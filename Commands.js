@@ -1,5 +1,6 @@
 //TODO: Destination Type as a parameter in the commandList Object
 //TODO: Duel
+//TODO: Figure a dynamic way of restricting commands by channel access but only on specific channels where an admin enables it( and then implement ;-) )
 
 //List of Commands
 var _ = require('underscore');
