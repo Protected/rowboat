@@ -58,6 +58,10 @@ var commandList = [
 		syntax: "+lsusers [username]",
 		permission: "z"
 	},{
+		command: "whoami",
+		func: _whoamiCmd,
+		help: "Provides information about your registered user."
+	},{
 		command: "minecraft",
 		func: _mcCmd,
 		help: "Provides information regarding the minecraft server."
@@ -260,15 +264,19 @@ function _bombCmd (from, to, message, messageObj){
     		return;
     }
 	
-	if ( !PA.bomb ) {	
-		PA.client.say(dest,"Bomb has been planted on "+bombee+".");
-		PA.client.say(dest,"Try to defuse it with +defuse <red|green|blue|yellow|black>.");
+	if ( !PA.bomb ) {
 		var wires = ["red","green","blue","yellow","black"];
 		PA.bomb = {};
 		PA.bomb.bombee = bombee;
 		PA.bomb.event = setTimeout(_bombBlowEvent, 20000);
 		PA.bomb.wire = wires[Math.floor(Math.random()*wires.length)];
+		if ( message.length > 2 && message[2] == "-s" && PA.checkForPermission(from, messageObj.host, 'b')){
+			PA.bomb.wire = 'death';
+			PA.bomb.super = true;
+		}
 		PA.bomb.channel = dest;
+		PA.client.say(dest,(PA.bomb.super?"Super-":"")+"Bomb has been planted on "+bombee+".");
+        PA.client.say(dest,"Try to defuse it with +defuse <red|green|blue|yellow|black>.");
 	}
 	
 	function _bombBlowEvent(){
@@ -281,6 +289,11 @@ function _bombCmd (from, to, message, messageObj){
 }
 function _defuseCmd (from, to, message, messageObj){
 	var dest = to.charAt(0)=='#'?to:from;
+	if ( PA.bomb && message[1] == "-f" && PA.checkForPermission(from, messageObj.host, 'b') ){
+		PA.client.say(dest,"Bomb removed from existence.");
+		clearTimeout(PA.bomb.event);
+        delete PA.bomb;
+	}
 	if ( PA.bomb && from == PA.bomb.bombee) {
 		if ( message[1].toLowerCase() == PA.bomb.wire.toLowerCase() ){
 			PA.client.say(dest,"Bomb defused.");
@@ -293,7 +306,7 @@ function _defuseCmd (from, to, message, messageObj){
 	}
 }
 
-function _namesCmd (from, to, message, messageObj) {
+function _namesCmd (from, to, message, messageObj){
 	var c = _.find(Object.keys(PA.client.chans), function(c){
 		return c == message[1];
 	});
@@ -401,4 +414,10 @@ function _lsusersCmd ( from, to, message, messageObj ){
 		str += (usrs[i].nick + ", ");
 	}
 	PA.client.say(dest,str);
+}
+
+function _whoamiCmd( from, to, message, messageObj ){
+	var usr = _.find(PA.users, function(user){ return user.nick.toLowerCase() == from.toLowerCase() ;});
+	if ( !usr ) { PA.client.say(from, "You are not in the list." ); return; }
+	PA.client.say(from,"N:"+usr.nick+" H:"+usr.host+" F:"+usr.permissions);
 }
