@@ -106,6 +106,22 @@ var commandList = [
 		help: "Attempts to defuse the bomb.",
 		syntax: "+defuse <wire>",
 		minParams: 1
+	},{
+		command: "duel",
+		func: _duelCmd,
+		help: "Starts a duel with a given player!",
+		syntax: "+duel <username>",
+		minParams: 1
+	},{
+		command: "cancelduel",
+		func: _cancelDuelCmd,
+		help: "Cancels active duel."
+	},{
+		command: "atk",
+		func: _atkCmd,
+		help: "Attacks when in a duel.",
+		syntax: "+atk <object/verb/anything_weaponizable>",
+		minParams: 1
 	}
 
 ];
@@ -136,6 +152,9 @@ function isUserInChannel(channel, nick){
 		if ( fn ) return true;
 		else return false;
 	}
+}
+function randomIntInc (low, high) {
+    return Math.floor(Math.random() * (high - low + 1) + low);
 }
 
 // Commands
@@ -420,4 +439,127 @@ function _whoamiCmd( from, to, message, messageObj ){
 	var usr = _.find(PA.users, function(user){ return user.nick.toLowerCase() == from.toLowerCase() ;});
 	if ( !usr ) { PA.client.say(from, "You are not in the list." ); return; }
 	PA.client.say(from,"N:"+usr.nick+" H:"+usr.host+" F:"+usr.permissions);
+}
+
+function _duelCmd( from, to, message, messageObj ){
+	var dest = to.charAt(0)=='#'?to:from;
+	if ( dest == from ) { PA.client.say("Can't duel in PM."); return ; }
+	var target = message[1];
+	if ( !isUserInChannel(dest, target) ) {
+		PA.client.say(dest,"There is no one in the channel with that nick.");
+		return;
+	}
+	if ( PA.duel ){
+		PA.client.say(from,"Duel already in progress.");
+		return;
+	} else {
+		PA.duel = {};
+		PA.duel.duelists = [{ 'nick': from ,  'hp': 1000},
+							{ 'nick': target, 'hp': 1000}];
+		PA.duel.turn = 0;
+
+		PA.client.say(dest,"Duel starting between "+from+" and "+target+".");
+		PA.client.say(dest, PA.duel.duelists[0].nick+"("+PA.duel.duelists[0].hp+") ~ ("+PA.duel.duelists[1].hp+")"+PA.duel.duelists[1].nick);
+	}
+
+}
+
+function _atkCmd( from, to, message, messageObj ){
+	var dest = to.charAt(0)=='#'?to:from;
+	if ( dest == from ) { PA.client.say("Can't duel in PM."); return ; }
+	var thing = message[1];
+
+	if ( !PA.duel ){
+		PA.client.say(from,"No duel in progress. Check the help for duel.");
+		return;
+	} else {
+
+		var turnee = PA.duel.duelists[PA.duel.turn];
+		var turned = PA.duel.duelists[(PA.duel.turn+1)%2];
+		if ( !(turnee.nick.toLowerCase() == from.toLowerCase()) ){
+			PA.client.say(from,"It's not your turn!");
+			return;
+		}
+		var damage = 0;
+		var crit = 0;
+		var lifesteal = 0;
+		var stun = 0;
+		var critDmg = 2;
+		var chaos = 0;
+		var vow = new RegExp("[aeiou]","ig");
+		var con = new RegExp("[bcdfghklmnprstvwxy]","ig");
+		var sup = new RegExp("[!#$%&?.]","ig");
+		var spe = new RegExp("[jzq]","ig");
+
+
+		for(var i = 0; i < thing.length; i++) {
+			var ch = thing.charAt(i);
+			if ( vow.test(ch) ){
+				damage += 10;
+				crit = crit+((100-crit)*0.1);
+				chaos += 2;
+			} else if ( con.test(ch) ){
+				damage += 20;
+				lifesteal = lifesteal + ((100-lifesteal)*0.05);
+				chaos += 2;
+			} else if ( sup.test(ch) ){
+				damage += 20;
+				stun = stun + ((100-stun)*0.05);
+				chaos += 10;
+			} else if ( spe.test(ch) ){
+				damage += 50;
+				critDmg += 1;
+				chaos += 20;
+			}
+		}
+
+		//PA.client.say(dest,"DEBUG:"+damage+":"+crit+":"+lifesteal+":"+stun+":"+critDmg+":"+chaos);
+
+		if ( randomIntInc(0,100) <= chaos ){
+			turnee.hp -= damage;
+			PA.client.say(dest,"The attack fiddled and you hurt yourself!");
+			PA.duel.turn = (PA.duel.turn+1)%2;
+		} else {
+			var critted = false;
+			var stunned = false;
+			var lifestolen = 0;
+			var trueDamage;
+			if ( randomIntInc(0,100) <= crit ){
+				critted = true;
+			}
+			if ( randomIntInc(0,100) <= stun ){
+				stunned = true;
+			}
+			trueDamage = critted?damage*critDmg:damage;
+			lifestolen = trueDamage * (lifesteal/100);
+
+			turnee.hp += lifestolen;
+			turned.hp -= trueDamage;
+
+			var str = "Dealt "+trueDamage+" damage with "+(critted?("a "+critDmg+"x crit "):"no crit ") + (stunned?(", stunned "):"") + "and stole "+lifestolen+" hp.";
+			PA.client.say(dest,str);
+
+			if ( !stunned ){
+				PA.duel.turn = (PA.duel.turn+1)%2;
+			}
+
+		}
+		if ( turnee.hp <= 0 ) {
+			PA.client.say(dest,turned.nick+" won the duel!");
+			delete PA.duel;
+		} else if (turned.hp <= 0 ) {
+			PA.client.say(dest, turnee.nick+" won the duel!");
+			delete PA.duel;
+		} else {
+			PA.client.say(dest, PA.duel.duelists[0].nick+"("+PA.duel.duelists[0].hp+") ~ ("+PA.duel.duelists[1].hp+")"+PA.duel.duelists[1].nick);
+		}
+	}
+
+}
+
+function _cancelDuelCmd( from, to, message, messageObj ){
+	if ( PA.duel ) {
+		delete PA.duel;
+		PA.client.say(from,"Duel cancelled.");
+	}
 }
