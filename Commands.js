@@ -1,5 +1,4 @@
 //TODO: Destination Type as a parameter in the commandList Object
-//TODO: Duel
 //TODO: Figure a dynamic way of restricting commands by channel access but only on specific channels where an admin enables it( and then implement ;-) )
 
 //List of Commands
@@ -12,20 +11,24 @@ var commandList = [
 	{ 
 		command: "hello", 
 		func: _helloCmd,
-		help: "Displays an Hello world."
+		help: "Displays an Hello world.",
+		dest: "any"
 	},{ 
 		command: "help", 
 		func: _helpCmd,
 		help: "Provides contextual help about a command.",
 		syntax: "+help <command_name>",
+		dest: "source",
 		minParams: 1
 	},{ 
 		command: "commands", 
 		func: _commandsCmd,
+		dest: "source",
 		help: "Lists all the available commands."
 	},{
 		command: "adduser",
 		func: _adduserCmd,
+		dest: "source",
 		help: "Adds a user to the access list.",
 		syntax: "+adduser <username> <vhost>",
 		permission: "z",
@@ -33,6 +36,7 @@ var commandList = [
 	},{
 		command: "deluser",
 		func: _deluserCmd,
+		dest: "source",
 		help: "Removes a user from the access list.",
 		syntax: "+deluser <username>",
 		permission: "z",
@@ -40,6 +44,7 @@ var commandList = [
 	},{
 		command: "addperm",
 		func: _addpermCmd,
+		dest: "source",
 		help: "Grants a permission flag to a given user.",
 		syntax: "+addperm <username> <flag>",
 		permission: "z",
@@ -47,6 +52,7 @@ var commandList = [
 	},{
 		command: "delperm",
 		func: _delpermCmd,
+		dest: "source",
 		help: "Revokes a permission flag from a given user.",
 		syntax: "+delperm <username> <flag>",
 		permission: "z",
@@ -54,25 +60,30 @@ var commandList = [
 	},{
 		command: "lsusers",
 		func: _lsusersCmd,
+		dest: "source",
 		help: "Lists registered users or provides detailed information about a given user.",
 		syntax: "+lsusers [username]",
 		permission: "z"
 	},{
 		command: "whoami",
 		func: _whoamiCmd,
-		help: "Provides information about your registered user."
+		help: "Provides information about your registered user.",
+		dest: "any"
 	},{
 		command: "minecraft",
 		func: _mcCmd,
+		dest: "any",
 		help: "Provides information regarding the minecraft server."
 	},{
 		command: "quit", 
 		func: _quitCmd,
+		dest: "any",
 		help: "Forces the bot to quit.",
 		permission: "z"
 	},{
 		command: "names",
 		func: _namesCmd,
+		dest: "source",
 		help: "Lists the users in a channel.",
 		syntax: "+names <#channel>",
 		permission: "z",
@@ -80,45 +91,53 @@ var commandList = [
     },{
 		command: "raw", 
 		func: _rawCmd,
+		dest: "source",
 		help: "Executes a raw command.",
 		permission: "z"
 	},{ 
 		command: "relation", 
 		func: _relationCmd,
+		dest: "any",
 		help: "Shows how two players are related.",
 		syntax: "+relation <name1> <name2>",
 		minParams: 2
 	},{ 
 		command: "gate", 
 		func: _gateCmd,
+		dest: "any",
 		help: "Executes logic operations.",
 		syntax: "+gate <boolean> <and|or|nand|nor|xor|xnor|not> <boolean>",
 		minParams: 3
 	},{ 
 		command: "bomb", 
 		func: _bombCmd,
+		dest: "channel",
 		help: "Plants a bomb on someone.",
 		syntax: "+bomb <nick>",
 		minParams: 1
 	},{ 
 		command: "defuse",
 		func: _defuseCmd,
+		dest: "channel",
 		help: "Attempts to defuse the bomb.",
 		syntax: "+defuse <wire>",
 		minParams: 1
 	},{
 		command: "duel",
 		func: _duelCmd,
+		dest: "channel",
 		help: "Starts a duel with a given player!",
 		syntax: "+duel <username>",
 		minParams: 1
 	},{
 		command: "cancelduel",
 		func: _cancelDuelCmd,
+		dest: "channel",
 		help: "Cancels active duel."
 	},{
 		command: "atk",
 		func: _atkCmd,
+		dest: "channel",
 		help: "Attacks when in a duel.",
 		syntax: "+atk <object/verb/anything_weaponizable>",
 		minParams: 1
@@ -159,19 +178,19 @@ function randomIntInc (low, high) {
 
 // Commands
 //+hello
-function _helloCmd(from, to, message){
-	PA.client.say(from,"World!");
+function _helloCmd(from, to, dest, message){
+	PA.client.notice(from,"World!");
 }
 //+help
 function _helpCmd(from, to, message){
 	var commandObj = getCommand(message[1]);
-	if(!commandObj) { PA.client.say(from,"Command not found!"); return }
+	if(!commandObj) { PA.client.notice(from,"Command not found!"); return }
 	if(commandObj.help) PA.client.say(from, commandObj.help);
 	if(commandObj.syntax) PA.client.say(from, commandObj.syntax);
 	if(commandObj.permission) PA.client.say(from,"Requires permission " + commandObj.permission + ".");
 }
 //+commands
-function _commandsCmd(from, to, message,messageObj){
+function _commandsCmd(from, to, dest, message,messageObj){
 	var str = "";
 	_.each(commandList, function(commandObj){
 		if( PA.checkForPermission(from,messageObj.host,commandObj.permission) ) 
@@ -180,24 +199,23 @@ function _commandsCmd(from, to, message,messageObj){
 	PA.client.say(from, str);
 }
 //+minecraft
-function _mcCmd(from, to, message){
+function _mcCmd(from, to, dest, message){
 	PA.client.say(from, "Server running on wyvernia.net (default port) with the modpack: FTB - DireWolf20 1.7.10 v1.0.1");
 }
 
 //+quit
-function _quitCmd(from, to, message){
+function _quitCmd(from, to, dest, message){
 	PA.client.disconnect("Freedom is liquid.");
 }
 //+raw
-function _rawCmd(from, to, message){
+function _rawCmd(from, to, dest, message){
 	message.splice(0,1);
 	PA.client.send.apply(this,message);
 }
 //+relation
-function _relationCmd( from, to, message, messageObj){
+function _relationCmd( from, to, dest, message, messageObj){
 	var name1 = message[1];
 	var name2 = message[2];
-	var dest = to.charAt(0)=='#'?to:from;
 	
 	if ( name1 == name2 ) { PA.client.say(dest,"Names can't be equal."); return; }
 	var sum = 0;
@@ -221,7 +239,7 @@ function _relationCmd( from, to, message, messageObj){
 }
 
 //+gate
-function _gateCmd(from, to, message){
+function _gateCmd(from, to, dest, message){
 	var booleansA = [
 		{
 			str: "true",
@@ -256,7 +274,6 @@ function _gateCmd(from, to, message){
 		}
 	
 	];
-	var dest = to.charAt(0)=='#'?to:from;
 	var p1 = _.find(booleansA, function(bo) { return bo.str.toLowerCase() == message[1].toLowerCase(); });
 	var p2 = _.find(booleansA, function(bo) { return bo.str.toLowerCase() == message[3].toLowerCase(); });
 	var gat = _.find(gatesA, function(ga) { return ga.str.toLowerCase() == message[2].toLowerCase(); });
@@ -265,8 +282,7 @@ function _gateCmd(from, to, message){
 	//PA.client.
 }
 
-function _bombCmd (from, to, message, messageObj){
-	var dest = to.charAt(0)=='#'?to:from;
+function _bombCmd (from, to, dest, message, messageObj){
 	if ( dest == from ) { PA.client.say("Can't bomb in PM."); return ; }
 	var bombee = message[1];
 	
@@ -306,8 +322,7 @@ function _bombCmd (from, to, message, messageObj){
 		}
 	}
 }
-function _defuseCmd (from, to, message, messageObj){
-	var dest = to.charAt(0)=='#'?to:from;
+function _defuseCmd (from, to, dest, message, messageObj){
 	if ( PA.bomb && message[1] == "-f" && PA.checkForPermission(from, messageObj.host, 'b') ){
 		PA.client.say(dest,"Bomb removed from existence.");
 		clearTimeout(PA.bomb.event);
@@ -325,7 +340,7 @@ function _defuseCmd (from, to, message, messageObj){
 	}
 }
 
-function _namesCmd (from, to, message, messageObj){
+function _namesCmd (from, to, dest, message, messageObj){
 	var c = _.find(Object.keys(PA.client.chans), function(c){
 		return c == message[1];
 	});
@@ -333,7 +348,7 @@ function _namesCmd (from, to, message, messageObj){
 	c = PA.client.chans[c];
 
 	if ( !c ) {
-		PA.client.say(from,"I'm not in that channel.");
+		PA.client.notice(from,"I'm not in that channel.");
 	} else {
 		var str = "";
 
@@ -346,8 +361,7 @@ function _namesCmd (from, to, message, messageObj){
 
 }
 
-function _adduserCmd ( from, to, message, messageObj ){
-	var dest = to.charAt(0)=='#'?to:from;
+function _adduserCmd ( from, to, dest, message, messageObj ){
 	var usrs = PA.users;
 	var nick = message[1];
 	var vhost = message[2];
@@ -368,8 +382,7 @@ function _adduserCmd ( from, to, message, messageObj ){
 	jf.writeFile("users.json",PA.users,function(){});
 }
 
-function _deluserCmd ( from, to, message, messageObj ){
-	var dest = to.charAt(0)=='#'?to:from;
+function _deluserCmd ( from, to, dest, message, messageObj ){
 	var usrs = PA.users;
 	var nick = message[1];
 	if ( !usrs ) return;
@@ -380,8 +393,7 @@ function _deluserCmd ( from, to, message, messageObj ){
 	jf.writeFile("users.json",PA.users,function(){});
 }
 
-function _addpermCmd ( from, to, message, messageObj ){
-	var dest = to.charAt(0)=='#'?to:from;
+function _addpermCmd ( from, to, dest, message, messageObj ){
 	var usrs = PA.users;
 	var nick = message[1];
 	var perms = message[2];
@@ -399,8 +411,7 @@ function _addpermCmd ( from, to, message, messageObj ){
 	jf.writeFile("users.json",PA.users,function(){});
 }
 
-function _delpermCmd ( from, to, message, messageObj ){
-	var dest = to.charAt(0)=='#'?to:from;
+function _delpermCmd ( from, to, dest, message, messageObj ){
 	var usrs = PA.users;
 	var nick = message[1];
 	var perms = message[2];
@@ -415,8 +426,7 @@ function _delpermCmd ( from, to, message, messageObj ){
 	jf.writeFile("users.json",PA.users,function(){});
 }
 
-function _lsusersCmd ( from, to, message, messageObj ){
-	var dest = to.charAt(0)=='#'?to:from;
+function _lsusersCmd ( from, to, dest, message, messageObj ){
 	var usrs = PA.users;
 	if ( !usrs ) return;
 
@@ -435,22 +445,20 @@ function _lsusersCmd ( from, to, message, messageObj ){
 	PA.client.say(dest,str);
 }
 
-function _whoamiCmd( from, to, message, messageObj ){
+function _whoamiCmd( from, to, dest, message, messageObj ){
 	var usr = _.find(PA.users, function(user){ return user.nick.toLowerCase() == from.toLowerCase() ;});
-	if ( !usr ) { PA.client.say(from, "You are not in the list." ); return; }
-	PA.client.say(from,"N:"+usr.nick+" H:"+usr.host+" F:"+usr.permissions);
+	if ( !usr ) { PA.client.notice(from, "You are not in the list." ); return; }
+	PA.client.notice(from,"N:"+usr.nick+" H:"+usr.host+" F:"+usr.permissions);
 }
 
-function _duelCmd( from, to, message, messageObj ){
-	var dest = to.charAt(0)=='#'?to:from;
-	if ( dest == from ) { PA.client.say("Can't duel in PM."); return ; }
+function _duelCmd( from, to, dest, message, messageObj ){
 	var target = message[1];
 	if ( !isUserInChannel(dest, target) ) {
 		PA.client.say(dest,"There is no one in the channel with that nick.");
 		return;
 	}
 	if ( PA.duel ){
-		PA.client.say(from,"Duel already in progress.");
+		PA.client.notice(from,"Duel already in progress.");
 		return;
 	} else {
 		PA.duel = {};
@@ -464,20 +472,18 @@ function _duelCmd( from, to, message, messageObj ){
 
 }
 
-function _atkCmd( from, to, message, messageObj ){
-	var dest = to.charAt(0)=='#'?to:from;
-	if ( dest == from ) { PA.client.say("Can't duel in PM."); return ; }
+function _atkCmd( from, to, dest, message, messageObj ){
 	var thing = message[1];
 
 	if ( !PA.duel ){
-		PA.client.say(from,"No duel in progress. Check the help for duel.");
+		PA.client.notice(from,"No duel in progress. Check the help for duel.");
 		return;
 	} else {
 
 		var turnee = PA.duel.duelists[PA.duel.turn];
 		var turned = PA.duel.duelists[(PA.duel.turn+1)%2];
 		if ( !(turnee.nick.toLowerCase() == from.toLowerCase()) ){
-			PA.client.say(from,"It's not your turn!");
+			PA.client.notice(from,"It's not your turn!");
 			return;
 		}
 		var damage = 0;
@@ -557,9 +563,9 @@ function _atkCmd( from, to, message, messageObj ){
 
 }
 
-function _cancelDuelCmd( from, to, message, messageObj ){
+function _cancelDuelCmd( from, to, dest, message, messageObj ){
 	if ( PA.duel ) {
 		delete PA.duel;
-		PA.client.say(from,"Duel cancelled.");
+		PA.client.notice(from,"Duel cancelled.");
 	}
 }

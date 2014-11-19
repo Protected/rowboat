@@ -53,16 +53,36 @@ client.addListener('message', function (from, to, message, messageObj) {
 		var commandObj = C.getCommand(commandStr);
 		if ( commandObj ){
 			try {
+				var dest;
 				if ( !checkForPermission(from,messageObj.host,commandObj.permission) ){
-					client.say(from,"Access denied. Flag "+commandObj.permission+" is required.");
+					client.notice(from,"Access denied. Flag "+commandObj.permission+" is required.");
 					return;
 				}
 				if (  commandObj.minParams && messageArr.length < commandObj.minParams+1 ){
-					C.getCommand("help").func(from,to,['+help',commandStr],messageObj);
+					C.getCommand("help").func(from,to,from,['+help',commandStr],messageObj);
                     return;
 				}
+				if ( commandObj.dest ){
+					switch (commandObj.dest){
+						case "source": dest = from; break;
+						case "channel": {
+							if ( to.charAt(0)=='#' ){
+								dest = to;
+								break;
+							}
+							else {
+								client.notice(from,"Can't use this command outside a channel.");
+								return;
+							}
+						}
+						case "any":
+						default: dest = to.charAt(0)=='#'?to:from; break;
+					}
+				} else {
+					dest = to.charAt(0)=='#'?to:from;
+				}
 
-				commandObj.func(from,to,messageArr,messageObj);
+				commandObj.func(from,to,dest,messageArr,messageObj);
 				//if ( message.length < 2 ) { _helpCmd(from, to, ["+help","names"]); return; }
 			}catch(ex){
 				console.log(ex);
