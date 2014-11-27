@@ -1,4 +1,3 @@
-//TODO: Destination Type as a parameter in the commandList Object
 //TODO: Figure a dynamic way of restricting commands by channel access but only on specific channels where an admin enables it( and then implement ;-) )
 
 //List of Commands
@@ -7,143 +6,148 @@ var gates = require('logic-gates');
 var jf = require('jsonfile');
 
 var PA = null;
-var commandList = [
-	{ 
-		command: "hello", 
-		func: _helloCmd,
-		help: "Displays an Hello world.",
-		dest: "any"
-	},{ 
-		command: "help", 
-		func: _helpCmd,
-		help: "Provides contextual help about a command.",
-		syntax: "+help <command_name>",
-		dest: "source",
-		minParams: 1
-	},{ 
-		command: "commands", 
-		func: _commandsCmd,
-		dest: "source",
-		help: "Lists all the available commands."
-	},{
-		command: "adduser",
-		func: _adduserCmd,
-		dest: "source",
-		help: "Adds a user to the access list.",
-		syntax: "+adduser <username> <vhost>",
-		permission: "z",
-		minParams: 2
-	},{
-		command: "deluser",
-		func: _deluserCmd,
-		dest: "source",
-		help: "Removes a user from the access list.",
-		syntax: "+deluser <username>",
-		permission: "z",
-		minParams: 1
-	},{
-		command: "addperm",
-		func: _addpermCmd,
-		dest: "source",
-		help: "Grants a permission flag to a given user.",
-		syntax: "+addperm <username> <flag>",
-		permission: "z",
-		minParams: 2
-	},{
-		command: "delperm",
-		func: _delpermCmd,
-		dest: "source",
-		help: "Revokes a permission flag from a given user.",
-		syntax: "+delperm <username> <flag>",
-		permission: "z",
-		minParams: 2
-	},{
-		command: "lsusers",
-		func: _lsusersCmd,
-		dest: "source",
-		help: "Lists registered users or provides detailed information about a given user.",
-		syntax: "+lsusers [username]",
-		permission: "z"
-	},{
-		command: "whoami",
-		func: _whoamiCmd,
-		help: "Provides information about your registered user.",
-		dest: "any"
-	},{
-		command: "minecraft",
-		func: _mcCmd,
-		dest: "any",
-		help: "Provides information regarding the minecraft server."
-	},{
-		command: "quit", 
-		func: _quitCmd,
-		dest: "any",
-		help: "Forces the bot to quit.",
-		permission: "z"
-	},{
-		command: "names",
-		func: _namesCmd,
-		dest: "source",
-		help: "Lists the users in a channel.",
-		syntax: "+names <#channel>",
-		permission: "z",
-		minParams: 1
-    },{
-		command: "raw", 
-		func: _rawCmd,
-		dest: "source",
-		help: "Executes a raw command.",
-		permission: "z"
-	},{ 
-		command: "relation", 
-		func: _relationCmd,
-		dest: "any",
-		help: "Shows how two players are related.",
-		syntax: "+relation <name1> <name2>",
-		minParams: 2
-	},{ 
-		command: "gate", 
-		func: _gateCmd,
-		dest: "any",
-		help: "Executes logic operations.",
-		syntax: "+gate <boolean> <and|or|nand|nor|xor|xnor|not> <boolean>",
-		minParams: 3
-	},{ 
-		command: "bomb", 
-		func: _bombCmd,
-		dest: "channel",
-		help: "Plants a bomb on someone.",
-		syntax: "+bomb <nick>",
-		minParams: 1
-	},{ 
-		command: "defuse",
-		func: _defuseCmd,
-		dest: "channel",
-		help: "Attempts to defuse the bomb.",
-		syntax: "+defuse <wire>",
-		minParams: 1
-	},{
-		command: "duel",
-		func: _duelCmd,
-		dest: "channel",
-		help: "Starts a duel with a given player!",
-		syntax: "+duel <username>",
-		minParams: 1
-	},{
-		command: "cancelduel",
-		func: _cancelDuelCmd,
-		dest: "channel",
-		help: "Cancels active duel."
-	},{
-		command: "atk",
-		func: _atkCmd,
-		dest: "channel",
-		help: "Attacks when in a duel.",
-		syntax: "+atk <object/verb/anything_weaponizable>",
-		minParams: 1
-	}
-
-];
+var commandList = [{
+    command: "hello",
+    func: _helloCmd,
+    help: "Displays an Hello world.",
+    dest: "any"
+}, {
+    command: "help",
+    func: _helpCmd,
+    help: "Provides contextual help about a command.",
+    syntax: "+help <command_name>",
+    dest: "any",
+    minParams: 1
+}, {
+    command: "commands",
+    func: _commandsCmd,
+    dest: "source",
+    help: "Lists all the available commands."
+}, {
+    command: "adduser",
+    func: _adduserCmd,
+    dest: "source",
+    help: "Adds a user to the access list.",
+    syntax: "+adduser <username> <vhost>",
+    permission: "z",
+    minParams: 2
+}, {
+    command: "deluser",
+    func: _deluserCmd,
+    dest: "source",
+    help: "Removes a user from the access list.",
+    syntax: "+deluser <username>",
+    permission: "z",
+    minParams: 1
+}, {
+    command: "addperm",
+    func: _addpermCmd,
+    dest: "source",
+    help: "Grants a permission flag to a given user.",
+    syntax: "+addperm <username> <flag>",
+    permission: "z",
+    minParams: 2
+}, {
+    command: "delperm",
+    func: _delpermCmd,
+    dest: "source",
+    help: "Revokes a permission flag from a given user.",
+    syntax: "+delperm <username> <flag>",
+    permission: "z",
+    minParams: 2
+}, {
+    command: "lsusers",
+    func: _lsusersCmd,
+    dest: "source",
+    help: "Lists registered users or provides detailed information about a given user.",
+    syntax: "+lsusers [username]",
+    permission: "z"
+}, {
+    command: "whoami",
+    func: _whoamiCmd,
+    help: "Provides information about your registered user.",
+    dest: "any"
+}, {
+    command: "minecraft",
+    func: _mcCmd,
+    dest: "any",
+    help: "Provides information regarding the minecraft server."
+}, {
+    command: "quit",
+    func: _quitCmd,
+    dest: "any",
+    help: "Forces the bot to quit.",
+    permission: "z"
+}, {
+    command: "names",
+    func: _namesCmd,
+    dest: "source",
+    help: "Lists the users in a channel.",
+    syntax: "+names <#channel>",
+    permission: "z",
+    minParams: 1
+}, {
+    command: "raw",
+    func: _rawCmd,
+    dest: "source",
+    help: "Executes a raw command.",
+    permission: "z"
+}, {
+    command: "relation",
+    func: _relationCmd,
+    dest: "any",
+    help: "Shows how two players are related.",
+    syntax: "+relation <name1> <name2>",
+    minParams: 2
+}, {
+    command: "addrel",
+    func: _addrelCmd,
+    dest: "any",
+    help: "Adds a new relation to the list.",
+    syntax: "+addrel {1} and {2} do things.",
+	permission: "r",
+    minParams: 3
+}, {
+    command: "gate",
+    func: _gateCmd,
+    dest: "any",
+    help: "Executes logic operations.",
+    syntax: "+gate <boolean> <and|or|nand|nor|xor|xnor|not> <boolean>",
+    minParams: 3
+}, {
+    command: "bomb",
+    func: _bombCmd,
+    dest: "channel",
+    help: "Plants a bomb on someone.",
+    syntax: "+bomb <nick>",
+    minParams: 1
+}, {
+    command: "defuse",
+    func: _defuseCmd,
+    dest: "channel",
+    help: "Attempts to defuse the bomb.",
+    syntax: "+defuse <wire>",
+    minParams: 1
+}, {
+    command: "duel",
+    func: _duelCmd,
+    dest: "channel",
+    help: "Starts a duel with a given player!",
+    syntax: "+duel <username>",
+    minParams: 1
+}, {
+    command: "cancelduel",
+    func: _cancelDuelCmd,
+    dest: "channel",
+    help: "Cancels active duel."
+}, {
+    command: "atk",
+    func: _atkCmd,
+    dest: "channel",
+    help: "Attacks when in a duel.",
+    syntax: "+atk <object/verb/anything_weaponizable>",
+    minParams: 1
+}];
 //Find Command
 function getCommand(commandStr){
 	return _.find(commandList, function(commandObj) { return commandObj.command == commandStr });
@@ -182,12 +186,12 @@ function _helloCmd(from, to, dest, message){
 	PA.client.notice(from,"World!");
 }
 //+help
-function _helpCmd(from, to, message){
+function _helpCmd(from, to, dest, message){
 	var commandObj = getCommand(message[1]);
-	if(!commandObj) { PA.client.notice(from,"Command not found!"); return }
-	if(commandObj.help) PA.client.say(from, commandObj.help);
-	if(commandObj.syntax) PA.client.say(from, commandObj.syntax);
-	if(commandObj.permission) PA.client.say(from,"Requires permission " + commandObj.permission + ".");
+	if(!commandObj) { PA.client.say(dest,"Command not found!"); return }
+	if(commandObj.help) PA.client.say(dest, commandObj.help);
+	if(commandObj.syntax) PA.client.say(dest, commandObj.syntax);
+	if(commandObj.permission) PA.client.say(dest,"Requires permission " + commandObj.permission + ".");
 }
 //+commands
 function _commandsCmd(from, to, dest, message,messageObj){
@@ -222,20 +226,42 @@ function _relationCmd( from, to, dest, message, messageObj){
 	for(var i=0;i<name1.length;i++){ 
 		sum += name1.charCodeAt(i);
 	}
+	var vName1 = sum;
 	for(var i=0;i<name2.length;i++){ 
 		sum += name2.charCodeAt(i);
 	}
+	var vName2 = sum - vName1;
 	
+	if ( vName2 > vName1 ) {
+		var aux = name1;
+		name1 = name2;
+		name2 = aux;
+	}
+	
+	/*
 	var list=[
 		"{1} and {2} are friends!",
 		"{1} and {2} are enemies.",
 		"{1} and {2} sleep in the same bed."
-	];
+	];*/
+	
+	var list = jf.readFileSync('relations.json');
 	
 	var choice = sum % list.length;
 	var fin = list[choice].replace("{1}",name1).replace("{2}",name2);
 	
 	PA.client.say(dest, fin);
+}
+
+function _addrelCmd(from, to, dest, message, messageObj){
+	message.splice(0,1);
+	var relStr = message.join(' ');
+	
+	var relations = jf.readFileSync('relations.json');
+	relations.push(relStr);
+	jf.writeFileSync('relations.json',relations);
+
+	PA.client.say(dest, "Relation added!");
 }
 
 //+gate
