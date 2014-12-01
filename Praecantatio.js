@@ -24,12 +24,15 @@ var channelSettings = [{
 	network: 'irc.irchighway.net',
 	channels: [
 		{
-			name: "#empire",
+			name: "#languagelearning",
 			commands: [
 				{
 					name:"duel",
-					restrict:"@"
-				}
+					restrict:"!"
+				},{
+					name:"bomb",
+					restrict:"!"
+				},
 			]
 		}
 	]
@@ -102,11 +105,11 @@ client.addListener('message', function (from, to, message, messageObj) {
 				} else {
 					dest = to.charAt(0)=='#'?to:from;
 				}
-				/*
-				if ( dest==to && !checkForRestrictions(dest,from,commandStr )) {
-					client.notice(dest,"Access denied. Restricted by the channel admin.");
+				
+				if ( dest==to && (!checkForRestrictions(dest,from,commandStr ) || checkForPermission(from,messageObj.host,commandObj.permission) )) {
+					client.say(dest,"Access denied. Restricted by the channel admin.");
 					return;
-				}*/
+				}
 				commandObj.func(from,to,dest,messageArr,messageObj);
 				//if ( message.length < 2 ) { _helpCmd(from, to, ["+help","names"]); return; }
 			}catch(ex){
@@ -131,12 +134,6 @@ function removeUser(channel, nick){
 	delete c.users[nick];
 }
 
-//AllowedList
-/*
-		nick: "AWRyder",
-		host: "doesnt.care.about.vhosts",
-		permissions: "z"
-*/
 jf.readFile('users.json', function(err, obj){
 	if ( obj ){
 		users = obj;
@@ -203,16 +200,24 @@ function checkForRestrictions( channel, nick, command  ){
 	if ( !c ) {
 		return false;
 	} else {
+		// Get the person's permission.
 		var perm = c.users[nick];
 		
+		//Get the settings block with the network in question.
 		var cs = _.find(channelSettings, function(cs){
 			return cs.network == argv.server;
 		});
+		
+		if ( !cs ) return true;
 
+		//Grab the block with information relative to the channel in question, inside the network block.
 		var csChan = _.find(cs.channels,function(csChan){
 			return csChan.name == channel;
 		});
-
+		
+		if ( !csChan ) return true;
+		
+		//Find the command within the channel block
 		var csChanCommand = _.find(csChan.commands, function(csChanCommand){
 			return csChanCommand.name == command;
 		});

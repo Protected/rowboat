@@ -58,7 +58,7 @@ var commandList = [{
 }, {
     command: "lsusers",
     func: _lsusersCmd,
-    dest: "source",
+    dest: "any",
     help: "Lists registered users or provides detailed information about a given user.",
     syntax: "+lsusers [username]",
     permission: "z"
@@ -147,6 +147,42 @@ var commandList = [{
     help: "Attacks when in a duel.",
     syntax: "+atk <object/verb/anything_weaponizable>",
     minParams: 1
+}, {
+    command: "addLanguage",
+    func: _addLanguageCmd,
+    dest: "any",
+    help: "Adds a language to the list.",
+	syntax: "+addLanguage <LanguageName>",
+	permission: "l",
+	minParams: 1
+}, {
+    command: "remLanguage",
+    func: _remLanguageCmd,
+    dest: "any",
+    help: "Removes a Language from the list",
+	syntax: "+remLanguage <LanguageName>",
+	permission: "l",
+	minParams: 1
+}, {
+    command: "addSpeaker",
+    func: _addSpeakerCmd,
+    dest: "any",
+    help: "Associates a speaker to a language",
+	syntax: "+addSpeaker <LanguageName> <Nick>",
+	permission: "l",
+	minParams: 2
+}, {
+    command: "languages",
+    func: _languagesCmd,
+    dest: "any",
+    help: "Lists all languages",
+}, {
+    command: "speaks",
+    func: _speaksCmd,
+    dest: "any",
+    help: "Queries who speaks which language.",
+	syntax: "+speaks <language>",
+	minParams: 1
 }];
 //Find Command
 function getCommand(commandStr){
@@ -160,6 +196,9 @@ function setMain(mains){
 exports.commandList = commandList;
 exports.getCommand = getCommand;
 exports.setMain = setMain;
+
+
+
 
 //Aux
 function isUserInChannel(channel, nick){
@@ -594,4 +633,71 @@ function _cancelDuelCmd( from, to, dest, message, messageObj ){
 		delete PA.duel;
 		PA.client.notice(from,"Duel cancelled.");
 	}
+}
+
+
+function _addLanguageCmd(from, to, dest, message,messageObj){
+	var languages = jf.readFileSync('languages.json');
+	
+	if ( !languages[message[1]] ) {	
+		languages[message[1]] = [];
+		jf.writeFileSync('languages.json',languages);
+		PA.client.say(dest, "Language added!");
+	} else {
+		PA.client.say(dest, "Language already exists.");
+	}
+}
+function _remLanguageCmd(from, to, dest, message,messageObj){
+	var languages = jf.readFileSync('languages.json');
+	
+	if ( languages[message[1]] ) {	
+		delete languages[message[1]];
+		jf.writeFileSync('languages.json',languages);
+		PA.client.say(dest, "Language removed!");
+	} else {
+		PA.client.say(dest, "Language doesn't exist.");
+	}
+}
+function _addSpeakerCmd(from, to, dest, message,messageObj){
+	var languages = jf.readFileSync('languages.json');
+	
+	if ( languages[message[1]] ) {	
+		languages[message[1]].push(message[2]);
+		jf.writeFileSync('languages.json',languages);
+		PA.client.say(dest, "Speaker added!");
+	} else {
+		PA.client.say(dest, "Language doesn't exist.");
+	}
+}
+function _speaksCmd(from, to, dest, message,messageObj){
+	var languages = jf.readFileSync('languages.json');
+	
+	if ( languages[message[1]] ) {	
+		if ( languages[message[1]].length == 0 ) {
+			PA.client.say(dest,"No speakers of that language.");
+			return;
+		}
+		var str = "";
+		for( var i=0; i<languages[message[1]].length; i++){
+			str += (languages[message[1]][i] + ", ");
+		}
+		PA.client.say(dest,str);
+	} else {
+		PA.client.say(dest, "Language doesn't exist.");
+	}
+}
+
+function _languagesCmd(from,to,dest,message,messageObj ){
+	var languages = jf.readFileSync('languages.json');
+	
+	if ( languages ) {	
+		var str = "";
+		for(var language in languages) {
+			str += (language+", ");
+		}
+		PA.client.say(dest,str);
+	} else {
+		PA.client.say(dest, "Something terrible happened.");
+	}
+	
 }
