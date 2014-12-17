@@ -6,13 +6,13 @@ var fs = require('fs');
 var argv = require('yargs')
           .default('server','irc.irchighway.net')
           .default('nick','Praecantatio')
-          .default('channel','#empire')
+          .default('channel',['#empire','#game'])
           .default('nickserv-passwd',null)
           .argv
 		  ;
 
 var client = new irc.Client(argv.server, argv.nick, {
-    channels: [argv.channel,'#game'],
+    channels: [argv.channel],
 	userName: 'Prae',
 	realName: 'Praecantatio',
 	floodProtection: true,
@@ -67,9 +67,6 @@ client.addListener('message', function (from, to, message, messageObj) {
 		
 		if ( commandStr == "reassemble" && checkForPermission(from,messageObj.host,'z') ){
 			console.log(from + ' reassembled me!');
-			if ( C.slaveTimer ) {
-				C.slaveTimer.stop();
-			}
 			C = requireUncached('./Commands.js');
 			C.setMain(PAObj);
 			client.say(from,"Reassembled!");
@@ -89,8 +86,6 @@ client.addListener('message', function (from, to, message, messageObj) {
                     return;
 				}
 
-				console.log(from+" issued the command: "+messageArr);
-				
 				if ( commandObj.dest ){
 					switch (commandObj.dest){
 						case "source": dest = from; break;

@@ -4,6 +4,7 @@
 var _ = require('underscore');
 var gates = require('logic-gates');
 var jf = require('jsonfile');
+var TimerJob = require('timer-jobs');
 
 var PA = null;
 var commandList = [{
@@ -31,6 +32,13 @@ var commandList = [{
     syntax: "+adduser <username> <vhost>",
     permission: "z",
     minParams: 2
+}, {
+    command: "eval",
+    func: _evalCmd,
+    dest: "any",
+    help: "Runs JS code on the fly",
+    syntax: "+eval",
+    permission: "z"
 }, {
     command: "deluser",
     func: _deluserCmd,
@@ -183,6 +191,38 @@ var commandList = [{
     help: "Queries who speaks which language.",
 	syntax: "+speaks <language>",
 	minParams: 1
+}, {
+    command: "slv",
+    func: _slaveryCmd,
+    dest: "any",
+    help: "Has many functions to play the slave game.",
+	syntax: "+slv <work|give|steal|buy|buyout|release|thrust|learn|stats> [<args>]",
+	minParams: 1
+}, {
+    command: "cah",
+    func: _cahCmd,
+    dest: "any",
+    help: "To play CaH",
+	syntax: "+cah (under construction)"
+}, {
+    command: "cahjoin",
+    func: _cahjoinCmd,
+    dest: "source",
+    help: "To enter a round of CaH.",
+	syntax: "+cahjoin (under construction)"
+}, {
+    command: "cahplay",
+    func: _cahplayCmd,
+    dest: "source",
+    help: "To play a card of CaH.",
+	syntax: "+cahplay (under construction)",
+	minParams: 1
+}, {
+    command: "cahvote",
+    func: _cahvoteCmd,
+    dest: "source",
+    help: "To vote on a round of CaH",
+	syntax: "+cahvote (under construction)"
 }];
 //Find Command
 function getCommand(commandStr){
@@ -196,9 +236,49 @@ function setMain(mains){
 exports.commandList = commandList;
 exports.getCommand = getCommand;
 exports.setMain = setMain;
+exports.slaveTimer = new TimerJob({interval: 1000*60*15, immediate: false}, function(done) {
+	addTick();
+    done();
+});
+exports.slaveTimer.start();
 
+function addTick() {
+	var slaves =  jf.readFileSync('slaves.json');
+	
+	var rnd = 1;
+	if ( randomIntInc(0,100) > 50 ){
+	
+		var randomSlave = slaves[randomIntInc(0,slaves.length-1)];
+	
+		switch(rnd){
+			case 1: {
+				PA.client.say("#game","[Random Event] Slave "+randomSlave.nick+" has lost some money in gambling.");
+				randomSlave.money *= 0.98;
+				break;
+			}
+		
+		}
+	}
+	_.each(slaves, function( slave ) {
+		slave.tired = false;
+		if ( slave.mood > 0 ) {
+			slave.mood *= 0.95;
+		}
+	});
+	
+	jf.writeFileSync('slaves.json',slaves);
+	PA.client.say("#game","[SLV] New Tick!");
+	console.log('new turn');
+}
 
-
+function _connCmd ( from, to, dest, message, messageObj){
+	for (var property in PA.client.conn) {
+		if (PA.client.conn.hasOwnProperty(property)) {
+			console.log(property);
+		}
+	}
+	
+}
 
 //Aux
 function isUserInChannel(channel, nick){
@@ -254,6 +334,16 @@ function _quitCmd(from, to, dest, message){
 function _rawCmd(from, to, dest, message){
 	message.splice(0,1);
 	PA.client.send.apply(this,message);
+}
+function _evalCmd(from,to,dest,message,messageObj ){
+	message.splice(0,1);
+	var run = message.join(' ');
+	try {
+		eval(run);
+	} catch ( e ) {
+		PA.client.say(dest,""+e);
+	}
+
 }
 //+relation
 function _relationCmd( from, to, dest, message, messageObj){
@@ -363,10 +453,17 @@ function _bombCmd (from, to, dest, message, messageObj){
     		PA.client.say(dest,"There is no one in the channel with that nick.");
     		return;
     }
+	if ( PA.bombCD && PA.bombCD[from] && ( new Date().getTime() - PA.bombCD[from] < 1000*60*2) ) {
+		PA.client.say(dest,"Better wait a bit before you do that again.");
+		return;
+	}
+	
 	
 	if ( !PA.bomb ) {
 		var wires = ["red","green","blue","yellow","black"];
 		PA.bomb = {};
+		if ( !PA.bombCD ) PA.bombCD = {};
+		PA.bombCD[from] = new Date().getTime();
 		PA.bomb.bombee = bombee;
 		PA.bomb.event = setTimeout(_bombBlowEvent, 20000);
 		PA.bomb.wire = wires[Math.floor(Math.random()*wires.length)];
@@ -700,4 +797,432 @@ function _languagesCmd(from,to,dest,message,messageObj ){
 		PA.client.say(dest, "Something terrible happened.");
 	}
 	
+}
+
+function _slaveryCmd(from,to,dest,message,messageObj ){
+	//var slavesMainObj = jf.readFileSync('slaves.json');
+
+	var slaves =  jf.readFileSync('slaves.json');//slaves.slaves;
+	var slavesMainObj = slaves;
+	
+	var playerObj = _.find(slaves, function(slv) {return slv.nick.toLowerCase() == from.toLowerCase();} );
+	if ( ! playerObj ) {
+		playerObj = {};
+		slaves.push(playerObj);
+		playerObj.nick = from;
+		playerObj.money = 200;
+		playerObj.alignment = 0;
+		playerObj.mood = 0;
+		playerObj.tired = false;
+		playerObj.slaves = [];
+		//playerObj.master = "";
+		playerObj.fuk = {};
+		playerObj.fuk.kissing = 0;
+		playerObj.fuk.smooth = 0;
+		playerObj.fuk.wooing = 0;
+		playerObj.fuk.hard = 0;
+		playerObj.logs = [];
+		PA.client.say(dest, "Welcome to the slave game, "+from+". You are now part of something big! >:D");
+		jf.writeFileSync('slaves.json',slavesMainObj);
+	}
+	
+	switch (message[1]) {
+		case 'work': {
+			if ( playerObj.tired ) {
+				PA.client.say(dest,"You're currently tired... need to wait for the next tick.");
+				break;
+			}
+	
+			var value = randomIntInc(50,200);
+			var mult = 1;
+			mult += ( 0.5 * Math.floor(playerObj.mood/50) );
+			value *= mult;
+			
+			giveMoney(playerObj,value,0);
+			playerObj.tired = true;
+			jf.writeFileSync('slaves.json',slavesMainObj);
+			
+			var list = [
+				 "{1} spent some time working at the local sex shop and made {2}€"
+				,"{1} participated in a porno and got {2}€"
+				,"{1} spent time building a statue in honor of Hel and got {2}€"
+				,"{1} went to the streets and performed for the public. Ended up making {2}€"
+				,"{1} went to a nearby park and scammed people for {2}€"
+				,"{1} performed a strip-tease at the strip club and earnt {2}€"
+				
+			];
+	
+			var choice = randomIntInc(0, list.length-1);
+			var fin = list[choice].replace("{1}",playerObj.nick).replace("{2}",value);
+			PA.client.say(dest,fin);
+			//PA.client.say(dest,playerObj.nick + " spent some time working at a local naughty store and made: "+value+"€.");
+			
+			break;
+		}
+		case 'steal': {
+			break;
+		}
+		case 'give': {
+			if ( message.length > 2 ) {
+				
+				if ( ! playerObj.master ) {
+					PA.client.say(dest,"You don't have a master to give money to.");
+					return;
+				}
+			
+				var slaveName = playerObj.master;
+				var slaveeObj = _.find(slaves, function(slv) {return slv.nick.toLowerCase() == slaveName.toLowerCase();} );
+				if ( !slaveeObj ) {
+					PA.client.say(dest,"No slave found with that nick.");
+					return;
+				}
+				var money = message[2];
+				money = parseInt(money);
+				if ( isNaN(money) ) {
+					PA.client.say(dest,"Bad value.");
+					return;
+				}
+				
+				if ( money < 1 || money > playerObj.money ) {
+					PA.client.say(dest,"Bad number.");
+					return;
+				}
+				
+				playerObj.money -= money;
+				slaveeObj.money += money;
+				playerObj.mood  += money*0.05;
+				
+				
+				PA.client.say(dest,"Slave "+playerObj.nick+" gave money to his master/mistress "+slaveeObj.nick+" and gained something in return.");
+				jf.writeFileSync('slaves.json',slavesMainObj);
+				
+			} else {
+				PA.client.say(dest,"Bad syntax... seek some +help :P");
+			}
+			
+			break;
+		}
+		case 'thrust': {
+			break;
+		}
+		case 'buy': {
+			if ( message.length > 2 ) {
+				var slaveName = message[2];
+				var slaveeObj = _.find(slaves, function(slv) {return slv.nick.toLowerCase() == slaveName.toLowerCase();} );
+				if ( !slaveeObj ) {
+					PA.client.say(dest,"No slave found with that nick.");
+					return;
+				}
+				if ( slaveeObj.master ) {
+					PA.client.say(dest,"That person already has a master.");
+					return;
+				}
+				if ( slaveeObj.nick == playerObj.nick ) {
+					PA.client.say(dest,"Can't buy yourself.");
+					return;
+				}
+				if ( playerObj.tired ) {
+					PA.client.say(dest,"You are tired and can't buy a slave at this moment.");
+					return;
+				}
+				
+				
+				
+				
+				if ( playerObj.money > slaveeObj.money ) {
+					playerObj.money -= slaveeObj.money;
+					playerObj.tired = true;
+					slaveeObj.master = playerObj.nick;
+					slaveeObj.boughtFor = slaveeObj.money;
+					slaveeObj.boughtWhen = new Date().getTime();
+					if ( ! playerObj.slaves ) playerObj.slaves = [];
+					playerObj.slaves.push(slaveeObj.nick);
+					
+					PA.client.say(dest,"Slave "+slaveeObj.nick+" now belongs to "+playerObj.nick+".");
+					logWrite(playerObj, "Bought "+slaveeObj.nick+" for "+slaveeObj.money+"€.");
+					jf.writeFileSync('slaves.json',slavesMainObj);
+					
+				} else {
+					PA.client.say(dest,"You don't have enough money to buy "+slaveeObj.nick+".");
+				}
+			}
+			break;
+		}
+		case 'buyout': {
+			
+			if ( !playerObj.master ) {
+				PA.client.say(dest,"You don't have a master.");
+				return;
+			}
+			
+			if ( !playerObj.boughtFor ) playerObj.boughtFor = 5000;
+			if ( !playerObj.boughtWhen) playerObj.boughtWhen = new Date().getTime();
+			
+			var moneyToSpend = playerObj.boughtFor;
+			var tax = Math.floor(((new Date().getTime()) - playerObj.boughtWhen)/1000/60/60/24/7)*5;
+			moneyToSpend = moneyToSpend + moneyToSpend*(tax/100);
+			
+			if ( playerObj.tired ) {
+				PA.client.say(dest,"You are tired and can't release yourself at this moment.");
+				return;
+			}
+			
+			if ( playerObj.money >= moneyToSpend ) {
+
+				playerObj.money -= moneyToSpend;
+				playerObj.tired = true;
+				delete playerObj.master;
+				delete playerObj.boughtFor;
+				delete playerObj.boughtWhen;
+				
+				PA.client.say(dest,"Slave "+playerObj.nick+" freed themself for "+moneyToSpend+"€!");
+				//logWrite(sObj, "Freed yourself.");
+				jf.writeFileSync('slaves.json',slavesMainObj);
+				
+			} else {
+				PA.client.say(dest,"You don't have enough money to release yourself. You need: "+moneyToSpend+"€");
+			}
+			break;
+		}
+		case 'release': {
+			break;
+		}
+		case 'learn': {
+			break;
+		}
+		case 'tick': {
+			if ( PA.checkForPermission(from,messageObj.host,"z") ){
+				addTick();
+			}
+			break;
+		}
+		case 'stats': {
+			var targObj;
+			if ( message.length > 2 && message[2].length > 0 ) {
+				var name = message[2];
+				var slaveeObj = _.find(slaves, function(slv) {return slv.nick.toLowerCase() == name.toLowerCase();} );
+				if ( !slaveeObj ) {
+					PA.client.say(dest,"No slave found with that nick.");
+					return;
+				}
+				targObj = slaveeObj;
+			} else {
+				targObj = playerObj;
+			}
+			PA.client.say(dest,targObj.nick+"|| €:"+targObj.money+" Alignment:"+targObj.alignment+" Mood:"+targObj.mood+" Tired:"+targObj.tired+" Master:" +(targObj.master?targObj.master:"N/A"));
+			break;
+		}
+		default: {
+			PA.client.say(dest,"404 command not found~ // Tried +help?");
+		}
+		
+		
+		
+		//***** AUX
+		function giveMoney(sObj, value, depth){
+			if ( depth > 2 ) return;
+			if ( sObj.master ) {
+				var split = value * 0.2;
+				value -= split;
+				masterObj = _.find(slaves, function(slv) {return slv.nick.toLowerCase() == sObj.master.toLowerCase();} );
+				if ( masterObj ) { giveMoney(masterObj,split,depth+1); }
+			} else {
+				
+			}
+			sObj.money += value;
+			logWrite(sObj, "Received "+value+"€ for working.");
+		}
+		function logWrite( sObj, log ){
+			sObj.logs.push(log);
+			if ( sObj.logs.length > 10 ) {
+				sObj.logs.splice(0,1);
+			}
+		}
+		//***** EO
+	}
+}
+
+function _cahCmd(from,to,dest,message,messageObj ){
+	
+	var blackCards = jf.readFileSync('pick1.json');
+	
+	if ( !PA.cah ) PA.cah = {};
+	
+	if ( PA.cah && PA.cah.game ){
+		PA.client.say(dest,"Game already going.");
+		return;
+	} else {
+		if (!PA.cah.game) PA.cah.game = {};
+		
+		PA.cah.game.askee = from;
+		PA.cah.game.chan = to;
+		
+		var bKeys = Object.keys(blackCards);
+		var r = randomIntInc(0,bKeys.length-1);
+		
+		var card = blackCards[bKeys[r]];
+		card.text = card.text.replace("_","_____");
+		PA.cah.game.card = card;
+		PA.cah.game.players = [];
+		PA.cah.game.phase = 0;
+		PA.cah.game.playEvent = setTimeout(_cahPlayEvent, 60000);
+		
+		PA.client.say(dest,"A new round of CaH has started! PM me with +cahjoin to enter the round!!");
+		PA.client.say(dest,card.text);
+		
+	}
+	
+	function _cahPlayEvent ( ) {
+		
+		PA.cah.game.phase = 1;
+		var chosenCards = [];
+		
+		for (var i = 0 ; i < PA.cah.game.players.length; i++ ) {
+			var player = PA.cah.game.players[i];
+			if ( player.chosenCard )
+				chosenCards.push({nick: player.nick, card: player.chosenCard, votes: 0});
+		}
+		PA.cah.game.chosenCards = chosenCards;
+		
+		for (var i = 0 ; i < PA.cah.game.players.length; i++ ) {
+			var player = PA.cah.game.players[i];
+			PA.client.say(player.nick,"Time to vote. Use +cahvote <number>");
+			for(var j=0; j<chosenCards.length; j++) {
+				//if (chosenCards[j].nick != player.nick)
+					PA.client.say(player.nick,(j+1)+": "+chosenCards[j].card.text);
+			}
+		}
+		
+		PA.cah.game.voteEvent = setTimeout(_cahVoteEvent, 60000);
+	}
+	function _cahVoteEvent ( ) {
+		PA.cah.game.phase = 2;
+		var chosenCards = PA.cah.game.chosenCards;
+		
+		var votedCards = _.sortBy(chosenCards, function(card){ return card.votes*-1; });
+		
+		PA.client.say(PA.cah.game.chan,"Black card was: "+PA.cah.game.card.text);
+		PA.client.say(PA.cah.game.chan,"Results by votes: ");
+		/*
+		var max = 0;
+		for (var i = 0 ; i < votedCards.length; i++ ) {
+			var vCard = votedCards[i];
+			if ( max <= vCard.votes ) {
+				max = vCard.votes;
+			}
+		}
+		*/
+		for (var i = 0 ; i < votedCards.length; i++ ) {
+			var vCard = votedCards[i];
+			if ( vCard.votes > 0 ) {
+				PA.client.say(PA.cah.game.chan,vCard.votes+" votes by "+vCard.nick+":"+vCard.card.text);
+			}
+		}
+		
+		delete PA.cah.game;
+	}
+}
+
+function _cahjoinCmd(from,to,dest,message,messageObj ){
+	if ( PA.cah && PA.cah.game ){
+		var finder = _.find(PA.cah.game.players, function(player){ return player.nick.toLowerCase() == from.toLowerCase(); });
+		if ( PA.cah.game.phase != 0 ) {
+			PA.client.say(dest,"This is not joining phase.");
+			return;
+		}
+		if ( finder ) {
+			PA.client.say(dest,"You already joined.");
+			return;		
+		} else {
+			var playerObj = {};
+			playerObj.nick = from;
+			playerObj.cards = [];
+			var whiteCards = jf.readFileSync('answers.json');
+			var wKeys = Object.keys(whiteCards);
+			var passed = [];
+			for(var i=0; i<5; ){
+				var r = randomIntInc(0,wKeys.length-1);
+				if ( passed.indexOf(r) == -1 ){
+					playerObj.cards.push(whiteCards[wKeys[r]]);
+					i++;
+				}
+			}
+			PA.cah.game.players.push(playerObj);
+			PA.client.say(dest,"Type: +cahplay <card number> to play. The black card is: "+PA.cah.game.card.text);
+			for(var i=0; i<playerObj.cards.length; i++){
+				PA.client.say(dest,(i+1)+": "+playerObj.cards[i].text);
+			}
+		}
+
+	} else {
+		PA.client.say(dest,"There is no game going right now.");
+	}
+}
+
+function _cahplayCmd(from,to,dest,message,messageObj ){
+	if ( PA.cah && PA.cah.game ){
+		var finder = _.find(PA.cah.game.players, function(player){ return player.nick.toLowerCase() == from.toLowerCase(); });
+		var choice = parseInt(message[1]);
+		if ( isNaN(choice) ) {
+			PA.client.say(dest,"Bad value...");
+			return;
+		}
+		if ( PA.cah.game.phase != 0 ) {
+			PA.client.say(dest,"This is not playing phase.");
+			return;
+		}
+		if ( !finder ) {
+			PA.client.say(dest,"You haven't joined yet, try +cahjoin");
+			return;		
+		} else {
+			if ( choice > 0 && choice <= finder.cards.length ) {
+				finder.chosenCard = finder.cards[--choice];
+				PA.client.say(dest,"Wait for the voting round. You've chosen "+(++choice)+": "+finder.chosenCard.text);
+			} else {
+				PA.client.say(dest,"Bad value...");
+				return;
+			}
+		}
+
+	} else {
+		PA.client.say(dest,"There is no game going right now.");
+	}
+}
+
+function _cahvoteCmd(from,to,dest,message,messageObj ){
+	if ( PA.cah && PA.cah.game ){
+		var finder = _.find(PA.cah.game.players, function(player){ return player.nick.toLowerCase() == from.toLowerCase(); });
+		var choice = parseInt(message[1]);
+		if ( isNaN(choice) ) {
+			PA.client.say(dest,"Bad value...");
+			return;
+		}
+		if ( PA.cah.game.phase != 1 ) {
+			PA.client.say(dest,"This is not voting phase.");
+			return;
+		}
+		if ( !finder ) {
+			PA.client.say(dest,"You haven't joined this round. :(");
+			return;		
+		} else {
+			if ( finder.hasVoted ){
+				PA.client.say(dest,"You have already voted.");	
+				return;
+			}
+			var chosenCards = PA.cah.game.chosenCards;
+
+			if ( choice > 0 && choice <= chosenCards.length ) {
+				var card = chosenCards[--choice];
+				card.votes += 1;
+				finder.hasVoted = true;
+				PA.client.say(dest,"You've voted for "+(++choice)+": "+card.card.text);
+			} else {
+				PA.client.say(dest,"Bad value...");
+				return;
+			}
+		}
+
+	} else {
+		PA.client.say(dest,"There is no game going right now.");
+	}
 }
