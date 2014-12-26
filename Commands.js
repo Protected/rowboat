@@ -1,17 +1,28 @@
 //TODO: Figure a dynamic way of restricting commands by channel access but only on specific channels where an admin enables it( and then implement ;-) )
+//TODO: Bold [Random Event]
+//TODO: Change relations to use a database.
+//TODO: ^ for the slave game + full rewrite.
 
 //List of Commands
 var _ = require('underscore');
 var gates = require('logic-gates');
 var jf = require('jsonfile');
 var TimerJob = require('timer-jobs');
+var ElizaBot = require("elizabot");
 
 var PA = null;
 var commandList = [{
-    command: "hello",
-    func: _helloCmd,
-    help: "Displays an Hello world.",
-    dest: "any"
+    command: "therapy",
+    func: _therapyCmd,
+    help: ">:D",
+    dest: "any",
+	permission: "z",
+},{
+    command: "hal",
+    func: _halCmd,
+    help: ">:D",
+    dest: "any",
+	permission: "z",
 }, {
     command: "help",
     func: _helpCmd,
@@ -32,6 +43,13 @@ var commandList = [{
     syntax: "+adduser <username> <vhost>",
     permission: "z",
     minParams: 2
+}, {
+    command: "pfact",
+    func: _pfactCmd,
+    dest: "any",
+    help: "Shows the prime factorization of a given number.",
+    syntax: "+pfact <number>",
+	minParams: 1
 }, {
     command: "eval",
     func: _evalCmd,
@@ -301,8 +319,26 @@ function randomIntInc (low, high) {
 
 // Commands
 //+hello
-function _helloCmd(from, to, dest, message){
-	PA.client.notice(from,"World!");
+function _therapyCmd(from, to, dest, message){
+	//PA.client.notice(from,"World!");
+	if ( ! PA.therapist ) PA.therapist = {};
+	if ( ! PA.therapist[from] ) {
+		PA.therapist[from] = new ElizaBot();
+		var reply = PA.therapist[from].getInitial();
+		PA.client.say(dest,reply);
+	} else {
+		message.splice(0,1);
+		var mess = message.join(" ");
+		var reply = PA.therapist[from].transform(mess);
+		PA.client.say(dest,reply);
+		if ( PA.therapist[from].quit ) {
+			delete PA.therapist[from];
+		}
+	}
+
+}
+function _halCmd(from, to, dest, message){
+
 }
 //+help
 function _helpCmd(from, to, dest, message){
@@ -524,24 +560,33 @@ function _namesCmd (from, to, dest, message, messageObj){
 }
 
 function _adduserCmd ( from, to, dest, message, messageObj ){
-	var usrs = PA.users;
 	var nick = message[1];
 	var vhost = message[2];
-	if ( !usrs ) return;
-	var usr = _.find(usrs, function (usr) { return usr.nick.toLowerCase() == nick.toLowerCase(); });
-	if ( usr ) { PA.client.say(dest, "User "+usr.nick+" already exists." ); return; }
+	var perm;
+	PA.mdb.User.count({},function(err,count){
+		if ( err ) return;
+		perm = count==0?"z":"";
+		
+		PA.mdb.User.count({'nick':nick}, function(err,data){
+			if ( err ) return;
+			if ( data ){
+				PA.client.say(dest,"User with that nick already exists.");
+				return;
+			}
+			var newUser = new PA.mdb.User({
+				'nick': nick,
+				'host': vhost,
+				'permissions': perm
+			});
 
-	var perm = usrs.length==0?"z":"";
-
-	usr = {
-		'nick': nick,
-		'host': vhost,
-		'permissions': perm
-	};
-
-	PA.users.push(usr);
-	PA.client.say(dest,"User "+usr.nick+" created successfuly.");
-	jf.writeFile("users.json",PA.users,function(){});
+			newUser.save(function(err,nAff) {
+				if ( err ) return;
+				PA.client.say(dest,"User "+newUser.nick+" created successfuly.");
+				PA.loadUsers();
+			});
+			
+		});
+	});
 }
 
 function _deluserCmd ( from, to, dest, message, messageObj ){
@@ -550,9 +595,18 @@ function _deluserCmd ( from, to, dest, message, messageObj ){
 	if ( !usrs ) return;
 	var usr = _.find(usrs, function (usr) { return usr.nick.toLowerCase() == nick.toLowerCase(); });
 	if ( !usr ) { PA.client.say(dest, "User "+nick+" doesn't exist." ); return; }
-	PA.users = _.without(PA.users, _.findWhere(PA.users, {'nick': nick}));
-	PA.client.say(dest,"Removed user "+nick+".");
-	jf.writeFile("users.json",PA.users,function(){});
+	//PA.users = _.without(PA.users, _.findWhere(PA.users, {'nick': nick}));
+	
+	/*
+	var mUser = PA.mdb.User.find({
+		nick: nick
+	});
+	*/
+	
+	usr.remove(function(err,data){
+		PA.client.say(dest,"Removed user "+nick+".");
+		PA.loadUsers();
+	});
 }
 
 function _addpermCmd ( from, to, dest, message, messageObj ){
@@ -569,8 +623,13 @@ function _addpermCmd ( from, to, dest, message, messageObj ){
 		}
 	}
 
-	PA.client.say(dest, "Permission(s) added." );
-	jf.writeFile("users.json",PA.users,function(){});
+	usr.save(function(err,nAff) {
+		PA.client.say(dest, "Permission(s) added." );
+		PA.loadUsers();
+	});
+		
+	
+	
 }
 
 function _delpermCmd ( from, to, dest, message, messageObj ){
@@ -584,8 +643,11 @@ function _delpermCmd ( from, to, dest, message, messageObj ){
 		var perm = perms.charAt(i);
 		usr.permissions = usr.permissions.replace(perm,'');
 	}
-	PA.client.say(dest, "Permission(s) removed." );
-	jf.writeFile("users.json",PA.users,function(){});
+	
+	usr.save(function(err,nAff) {
+		PA.client.say(dest, "Permission(s) removed." );
+		PA.loadUsers();
+	});
 }
 
 function _lsusersCmd ( from, to, dest, message, messageObj ){
@@ -835,7 +897,7 @@ function _slaveryCmd(from,to,dest,message,messageObj ){
 	
 			var value = randomIntInc(50,200);
 			var mult = 1;
-			mult += ( 0.5 * Math.floor(playerObj.mood/50) );
+			mult += ( 0.25 * Math.floor(playerObj.mood/50) );
 			value *= mult;
 			
 			giveMoney(playerObj,value,0);
@@ -890,7 +952,7 @@ function _slaveryCmd(from,to,dest,message,messageObj ){
 				
 				playerObj.money -= money;
 				slaveeObj.money += money;
-				playerObj.mood  += money*0.05;
+				playerObj.mood  += money*0.5;
 				
 				
 				PA.client.say(dest,"Slave "+playerObj.nick+" gave money to his master/mistress "+slaveeObj.nick+" and gained something in return.");
@@ -1009,7 +1071,7 @@ function _slaveryCmd(from,to,dest,message,messageObj ){
 			} else {
 				targObj = playerObj;
 			}
-			PA.client.say(dest,targObj.nick+"|| €:"+targObj.money+" Alignment:"+targObj.alignment+" Mood:"+targObj.mood+" Tired:"+targObj.tired+" Master:" +(targObj.master?targObj.master:"N/A"));
+			PA.client.say(dest,targObj.nick+"|| €:"+Math.round(targObj.money)+" Alignment:"+Math.round(targObj.alignment)+" Mood:"+Math.round(targObj.mood)+" Tired:"+targObj.tired+" Master:" +(targObj.master?targObj.master:"N/A"));
 			break;
 		}
 		default: {
@@ -1225,4 +1287,42 @@ function _cahvoteCmd(from,to,dest,message,messageObj ){
 	} else {
 		PA.client.say(dest,"There is no game going right now.");
 	}
+}
+
+
+function _pfactCmd(from,to,dest,message,messageObj ){
+	
+	function factor(n) {
+		 if (isNaN(n) || !isFinite(n) || n%1!=0 || n==0) return ''+n;
+		 if (n<0) return '-'+factor(-n);
+		 var minFactor = leastFactor(n);
+		 if (n==minFactor) return ''+n;
+		 return minFactor+'*'+factor(n/minFactor);
+	}
+
+		// find the least factor in n by trial division
+	function leastFactor(n) {
+		 if (isNaN(n) || !isFinite(n)) return NaN;  
+		 if (n==0) return 0;  
+		 if (n%1 || n*n<2) return 1;
+		 if (n%2==0) return 2;  
+		 if (n%3==0) return 3;  
+		 if (n%5==0) return 5;  
+		 var m = Math.sqrt(n);
+		 for (var i=7;i<=m;i+=30) {
+		  if (n%i==0)      return i;
+		  if (n%(i+4)==0)  return i+4;
+		  if (n%(i+6)==0)  return i+6;
+		  if (n%(i+10)==0) return i+10;
+		  if (n%(i+12)==0) return i+12;
+		  if (n%(i+16)==0) return i+16;
+		  if (n%(i+22)==0) return i+22;
+		  if (n%(i+24)==0) return i+24;
+		 }
+		 return n;
+	}
+	
+	var str = factor(message[1]);
+	
+	PA.client.say(dest,"Prime factorization of "+message[1]+": "+str);
 }

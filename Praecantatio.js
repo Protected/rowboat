@@ -3,21 +3,27 @@ var _ = require('underscore');
 var C = require('./Commands.js');
 var jf = require('jsonfile');
 var fs = require('fs');
+var megahal = require('jsmegahal');
+var sys = require("sys");
+var mongoose = require('mongoose');
+var config = require('./config');
 var argv = require('yargs')
           .default('server','irc.irchighway.net')
           .default('nick','Praecantatio')
           .default('channel','#empire')
-          .default('nickserv-passwd',null)
+          .default('password',null)
           .argv
 		  ;
 
+		  
 var client = new irc.Client(argv.server, argv.nick, {
     channels: [argv.channel,'#game'],
 	userName: 'Prae',
 	realName: 'Praecantatio',
 	floodProtection: true,
 	floodProtectionDelay: 500,
-	stripColors: true
+	stripColors: true,
+	password: argv.password
 });
 var users = [];
 var channelSettings = [{
@@ -37,16 +43,101 @@ var channelSettings = [{
 		}
 	]
 }];
+var db = mongoose.connect(config.mongoConnStr);
+var Schema = mongoose.Schema;
+var PAObj;
+
+var userSchema = new Schema({
+	 nick: String
+	,host: String
+	,permissions: String
+});
+var User = mongoose.model('User',userSchema);
+
+function loadUsers() {
+	User.find({}, function(err, data ){
+		if ( err ) {console.dir(err); return ;}
+		users = data;
+		PAObj.users = users;
+		console.log("Users Loaded!");
+	});
+};
+loadUsers();
+var loadUsersEvent = setTimeout(loadUsers, 60000);
+
+var mdb = {
+	'db': db,
+	'Schema': Schema,
+	'User': User
+};
+
+
 
 //Public Access Object
-var PAObj = {
+PAObj = {
 	client: client,
 	checkForPermission: checkForPermission,
-	users: users
+	users: users,
+	'mdb': mdb,
+	loadUsers: loadUsers
 };
 
 
 C.setMain(PAObj);
+
+megahal.prototype.save = function() {
+		var saveObj = {
+			words: this.words,
+			quads: this.quads,
+			next: this.next,
+			prev: this.prev
+		};
+		jf.writeFileSync('mhal.json',saveObj);
+}
+megahal.prototype.load = function() {
+	try{
+		var saveObj = jf.readFileSync('mhal.json');
+		var _this = this;
+		//this.words = saveObj.words;
+		_.each(Object.keys(saveObj.words), function ( key ) {
+			_this.words[key] = saveObj.words[key];
+		});
+		//this.quads = saveObj.quads;
+		_.each(Object.keys(saveObj.quads), function ( key ) {
+			_this.quads[key] = saveObj.quads[key];
+			_this.quads[key].hash = function() {
+			  return this.tokens.join(',');
+			};
+			
+		});
+		//this.next = saveObj.next;
+		_.each(Object.keys(saveObj.next), function ( key ) {
+			_this.next[key] = saveObj.next[key];
+		});
+		//this.prev = saveObj.prev;
+		_.each(Object.keys(saveObj.prev), function ( key ) {
+			_this.prev[key] = saveObj.prev[key];
+		});
+	} catch (e) {
+		
+	}
+}
+
+var mhal = new megahal(4);
+mhal.load();
+
+var stdin = process.openStdin();
+
+stdin.addListener("data", function(d) {
+    // note:  d is an object, and when converted to a string it will
+    // end with a linefeed.  so we (rather crudely) account for that  
+    // with toString() and then substring() 
+	var str = d.toString().substring(0, d.length-1)
+	mhal.addMass(str);
+	mhal.save();
+    console.log("Parsed line");
+});
+
 
 client.addListener('error', function(message) {
     console.log('error: ', message);
@@ -60,10 +151,10 @@ client.addListener('raw', function ( messageObj) {
 
 //Commands
 client.addListener('message', function (from, to, message, messageObj) {
-    
+    var messageArr = message.split(" ");
+	var commandStr = messageArr[0].substring(1);
+	
     if ( message.charAt(0) == '+' ) {
-		var messageArr = message.split(" ");
-		var commandStr = messageArr[0].substring(1);
 		
 		if ( commandStr == "reassemble" && checkForPermission(from,messageObj.host,'z') ){
 			console.log(from + ' reassembled me!');
@@ -122,7 +213,16 @@ client.addListener('message', function (from, to, message, messageObj) {
 				console.log(ex);
 			}
 		}
-    }
+    } else if ( message.indexOf(argv.nick) > -1 ) {
+		var dest = to.charAt(0)=='#'?to:from;
+		client.say(dest,mhal.getReplyFromSentence(message));
+		
+	} else if ( message.charAt(0) == '!') {
+		
+	} else {
+		mhal.addMass(message);
+		mhal.save();
+	}
 
 });
 
@@ -139,13 +239,6 @@ function removeUser(channel, nick){
 	if ( !c ) return;
 	delete c.users[nick];
 }
-
-jf.readFile('users.json', function(err, obj){
-	if ( obj ){
-		users = obj;
-		PAObj.users = users;
-	}
-});
 
 function compareChannelLevels(l1, l2){
 	var values = {
@@ -191,9 +284,11 @@ function compareChannelLevels(l1, l2){
 function checkForPermission( nick, vhost, permission ){
 	if ( users.length == 0 ) return true;
 	if (typeof permission === 'undefined') return true;
-	var user = _.find(users, function(user){ return user.nick.toLowerCase() == nick.toLowerCase();});
+	var regexVhost = new RegExp(vhost,'i');
+	var user = _.find(users, function(usr){ return usr.nick.toLowerCase() == nick.toLowerCase();});
 	if ( !user ) return false;
-	if ( user.host.match( new RegExp(vhost)) && ( user.permissions.indexOf(permission) > -1 || user.permissions.indexOf('z') > -1 ) ) return true;
+	if ( !user.host.match(regexVhost) ) return false;
+	if ( user.permissions.indexOf(permission) > -1 || user.permissions.indexOf('z') > -1) return true;
 	return false;
 }
 
