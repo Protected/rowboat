@@ -25,27 +25,42 @@ var client = new irc.Client(argv.server, argv.nick, {
 	stripColors: true,
 	password: argv.password
 });
+var commandList = [];
 var users = [];
-var channelSettings = [{
-	network: 'irc.irchighway.net',
-	channels: [
-		{
-			name: "#languagelearning",
-			commands: [
-				{
-					name:"duel",
-					restrict:"!"
-				},{
-					name:"bomb",
-					restrict:"!"
-				},
-			]
-		}
-	]
-}];
+
 var db = mongoose.connect(config.mongoConnStr);
 var Schema = mongoose.Schema;
 var PAObj;
+
+//Modules
+var modules = [
+	{
+		name: 'Commands.js',
+		exp: undefined,
+		
+	},{
+		name: 'memo.js',
+		exp: undefined
+	}
+];
+function loadModules() {
+	commandList = [];
+	_.each(modules, function(module){
+		try{
+			if ( module.exp)
+				module.exp.onReassemble();
+			module.exp = requireUncached('./'+module.name);
+			module.exp.setMain(PAObj);
+			_.each(module.exp.commandList, function(cmd){
+				commandList.push(cmd);
+			});
+		}catch(ex){
+			console.log("[ERR] Loading module '"+module.name+"': "+ ex);
+		}
+	});
+}
+
+//EOModules
 
 var userSchema = new Schema({
 	 nick: String
@@ -66,6 +81,7 @@ loadUsers();
 var loadUsersEvent = setTimeout(loadUsers, 60000);
 
 var mdb = {
+	'mongoose': mongoose,
 	'db': db,
 	'Schema': Schema,
 	'User': User
@@ -83,7 +99,8 @@ PAObj = {
 };
 
 
-C.setMain(PAObj);
+//C.setMain(PAObj);
+loadModules();
 
 megahal.prototype.save = function() {
 		var saveObj = {
@@ -143,12 +160,6 @@ client.addListener('error', function(message) {
     console.log('error: ', message);
 });
 
-/*//DEBUG
-client.addListener('raw', function ( messageObj) {
-	console.log(JSON.stringify(messageObj));
-});
-//*///
-
 //Commands
 client.addListener('message', function (from, to, message, messageObj) {
     var messageArr = message.split(" ");
@@ -158,16 +169,12 @@ client.addListener('message', function (from, to, message, messageObj) {
 		
 		if ( commandStr == "reassemble" && checkForPermission(from,messageObj.host,'z') ){
 			console.log(from + ' reassembled me!');
-			if ( C.slaveTimer ) {
-				C.slaveTimer.stop();
-			}
-			C = requireUncached('./Commands.js');
-			C.setMain(PAObj);
-			client.say(from,"Reassembled!");
+			
+			loadModules();
 			return;
 		}
 		
-		var commandObj = C.getCommand(commandStr);
+		var commandObj = getCommand(commandStr);
 		if ( commandObj ){
 			try {
 				var dest;
@@ -176,7 +183,7 @@ client.addListener('message', function (from, to, message, messageObj) {
 					return;
 				}
 				if (  commandObj.minParams && messageArr.length < commandObj.minParams+1 ){
-					C.getCommand("help").func(from,to,from,['+help',commandStr],messageObj);
+					getCommand("help").func(from,to,from,['+help',commandStr],messageObj);
                     return;
 				}
 
@@ -201,12 +208,7 @@ client.addListener('message', function (from, to, message, messageObj) {
 				} else {
 					dest = to.charAt(0)=='#'?to:from;
 				}
-				/*
-				if ( dest==to && (!checkForRestrictions(dest,from,commandStr ) || checkForPermission(from,messageObj.host,commandObj.permission) )) {
-					client.say(dest,"Access denied. Restricted by the channel admin.");
-					return;
-				}
-				*/
+
 				commandObj.func(from,to,dest,messageArr,messageObj);
 				//if ( message.length < 2 ) { _helpCmd(from, to, ["+help","names"]); return; }
 			}catch(ex){
@@ -226,18 +228,14 @@ client.addListener('message', function (from, to, message, messageObj) {
 
 });
 
+function getCommand(commandStr){
+	return _.find(commandList, function(commandObj) { return commandObj.command.toLowerCase() == commandStr.toLowerCase() });
+}
+
 //Reload
 function requireUncached(module){
     delete require.cache[require.resolve(module)]
     return require(module)
-}
-//RemoveUserFromChannelList
-function removeUser(channel, nick){
-	var c = _.find(channels, function(c){
-		return c.name == channel;
-	});
-	if ( !c ) return;
-	delete c.users[nick];
 }
 
 function compareChannelLevels(l1, l2){
@@ -290,45 +288,6 @@ function checkForPermission( nick, vhost, permission ){
 	if ( !user.host.match(regexVhost) ) return false;
 	if ( user.permissions.indexOf(permission) > -1 || user.permissions.indexOf('z') > -1) return true;
 	return false;
-}
-
-function checkForRestrictions( channel, nick, command  ){
-	var c = _.find(Object.keys(client.chans), function(c) {
-		return c == channel;
-	});
-	c = client.chans[c];
-
-	if ( !c ) {
-		return false;
-	} else {
-		// Get the person's permission.
-		var perm = c.users[nick];
-		
-		//Get the settings block with the network in question.
-		var cs = _.find(channelSettings, function(cs){
-			return cs.network == argv.server;
-		});
-		
-		if ( !cs ) return true;
-
-		//Grab the block with information relative to the channel in question, inside the network block.
-		var csChan = _.find(cs.channels,function(csChan){
-			return csChan.name == channel;
-		});
-		
-		if ( !csChan ) return true;
-		
-		//Find the command within the channel block
-		var csChanCommand = _.find(csChan.commands, function(csChanCommand){
-			return csChanCommand.name == command;
-		});
-
-		if ( !csChanCommand ) return true;
-		
-		if ( compareChannelLevels(perm, csChanCommand.restrict) ) return true;
-		return false;
-	}
-
 }
 
 

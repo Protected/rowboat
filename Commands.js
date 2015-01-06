@@ -2,7 +2,12 @@
 //TODO: Bold [Random Event]
 //TODO: Change relations to use a database.
 //TODO: ^ for the slave game + full rewrite.
+/*
+	-hunt
+	-
 
+
+*/
 //List of Commands
 var _ = require('underscore');
 var gates = require('logic-gates');
@@ -155,6 +160,13 @@ var commandList = [{
     syntax: "+defuse <wire>",
     minParams: 1
 }, {
+    command: "bombkick",
+    func: _bombkickCmd,
+    dest: "any",
+    help: "Toggles bomb kicking.",
+    syntax: "",
+	permission: "b"
+}, {
     command: "duel",
     func: _duelCmd,
     dest: "channel",
@@ -250,9 +262,15 @@ function getCommand(commandStr){
 function setMain(mains){
 	PA = mains;
 }
+
+function onReassemble(){
+	if ( exports.slaveTimer ) {
+		exports.slaveTimer.stop();
+	}
+}
 //Exports
 exports.commandList = commandList;
-exports.getCommand = getCommand;
+exports.onReassemble = onReassemble;
 exports.setMain = setMain;
 exports.slaveTimer = new TimerJob({interval: 1000*60*15, immediate: false}, function(done) {
 	addTick();
@@ -501,6 +519,8 @@ function _bombCmd (from, to, dest, message, messageObj){
 		if ( !PA.bombCD ) PA.bombCD = {};
 		PA.bombCD[from] = new Date().getTime();
 		PA.bomb.bombee = bombee;
+		PA.bomb.original = bombee;
+		PA.bomb.bomber = from;
 		PA.bomb.event = setTimeout(_bombBlowEvent, 20000);
 		PA.bomb.wire = wires[Math.floor(Math.random()*wires.length)];
 		if ( message.length > 2 && message[2] == "-s" && PA.checkForPermission(from, messageObj.host, 'b')){
@@ -513,9 +533,11 @@ function _bombCmd (from, to, dest, message, messageObj){
 	}
 	
 	function _bombBlowEvent(){
+		
 		if ( PA.bomb ) {
+			if ( PA.bomb.bombee != PA.bomb.original ) PA.bomb.bombee = PA.bomb.bomber;
 			PA.client.say(dest,"Bomb has exploded and "+PA.bomb.bombee+" went Kaboom!");
-			PA.client.send("KICK",PA.bomb.channel,PA.bomb.bombee,"Badaboom!");
+			if ( PA.bombKick ) PA.client.send("KICK",PA.bomb.channel,PA.bomb.bombee,"Badaboom!");
 			delete PA.bomb;
 		}
 	}
@@ -531,11 +553,20 @@ function _defuseCmd (from, to, dest, message, messageObj){
 			PA.client.say(dest,"Bomb defused.");
 		} else {
 			PA.client.say(dest,"Wrong wire! Bomb exploded. :D");
-			PA.client.send("KICK",PA.bomb.channel,PA.bomb.bombee,"Badaboom!");
+			if ( PA.bombKick ) PA.client.send("KICK",PA.bomb.channel,PA.bomb.bombee,"Badaboom!");
 		}
 		clearTimeout(PA.bomb.event);
 		delete PA.bomb;
 	}
+}
+
+function _bombkickCmd( from, to, dest, message, messageObj ) {
+	if ( PA.bombKick ) {
+		PA.bombKick = !PA.bombKick;
+	} else {
+		PA.bombKick = true;
+	}
+	PA.client.say(dest,"Bomb Kicking set to: "+PA.bombKick);
 }
 
 function _namesCmd (from, to, dest, message, messageObj){
@@ -922,6 +953,33 @@ function _slaveryCmd(from,to,dest,message,messageObj ){
 			break;
 		}
 		case 'steal': {
+			if ( ! playerObj.master ) {
+				PA.client.say(dest,"You don't have a master to steal money from.");
+				return;
+			}
+			if ( playerObj.tired ) {
+				PA.client.say(dest,"You are tired and can't buy a slave at this moment.");
+				return;
+			}
+			
+			var masterName = playerObj.master;
+			var masterObj = _.find(slaves, function(slv) {return slv.nick.toLowerCase() == masterName.toLowerCase();} );
+			if ( !masterObj ) {
+				PA.client.say(dest,"No slave found with that nick.");
+				return;
+			}
+			
+			var r = randomIntInc(5,20);
+			var money = masterObj.money * (r/100);
+			
+			masterObj.money -= money;
+			playerObj.money += money;
+			playerObj.alignment -= 5;
+			playerObj.tired = true;
+			
+			PA.client.say(dest,"Slave "+playerObj.nick+" stole money from their master/mistress "+masterObj.nick+".");
+			jf.writeFileSync('slaves.json',slavesMainObj);
+		
 			break;
 		}
 		case 'give': {
@@ -931,6 +989,7 @@ function _slaveryCmd(from,to,dest,message,messageObj ){
 					PA.client.say(dest,"You don't have a master to give money to.");
 					return;
 				}
+				
 			
 				var slaveName = playerObj.master;
 				var slaveeObj = _.find(slaves, function(slv) {return slv.nick.toLowerCase() == slaveName.toLowerCase();} );
@@ -953,9 +1012,10 @@ function _slaveryCmd(from,to,dest,message,messageObj ){
 				playerObj.money -= money;
 				slaveeObj.money += money;
 				playerObj.mood  += money*0.5;
+				playerObj.alignment += 5;
 				
 				
-				PA.client.say(dest,"Slave "+playerObj.nick+" gave money to his master/mistress "+slaveeObj.nick+" and gained something in return.");
+				PA.client.say(dest,"Slave "+playerObj.nick+" gave money to their master/mistress "+slaveeObj.nick+" and gained something in return.");
 				jf.writeFileSync('slaves.json',slavesMainObj);
 				
 			} else {
