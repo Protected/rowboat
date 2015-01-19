@@ -261,6 +261,10 @@ function getCommand(commandStr){
 //Set Main Instance PA
 function setMain(mains){
 	PA = mains;
+	exports.slaveTimer = new TimerJob({interval: 1000*60*15, immediate: false}, function(done) {
+		addTick();
+		done();
+	});
 }
 
 function onReassemble(){
@@ -272,11 +276,8 @@ function onReassemble(){
 exports.commandList = commandList;
 exports.onReassemble = onReassemble;
 exports.setMain = setMain;
-exports.slaveTimer = new TimerJob({interval: 1000*60*15, immediate: false}, function(done) {
-	addTick();
-    done();
-});
-exports.slaveTimer.start();
+
+//exports.slaveTimer.start();
 
 function addTick() {
 	var slaves =  jf.readFileSync('slaves.json');

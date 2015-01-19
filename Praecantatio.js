@@ -37,9 +37,11 @@ var modules = [
 	{
 		name: 'Commands.js',
 		exp: undefined,
-		
 	},{
 		name: 'memo.js',
+		exp: undefined
+	},{
+		name: 'deeps.js',
 		exp: undefined
 	}
 ];
