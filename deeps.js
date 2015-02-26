@@ -16,6 +16,11 @@ var commandList = [{
     help: "Joins the game: The Deeps",
     dest: "any",
 },{
+    command: "tdcommands",
+    func: _tdCommandsCmd,
+    help: "List the commands relative to The Deeps",
+    dest: "any",
+},{
 	command: "stats",
 	func: _statsCmd,
 	help: "Gives stats of the player in The Deeps",
@@ -24,6 +29,11 @@ var commandList = [{
 	command: "warp",
 	func: _warpCmd,
 	help: "Warps to another system in The Deeps",
+	dest: "any",
+},{
+	command: "mine",
+	func: _mineCmd,
+	help: "Mines in the System you are in.",
 	dest: "any",
 },{
 	command: "deval",
@@ -71,7 +81,7 @@ function setMain(mains){
 		}
 	}
 	
-	tickTimer = setInterval( doTick , 1000*60*10 );
+	tickTimer = setInterval( doTick , 1000*60*15 );
 	function doTick(){
 		if ( TDPlayerShip && TDShip ){
 			TDPlayerShip.find({}).populate('Ship').exec(updateAllCapacitors);
@@ -170,7 +180,7 @@ function setMain(mains){
 					MaxShields: 200,
 					MaxFirepower: 50,
 					MaxCargo: 200,
-					MaxCapacitor: 500,
+					MaxCapacitor: 200,
 					CapacitorRecharge: 25,
 					Price: 3000,
 				});
@@ -192,59 +202,8 @@ function setMain(mains){
 				Fatalis.save(function(err,aff){});
 			}
 		});
-		//Systems
-		TDSystem.findOne({Name: 'Sanctuary'} , function(err,data) {
-			if ( err || !data || data.length == 0 ) {
-				var Sanctuary = new TDSystem({
-					Name: 'Sanctuary',
-					Security: 1,
-					Exits: [],
-					Asteroids: [],
-					PirateDrops: [],
-				});
-				Sanctuary.save(function(err,aff){});
-				var Valgrind = new TDSystem({
-					Name: 'Valgrind',
-					Security: 0.9,
-					Exits: [ Sanctuary._id ],
-					Asteroids: [],
-					PirateDrops: [],
-				});
-				Valgrind.save(function(err,aff){});
-				var Elysium = new TDSystem({
-					Name: 'Elysium',
-					Security: 0.9,
-					Exits: [ Sanctuary._id ],
-					Asteroids: [],
-					PirateDrops: [],
-				});
-				Elysium.save(function(err,aff){});
-				Sanctuary.Exits = [ Valgrind._id, Elysium._id ];
-				Sanctuary.save(function(err,aff){});
-				var Gyrth = new TDSystem({
-					Name: 'Gyrth',
-					Security: 0.6,
-					Exits: [ Elysium._id ],
-					Asteroids: [],
-					PirateDrops: [],
-				});
-				var Hjoldfadir = new TDSystem({
-					Name: 'Hjoldfadir',
-					Security: 0.5,
-					Exits: [ Elysium._id, Gyrth._id ],
-					Asteroids: [],
-					PirateDrops: [],
-				});
-				Gyrth.Exits.push(Hjoldfadir._id);
-				Gyrth.save(function(){});
-				Hjoldfadir.save(function(){});
-				Elysium.Exits.push(Hjoldfadir._id);
-				Elysium.Exits.push(Gyrth._id);
-				Elysium.save(function(){});
-				
-			}
-		});
-		loadSystems();
+		createSystems();
+		setTimeout(loadSystems,5000);
 		setTimeout(loadPlayers,5000);
 		
 	} catch( ex ) {
@@ -268,6 +227,104 @@ function onReassemble(){
 exports.commandList = commandList;
 exports.setMain = setMain;
 exports.onReassemble = onReassemble;
+
+function randomIntInc (low, high) {
+    return Math.floor(Math.random() * (high - low + 1) + low);
+}
+
+function createSystems(){
+	//Systems
+	var Sys = {};
+	var Pre = [
+				{ Name: 'Sanctuary', Security: 1},
+				{ Name: 'Valgrind', Security: 0.9},
+				{ Name: 'Elysium', Security: 0.9},
+				{ Name: 'Gyrth', Security: 0.6},
+				{ Name: 'Hjoldfadir', Security: 0.5},
+				{ Name: 'Yishiki', Security: 0.8},
+				{ Name: 'Hishin', Security: 0.6},
+				{ Name: 'Holloweth', Security: 0.4},
+				{ Name: 'Zuldrack', Security: 0.4},
+				{ Name: 'Gynth', Security: 0.3},
+				{ Name: 'Draek', Security: 0.3},
+				{ Name: 'Heide', Security: 0.6},
+				{ Name: 'Peide', Security: 0.6},
+				{ Name: 'Fishnyr', Security: 0.2},
+				{ Name: 'Fashnyr', Security: 0.5},
+				{ Name: 'Batatas', Security: 0.4},
+				{ Name: 'Cozidas', Security: 0.3},
+				{ Name: 'Fritas', Security: 0.3},
+				{ Name: 'Mingyang', Security: 0.2},
+				{ Name: 'End', Security: 0.1},
+				{ Name: 'Beginning', Security: 0.1},
+				{ Name: 'Firefrost', Security: 0.0},
+	];
+	//for(var i=0; i<Pre.length; i++){
+	
+	function doNewSystem(i){
+		var P = Pre[i];
+		TDSystem.findOne({Name: P.Name} , function(err,data) {
+			if ( err || !data || data.length == 0 ) {
+				Sys[P.Name] = new TDSystem({
+					Name: P.Name,
+					Security: P.Security,
+					Exits: [],
+					Asteroids: [],
+					PirateDrops: [],
+				});
+				
+			} else {
+				Sys[P.Name] = data;
+			}
+			
+			if ( !Pre[i+1] ) {
+				Sys[P.Name].save(function(err,aff){
+					dealExits();
+				});
+			} else {
+				Sys[P.Name].save(function(err,aff){
+					doNewSystem(i+1);
+				});
+			}
+		});
+	}
+	doNewSystem(0);
+	
+	function dealExits (err, aff){
+		//Make Exits
+		Sys['Sanctuary'].Exits = [Sys['Valgrind']._id,Sys['Elysium']._id];
+		Sys['Valgrind'].Exits = [Sys['Sanctuary']._id,Sys['Yishiki']._id];
+		Sys['Elysium'].Exits = [Sys['Sanctuary']._id,Sys['Hjoldfadir']._id,Sys['Gyrth']._id];
+		Sys['Gyrth'].Exits = [Sys['Elysium']._id,Sys['Hjoldfadir']._id];
+		Sys['Hjoldfadir'].Exits = [Sys['Elysium']._id,Sys['Gyrth']._id];
+		Sys['Yishiki'].Exits = [Sys['Valgrind']._id,Sys['Hishin']._id];
+		Sys['Hishin'].Exits = [Sys['Holloweth']._id,Sys['Yishiki']._id];
+		Sys['Holloweth'].Exits = [Sys['Zuldrack']._id,Sys['Draek']._id,Sys['Hishin']._id];
+		Sys['Zuldrack'].Exits = [Sys['Gynth']._id,Sys['Holloweth']._id,Sys['Valgrind']._id];
+		Sys['Gynth'].Exits = [Sys['Zuldrack']._id,Sys['Draek']._id,Sys['Fishnyr']._id,Sys['Heide']._id];
+		Sys['Draek'].Exits = [Sys['Mingyang']._id,Sys['Holloweth']._id,Sys['Gynth']._id];
+		Sys['Heide'].Exits = [Sys['Peide']._id,Sys['Gynth']._id,Sys['Gyrth']._id,Sys['Fashnyr']._id,Sys['Batatas']._id];
+		Sys['Peide'].Exits = [Sys['Heide']._id];
+		Sys['Fishnyr'].Exits = [Sys['Mingyang']._id,Sys['Gynth']._id];
+		Sys['Fashnyr'].Exits = [Sys['Fritas']._id,Sys['Heide']._id];
+		Sys['Batatas'].Exits = [Sys['Cozidas']._id,Sys['Fritas']._id,Sys['Heide']._id];
+		Sys['Cozidas'].Exits = [Sys['Batatas']._id];
+		Sys['Fritas'].Exits = [Sys['Batatas']._id,Sys['Fashnyr']._id];
+		Sys['Mingyang'].Exits = [Sys['End']._id,Sys['Fishnyr']._id,Sys['Draek']._id,];
+		Sys['End'].Exits = [Sys['Beginning']._id,Sys['Mingyang']._id];
+		Sys['Beginning'].Exits = [Sys['End']._id,Sys['Firefrost']._id];
+		Sys['Firefrost'].Exits = [Sys['Beginning']._id];
+		
+		_.each(Pre, function(PP){
+			console.log('Saving %s',Sys[PP.Name].Name);
+			Sys[PP.Name].save(function(err,aff){});
+		});
+		/*
+		//loadSystems();
+		*/
+	}
+	
+}
 
 function loadSystems(){
 	TDSystem.find({}).exec( loadSystemsIntoGlobal );
@@ -334,6 +391,15 @@ function loadPlayers(){
 	
 }
 
+function _tdCommandsCmd (from, to, dest, message, messageObj) {
+	var cmdStrs = [];
+	_.each(commandList, function(command){
+		if( PA.checkForPermission(from,messageObj.host,command.permission) ) 
+			cmdStrs.push(command.command);
+	});
+	PA.client.say(dest,"Commands for The Deep: "+cmdStrs.join(", "));
+}
+
 function _statsCmd (from, to, dest, message, messageObj) {
 	var player = _.find(Players, function(pl){
 		return pl.User.toLowerCase() == from.toLowerCase();
@@ -343,7 +409,7 @@ function _statsCmd (from, to, dest, message, messageObj) {
 		return;
 	}
 	
-	PA.client.say(dest,"Player "+player.User+" is flying a "+player.Ship.Ship.Name+" in the system "+player.Location.Name+" and has "+player.Ship.Capacitor+ "/"+player.Ship.Ship.MaxCapacitor+" cap.");
+	PA.client.say(dest,"Player "+player.User+" is flying a "+player.Ship.Ship.Name+" in the system "+player.Location.Name+", has "+player.Ship.Capacitor+ "/"+player.Ship.Ship.MaxCapacitor+" cap and has "+player.Money+"$.");
 	
 }
 
@@ -460,10 +526,11 @@ function _joinCmd (from, to, dest, message, messageObj) {
 }
 
 function _tdaShipCmd (from, to, dest, message, messageObj) {
-	TDPlayer.findOne({User:message[1]}).populate('Ship').exec(checkForPlayer ); 
+	TDPlayer.findOne({User:message[1]}).exec(checkForPlayer ); 
 	
 	var tdPlayer;
 	var tdShip;
+	var tdPlayerShip;
 	
 	function checkForPlayer(err,player){
 		if (!!err || !player){ 
@@ -479,13 +546,23 @@ function _tdaShipCmd (from, to, dest, message, messageObj) {
 			return;
 		}
 		tdShip = ship;
-		tdPlayer.Ship.Ship = tdShip;
-		tdPlayer.Ship.HP = tdShip.MaxHP;
-		tdPlayer.Ship.Shields = tdShip.MaxShields;
-		tdPlayer.Ship.Capacitor = tdShip.MaxCapacitor;
+		TDPlayerShip.findById(tdPlayer.Ship, checkForPlayerShip);
+	}
+	function checkForPlayerShip(err,plShip){
+		if (!!err || !plShip){
+			PA.client.say(dest,"Player ship not found.");
+			return;
+		}
+		tdPlayerShip = plShip;
+		tdPlayerShip.Ship = tdShip;
+		tdPlayerShip.HP = tdShip.MaxHP;
+		tdPlayerShip.Shields = tdShip.MaxShields;
+		tdPlayerShip.Capacitor = tdShip.MaxCapacitor;
 		tdPlayer.save(savePlayer);
+		
 	}
 	function savePlayer( err, aff ){
+		tdPlayerShip.save(function(){});
 		if(!!err || aff < 1){
 			PA.client.say(dest,"Problem saving.");
 		}else {
@@ -497,5 +574,60 @@ function _tdaShipCmd (from, to, dest, message, messageObj) {
 }
 
 function _tdaWarpCmd (from, to, dest, message, messageObj) {
+	
+}
+
+function _mineCmd (from, to, dest, message, messageObj) {
+	var player = _.find(Players, function(pl){
+		return pl.User.toLowerCase() == from.toLowerCase();
+	});
+	if ( !player ){
+		PA.client.say(dest,"You're not in the game. Join with +join.");
+		return;
+	}
+	if ( player.Ship.Capacitor < 50 ){
+		PA.client.say(dest, "You don't have enough capacitor energy to mine.");
+		return;
+	}
+	
+	var improve = 1 - player.Location.Security;
+	var width = 40;
+	var per = width/2;
+	var min = per*improve;
+	var chance = randomIntInc(min,min+40);
+	
+	var multi;
+	if ( chance < 20 ) {
+		PA.client.say(dest,"You found the remains of a mined asteroid belt.");
+		multi = 1;
+	} else if ( chance < 40 ){
+		PA.client.say(dest,"You found a small asteroid belt with decent ore.");
+		multi = 2;
+	} else if ( chance < 60 ){
+		PA.client.say(dest,"You found an average ore deposit.");
+		multi = 4;
+	} else if ( chance < 80 ){
+		PA.client.say(dest,"You found a generous ore deposit.");
+		multi = 8;
+	} else {
+		PA.client.say(dest,"Jackpot! You've found an asteroid belt with rare minerals.");
+		multi = 16;
+	}
+	var money = 500*multi;
+	money += randomIntInc(-250,250);
+	
+	TDPlayer.findById(player._id, updatePlayer);
+	function updatePlayer(err, pl){
+		pl.Money += money;
+		pl.save(savePlayerAndChangeCap);
+	}
+	function savePlayerAndChangeCap(err, aff){
+		TDPlayerShip.findById(player.Ship._id, changeCap);
+	}
+	function changeCap(err, plSh){
+		plSh.Capacitor -= 50;
+		plSh.save(loadPlayers);
+		PA.client.say(dest,"Mining it has yielded "+money+"$");
+	}
 	
 }

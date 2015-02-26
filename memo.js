@@ -12,16 +12,21 @@ var commandList = [{
 }];
 var Memo = null;
 var memoId = 0;
+var a;
 function setMain(mains){
 	PA = mains;
 	mdb = PA.mdb;
+	if ( !a ) {
+		a = PA.client.addListener('message', function (from, to, message, messageObj) {
+				checkForMemos(from,to,message,messageObj);
+		});
+	}
 	
-	PA.client.addListener('message', function (from, to, message, messageObj) {
-			checkForMemos(from,to,message,messageObj);
-	});
+	console.log(a);
 	
 	//# id channel ts lastnoticets sender receiver flags read msg deleted
 	//# 0  1       2  3            4       5       6    7    8    9
+	
 	try {
 		var memoSchema = new mdb.Schema({
 			 id: Number

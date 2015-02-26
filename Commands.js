@@ -13,7 +13,8 @@ var _ = require('underscore');
 var gates = require('logic-gates');
 var jf = require('jsonfile');
 var TimerJob = require('timer-jobs');
-var ElizaBot = require("elizabot");
+var ElizaBot = require('elizabot');
+var http = require('http');
 
 var PA = null;
 var commandList = [{
@@ -253,6 +254,13 @@ var commandList = [{
     dest: "source",
     help: "To vote on a round of CaH",
 	syntax: "+cahvote (under construction)"
+}, {
+    command: "w",
+    func: _wCmd,
+    help: "Provides weather information about a given city",
+	syntax: "+w <City Name>[,<country code>]",
+	minParams: 1,
+    dest: "any"
 }];
 //Find Command
 function getCommand(commandStr){
@@ -370,7 +378,7 @@ function _helpCmd(from, to, dest, message){
 //+commands
 function _commandsCmd(from, to, dest, message,messageObj){
 	var str = "";
-	_.each(commandList, function(commandObj){
+	_.each(PA.commandList, function(commandObj){
 		if( PA.checkForPermission(from,messageObj.host,commandObj.permission) ) 
 			str += (commandObj.command + " ");
 	});
@@ -508,7 +516,7 @@ function _bombCmd (from, to, dest, message, messageObj){
     		PA.client.say(dest,"There is no one in the channel with that nick.");
     		return;
     }
-	if ( PA.bombCD && PA.bombCD[from] && ( new Date().getTime() - PA.bombCD[from] < 1000*60*2) ) {
+	if (from!="AWRyder" && PA.bombCD && PA.bombCD[from] && ( new Date().getTime() - PA.bombCD[from] < 1000*60*2) ) {
 		PA.client.say(dest,"Better wait a bit before you do that again.");
 		return;
 	}
@@ -1386,4 +1394,48 @@ function _pfactCmd(from,to,dest,message,messageObj ){
 	var str = factor(message[1]);
 	
 	PA.client.say(dest,"Prime factorization of "+message[1]+": "+str);
+}
+
+function _wCmd(from,to,dest,message,messageObj ){
+	message.splice(0,1);
+	var q = message.join(' ');
+	
+	/*
+	api.openweathermap.org/data/2.5/forecast/daily?q=Vieira De Leiria&cnt=10&mode=json&APPID=d85015133fd35a39151165e48bad0e4e
+	*/
+	
+	var options = {
+	  host: 'api.openweathermap.org',
+	  port: 80,
+	  path: '/data/2.5/forecast/daily?q='+q+'&cnt=1&mode=json&APPID=d85015133fd35a39151165e48bad0e4e'
+	};
+
+	http.get(options, function(resp){
+	  var stf = "";
+	  resp.on('data', function(chunk){
+		//console.log(chunk);
+		stf+=chunk;
+	  });
+	  resp.on('end', function() {
+		try{
+			var res = JSON.parse(stf);
+			
+			if (!res || !res.city || !res.list || !res.list[0] || !res.list[0].weather[0]){
+				PA.client.say(dest,"Error communicating with the weather server.");
+				return;
+			}
+			
+			var name = res.city.name;
+			var country = res.city.country;
+			var weather = res.list[0].weather[0].main;
+			var min = Math.round(res.list[0].temp.min - 272.15);
+			var max = Math.round(res.list[0].temp.max - 272.15);
+			PA.client.say(dest,name+", "+country+": "+weather+" ("+min+"ºC/"+max+"ºC)");
+		} catch (e) {
+			PA.client.say(dest,"Error communicating with the weather server.");
+		}
+	  });
+	}).on("error", function(e){
+	  PA.client.say(dest,"Error communicating with the weather server.");
+	});
 }

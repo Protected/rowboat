@@ -97,7 +97,8 @@ PAObj = {
 	checkForPermission: checkForPermission,
 	users: users,
 	'mdb': mdb,
-	loadUsers: loadUsers
+	loadUsers: loadUsers,
+	commandList:commandList,
 };
 
 
@@ -162,10 +163,20 @@ client.addListener('error', function(message) {
     console.log('error: ', message);
 });
 
+var denied = ['sakura','[einbot]','angel','angelina','atsuko','Bot','chanstat','chibibot','demon','eir','ekaterina','juiz','sakura','strip','wolfy'];
+
 //Commands
 client.addListener('message', function (from, to, message, messageObj) {
     var messageArr = message.split(" ");
 	var commandStr = messageArr[0].substring(1);
+	var isDenied = false;
+	_.each(denied, function(den) {
+		if ( den.toLowerCase() == from.toLowerCase() ){
+			isDenied = true;
+			return;
+		}
+	});
+	if ( isDenied ) return;
 	
     if ( message.charAt(0) == '+' ) {
 		
