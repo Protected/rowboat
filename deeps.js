@@ -8,7 +8,7 @@ var TDPlayerShip = null;
 var TDSystem = null;
 var TDItem = null;
 
-var tickTimer = null;
+var tickTimer = null; 
 
 var commandList = [{
     command: "join",
