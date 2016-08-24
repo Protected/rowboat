@@ -70,9 +70,9 @@ function setMain(mains){
 	mdb = PA.mdb;
 	var Schema = mdb.Schema;
 	var ObjectId = mdb.Schema.ObjectId;
-	
+
 	function modelExists( name ) {
-		try { 
+		try {
 			var m = mdb.mongoose.model(name);
 			if ( m ) return true;
 			return false;
@@ -80,7 +80,7 @@ function setMain(mains){
 			return false;
 		}
 	}
-	
+
 	tickTimer = setInterval( doTick , 1000*60*15 );
 	function doTick(){
 		if ( TDPlayerShip && TDShip ){
@@ -95,14 +95,14 @@ function setMain(mains){
 					});
 					console.log("[TheDeep] Tick!");
 					loadPlayers();
-				}				
+				}
 			}
 		}
 	}
-	
-	
+
+
 	try{
-		
+
 		var tdShipSchema = new Schema({
 			Name: String,
 			MaxHP: Number,
@@ -113,14 +113,14 @@ function setMain(mains){
 			CapacitorRecharge:Number,
 			Price: Number,
 		});
-		
+
 		var tdItemSchema = new Schema({
 			Name: String,
 			Type: Number,
 			SellWorth: Number,
 			Size: Number,
 		});
-		
+
 		var tdPlayerShipSchema = new Schema({
 			Ship: {type: ObjectId, ref: 'TDShip'},
 			HP: Number,
@@ -128,7 +128,7 @@ function setMain(mains){
 			Cargo: { type: Array, "default": [] },
 			Capacitor: Number,
 		});
-		
+
 		var tdSystemSchema = new Schema ({
 			Name: String,
 			Security: Number,
@@ -136,7 +136,7 @@ function setMain(mains){
 			Asteroids: { type: Array, "default": [] },
 			PirateDrops: { type: Array, "default": [] },
 		});
-	
+
 		var tdPlayerSchema = new Schema({
 			User: String,
 			VHost: String,
@@ -144,7 +144,7 @@ function setMain(mains){
 			Ship: { type: ObjectId, ref: 'TDPlayerShip' },
 			Location: { type: ObjectId, ref: 'TDSystem' },
 		});
-		
+
 		if ( !modelExists('TDPlayer') ){
 			TDPlayer = mdb.mongoose.model('TDPlayer',tdPlayerSchema);
 		} else {
@@ -170,7 +170,7 @@ function setMain(mains){
 		}else {
 			TDItem = mdb.mongoose.model('TDItem');
 		}
-		
+
 		//Ships
 		TDShip.findOne( {Name: 'Imp'} , function(err, data) {
 			if ( err || !data || data.length == 0 ) {
@@ -205,7 +205,7 @@ function setMain(mains){
 		createSystems();
 		setTimeout(loadSystems,5000);
 		setTimeout(loadPlayers,5000);
-		
+
 	} catch( ex ) {
 		console.log(ex);/*
 		TDPlayer = mdb.mongoose.model('TDPlayer');
@@ -215,7 +215,7 @@ function setMain(mains){
 		TDItem = mdb.mongoose.model('TDItem');
 		*/
 	}
-	
+
 }
 
 function onReassemble(){
@@ -260,7 +260,7 @@ function createSystems(){
 				{ Name: 'Firefrost', Security: 0.0},
 	];
 	//for(var i=0; i<Pre.length; i++){
-	
+
 	function doNewSystem(i){
 		var P = Pre[i];
 		TDSystem.findOne({Name: P.Name} , function(err,data) {
@@ -272,11 +272,11 @@ function createSystems(){
 					Asteroids: [],
 					PirateDrops: [],
 				});
-				
+
 			} else {
 				Sys[P.Name] = data;
 			}
-			
+
 			if ( !Pre[i+1] ) {
 				Sys[P.Name].save(function(err,aff){
 					dealExits();
@@ -289,7 +289,7 @@ function createSystems(){
 		});
 	}
 	doNewSystem(0);
-	
+
 	function dealExits (err, aff){
 		//Make Exits
 		Sys['Sanctuary'].Exits = [Sys['Valgrind']._id,Sys['Elysium']._id];
@@ -314,21 +314,21 @@ function createSystems(){
 		Sys['End'].Exits = [Sys['Beginning']._id,Sys['Mingyang']._id];
 		Sys['Beginning'].Exits = [Sys['End']._id,Sys['Firefrost']._id];
 		Sys['Firefrost'].Exits = [Sys['Beginning']._id];
-		
+
 		_.each(Pre, function(PP){
-			console.log('Saving %s',Sys[PP.Name].Name);
+			//console.log('Saving %s',Sys[PP.Name].Name);
 			Sys[PP.Name].save(function(err,aff){});
 		});
 		/*
 		//loadSystems();
 		*/
 	}
-	
+
 }
 
 function loadSystems(){
 	TDSystem.find({}).exec( loadSystemsIntoGlobal );
-	
+
 	function loadSystemsIntoGlobal(err, data){
 		Systems = [];
 		_.each(data,function(system){
@@ -338,10 +338,10 @@ function loadSystems(){
 }
 
 function loadPlayers(){
-	
+
 	TDPlayer.find({}).exec( loadPlayersIntoGlobal );
-	
-	
+
+
 	function loadPlayersIntoGlobal(err, data) {
 		Players = [];
 		_.each(data,function(player){
@@ -366,7 +366,7 @@ function loadPlayers(){
 		_.each(data, function(plShip){
 			PlayerShips.push(plShip.toObject());
 		});
-		
+
 		for (var i=0; i<Players.length; i++){
 			var shipOf = null;
 			for (var j=0; j<PlayerShips.length; j++){
@@ -377,8 +377,8 @@ function loadPlayers(){
 			}
 			if ( shipOf ){
 				var pl = Players[i];
-				pl['Ship'] = shipOf; 
-				
+				pl['Ship'] = shipOf;
+
 				var ship = _.find(Ships, function(ship){
 					return ship._id.equals(pl.Ship.Ship);
 				});
@@ -388,13 +388,13 @@ function loadPlayers(){
 			}
 		}
 	}
-	
+
 }
 
 function _tdCommandsCmd (from, to, dest, message, messageObj) {
 	var cmdStrs = [];
 	_.each(commandList, function(command){
-		if( PA.checkForPermission(from,messageObj.host,command.permission) ) 
+		if( PA.checkForPermission(from,messageObj.host,command.permission) )
 			cmdStrs.push(command.command);
 	});
 	PA.client.say(dest,"Commands for The Deep: "+cmdStrs.join(", "));
@@ -408,9 +408,9 @@ function _statsCmd (from, to, dest, message, messageObj) {
 		PA.client.say(dest,"You're not in the game. Join with +join.");
 		return;
 	}
-	
+
 	PA.client.say(dest,"Player "+player.User+" is flying a "+player.Ship.Ship.Name+" in the system "+player.Location.Name+", has "+player.Ship.Capacitor+ "/"+player.Ship.Ship.MaxCapacitor+" cap and has "+player.Money+"$.");
-	
+
 }
 
 function _warpCmd (from, to, dest, message, messageObj) {
@@ -421,7 +421,7 @@ function _warpCmd (from, to, dest, message, messageObj) {
 		PA.client.say(dest,"You're not in the game. Join with +join.");
 		return;
 	}
-	
+
 	var exits = [];
 	_.each(player.Location.Exits, function (exit){
 		var exitSys = _.find(Systems, function(sys){
@@ -431,19 +431,19 @@ function _warpCmd (from, to, dest, message, messageObj) {
 			exits.push(exitSys.Name);
 		}
 	});
-	
+
 	if ( message.length < 2 ) {
 		PA.client.say(dest,"Exits: "+exits.join(', '));
 	} else {
 		var destination = message[1];
-		
+
 		var destSystem = _.find(exits, function(sys){
 			return sys.toLowerCase() == destination.toLowerCase();
 		});
 		if ( !destSystem ){
 			PA.client.say(dest, "There's no exit that matches.");
 			return;
-		}		
+		}
 		var chosenSys = _.find(Systems, function(sys){
 			return destSystem.toLowerCase() == sys.Name.toLowerCase();
 		});
@@ -455,7 +455,7 @@ function _warpCmd (from, to, dest, message, messageObj) {
 			PA.client.say(dest, "You don't have enough capacitor energy to make the jump.");
 			return;
 		}
-		
+
 		TDPlayer.findById(player._id, updatePlayer);
 		function updatePlayer(err, pl){
 			pl.Location = chosenSys._id;
@@ -469,10 +469,10 @@ function _warpCmd (from, to, dest, message, messageObj) {
 			plSh.save(loadPlayers);
 			PA.client.say(dest,player.User + " warped into "+destSystem+" successfuly!");
 		}
-		
+
 	}
-	
-	
+
+
 }
 
 function _devalCmd(from,to,dest,message,messageObj ){
@@ -489,12 +489,12 @@ function _devalCmd(from,to,dest,message,messageObj ){
 function _joinCmd (from, to, dest, message, messageObj) {
 	TDPlayer.findOne({User:from}, function(err,data){
 		if (data){ PA.client.say(dest,"You're already in the game!") ; loadPlayers(); return;}
-		
+
 		TDSystem.findOne({Name: 'Sanctuary'} , function(err,system) {
 			if ( err ) return;
 			TDShip.findOne( {Name: 'Imp'} , function(err, ship) {
 				if ( err ) return;
-				
+
 				var playerShip = new TDPlayerShip({
 					Ship: ship,
 					HP: ship.MaxHP,
@@ -503,7 +503,7 @@ function _joinCmd (from, to, dest, message, messageObj) {
 					Capacitor: ship.MaxCapacitor,
 				});
 				playerShip.save(function(){});
-				
+
 				var player = new TDPlayer({
 					User: from,
 					VHost: messageObj.host,
@@ -511,29 +511,29 @@ function _joinCmd (from, to, dest, message, messageObj) {
 					Ship: playerShip,
 					Location: system,
 				});
-				
+
 				player.save(function(err,aff){
 					TDPlayer.findOne({_id:player._id}).populate('Ship').exec(function(err,newPlayer){
 						PA.client.say(dest,"You have joined The Deep! Username: "+newPlayer.User+", Money:"+newPlayer.Money+".");
 						loadPlayers();
 					});
 				});
-				
+
 			});
 		});
-		
+
 	});
 }
 
 function _tdaShipCmd (from, to, dest, message, messageObj) {
-	TDPlayer.findOne({User:message[1]}).exec(checkForPlayer ); 
-	
+	TDPlayer.findOne({User:message[1]}).exec(checkForPlayer );
+
 	var tdPlayer;
 	var tdShip;
 	var tdPlayerShip;
-	
+
 	function checkForPlayer(err,player){
-		if (!!err || !player){ 
+		if (!!err || !player){
 			PA.client.say(dest,"Player not found.");
 			return;
 		}
@@ -559,7 +559,7 @@ function _tdaShipCmd (from, to, dest, message, messageObj) {
 		tdPlayerShip.Shields = tdShip.MaxShields;
 		tdPlayerShip.Capacitor = tdShip.MaxCapacitor;
 		tdPlayer.save(savePlayer);
-		
+
 	}
 	function savePlayer( err, aff ){
 		tdPlayerShip.save(function(){});
@@ -570,11 +570,11 @@ function _tdaShipCmd (from, to, dest, message, messageObj) {
 			loadPlayers();
 		}
 	}
-	
+
 }
 
 function _tdaWarpCmd (from, to, dest, message, messageObj) {
-	
+
 }
 
 function _mineCmd (from, to, dest, message, messageObj) {
@@ -589,13 +589,13 @@ function _mineCmd (from, to, dest, message, messageObj) {
 		PA.client.say(dest, "You don't have enough capacitor energy to mine.");
 		return;
 	}
-	
+
 	var improve = 1 - player.Location.Security;
 	var width = 40;
 	var per = width/2;
 	var min = per*improve;
 	var chance = randomIntInc(min,min+40);
-	
+
 	var multi;
 	if ( chance < 20 ) {
 		PA.client.say(dest,"You found the remains of a mined asteroid belt.");
@@ -615,7 +615,7 @@ function _mineCmd (from, to, dest, message, messageObj) {
 	}
 	var money = 500*multi;
 	money += randomIntInc(-250,250);
-	
+
 	TDPlayer.findById(player._id, updatePlayer);
 	function updatePlayer(err, pl){
 		pl.Money += money;
@@ -629,5 +629,5 @@ function _mineCmd (from, to, dest, message, messageObj) {
 		plSh.save(loadPlayers);
 		PA.client.say(dest,"Mining it has yielded "+money+"$");
 	}
-	
+
 }
