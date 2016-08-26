@@ -33,12 +33,6 @@ var modules = [
 	{
 		name: 'Commands.js',
 		exp: undefined,
-	},{
-		name: 'memo.js',
-		exp: undefined
-	},{
-		name: 'deeps.js',
-		exp: undefined
 	}
 ];
 function loadModules() {
@@ -62,15 +56,10 @@ function loadModules() {
 
 //TODO: Change to jsonfile
 function loadUsers() {
-	User.find({}, function(err, data ){
-		if ( err ) {console.dir(err); return ;}
-		users = data;
-		PAObj.users = users;
-		console.log("Users Loaded!");
-	});
+	users = jf.readFileSync("users.json");
+	PAObj.users = users;
 };
 
-loadUsers();
 var loadUsersEvent = setTimeout(loadUsers, 60000);
 
 //Public Access Object
@@ -82,6 +71,7 @@ PAObj = {
 	commandList: commandList,
 };
 
+loadUsers();
 loadModules();
 
 client.addListener('error', function(message) {
