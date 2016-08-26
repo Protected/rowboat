@@ -135,7 +135,7 @@ function _helpCmd(from, to, dest, message){
 }
 //+commands
 function _commandsCmd(from, to, dest, message,messageObj){
-	var str = "";
+	var str = "Commands: ";
 	_.each(PA.commandList, function(commandObj){
 		if( PA.checkForPermission(from,messageObj.host,commandObj.permission) ) 
 			str += (commandObj.command + " ");

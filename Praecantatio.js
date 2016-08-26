@@ -5,16 +5,16 @@ var jf = require('jsonfile');
 var fs = require('fs');
 
 var argv = require('yargs')
-          .default('server','irc.irchighway.net')
+          .default('server','irc.quakenet.org')
           .default('nick','Praecantatio')
-          .default('channel','#empire')
+          .default('channel','#discworld')
           .default('password',null)
           .argv
 		  ;
 
 		  
 var client = new irc.Client(argv.server, argv.nick, {
-    channels: [argv.channel,'#game'],
+    channels: [argv.channel],
 	userName: 'Prae',
 	realName: 'Praecantatio',
 	floodProtection: true,
@@ -81,15 +81,7 @@ client.addListener('error', function(message) {
 //Commands
 client.addListener('message', function (from, to, message, messageObj) {
     var messageArr = message.split(" ");
-	var commandStr = messageArr[0].substring(1);
-	var isDenied = false;
-	_.each(denied, function(den) {
-		if ( den.toLowerCase() == from.toLowerCase() ){
-			isDenied = true;
-			return;
-		}
-	});
-	if ( isDenied ) return;
+    var commandStr = messageArr[0].substring(1);
 	
     if ( message.charAt(0) == '+' ) {
 		
