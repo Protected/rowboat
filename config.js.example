@@ -1,1 +1,0 @@
-exports.mongoConnStr = 'mongo connection string';
