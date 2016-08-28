@@ -104,6 +104,7 @@ function onReassemble(){
 exports.commandList = commandList;
 exports.onReassemble = onReassemble;
 exports.setMain = setMain;
+exports.messageCallback = null;
 
 //Aux
 function isUserInChannel(channel, nick){
@@ -137,7 +138,7 @@ function _helpCmd(from, to, dest, message){
 function _commandsCmd(from, to, dest, message,messageObj){
 	var str = "Commands: ";
 	_.each(PA.commandList, function(commandObj){
-		if( PA.checkForPermission(from,messageObj.host,commandObj.permission) ) 
+		if( PA.checkForPermission(from,messageObj.host,commandObj.permission) )
 			str += (commandObj.command + " ");
 	});
 	PA.client.say(from, str);
@@ -190,7 +191,7 @@ function _adduserCmd ( from, to, dest, message, messageObj ){
 	PA.mdb.User.count({},function(err,count){
 		if ( err ) return;
 		perm = count==0?"z":"";
-		
+
 		PA.mdb.User.count({'nick':nick}, function(err,data){
 			if ( err ) return;
 			if ( data ){
@@ -208,7 +209,7 @@ function _adduserCmd ( from, to, dest, message, messageObj ){
 				PA.client.say(dest,"User "+newUser.nick+" created successfuly.");
 				PA.loadUsers();
 			});
-			
+
 		});
 	});
 }
@@ -220,13 +221,13 @@ function _deluserCmd ( from, to, dest, message, messageObj ){
 	var usr = _.find(usrs, function (usr) { return usr.nick.toLowerCase() == nick.toLowerCase(); });
 	if ( !usr ) { PA.client.say(dest, "User "+nick+" doesn't exist." ); return; }
 	//PA.users = _.without(PA.users, _.findWhere(PA.users, {'nick': nick}));
-	
+
 	/*
 	var mUser = PA.mdb.User.find({
 		nick: nick
 	});
 	*/
-	
+
 	usr.remove(function(err,data){
 		PA.client.say(dest,"Removed user "+nick+".");
 		PA.loadUsers();
@@ -251,9 +252,9 @@ function _addpermCmd ( from, to, dest, message, messageObj ){
 		PA.client.say(dest, "Permission(s) added." );
 		PA.loadUsers();
 	});
-		
-	
-	
+
+
+
 }
 
 function _delpermCmd ( from, to, dest, message, messageObj ){
@@ -267,7 +268,7 @@ function _delpermCmd ( from, to, dest, message, messageObj ){
 		var perm = perms.charAt(i);
 		usr.permissions = usr.permissions.replace(perm,'');
 	}
-	
+
 	usr.save(function(err,nAff) {
 		PA.client.say(dest, "Permission(s) removed." );
 		PA.loadUsers();
@@ -298,4 +299,3 @@ function _whoamiCmd( from, to, dest, message, messageObj ){
 	if ( !usr ) { PA.client.notice(from, "You are not in the list." ); return; }
 	PA.client.notice(from,"N:"+usr.nick+" H:"+usr.host+" F:"+usr.permissions);
 }
-

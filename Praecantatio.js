@@ -12,7 +12,7 @@ var argv = require('yargs')
           .argv
 		  ;
 
-		  
+
 var client = new irc.Client(argv.server, argv.nick, {
     channels: [argv.channel],
 	userName: 'Prae',
@@ -24,6 +24,7 @@ var client = new irc.Client(argv.server, argv.nick, {
 });
 
 var commandList = [];
+var callbackList = {};
 var users = [];
 
 var PAObj;
@@ -32,6 +33,10 @@ var PAObj;
 var modules = [
 	{
 		name: 'Commands.js',
+		exp: undefined,
+	},
+	{
+		name: "Disc.js",
 		exp: undefined,
 	}
 ];
@@ -46,6 +51,7 @@ function loadModules() {
 			_.each(module.exp.commandList, function(cmd){
 				commandList.push(cmd);
 			});
+			callbackList[module.name] = module.exp.messageCallback;
 		}catch(ex){
 			console.log("[ERR] Loading module '"+module.name+"': "+ ex);
 		}
@@ -82,16 +88,22 @@ client.addListener('error', function(message) {
 client.addListener('message', function (from, to, message, messageObj) {
     var messageArr = message.split(" ");
     var commandStr = messageArr[0].substring(1);
-	
+
+	_.each(modules, function(module){
+		if (callbackList[module.name]){
+			callbackList[module.name](from, to, message, messageObj);
+		}
+	});
+
     if ( message.charAt(0) == '+' ) {
-		
+
 		if ( commandStr == "reassemble" && checkForPermission(from,messageObj.host,'z') ){
 			console.log(from + ' reassembled me!');
-			
+
 			loadModules();
 			return;
 		}
-		
+
 		var commandObj = getCommand(commandStr);
 		if ( commandObj ){
 			try {
@@ -106,7 +118,7 @@ client.addListener('message', function (from, to, message, messageObj) {
 				}
 
 				console.log(from+" issued the command: "+messageArr);
-				
+
 				if ( commandObj.dest ){
 					switch (commandObj.dest){
 						case "source": dest = from; break;
@@ -135,12 +147,9 @@ client.addListener('message', function (from, to, message, messageObj) {
     } else if ( message.indexOf(argv.nick) > -1 ) {
 		var dest = to.charAt(0)=='#'?to:from;
 		client.say(dest,mhal.getReplyFromSentence(message));
-		
+
 	} else if ( message.charAt(0) == '!') {
-		
-	} else {
-		mhal.addMass(message);
-		mhal.save();
+
 	}
 
 });
@@ -179,7 +188,7 @@ function compareChannelLevels(l1, l2){
 			y = x;
 		}
 	}
-	
+
 	var v1;
 	try {
 		v1 = values[l1];
@@ -206,5 +215,3 @@ function checkForPermission( nick, vhost, permission ){
 	if ( user.permissions.indexOf(permission) > -1 || user.permissions.indexOf('z') > -1) return true;
 	return false;
 }
-
-
