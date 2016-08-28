@@ -1,2 +1,4 @@
-config.js
-mhal.json
+node_modules
+users.json
+discord.env
+

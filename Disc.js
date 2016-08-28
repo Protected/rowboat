@@ -7,13 +7,13 @@ var PA = null;
 var mybot = new Discord.Client();
 
 var commandList = [
-{
-    command: "dummy1",
-    func: _dummy1Cmd,
-    help: "Does dummy things",
-	syntax: "+dummy <arg> <arg>",
-    dest: "any",
-}
+    {
+        command: "dummy1",
+        func: _dummy1Cmd,
+        help: "Does dummy things",
+        syntax: "+dummy <arg> <arg>",
+        dest: "any",
+    }
 ];
 
 
@@ -39,14 +39,6 @@ exports.onReassemble = onReassemble;
 exports.messageCallback = onMessage;
 
 
-
-//// Function methods
-
-function _dummy1Cmd (from, to, dest, message, messageObj ) {
-	PA.client.say(dest,"It does things.");
-}
-
-
 // Discord related
 
 var settings = jsonfile.readFileSync("discord.env");
@@ -60,8 +52,9 @@ mybot.on("message", function(message) {
         username: message.author.username,
         content: message.content
     };
-	if ( mybot.user.username != blob.username )
-		PA.client.say(settings.channelName, blob.username+": "+blob.content);
+	if (mybot.user.username != blob.username) {
+		PA.client.say(settings.channelName, blob.username + ": " + blob.content);
+    }
 });
 
 mybot.on("ready", function(message) {
