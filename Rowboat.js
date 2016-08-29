@@ -37,7 +37,7 @@ var modules = [
 		exp: undefined,
 	},
 	{
-		name: "Disc.js",
+		name: "Discord.js",
 		exp: undefined,
 	}
 ];
