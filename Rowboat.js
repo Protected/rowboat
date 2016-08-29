@@ -1,86 +1,93 @@
-var irc = require('irc');
-var _ = require('underscore');
-var jf = require('jsonfile');
-
-var argv = require('yargs')
-          .default('server','irc.rizon.net')
-          .default('nick','Rowboat')
-          .default('channel','#discworld')
-          .default('password',null)
-          .argv
-		  ;
-
-
-var client = new irc.Client(argv.server, argv.nick, {
-    channels: [argv.channel],
-	userName: 'myshelter',
-	realName: 'Not a pun, just a misunderstanding.',
-	floodProtection: true,
-	floodProtectionDelay: 500,
-	stripColors: false,
-	password: argv.password
-});
-
-var callbackList = {};
-
-var PAObj;
-
-
-//Modules
-
-var modules = [
-	{
-		name: "Discord.js",
-		exp: undefined,
-	}
-];
-
-function loadModules() {
-	_.each(modules, function(module) {
-		try {
-			if (module.exp) {
-				module.exp.onReassemble();
-            }
-			module.exp = requireUncached('./' + module.name);
-			module.exp.setMain(PAObj);
-			callbackList[module.name] = module.exp.messageCallback;
-		} catch(ex) {
-			console.log("[ERR] Loading module '" + module.name + "': " + ex);
-		}
-	});
-}
-
-
-//Public Access Object
-
-PAObj = {
-	client: client
-};
-
-
-loadModules();
-
-
-client.addListener('error', function(message) {
-    console.log('error: ', message);
-});
-
-
-client.addListener('message', function (from, to, message, messageObj) {
-    var messageArr = message.split(" ");
-    var commandStr = messageArr[0].substring(1);
-
-	_.each(modules, function(module) {
-		if (callbackList[module.name]) {
-			callbackList[module.name](from, to, message, messageObj);
-		}
-	});
-});
-
-
-//Reload
+var jsonfile = require('jsonfile');
 
 function requireUncached(module) {
     delete require.cache[require.resolve(module)];
     return require(module);
 }
+
+var environments = {};
+var modules = {};
+
+
+//Load master config
+
+console.log("Welcome to Rowboat!");
+console.log("Loading master config...");
+
+try {
+    var config = jsonfile.readFileSync("config.json");
+} catch (e) {
+    console.log("Failed to load master config. Error: " + e.message);
+    return;
+}
+
+if (config.environments.length < 1) {
+    console.log("Environments provide connectivity. Please configure at least one environment.");
+    return;
+}
+
+if (config.modules.length < 1) {
+    console.log("Modules provide behavior. Please configure at least one module.");
+    return;
+}
+
+
+//Load and initialize environments
+
+for (var i = 0; i < config.environments.length; i++) {
+    var env = requireUncached("./Env" + config.environments[i] + ".js");
+    if (!env) {
+        console.log("Could not load the environment: " + config.environments[i] + " . Is the environment source in Rowboat's directory?");
+        return;
+    }
+    
+    if (!env.initialize()) {
+        console.log("Could not initialize the environment: " + config.environments[i] + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
+        return;
+    }
+    
+    env.registerOnError(function(env, err) {
+        console.log("[" + env + "] Error: " + err);
+    });
+    environments[env.name] = env;
+    
+    console.log("Successfully loaded environment: " + env.name);
+}
+
+
+//Load and initialize modules
+
+for (var i = 0; i < config.modules.length; i++) {
+    var mod = requireUncached("./Mod" + config.modules[i] + ".js");
+    if (!mod) {
+        console.log("Could not load the module: " + config.modules[i] + " . Is the module source in Rowboat's directory?");
+        return;
+    }
+    
+    for (var j = 0; j < mod.requiredenvironments.length; j++) {
+        if (!environments[mod.requiredenvironments[j]]) {
+            console.log("Could not initialize the module: " + mod.name + " because the required environment: " + mod.requiredenvironments[j] + " is not loaded.");
+            return;
+        }
+    }
+    
+    if (!mod.initialize(environments)) {
+        console.log("Could not initialize the module: " + mod.name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
+        return;
+    }
+    
+    modules[mod.name] = mod;
+    console.log("Successfully loaded module: " + mod.name);
+}
+
+
+//Connect environments
+
+var envs = Object.keys(environments);
+for (var i = 0; i < envs.length; i++) {
+    console.log("Requesting connection of environment " + envs[i] + " ...");
+    environments[envs[i]].connect();
+}
+
+
+console.log("Rowboat is now running.");

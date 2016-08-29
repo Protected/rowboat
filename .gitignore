@@ -1,4 +1,5 @@
 node_modules
-users.json
-discord.env
+*.env.json
+*.mod.json
+config.json
 
