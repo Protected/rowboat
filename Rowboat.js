@@ -2,7 +2,6 @@ var irc = require('irc');
 var _ = require('underscore');
 var C = require('./Commands.js');
 var jf = require('jsonfile');
-var fs = require('fs');
 
 var argv = require('yargs')
           .default('server','irc.rizon.net')
