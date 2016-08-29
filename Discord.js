@@ -3,11 +3,10 @@ var jsonfile = require('jsonfile');
 var cd = require('color-difference');
 
 var PA = null;
+exports.setMain = function (mains) { PA = mains; }
+exports.onReassemble = function () {}
+
 var mybot = new Discord.Client();
-
-var commandList = [
-
-];
 
 var colormap = [
 	"#FFFFFF",
@@ -26,16 +25,7 @@ var colormap = [
 	"#FF00FF",
 	"#7F7F7F",
 	"#D2D2D2"
-]
-
-
-function setMain(mains){
-	PA = mains;
-}
-
-function onReassemble() {
-
-}
+];
 
 function closestTtyColor(hexrgb) {
     var distance = 101;
@@ -58,7 +48,7 @@ var server;
 var channel;
 var channels = {};
 
-function onMessage (from, to, message, messageObj) {
+exports.messageCallback = function(from, to, message, messageObj) {
     var targetchan = channel;
 
     var directedmessage = /^\[#([a-zA-Z0-9]+)\] (.+)/.exec(message);
@@ -172,18 +162,11 @@ function onMessage (from, to, message, messageObj) {
     mybot.sendMessage(targetchan, "`<" + from + ">` " + finalmsg);
 }
 
-// Exports
-exports.commandList = commandList;
-exports.setMain = setMain;
-exports.onReassemble = onReassemble;
-exports.messageCallback = onMessage;
 
 
 // Discord related
 
 var settings = jsonfile.readFileSync("discord.env");
-
-var amIReady = false;
 
 mybot.on("message", function(message) {
     if (mybot.user.username == message.author.username) return;
@@ -226,8 +209,6 @@ mybot.on("ready", function(message) {
 	channel = server.channels.getAll("type", "text").get("name", settings.discordChannel);
 	channels[settings.discordChannel] = channel;
 	channels[server.defaultChannel.name] = server.defaultChannel;
-    amIReady = true;
 });
 
-mybot.loginWithToken(settings.token, function(err) {
-});
+mybot.loginWithToken(settings.token, function(err) {});
