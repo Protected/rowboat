@@ -144,7 +144,7 @@ exports.connect = function() {
         remPeople(nick, [channel]);
     });
     
-    client.addListener('kick', function(oldnick, newnick, channels, messageObj) {
+    client.addListener('nick', function(oldnick, newnick, channels, messageObj) {
         remPeople(oldnick, channels);
         addPeople(newnick, channels, messageObj);
     });
