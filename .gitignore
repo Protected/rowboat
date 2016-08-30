@@ -1,5 +1,6 @@
 node_modules
 *.env.json
 *.mod.json
+*.data.json
 config.json
 

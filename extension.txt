@@ -19,9 +19,9 @@ connect()
 disconnect()
     Should disconnect the environment. A new connect() may then be issued.
     
-msg(target, msg)
-    Should send a message through the remote connection, to the recipient 'target'.
-    'target' must at least support the following types: null (sends the message to a default target) and "string" (sends the message to the target identified by the string).
+msg(targetid, msg)
+    Should send a message through the remote connection, to the recipient 'targetid'.
+    'targetid' must at least support the following types: null (sends the message to a default target) and "string" (sends the message to the target identified by the string).
     
 registerOnError(callback)
     >> callback(env, errormsg)
@@ -29,11 +29,23 @@ registerOnError(callback)
     All registered callbacks should be executed in order until one of them returns true.
 
 registerOnMessage(callback)
-    >> callback(env, type, message, author, rawobject)
+    >> callback(env, type, message, authorid, rawobject)
     Other modules use this to register a callback for execution when a message is received through the remote connection.
     'env' is the environent name, 'type' is the message type (a string which is "regular" by default) 'message' are the message's contents and 'author' is a string representing the author.
     'rawobject' can be an ENVIRONMENT-SPECIFIC object you wish to expose to the other modules, or null.
     All registered callbacks should be executed in order until one of them returns true.
+    
+idToDisplayName(id)
+    Returns a display name for an authorid/targetid. This can be the id itself.
+    
+displayNameToId(displayname)
+    Returns an authorid/targetid for the given display name, if possible or null if the entity could not be resolved.
+    
+idIsSecured(id)
+    Returns true if the id should be considered by the calling module to be connected securely.
+    
+idIsAuthenticated(id)
+    Returns true if the id should be considered by the calling module to be authenticated (the identity of the connection has been verified).
 
 getRawObject()
     This returns an ENVIRONMENT-SPECIFIC object providing direct access to the remote connection to other modules, or null.
@@ -57,10 +69,11 @@ requiredmodules
     A list of modules that must have been previously loaded for the module to be allowed to load.
     All modules directly used by the declaring module should be listed here.
     
-initialize(environments, moduleRequest)
+initialize(environments, modules, moduleRequest)
     Executed when the module is loaded. The module's parameters should be loaded here, and any callbacks should be registered here. Return true for success or false for failure.
     By convention, parameters should be stored in LOWERCASENAME.mod.json, where LOWERCASENAME is the name of the module in lower case.
-    'environments' is a map with the environments loaded by Rowboat, to be used for registering callbacks.
+    'environments' is a map with the environments loaded by Rowboat, to be used for registering callbacks. Trust only in the presence of requiredenvironments.
+    'modules' is a map with the modules previously loaded by Rowboat. Trust only in the presence of requiredmodules.
     'moduleRequest' is a function that can be used to register a callback for execution with a module that may not have been loaded yet. This should only be done within initialize().
         >> moduleRequest(modname, callback)
         >> callback(module)

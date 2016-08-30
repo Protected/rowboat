@@ -15,6 +15,7 @@ var defaultdiscordchannel = null;
 //==
 
 var environments = null;
+var modules = null;
 
 
 var modname = "Bridge";
@@ -25,7 +26,7 @@ exports.requiredenvironments = ["Discord", "IRC"];
 exports.requiredmodules = [];
 
 
-exports.initialize = function(envs, moduleRequest) {
+exports.initialize = function(envs, mods, moduleRequest) {
 
     //Load parameters
 
@@ -42,6 +43,7 @@ exports.initialize = function(envs, moduleRequest) {
     
     if (!envs) return false;
     environments = envs;
+    modules = mods;
     
     
     //Register callbacks
@@ -94,34 +96,10 @@ function closestTtyColor(hexrgb) {
 }
 
 
-function discordUserFromAnyReference(discordserver, refstring) {
-    var refuser = null;
-    var parts = refstring.split("#");
-    if (parts[1]) {
-        refuser = discordserver.members.getAll("username", parts[0]).get("discriminator", parts[1]);
-    } else {
-        var cache = discordserver.members.getAll("username", refstring);
-        if (cache.length == 1) {
-            refuser = cache[0];
-        } else {
-            refstring = refstring.toLowerCase();
-            for (var i = 0; i < discordserver.members.length; i++) {
-                var nick = discordserver.detailsOfUser(discordserver.members[i]).nick;
-                if (nick && nick.toLowerCase() == refstring) {
-                    refuser = discordserver.members[i];
-                    break;
-                }
-            }
-        }
-    }
-    return refuser;
-}
-
-
 //Event handlers
 
 
-function onIrcMessage(env, type, message, author, rawobject) {
+function onIrcMessage(env, type, message, authorid, rawobject) {
 
     var target = null;
 
@@ -178,32 +156,31 @@ function onIrcMessage(env, type, message, author, rawobject) {
     }
     
     finalmsg = finalmsg.replace(/@(([^ #]+)(#[0-9]{4})?)/, function(match, userornick) {
-        var refuser = discordUserFromAnyReference(environments.Discord.getRawObject().server, userornick);
-        if (refuser) return "<@" + refuser.id + ">";
+        var refid = environments.Discord.displayNameToId(userornick);
+        if (refid) return "<@" + refid + ">";
         return match;
     });
     
     finalmsg = finalmsg.replace(/^([^:]+): /, function(match, userornick) {
-        var refuser = discordUserFromAnyReference(environments.Discord.getRawObject().server, userornick);
-        if (refuser) return "<@" + refuser.id + "> ";
+        var refid = environments.Discord.displayNameToId(userornick);
+        if (refid) return "<@" + refid + ">";
         return match;
     });
     
     if (type == "action") {
-        environments.Discord.msg(target, "_* `" + author + "` " + finalmsg + "_");
+        environments.Discord.msg(target, "_* `" + environments.IRC.idToDisplayName(authorid) + "` " + finalmsg + "_");
     } else if (type == "regular") {
-        environments.Discord.msg(target, "`<" + author + ">` " + finalmsg);
+        environments.Discord.msg(target, "`<" + environments.IRC.idToDisplayName(authorid) + ">` " + finalmsg);
     }
 }
 
 
-function onDiscordMessage(env, type, message, author, rawobject) {
+function onDiscordMessage(env, type, message, authorid, rawobject) {
     
     var server = environments.Discord.getRawObject().server;
     var finalmsg = message;
     
-    var authorname = server.detailsOfUser(rawobject.author).nick;
-    if (!authorname) authorname = author;
+    var authorname = environments.Discord.idToDisplayName(authorid);
     
     var roles = server.roles;
     for (var i = 0; i < roles.length; i++) {
@@ -231,6 +208,8 @@ function onDiscordMessage(env, type, message, author, rawobject) {
         finalmsg = "[#" + rawobject.channel.name + "] " + finalmsg;
     }
     
-    environments.IRC.msg(ircchannel, finalmsg);
+    if (type == "regular") {
+        environments.IRC.msg(ircchannel, finalmsg);
+    }
     
 };

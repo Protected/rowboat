@@ -94,7 +94,7 @@ for (var i = 0; i < config.modules.length; i++) {
         }
     }
     
-    if (!mod.initialize(environments, moduleRequest)) {
+    if (!mod.initialize(environments, modules, moduleRequest)) {
         console.log("Could not initialize the module: " + mod.name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
         return;
     }

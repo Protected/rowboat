@@ -61,24 +61,12 @@ exports.connect = function() {
     
     client.on("message", function(message) {
     
-        /* Impossible for now
-        var fixprefix = message.content.replace(/^([^:]+): /, function(match, userornick) {
-            var refuser = discordUserFromAnyReference(server, userornick);
-            if (refuser) return "<@" + refuser.id + "> ";
-            return match;
-        });
-        
-        if (fixprefix != message.content) {
-            message.update(fixprefix, {}, genericErrorHandler);
-        }
-        */
-    
         if (message.author.username == client.user.username) return;
         
         var type = "regular";
         if (message.channel instanceof discord.PMChannel) type = "private";
         for (var i = 0; i < cbMessage.length; i++) {
-            if (cbMessage[i](envname, type, message.content, message.author.username, message)) {
+            if (cbMessage[i](envname, type, message.content, message.author.id, message)) {
                 break;
             }
         }
@@ -94,19 +82,28 @@ exports.disconnect = function() {
 }
 
 
-exports.msg = function(target, msg) {
+exports.msg = function(targetid, msg) {
 
     var targetchan = null;
     
-    if (typeof target == "string") {
-        if (!channels[target]) {
-            channels[target] = server.channels.getAll("type", "text").get("name", target);
+    if (typeof targetid == "string") {
+        if (!channels[targetid]) {
+            channels[targetid] = server.channels.getAll("type", "text").get("id", targetid);
         }
-        if (channels[target]) {
-            targetchan = channels[target];
+        if (!channels[targetid]) {
+            channels[targetid] = server.users.get("id", targetid);
+        }
+        if (!channels[targetid]) {
+            channels[targetid] = server.channels.getAll("type", "text").get("name", targetid);
+        }
+        if (!channels[targetid]) {
+            channels[targetid] = server.users.get("name", targetid);
+        }
+        if (channels[targetid]) {
+            targetchan = channels[targetid];
         }
     } else {
-        targetchan = target;
+        targetchan = targetid;
     }
     
     if (!targetchan) {
@@ -122,8 +119,59 @@ exports.registerOnError = function(func) {  //callback(env, errormsg)
 }
 
 
-exports.registerOnMessage = function(func) {  //callback(env, type, message, author, rawobject)
+exports.registerOnMessage = function(func) {  //callback(env, type, message, authorid, rawobject)
     cbMessage.push(func);
+}
+
+
+exports.idToDisplayName = function(id) {
+    var user = server.members.get("id", id);
+    if (user) {
+        var disp = server.detailsOfUser(user).nick;
+        if (!disp) disp = user.username;
+        return disp;
+    }
+    return id;
+}
+
+    
+exports.displayNameToId = function(displayname) {
+    var refuser = null;
+    
+    var parts = displayname.split("#");
+    if (parts[1]) {
+        refuser = server.members.getAll("username", parts[0]).get("discriminator", parts[1]);
+    } else {
+        var cache = server.members.getAll("username", displayname);
+        if (cache.length == 1) {
+            refuser = cache[0];
+        } else {
+            displayname = displayname.toLowerCase();
+            for (var i = 0; i < server.members.length; i++) {
+                var nick = server.detailsOfUser(server.members[i]).nick;
+                if (nick && nick.toLowerCase() == displayname) {
+                    refuser = server.members[i];
+                    break;
+                }
+            }
+        }
+    }
+    
+    if (refuser) {
+        return refuser.id;
+    }
+    
+    return null;
+}
+
+
+exports.idIsSecured = function(id) {
+    return true;
+}
+
+
+exports.idIsAuthenticated = function(id) {
+    return true;
 }
 
 
