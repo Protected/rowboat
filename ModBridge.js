@@ -22,9 +22,10 @@ exports.name = modname;
 
 
 exports.requiredenvironments = ["Discord", "IRC"];
+exports.requiredmodules = [];
 
 
-exports.initialize = function(envs) {
+exports.initialize = function(envs, moduleRequest) {
 
     //Load parameters
 
@@ -188,8 +189,11 @@ function onIrcMessage(env, type, message, author, rawobject) {
         return match;
     });
     
-    environments.Discord.msg(target, "`<" + author + ">` " + finalmsg);
-    
+    if (type == "action") {
+        environments.Discord.msg(target, "_* `" + author + "` " + finalmsg + "_");
+    } else if (type == "regular") {
+        environments.Discord.msg(target, "`<" + author + ">` " + finalmsg);
+    }
 }
 
 

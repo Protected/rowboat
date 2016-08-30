@@ -1,0 +1,67 @@
+This file contains some notes on how to extend Rowboat.
+
+
+== ENVIRONMENTS ==
+
+Each environment represents a remote connection for exchanging messages. Environments are modules named EnvPROPERNAME.js and are declared in config.json under "environments".
+Environments must never reference other environments or Rowboat modules, and all environments must export exactly the same literals and functions:
+
+name
+    The name of the environment. This is used to reference the environment everywhere except in config.json. To avoid confusion, it should be equal to PROPERNAME (read above).
+
+initialize()
+    Executed when the environment is loaded. The envirnment's parameters should be loaded here. Return true for success or false for failure.
+    By convention, parameters should be stored in LOWERCASENAME.env.json, where LOWERCASENAME is the name of the environment in lower case.
+    
+connect()
+    Should connect the environment and register all remote callbacks as needed. Environments will only be connected after all modules have been initialized.
+
+disconnect()
+    Should disconnect the environment. A new connect() may then be issued.
+    
+msg(target, msg)
+    Should send a message through the remote connection, to the recipient 'target'.
+    'target' must at least support the following types: null (sends the message to a default target) and "string" (sends the message to the target identified by the string).
+    
+registerOnError(callback)
+    >> callback(env, errormsg)
+    Other modules use this to register a callback for execution when an error occurs. 'env' is the environment name and 'errormsg' a string.
+    All registered callbacks should be executed in order until one of them returns true.
+
+registerOnMessage(callback)
+    >> callback(env, type, message, author, rawobject)
+    Other modules use this to register a callback for execution when a message is received through the remote connection.
+    'env' is the environent name, 'type' is the message type (a string which is "regular" by default) 'message' are the message's contents and 'author' is a string representing the author.
+    'rawobject' can be an ENVIRONMENT-SPECIFIC object you wish to expose to the other modules, or null.
+    All registered callbacks should be executed in order until one of them returns true.
+
+getRawObject()
+    This returns an ENVIRONMENT-SPECIFIC object providing direct access to the remote connection to other modules, or null.
+
+
+== MODULES ==
+
+Modules provide behavior for Rowboat. Without modules, Rowboat will not do anything.  Modules are named ModPROPERNAME.js and are declares in config.json under "modules".
+Modules can reference environments and other modules, in accordance with the rules described below.
+
+Every module must export the literals and functions listed below, and in addition can export any other functions for exposition to its dependents.
+
+name
+    The name of the module. This is used to reference the module everywhere except in config.json. To avoid confusion, it should be equal to PROPERNAME (read above).
+    
+requiredenvironments
+    A list of environments that must be loaded for the module to be allowed to load.
+    All environments used by the declaring module should be listed here.
+    
+requiredmodules
+    A list of modules that must have been previously loaded for the module to be allowed to load.
+    All modules directly used by the declaring module should be listed here.
+    
+initialize(environments, moduleRequest)
+    Executed when the module is loaded. The module's parameters should be loaded here, and any callbacks should be registered here. Return true for success or false for failure.
+    By convention, parameters should be stored in LOWERCASENAME.mod.json, where LOWERCASENAME is the name of the module in lower case.
+    'environments' is a map with the environments loaded by Rowboat, to be used for registering callbacks.
+    'moduleRequest' is a function that can be used to register a callback for execution with a module that may not have been loaded yet. This should only be done within initialize().
+        >> moduleRequest(modname, callback)
+        >> callback(module)
+    If the module has already been loaded, the callback is executed immediately.

@@ -60,29 +60,37 @@ exports.connect = function() {
     });
     
     client.on("message", function(message) {
+    
+        /* Impossible for now
+        var fixprefix = message.content.replace(/^([^:]+): /, function(match, userornick) {
+            var refuser = discordUserFromAnyReference(server, userornick);
+            if (refuser) return "<@" + refuser.id + "> ";
+            return match;
+        });
+        
+        if (fixprefix != message.content) {
+            message.update(fixprefix, {}, genericErrorHandler);
+        }
+        */
+    
         if (message.author.username == client.user.username) return;
+        
         var type = "regular";
         if (message.channel instanceof discord.PMChannel) type = "private";
         for (var i = 0; i < cbMessage.length; i++) {
-            cbMessage[i](envname, type, message.content, message.author.username, message);
+            if (cbMessage[i](envname, type, message.content, message.author.username, message)) {
+                break;
+            }
         }
     });
 
-    client.loginWithToken(token, function(err) {
-        if (!err) return;
-        for (var i = 0; i < cbError.length; i++) {
-            cbError[i](envname, err);
-        }
-    });
+    client.loginWithToken(token, genericErrorHandler);
 
 }
 
 
 exports.disconnect = function() {
-    client.logout(function(err) {
-        if (!err) return;
-        cbError[i](envname, err);
-    });
+    client.logout(genericErrorHandler);
 }
 
 
@@ -105,12 +113,7 @@ exports.msg = function(target, msg) {
         targetchan = channels[defaultchannel];
     }
     
-    client.sendMessage(targetchan, msg, {disableEveryone: true}, function(err) {
-        if (!err) return;
-        for (var i = 0; i < cbError.length; i++) {
-            cbError[i](envname, err);
-        }
-    });
+    client.sendMessage(targetchan, msg, {disableEveryone: true}, genericErrorHandler);
 }
 
 
@@ -128,5 +131,18 @@ exports.getRawObject = function() {
     return {
         "client": client,
         "server": server
+    }
+}
+
+
+//Auxiliary
+
+
+function genericErrorHandler(err) {
+    if (!err) return;
+    for (var i = 0; i < cbError.length; i++) {
+        if (cbError[i](envname, err)) {
+            break;
+        }
     }
 }

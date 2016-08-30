@@ -1,12 +1,28 @@
 var jsonfile = require('jsonfile');
 
+var environments = {};
+var modules = {};
+
+var modulerequests = {};
+
+
+//Auxiliary functions
+
 function requireUncached(module) {
     delete require.cache[require.resolve(module)];
     return require(module);
 }
 
-var environments = {};
-var modules = {};
+function moduleRequest(modname, callback) {
+    if (modules[modname]) {
+        callback(modules[modname]);
+    } else {
+        if (!modulerequests[modname]) {
+            modulerequests[modname] = [];
+        }
+        modulerequests[modname].push(callback);
+    }
+}
 
 
 //Load master config
@@ -71,13 +87,27 @@ for (var i = 0; i < config.modules.length; i++) {
         }
     }
     
-    if (!mod.initialize(environments)) {
+    for (var j = 0; j < mod.requiredmodules.length; j++) {
+        if (!modules[mod.requiredmodules[j]]) {
+            console.log("Could not initialize the module: " + mod.name + " because the required module: " + mod.requiredmodules[j] + " is not loaded.");
+            return;
+        }
+    }
+    
+    if (!mod.initialize(environments, moduleRequest)) {
         console.log("Could not initialize the module: " + mod.name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
         return;
     }
     
     modules[mod.name] = mod;
     console.log("Successfully loaded module: " + mod.name);
+    
+    if (modulerequests[mod.name]) {
+        for (var j = 0; j < modulerequests[mod.name].length; j++) {
+            modulerequests[mod.name][j](mod);
+        }
+        delete modulerequests[mod.name];
+    }
 }
 
 

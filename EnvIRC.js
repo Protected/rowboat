@@ -8,14 +8,29 @@ var irc = require('irc');
 //*IP address or hostname of the IRC server
 var serverhost = null;
 
+//Port of the IRC server
+var port = 6667;
+
+//Use SSL connection
+var ssl = false;
+
 //*Nickname for the connection
 var nickname = null;
 
 //*List of channels to join (each item is a string representing a channel name)
 var channels = null;
 
+//Nickserv's nickname
+var nickservnick = 'Nickserv';
+
 //Nickserv password
 var nickpass = null;
+
+//Username
+var ident = 'myshelter';
+
+//Real name
+var realname = 'Not a pun, just a misunderstanding.';
 
 //==
 
@@ -38,13 +53,19 @@ exports.initialize = function() {
     if (params.serverhost) serverhost = params.serverhost;
     if (!serverhost) return false;
     
+    if (params.port) port = params.port;
+    if (params.ssl) ssl = params.ssl;
+    
     if (params.nickname) nickname = params.nickname;
     if (!nickname) return false;
     
     if (params.channels) channels = params.channels;
     if (channels.length < 1) return false;
     
+    if (params.nickservnick) nickservnick = params.nickservnick;
     if (params.nickpass) nickpass = params.nickpass;
+    if (params.ident) ident = params.ident;
+    if (params.realname) realname = params.realname;
     
     return true;
 }
@@ -53,9 +74,11 @@ exports.initialize = function() {
 exports.connect = function() {
 
     client = new irc.Client(serverhost, nickname, {
+        port: port,
+        secure: ssl,
         channels: channels,
-        userName: 'myshelter',
-        realName: 'Not a pun, just a misunderstanding.',
+        userName: ident,
+        realName: realname,
         floodProtection: true,
         floodProtectionDelay: 500,
         stripColors: false,
@@ -64,7 +87,9 @@ exports.connect = function() {
     
     client.addListener('error', function(message) {
         for (var i = 0; i < cbError.length; i++) {
-            cbError[i](envname, message);
+            if (cbError[i](envname, message)) {
+                break;
+            }
         }
     });
     
@@ -72,7 +97,9 @@ exports.connect = function() {
         var type = "regular";
         if (to[0] != "#") type = "private";
         for (var i = 0; i < cbMessage.length; i++) {
-            cbMessage[i](envname, type, message, from, messageObj);
+            if (cbMessage[i](envname, type, message, from, messageObj)) {
+                break;
+            }
         }
     });
     
@@ -80,7 +107,17 @@ exports.connect = function() {
         var type = "action";
         if (to[0] != "#") type = "privateaction";
         for (var i = 0; i < cbMessage.length; i++) {
-            cbMessage[i](envname, type, message, from, messageObj);
+            if (cbMessage[i](envname, type, message, from, messageObj)) {
+                break;
+            }
+        }
+    });
+    
+    client.addListener('notice', function (from, to, message, messageObj) {
+        if (nickpass && from && nickservnick && from.toLowerCase() == nickservnick.toLowerCase()) {
+            if (/This.*nickname.*registered/i.exec(message)) {
+                client.say(nickservnick, "IDENTIFY " + nickpass);
+            }
         }
     });
 }
