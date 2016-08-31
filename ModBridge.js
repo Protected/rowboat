@@ -30,7 +30,7 @@ exports.initialize = function(envs, mods, moduleRequest) {
 
     //Load parameters
 
-    var params;
+    var params = {};
     try {
         params = jsonfile.readFileSync("bridge.mod.json");
     } catch(e) {}
@@ -52,7 +52,7 @@ exports.initialize = function(envs, mods, moduleRequest) {
     envs.Discord.registerOnMessage(onDiscordMessage);
     
     return true;
-}
+};
 
 
 // # Module code below this line #
@@ -99,7 +99,7 @@ function closestTtyColor(hexrgb) {
 //Event handlers
 
 
-function onIrcMessage(env, type, message, authorid, rawobject) {
+function onIrcMessage(env, type, message, authorid, channelid, rawobject) {
 
     var target = null;
 
@@ -175,7 +175,7 @@ function onIrcMessage(env, type, message, authorid, rawobject) {
 }
 
 
-function onDiscordMessage(env, type, message, authorid, rawobject) {
+function onDiscordMessage(env, type, message, authorid, channelid, rawobject) {
     
     var server = environments.Discord.getRawObject().server;
     var finalmsg = message;

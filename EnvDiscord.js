@@ -29,7 +29,7 @@ exports.name = envname;
 
 
 exports.initialize = function() {
-    var params;
+    var params = {};
     try {
         params = jsonfile.readFileSync("discord.env.json");
     } catch(e) {}
@@ -64,9 +64,14 @@ exports.connect = function() {
         if (message.author.username == client.user.username) return;
         
         var type = "regular";
-        if (message.channel instanceof discord.PMChannel) type = "private";
+        channelid = message.channel.id;
+        if (message.channel instanceof discord.PMChannel) {
+            type = "private";
+            channelid = message.author.id;
+        }
+        
         for (var i = 0; i < cbMessage.length; i++) {
-            if (cbMessage[i](envname, type, message.content, message.author.id, message)) {
+            if (cbMessage[i](envname, type, message.content, message.author.id, channelid, message)) {
                 break;
             }
         }
@@ -91,13 +96,13 @@ exports.msg = function(targetid, msg) {
             channels[targetid] = server.channels.getAll("type", "text").get("id", targetid);
         }
         if (!channels[targetid]) {
-            channels[targetid] = server.users.get("id", targetid);
+            channels[targetid] = server.members.get("id", targetid);
         }
         if (!channels[targetid]) {
             channels[targetid] = server.channels.getAll("type", "text").get("name", targetid);
         }
         if (!channels[targetid]) {
-            channels[targetid] = server.users.get("name", targetid);
+            channels[targetid] = server.members.get("name", targetid);
         }
         if (channels[targetid]) {
             targetchan = channels[targetid];

@@ -47,7 +47,7 @@ exports.name = envname;
 
 
 exports.initialize = function() {
-    var params;
+    var params = {};
     try {
         params = jsonfile.readFileSync("irc.env.json");
     } catch (e) {}
@@ -97,9 +97,14 @@ exports.connect = function() {
     
     client.addListener('message', function(from, to, message, messageObj) {
         var type = "regular";
-        if (to[0] != "#") type = "private";
+        var authorid = from + '!' + messageObj.user + '@' + messageObj.host;
+        var channelid = to;
+        if (to[0] != "#") {
+            type = "private";
+            channelid = authorid;
+        }
         for (var i = 0; i < cbMessage.length; i++) {
-            if (cbMessage[i](envname, type, message, from + '!' + messageObj.user + '@' + messageObj.host, messageObj)) {
+            if (cbMessage[i](envname, type, message, authorid, channelid, messageObj)) {
                 break;
             }
         }
@@ -107,9 +112,14 @@ exports.connect = function() {
     
     client.addListener('action', function(from, to, message, messageObj) {
         var type = "action";
-        if (to[0] != "#") type = "privateaction";
+        var authorid = from + '!' + messageObj.user + '@' + messageObj.host;
+        var channelid = to;
+        if (to[0] != "#") {
+            type = "privateaction";
+            channelid = authorid;
+        }
         for (var i = 0; i < cbMessage.length; i++) {
-            if (cbMessage[i](envname, type, message, from + '!' + messageObj.user + '@' + messageObj.host, messageObj)) {
+            if (cbMessage[i](envname, type, message, authorid, channelid, messageObj)) {
                 break;
             }
         }

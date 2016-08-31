@@ -29,9 +29,10 @@ registerOnError(callback)
     All registered callbacks should be executed in order until one of them returns true.
 
 registerOnMessage(callback)
-    >> callback(env, type, message, authorid, rawobject)
+    >> callback(env, type, message, authorid, channelid, rawobject)
     Other modules use this to register a callback for execution when a message is received through the remote connection.
-    'env' is the environent name, 'type' is the message type (a string which is "regular" by default) 'message' are the message's contents and 'author' is a string representing the author.
+    'env' is the environent name, 'type' is the message type (a string which is "regular" by default) 'message' are the message's contents and 'authorid' is a string representing the author.
+    'channelid' represents the environment-side communications channel the message arrived through. It can be the same as 'authorid'.
     'rawobject' can be an ENVIRONMENT-SPECIFIC object you wish to expose to the other modules, or null.
     All registered callbacks should be executed in order until one of them returns true.
     

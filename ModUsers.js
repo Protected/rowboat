@@ -11,6 +11,10 @@ var userhandles = {};
 var datafile = 'users.data.json';
 
 
+var PERM_ADMIN = 'administrator';
+var PERM_MOD = 'moderator';
+
+
 var modname = "Users";
 exports.name = modname;
 
@@ -37,12 +41,184 @@ exports.initialize = function(envs, mods, moduleRequest) {
     
     moduleRequest('Commands', function(commands) {
     
-        //TODO Add commands
+    
+        commands.registerCommand('useradd', {
+            args: ["handle"],
+            description: "Create a new empty user account with the given handle.",
+            types: ["private"],
+            permissions: [PERM_ADMIN]
+        }, function(env, type, userid, command, args, handle, reply) {
+        
+            if (addUser(args.handle)) {
+                reply("The account " + args.handle + " was successfuly created.");
+            } else {
+                reply("There already exists an account identified by " + args.handle + "!");
+            }
+            
+            return true;
+        });
+        
+        
+        commands.registerCommand('userdel', {
+            args: ["handle"],
+            description: "Delete an existing user account identified by the given handle.",
+            types: ["private"],
+            permissions: [PERM_ADMIN]
+        }, function(env, type, userid, command, args, handle, reply) {
+        
+            if (delUser(args.handle)) {
+                reply("The account " + args.handle + " was successfully deleted.");
+            } else {
+                reply("I could not find an account identified by " + args.handle + "!");
+            }
+            
+            return true;
+        });
+        
+        
+        commands.registerCommand('idadd', {
+            args: ["handle", "environment", "idpattern"],
+            description: "Add an ID pattern (regex) to authenticate the user account identified by the handle in the specified environment.",
+            types: ["private"],
+            permissions: [PERM_ADMIN]
+        }, function(env, type, userid, command, args, handle, reply) {
+        
+            args.idpattern = "^" + args.idpattern + "$";
+            if (!environments[args.environment]) {
+                reply("There is no environment named " + args.environment + " at this time.");
+                return true;
+            }
+            
+            if (addId(args.handle, args.environment, args.idpattern)) {
+                reply("Successfully added the requested pattern to the account identified by " + args.handle + ".");
+            } else {
+                reply("I could not find an account identified by " + args.handle + "!");
+            }
+            
+            return true;
+        });
+        
+        
+        commands.registerCommand('iddel', {
+            args: ["handle", "environment", "idpattern"],
+            description: "Remove an existing ID pattern from a user such that it will no longer authenticate the user account identified by the handle.",
+            types: ["private"],
+            permissions: [PERM_ADMIN]
+        }, function(env, type, userid, command, args, handle, reply) {
+            
+            args.idpattern = "^" + args.idpattern + "$";
+            
+            if (delId(args.handle, args.environment, args.idpattern)) {
+                reply("Successfully removed the requested patterm from the account identified by " + args.handle + ".");
+            } else {
+                reply("I could not find an account identified by " + args.handle + "!");
+            }
+            
+            return true;
+        });
+        
+        
+        commands.registerCommand('permadd', {
+            args: ["handle", "permissions", true],
+            minArgs: 2,
+            description: "Add one or more permissions to the user account identified by the handle.",
+            permissions: [PERM_ADMIN]
+        }, function(env, type, userid, command, args, handle, reply) {
+        
+            if (addPerms(args.handle, args.permissions)) {
+                reply("The permissions listed were added to the account identified by " + args.handle + ".");
+            } else {
+                reply("I could not find an account identified by " + args.handle + "!");
+            }
+        
+            return true;
+        });
+        
+        
+        commands.registerCommand('permdel', {
+            args: ["handle", "permissions", true],
+            minArgs: 2,
+            description: "Remove one or more permissions from the user account identified by the handle.",
+            permissions: [PERM_ADMIN]
+        }, function(env, type, userid, command, args, handle, reply) {
+        
+            if (delPerms(args.handle, args.permissions)) {
+                reply("The permissions listed were removed from the account identified by " + args.handle + ".");
+            } else {
+                reply("I could not find an account identified by " + args.handle + "!");
+            }
+        
+            return true;
+        });
+        
+        
+        commands.registerCommand('userfind', {
+            args: ["environment", "id"],
+            description: "List the handles of the user accounts that match the given id and environment.",
+            types: ["private"],
+            permissions: [PERM_ADMIN, PERM_MOD]
+        }, function(env, type, userid, command, args, handle, reply) {
+        
+            var handles = getHandlesById(args.environment, args.id);
+            if (!handles.length) {
+                reply("No handles were found matching the given environment and id.");
+                return true;
+            }
+            
+            while(handles.length) {
+                var outbound = handles.slice(0, 10);
+                outbound = '"' + outbound.join('","') + '"';
+                reply(outbound);
+                handles = handles.slice(10);
+            }
+        
+            return true;
+        });
+        
+        
+        commands.registerCommand('whois', {
+            args: ["handle"],
+            description: "Describe the user account identified by the handle.",
+            types: ["private"],
+            permissions: [PERM_ADMIN, PERM_MOD]
+        }, function(env, type, userid, command, args, handle, reply) {
+        
+            var account = getUser(args.handle);
+            if (!account) {
+                reply("I could not find an account identified by " + args.handle + "!");
+                return true;
+            }
+            
+            reply('========== ' + account.handle + ' ==========');
+            
+            reply('* ID patterns:');
+            if (account.ids) {
+                for (var i = 0; i < account.ids.length; i++) {
+                    reply('    {' + account.ids[i].env + '} ' + account.ids[i].idpattern);
+                }
+            }
+            
+            reply('* Permissions:');
+            var perms = account.perms;
+            if (perms) {
+                while (perms.length) {
+                    var outbound = perms.slice(0, 10);
+                    outbound = outbound.join(', ');
+                    reply(outbound);
+                    perms = perms.slice(10);
+                }
+            }
+            
+            reply('.');
+        
+            return true;
+        });
+    
     
     });
     
     return true;
-}
+};
 
 
 // # Module code below this line #
@@ -87,6 +263,8 @@ function addUser(handle) {
     }
     userdata.push(newuser);
     userhandles[handle] = newuser;
+    
+    saveUsers(datafile);
     return true;
 }
 
@@ -100,6 +278,7 @@ function delUser(handle) {
     if (i > -1) userdata.splice(i, 1);
     delete userhandles[handle];
     
+    saveUsers(datafile);
     return true;
 }
 
@@ -113,19 +292,23 @@ function getUser(handle) {
 function addId(handle, env, idpattern) {
     if (!env || !idpattern) return false;
     
+    var changed = false;
     var chuser = getUser(handle);
     if (!chuser) return false;
 
     if (!chuser.ids.find(function(id) { return id.env == env && id.idpattern == idpattern; })) {
         chuser.ids.push({env: env, idpattern: idpattern});
+        changed = true;
     }
 
+    if (changed) saveUsers(datafile);
     return true;
 }
 
 function delId(handle, env, idpattern) {
     if (!env) return false;
     
+    var changed = false;
     var chuser = getUser(handle);
     if (!chuser) return false;
     
@@ -133,9 +316,11 @@ function delId(handle, env, idpattern) {
         if (chuser.ids[i].env != env) continue;
         if (idpattern && chuser.ids[i].idpattern != idpattern) continue;
         chuser.ids.splice(i, 1);
+        changed = true;
         i -= 1;
     }
     
+    if (changed) saveUsers(datafile);
     return true;
 }
 
@@ -154,7 +339,7 @@ function getIds(handle, env) {
 
 function isIdHandle(handle, env, id, strict) {
     if (strict) {
-        if (!environment[env].idIsSecured || !environment[env].idIsAuthenticated) {
+        if (!environments[env].idIsSecured || !environments[env].idIsAuthenticated) {
             return false;
         }
     }
@@ -162,7 +347,7 @@ function isIdHandle(handle, env, id, strict) {
     var ids = getIds(handle, env);
     
     for (var i = 0; i < ids.length; i++) {
-        if (RegExp(ids[i]).match(id)) {
+        if (RegExp(ids[i]).exec(id)) {
             return true;
         }
     }
