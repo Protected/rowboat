@@ -182,7 +182,7 @@ exports.connect = function() {
 
 
 exports.disconnect = function() {
-    client.disconnect();
+    if (client) client.disconnect();
 }
 
 

@@ -83,7 +83,7 @@ exports.connect = function() {
 
 
 exports.disconnect = function() {
-    client.logout(genericErrorHandler);
+    if (client) client.logout(genericErrorHandler);
 }
 
 

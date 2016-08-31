@@ -144,6 +144,14 @@ if (!loadModules()) return;
 
 //Run environments
 
+exports.stopEnvironments = function() {
+    var envs = Object.keys(environments);
+    for (var i = 0; i < envs.length; i++) {
+        console.log("Requesting disconnection of environment " + envs[i] + " ...");
+        environments[envs[i]].disconnect();
+    }
+}
+
 var runEnvironments = exports.runEnvironments = function() {
     var envs = Object.keys(environments);
     for (var i = 0; i < envs.length; i++) {

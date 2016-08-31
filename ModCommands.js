@@ -161,20 +161,19 @@ exports.initialize = function(envs, mods, moduleRequest) {
                 process.exit(1);
             }
             
+            modules.root.stopEnvironments();
+            
             if (!modules.root.loadEnvironments()) {
-                reply('Failed to load environments.');
+                console.log('Failed to load environments.');
                 process.exit(1);
             }
             
             if (!modules.root.loadModules()) {
-                reply('Failed to load modules.');
+                console.log('Failed to load modules.');
                 process.exit(1);
             }
             
-            if (!modules.root.runEnvironments()) {
-                reply('Failed to run environments.');
-                process.exit(1);
-            }
+            modules.root.runEnvironments();
         
             console.log('Reload successful.');
             reply('Reload ended successfully.');
@@ -309,7 +308,7 @@ function buildCommandSyntax(command) {
     var descriptor = index[command];
     var syntax = command;
     var optionals = false;
-    for (var i = 0; i < descriptor.args; i++) {
+    for (var i = 0; i < descriptor.args.length; i++) {
         syntax += ' ';
         if (minArgs !== null && i == minArgs && descriptor.args[i] !== true) {
             syntax += '[';
