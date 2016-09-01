@@ -162,6 +162,7 @@ exports.initialize = function(envs, mods, moduleRequest) {
             }
             
             modules.root.stopEnvironments();
+            modules.root.resetContext();
             
             if (!modules.root.loadEnvironments()) {
                 console.log('Failed to load environments.');
@@ -310,7 +311,7 @@ function buildCommandSyntax(command) {
     var optionals = false;
     for (var i = 0; i < descriptor.args.length; i++) {
         syntax += ' ';
-        if (minArgs !== null && i == minArgs && descriptor.args[i] !== true) {
+        if (descriptor.minArgs !== null && i == descriptor.minArgs && descriptor.args[i] !== true) {
             syntax += '[';
             optionals = true;
         }

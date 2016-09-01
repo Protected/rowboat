@@ -3,6 +3,11 @@
 
 var jsonfile = require('jsonfile');
 var cd = require('color-difference');
+var emoji = require('emojione');
+
+emoji.ascii = true;
+delete emoji.asciiList['d:'];
+
 
 //== Module settings (bridge.mod.json)
 
@@ -112,43 +117,60 @@ function onIrcMessage(env, type, message, authorid, channelid, rawobject) {
     var bold = null;
     var und = null;
     var ita = null;
+    var order = [];
     var finalmsg = message.replace(/([0-9]{1,2}(,[0-9]{1,2})?)?/g, "").replace(//g, "") + "";
     for (var i = 0; i < finalmsg.length; i++) {
         if (finalmsg[i] == "") {
-            if (und === null) und = i;
-            else {
+            if (und === null) {
+                und = i;
+                order.push('und');
+            } else {
                 finalmsg = finalmsg.slice(0, und) + "__" + finalmsg.slice(und + 1, i) + "__" + finalmsg.slice(i + 1);
                 und = null;
                 i += 2;
+                order.splice(order.indexOf('und'), 1);
             }
         } else if (finalmsg[i] == "") {
-            if (bold === null) bold = i;
-            else {
+            if (bold === null) {
+                bold = i;
+                order.push('bold');
+            } else {
                 finalmsg = finalmsg.slice(0, bold) + "**" + finalmsg.slice(bold + 1, i) + "**" + finalmsg.slice(i + 1);
                 bold = null;
                 i += 2;
+                order.splice(order.indexOf('bold'), 1);
             }
         } else if (finalmsg[i] == "") {
-            if (ita === null) ita = i;
-            else {
+            if (ita === null) {
+                ita = i;
+                order.push('ita');
+            } else {
                 finalmsg = finalmsg.slice(0, ita) + "*" + finalmsg.slice(ita + 1, i) + "*" + finalmsg.slice(i + 1);
                 ita = null;
+                order.splice(order.indexOf('ita'), 1);
             }
         } else if (finalmsg[i] == "") {
-            var off = 0;
-            if (ita !== null) {
-                finalmsg = finalmsg.slice(0, ita) + "*" + finalmsg.slice(ita + 1, i + off) + "*" + finalmsg.slice(i + off - 1);
-                off += 1;
+            var insert = '';
+            var offset = 0;
+            var next = null;
+            while (next = order.pop()) {
+                if (next == 'ita' && ita !== null) {
+                    finalmsg = finalmsg.slice(0, ita) + "*" + finalmsg.slice(ita + 1);
+                    insert += '*';
+                }
+                if (next == 'bold' && bold !== null) {
+                    finalmsg = finalmsg.slice(0, bold) + "**" + finalmsg.slice(bold + 1);
+                    insert += '**';
+                    offset += 1;
+                }
+                if (next == 'und' && und !== null) {
+                    finalmsg = finalmsg.slice(0, und) + "__" + finalmsg.slice(und + 1);
+                    insert += '__';
+                    offset += 1;
+                }
             }
-            if (bold !== null) {
-                finalmsg = finalmsg.slice(0, bold) + "**" + finalmsg.slice(bold + 1, i + off) + "**" + finalmsg.slice(i + off - 1);
-                off += 3;
-                if (und !== null && und > bold) und += 1;
-            }
-            if (und !== null) {
-                finalmsg = finalmsg.slice(0, und) + "__" + finalmsg.slice(und + 1, i + off) + "__" + finalmsg.slice(i + off - 1);
-                off += 3;
-            }
+            finalmsg = finalmsg.slice(0, i + offset) + insert + finalmsg.slice(i + offset + 1);
+            i += offset + insert.length;
             bold = null;
             und = null;
             ita = null;
@@ -167,6 +189,8 @@ function onIrcMessage(env, type, message, authorid, channelid, rawobject) {
         return match;
     });
     
+    finalmsg = emoji.shortnameToUnicode(finalmsg);
+    
     if (type == "action") {
         environments.Discord.msg(target, "_* `" + environments.IRC.idToDisplayName(authorid) + "` " + finalmsg + "_");
     } else if (type == "regular") {
@@ -179,6 +203,8 @@ function onDiscordMessage(env, type, message, authorid, channelid, rawobject) {
     
     var server = environments.Discord.getRawObject().server;
     var finalmsg = message;
+    
+    var action = false;
     
     var authorname = environments.Discord.idToDisplayName(authorid);
     
@@ -202,7 +228,16 @@ function onDiscordMessage(env, type, message, authorid, channelid, rawobject) {
         return "#" + chan.name;
     });
     
-    finalmsg = authorname + ": " + finalmsg.replace(/__(.*?)__/g, "$1").replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1").replace(/_(.*?)_/g, "$1");
+    action = !!/^_[^_](.*[^_])?_$/.exec(finalmsg);
+    
+    finalmsg = finalmsg.replace(/__(.*?)__/g, "$1").replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1").replace(/_(.*?)_/g, "$1");
+    finalmsg = emoji.shortnameToAscii(emoji.toShort(finalmsg));
+    
+    if (action) {
+        finalmsg = '* ' + authorname + " " + finalmsg;
+    } else {
+        finalmsg = authorname + ": " + finalmsg;
+    }
     
     if (rawobject.channel.name != defaultdiscordchannel) {
         finalmsg = "[#" + rawobject.channel.name + "] " + finalmsg;

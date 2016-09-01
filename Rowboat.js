@@ -55,6 +55,12 @@ var loadMasterConfig = exports.loadMasterConfig = function() {
     return true;
 }
 
+var resetContext = exports.resetContext = function() {
+    environments = {};
+    modules = {};
+    modulerequests = {};
+}
+
 if (!loadMasterConfig()) return;
 
 

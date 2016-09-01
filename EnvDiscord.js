@@ -14,11 +14,16 @@ var servername = null;
 //*Default channel to operate on (must be a channel in the above server)
 var defaultchannel = null;
 
+//Send delay (ms)
+var senddelay = 500;
+
 //== 
 
 var client = null;
 var server = null;
 var channels = {};
+var outbox = [];
+var carrier = null;
 
 var cbError = [];
 var cbMessage = [];
@@ -42,6 +47,8 @@ exports.initialize = function() {
     
     if (params.defaultchannel) defaultchannel = params.defaultchannel;
     if (!defaultchannel) return false;
+    
+    if (params.senddelay) senddelay = params.senddelay;
     
     return true;
 }
@@ -79,11 +86,15 @@ exports.connect = function() {
 
     client.loginWithToken(token, genericErrorHandler);
 
+    carrier = setInterval(deliverMsgs, senddelay);
 }
 
 
 exports.disconnect = function() {
+    if (carrier) clearInterval(carrier);
     if (client) client.logout(genericErrorHandler);
+    carrier = null;
+    client = null;
 }
 
 
@@ -115,7 +126,7 @@ exports.msg = function(targetid, msg) {
         targetchan = channels[defaultchannel];
     }
     
-    client.sendMessage(targetchan, msg, {disableEveryone: true}, genericErrorHandler);
+    outbox.push([targetchan, msg]);
 }
 
 
@@ -199,3 +210,32 @@ function genericErrorHandler(err) {
         }
     }
 }
+
+
+function deliverMsgs() {
+    var packages = {};
+    for (var i = 0; i < outbox.length; i++) {
+        var rawchannelid = outbox[i][0].id;
+        if (!packages[rawchannelid]) {
+            packages[rawchannelid] = {
+                targetchan: outbox[i][0],
+                messages: []
+            }
+        }
+        packages[rawchannelid].messages.push(outbox[i][1]);
+    }
+    for (var rawchannelid in packages) {
+        try {
+            client.sendMessage(
+                packages[rawchannelid].targetchan,
+                packages[rawchannelid].messages.join("\n"),
+                {disableEveryone: true},
+                genericErrorHandler
+            );
+        } catch (e) {
+            genericErrorHandler(e.message);
+        }
+    }
+    outbox = [];
+}
+

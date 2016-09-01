@@ -32,6 +32,9 @@ var ident = 'myshelter';
 //Real name
 var realname = 'Not a pun, just a misunderstanding.';
 
+//Send delay (ms)
+var senddelay = 500;
+
 //==
 
 var client = null;
@@ -68,6 +71,7 @@ exports.initialize = function() {
     if (params.nickpass) nickpass = params.nickpass;
     if (params.ident) ident = params.ident;
     if (params.realname) realname = params.realname;
+    if (params.senddelay) senddelay = params.senddelay;
     
     return true;
 }
@@ -82,17 +86,13 @@ exports.connect = function() {
         userName: ident,
         realName: realname,
         floodProtection: true,
-        floodProtectionDelay: 500,
+        floodProtectionDelay: senddelay,
         stripColors: false,
         password: null
     });
     
     client.addListener('error', function(message) {
-        for (var i = 0; i < cbError.length; i++) {
-            if (cbError[i](envname, JSON.stringify(message, null, 4))) {
-                break;
-            }
-        }
+        genericErrorHandler(JSON.stringify(message, null, 4));
     });
     
     client.addListener('message', function(from, to, message, messageObj) {
@@ -183,6 +183,7 @@ exports.connect = function() {
 
 exports.disconnect = function() {
     if (client) client.disconnect();
+    client = null;
 }
 
 
@@ -191,13 +192,16 @@ exports.msg = function(targetid, msg) {
     
     var parts;
     
-    if (parts = targetid.match(/^([^!]+)![^@]+@.+$/)) {
-        client.say(parts[1], msg);
+    try {
+        if (parts = targetid.match(/^([^!]+)![^@]+@.+$/)) {
+            client.say(parts[1], msg);
+        }
+        if (parts = targetid.match(/^#.+$/)) {
+            client.say(targetid, msg);
+        }
+    } catch (e) {
+        genericErrorHandler(e.message);
     }
-    if (parts = targetid.match(/^#.+$/)) {
-        client.say(targetid, msg);
-    }
-    
 }
 
 
@@ -245,6 +249,16 @@ exports.getRawObject = function() {
 
 
 //Auxiliary
+
+
+function genericErrorHandler(err) {
+    if (!err) return;
+    for (var i = 0; i < cbError.length; i++) {
+        if (cbError[i](envname, err)) {
+            break;
+        }
+    }
+}
 
 
 function addPeople(nick, channels, messageObj) {
