@@ -233,18 +233,24 @@ function onDiscordMessage(env, type, message, authorid, channelid, rawobject) {
     finalmsg = finalmsg.replace(/__(.*?)__/g, "$1").replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1").replace(/_(.*?)_/g, "$1");
     finalmsg = emoji.shortnameToAscii(emoji.toShort(finalmsg));
     
-    if (action) {
-        finalmsg = '* ' + authorname + " " + finalmsg;
-    } else {
-        finalmsg = authorname + ": " + finalmsg;
-    }
+    var lines = finalmsg.split("\n");
     
-    if (rawobject.channel.name != defaultdiscordchannel) {
-        finalmsg = "[#" + rawobject.channel.name + "] " + finalmsg;
-    }
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
     
-    if (type == "regular") {
-        environments.IRC.msg(ircchannel, finalmsg);
+        if (action) {
+            line = '* ' + authorname + " " + line;
+        } else {
+            line = authorname + ": " + line;
+        }
+        
+        if (rawobject.channel.name != defaultdiscordchannel) {
+            line = "[#" + rawobject.channel.name + "] " + line;
+        }
+        
+        if (type == "regular") {
+            environments.IRC.msg(ircchannel, line);
+        }
     }
     
 };
