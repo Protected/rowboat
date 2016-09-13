@@ -8,10 +8,19 @@ var proto = EnvDiscord.prototype;
  *  Environment: Discord -- This environment connects to a Discord server/guild.
  */
 function EnvDiscord(){
+    //== Environment settings (discord.env.json)
+
+    //*Discord application token
     this._token = null;
+    //*Server name to operate on (application must have been previously added to server)
     this._servername = null;
+    //*Default channel to operate on (must be a channel in the above server)
     this._defaultchannel = null;
+    //Send delay (ms)
     this._senddelay = 500;
+    //==
+
+    //Class-specific
     this._client = null;
     this._server = null;
     this._channels = {};
@@ -26,17 +35,25 @@ var attributes = ["token","servername","defaultchannel","senddelay","client"
                  ,"server","channels","outbox","carrier","cbError","cbMessage","envname"];
 
 for(var idx in attributes) {
-    let attr = attributes[idx];
-    Object.defineProperty(proto, attr, {
-        configurable: true,
-        get: function () {
-            return this['_'+attr];
-        },
-        set: function (value) {
-            this['_'+attr] = value;
-        }
-    });
+    function run() {
+        var attr = attributes[idx];
+
+        Object.defineProperty(proto, attr, {
+            configurable: true,
+            get: function () {
+                var attributeFinal = '_'+attr;
+                return this[attributeFinal];
+            },
+            set: function (value) {
+                var attributeFinal = '_'+attr;
+                this[attributeFinal] = value;
+            }
+        });
+    }
+    run();
 }
+
+
 //Initializes the environment.
 Object.defineProperty(proto, 'initialize', {
     configurable: true,
@@ -47,13 +64,13 @@ Object.defineProperty(proto, 'initialize', {
         } catch(e) {}
 
         if (params.token) this.token = params.token;
-        if (!token) return false;
+        if (!this.token) return false;
 
         if (params.servername) this.servername = params.servername;
-        if (!servername) return false;
+        if (!this.servername) return false;
 
         if (params.defaultchannel) this.defaultchannel = params.defaultchannel;
-        if (!defaultchannel) return false;
+        if (!this.defaultchannel) return false;
 
         if (params.senddelay) this.senddelay = params.senddelay;
 
@@ -66,17 +83,20 @@ Object.defineProperty(proto, 'connect', {
     value: function () {
         this.client = new discord.Client();
 
+        var self = this;
+
         this.client.on("ready", function(message) {
-            this.server = this.client.servers.get("name", servername);
-            this.channels[this.server.defaultChannel.name] = this.server.defaultChannel;
-            if (this.defaultchannel != this.server.defaultChannel.name) {
-                this.channels[this.defaultchannel] = this.server.channels.getAll("type", "text").get("name", this.defaultchannel);
+            self.server = self.client.servers.get("name", self.servername);
+            self.channels[self.server.defaultChannel.name] = self.server.defaultChannel;
+            if (self.defaultchannel != self.server.defaultChannel.name) {
+                self.channels[self.defaultchannel] = self.server.channels.getAll("type", "text").get("name", self.defaultchannel);
             }
+            self.carrier = setInterval(function() { self.deliverMsgs.apply(self,null) }, self.senddelay);
         });
 
         this.client.on("message", function(message) {
 
-            if (message.author.username == this.client.user.username) return;
+            if (message.author.username == self.client.user.username) return;
 
             var type = "regular";
             var channelid = message.channel.id;
@@ -85,19 +105,18 @@ Object.defineProperty(proto, 'connect', {
                 channelid = message.author.id;
             }
 
-            for (var i = 0; i < this.cbMessage.length; i++) {
-                if (this.cbMessage[i](this.envname, type, message.content, message.author.id, channelid, message)) {
+            for (var i = 0; i < self.cbMessage.length; i++) {
+                if (self.cbMessage[i](self.envname, type, message.content, message.author.id, channelid, message)) {
                     break;
                 }
             }
         });
 
-        this.client.loginWithToken(token, genericErrorHandler);
-        this.carrier = setInterval(this.deliverMsgs, this.senddelay);
+        this.client.loginWithToken(this.token, this.genericErrorHandler);
     }
 });
 // Disconnects from the environment.
-Object.defineProperty(proto, 'initialize', {
+Object.defineProperty(proto, 'disconnect', {
     configurable: true,
     value: function () {
         if (this.carrier) clearInterval(this.carrier);
@@ -133,7 +152,7 @@ Object.defineProperty(proto, 'msg', {
         }
 
         if (!targetchan) {
-            targetchan = this.channels[defaultchannel];
+            targetchan = this.channels[this.defaultchannel];
         }
 
         this.outbox.push([targetchan, msg]);
@@ -234,12 +253,14 @@ Object.defineProperty(proto, 'genericErrorHandler', {
         }
     }
 });
+
+
 // Deliver Messages
 Object.defineProperty(proto, 'deliverMsgs', {
     configurable: true,
     value: function () {
         var packages = {};
-        for (var i = 0; i < this.outbox.length; i++) {
+        for (var i = 0; this.outbox && i < this.outbox.length; i++) {
             var rawchannelid = this.outbox[i][0].id;
             if (!packages[rawchannelid]) {
                 packages[rawchannelid] = {
