@@ -56,7 +56,7 @@ class EnvIRC extends Environment {
         });
         
         this._client.addListener('error', (message) => {
-            Environment.genericErrorHandler(JSON.stringify(message, null, 4));
+            this.genericErrorHandler(JSON.stringify(message, null, 4));
         });
     
         this._client.addListener('message', (from, to, message, messageObj) => {
@@ -165,7 +165,7 @@ class EnvIRC extends Environment {
                 this._client.say(targetid, msg);
             }
         } catch (e) {
-            Environment.genericErrorHandler(e.message);
+            this.genericErrorHandler(e.message);
         }
     }
 

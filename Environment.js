@@ -70,7 +70,7 @@ class Environment {
     idIsAuthenticated(id) { return false; }
 
 
-    static genericErrorHandler(err) {
+    genericErrorHandler(err) {
         if (!err) return;
         for (let callback of this._cbError) {
             if (callback(this, err)) {

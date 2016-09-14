@@ -65,14 +65,14 @@ class EnvDiscord extends Environment {
             
         });
 
-        this._client.loginWithToken(params.token, Environment.genericErrorHandler);
+        this._client.loginWithToken(params.token, this.genericErrorHandler);
         
     }
     
     
     disconnect() {
         if (this._carrier) clearInterval(this._carrier);
-        if (this._client) this._client.logout(Environment.genericErrorHandler);
+        if (this._client) this._client.logout(this.genericErrorHandler);
         this.carrier = null;
         this.client = null;
     }
