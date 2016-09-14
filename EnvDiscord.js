@@ -1,6 +1,6 @@
 /* Environment: Discord -- This environment connects to a Discord server/guild. */
 
-var Environment = require('Environment');
+var Environment = require('./Environment.js');
 var discord = require('discord.js');
 
 class EnvDiscord extends Environment {

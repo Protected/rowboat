@@ -1,6 +1,6 @@
 /* Environment: IRC -- This environment connects to an IRC server. */
 
-var Environment = require('Environment');
+var Environment = require('./Environment.js');
 var irc = require('irc');
 
 class EnvIRC extends Environment {
