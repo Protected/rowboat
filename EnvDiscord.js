@@ -158,15 +158,15 @@ class EnvDiscord extends Environment {
     
     deliverMsgs() {
         var packages = {};
-        for (var i = 0; this.outbox && i < this.outbox.length; i++) {
-            var rawchannelid = this.outbox[i][0].id;
+        for (var i = 0; this._outbox && i < this._outbox.length; i++) {
+            var rawchannelid = this._outbox[i][0].id;
             if (!packages[rawchannelid]) {
                 packages[rawchannelid] = {
-                    targetchan: this.outbox[i][0],
+                    targetchan: this._outbox[i][0],
                     messages: []
                 }
             }
-            packages[rawchannelid].messages.push(this.outbox[i][1]);
+            packages[rawchannelid].messages.push(this._outbox[i][1]);
         }
         for (var rawchannelid in packages) {
             try {
@@ -180,7 +180,7 @@ class EnvDiscord extends Environment {
                 this.genericErrorHandler(e.message);
             }
         }
-        this.outbox = [];
+        this._outbox = [];
     }
     
     
