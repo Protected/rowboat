@@ -1,6 +1,6 @@
 node_modules
-*.env.json
-*.mod.json
+config/config.json
+config/*.env.json
+config/*.mod.json
 *.data.json
-config.json
-
+test.js

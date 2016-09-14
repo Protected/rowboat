@@ -1,4 +1,0 @@
-{
-    "environments": ["IRC", "Discord"],
-    "modules": ["Bridge"]
-}

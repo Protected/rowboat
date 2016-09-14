@@ -1,293 +1,236 @@
 /* Environment: IRC -- This environment connects to an IRC server. */
 
-var jsonfile = require('jsonfile');
+var Environment = require('Environment.js');
 var irc = require('irc');
 
-//== Environment settings (irc.env.json)
-
-//*IP address or hostname of the IRC server
-var serverhost = null;
-
-//Port of the IRC server
-var port = 6667;
-
-//Use SSL connection
-var ssl = false;
-
-//*Nickname for the connection
-var nickname = null;
-
-//*List of channels to join (each item is a string representing a channel name)
-var channels = null;
-
-//Nickserv's nickname
-var nickservnick = 'Nickserv';
-
-//Nickserv password
-var nickpass = null;
-
-//Username
-var ident = 'myshelter';
-
-//Real name
-var realname = 'Not a pun, just a misunderstanding.';
-
-//Send delay (ms)
-var senddelay = 500;
-
-//==
-
-var client = null;
-var prefixes = [];
-var people = {};
-
-var cbError = [];
-var cbMessage = [];
+class EnvIRC extends Environment {
 
 
-var envname = "IRC";
-exports.name = envname;
-
-
-exports.initialize = function() {
-    var params = {};
-    try {
-        params = jsonfile.readFileSync("irc.env.json");
-    } catch (e) {}
+    get requiredParams() { return [
+        'serverhost',           //IP address or hostname of the IRC server
+        'nickname',             //Nickname for the connection
+        'channels'              //List of channels to join (each item is a string representing a channel name)
+    ]; }
     
-    if (params.serverhost) serverhost = params.serverhost;
-    if (!serverhost) return false;
+    get optionalParams() { return [
+        'port',                 //Port of the IRC server
+        'ssl',                  //Use SSL connection
+        'nickservnick',         //Nickserv's nickname
+        'nickpass',             //Nickserv password
+        'ident',                //Username
+        'realname',             //Real name
+        'senddelay'             //Send delay (ms)
+    ]; }
     
-    if (params.port) port = params.port;
-    if (params.ssl) ssl = params.ssl;
-    
-    if (params.nickname) nickname = params.nickname;
-    if (!nickname) return false;
-    
-    if (params.channels) channels = params.channels;
-    if (channels.length < 1) return false;
-    
-    if (params.nickservnick) nickservnick = params.nickservnick;
-    if (params.nickpass) nickpass = params.nickpass;
-    if (params.ident) ident = params.ident;
-    if (params.realname) realname = params.realname;
-    if (params.senddelay) senddelay = params.senddelay;
-    
-    return true;
-}
+    constructor(name) {
+        super('IRC', name);
+        
+        this._params['port'] = 6667;
+        this._params['ssl'] = false;
+        this._params['nickservnick'] = 'Nickserv';
+        this._params['nickpass'] = null;
+        this._params['ident'] = 'myshelter';
+        this._params['realname'] = 'Not a pun, just a misunderstanding.';
+        this._params['senddelay'] = 500;
+
+        this._client = null;
+        this._prefixes = [];
+        this._people = {};
+    }
 
 
-exports.connect = function() {
+    connect() {
 
-    client = new irc.Client(serverhost, nickname, {
-        port: port,
-        secure: ssl,
-        channels: channels,
-        userName: ident,
-        realName: realname,
-        floodProtection: true,
-        floodProtectionDelay: senddelay,
-        stripColors: false,
-        password: null
-    });
+        var params = this.params;
+
+        this._client = new irc.Client(params.serverhost, params.nickname, {
+            port: params.port,
+            secure: params.ssl,
+            channels: params.channels,
+            userName: params.ident,
+            realName: params.realname,
+            floodProtection: true,
+            floodProtectionDelay: params.senddelay,
+            stripColors: false,
+            password: null
+        });
+        
+        this._client.addListener('error', (message) => {
+            Environment.genericErrorHandler(JSON.stringify(message, null, 4));
+        });
     
-    client.addListener('error', function(message) {
-        genericErrorHandler(JSON.stringify(message, null, 4));
-    });
-    
-    client.addListener('message', function(from, to, message, messageObj) {
-        var type = "regular";
-        var authorid = from + '!' + messageObj.user + '@' + messageObj.host;
-        var channelid = to;
-        if (to[0] != "#") {
-            type = "private";
-            channelid = authorid;
-        }
-        for (var i = 0; i < cbMessage.length; i++) {
-            if (cbMessage[i](envname, type, message, authorid, channelid, messageObj)) {
-                break;
+        this._client.addListener('message', (from, to, message, messageObj) => {
+            var type = "regular";
+            var authorid = from + '!' + messageObj.user + '@' + messageObj.host;
+            var channelid = to;
+            if (to[0] != "#") {
+                type = "private";
+                channelid = authorid;
             }
-        }
-    });
-    
-    client.addListener('action', function(from, to, message, messageObj) {
-        var type = "action";
-        var authorid = from + '!' + messageObj.user + '@' + messageObj.host;
-        var channelid = to;
-        if (to[0] != "#") {
-            type = "privateaction";
-            channelid = authorid;
-        }
-        for (var i = 0; i < cbMessage.length; i++) {
-            if (cbMessage[i](envname, type, message, authorid, channelid, messageObj)) {
-                break;
-            }
-        }
-    });
-    
-    client.addListener('notice', function(from, to, message, messageObj) {
-        if (nickpass && from && nickservnick && from.toLowerCase() == nickservnick.toLowerCase()) {
-            if (/This.*nickname.*registered/i.exec(message)) {
-                client.say(nickservnick, "IDENTIFY " + nickpass);
-            }
-        }
-    });
-    
-    //Keep track of people
-    
-    client.addListener('join', function(channel, nick, messageObj) {
-        addPeople(nick, [channel], messageObj);
-        if (nick.toLowerCase() == nickname.toLowerCase()) {
-            client.send('WHO', channel);
-        }
-    });
-    
-    client.addListener('part', function(channel, nick) {
-        remPeople(nick, [channel]);
-    });
-    
-    client.addListener('quit', function(nick, x, channels) {
-        remPeople(nick, channels);
-    });
-    
-    client.addListener('kick', function(channel, nick) {
-        remPeople(nick, [channel]);
-    });
-    
-    client.addListener('nick', function(oldnick, newnick, channels, messageObj) {
-        remPeople(oldnick, channels);
-        addPeople(newnick, channels, messageObj);
-    });
-    
-    client.addListener('raw', function(messageObj) {
-        if (messageObj.rawCommand == 005) { //VERSION reply
-            for (var i = 0; i < messageObj.args.length; i++) {
-                var getprefs;
-                if (getprefs = messageObj.args[i].match(/PREFIX=\([^\)]+\)(.+)/)) {
-                    prefixes = getprefs[1].split('');
+            for (let callback of this._cbMessage) {
+                if (callback(this, type, message, authorid, channelid, messageObj)) {
+                    break;
                 }
             }
-        }
-        if (messageObj.rawCommand == 352) { //WHO reply
-            addPeople(messageObj.args[5], [messageObj.args[1]], {user: messageObj.args[2], host: messageObj.args[3]});
-        }
-        if (messageObj.rawCommand == 307) { //WHOIS reply - identified
-            people[messageObj.args[0]].identified = true;
-        }
-        if (messageObj.rawCommand == 671) { //WHOIS reply - secured
-            people[messageObj.args[0]].secured = true;
-        }
-    });
-}
-
-
-exports.disconnect = function() {
-    if (client) client.disconnect();
-    client = null;
-}
-
-
-exports.msg = function(targetid, msg) {
-    if (!targetid) targetid = channels[0];
+        });
     
-    var parts;
+        this._client.addListener('action', (from, to, message, messageObj) => {
+            var type = "action";
+            var authorid = from + '!' + messageObj.user + '@' + messageObj.host;
+            var channelid = to;
+            if (to[0] != "#") {
+                type = "privateaction";
+                channelid = authorid;
+            }
+            for (let callback of this._cbMessage) {
+                if (callback(this, type, message, authorid, channelid, messageObj)) {
+                    break;
+                }
+            }
+        });
+        
+        this._client.addListener('notice', (from, to, message, messageObj) => {
+            if (params.nickpass && from && params.nickservnick && from.toLowerCase() == params.nickservnick.toLowerCase()) {
+                if (/This.*nickname.*registered/i.exec(message)) {
+                    this._client.say(params.nickservnick, "IDENTIFY " + params.nickpass);
+                }
+            }
+        });
     
-    try {
-        if (parts = targetid.match(/^([^!]+)![^@]+@.+$/)) {
-            client.say(parts[1], msg);
+        //Keep track of people
+        
+        this._client.addListener('join', (channel, nick, messageObj) => {
+            this.addPeople(nick, [channel], messageObj);
+            if (nick.toLowerCase() == params.nickname.toLowerCase()) {
+                client.send('WHO', channel);
+            }
+        });
+        
+        this._client.addListener('part', (channel, nick) => {
+            this.remPeople(nick, [channel]);
+        });
+        
+        this._client.addListener('quit', (nick, x, channels) => {
+            this.remPeople(nick, channels);
+        });
+        
+        this._client.addListener('kick', (channel, nick) => {
+            this.remPeople(nick, [channel]);
+        });
+        
+        this._client.addListener('nick', (oldnick, newnick, channels, messageObj) => {
+            this.remPeople(oldnick, channels);
+            this.addPeople(newnick, channels, messageObj);
+        });
+        
+        this._client.addListener('raw', (messageObj) => {
+            if (messageObj.rawCommand == 005) { //VERSION reply
+                for (let arg of messageObj.args) {
+                    var getprefs;
+                    if (getprefs = arg.match(/PREFIX=\([^\)]+\)(.+)/)) {
+                        this._prefixes = getprefs[1].split('');
+                    }
+                }
+            }
+            if (messageObj.rawCommand == 352) { //WHO reply
+                this.addPeople(messageObj.args[5], [messageObj.args[1]], {user: messageObj.args[2], host: messageObj.args[3]});
+            }
+            if (messageObj.rawCommand == 307) { //WHOIS reply - identified
+                this._people[messageObj.args[0]].identified = true;
+            }
+            if (messageObj.rawCommand == 671) { //WHOIS reply - secured
+                this._people[messageObj.args[0]].secured = true;
+            }
+        });
+        
+    }
+
+
+    disconnect() {
+        if (this._client) this._client.disconnect();
+        this._client = null;
+    }
+
+
+    msg(targetid, msg) {
+        if (!targetid) targetid = channels[0];
+        
+        var parts;
+        
+        try {
+            if (parts = targetid.match(/^([^!]+)![^@]+@.+$/)) {
+                this._client.say(parts[1], msg);
+            }
+            if (parts = targetid.match(/^#.+$/)) {
+                this._client.say(targetid, msg);
+            }
+        } catch (e) {
+            Environment.genericErrorHandler(e.message);
         }
-        if (parts = targetid.match(/^#.+$/)) {
-            client.say(targetid, msg);
+    }
+
+
+    idToDisplayName(id) {
+        var parts = id.split("!");
+        return parts[0];
+    }
+
+
+    displayNameToId(displayname) {
+        if (this._people[displayname]) {
+            return this._people[displayname].id;
         }
-    } catch (e) {
-        genericErrorHandler(e.message);
+        return null;
     }
-}
 
 
-exports.registerOnError = function(func) {  //callback(env, errormsg)
-    cbError.push(func);
-}
-
-
-exports.registerOnMessage = function(func) {  //callback(env, type, message, author, rawobject)
-    cbMessage.push(func);
-}
-
-
-exports.idToDisplayName = function(id) {
-    var parts = id.split("!");
-    return parts[0];
-}
-
-
-exports.displayNameToId = function(displayname) {
-    if (people[displayname]) {
-        return people[displayname].id;
+    idIsSecured(id) {
+        var parts = id.split("!");
+        var person = this._people[parts[0]];
+        return (person && person.secured);
     }
-    return null;
-}
 
 
-exports.idIsSecured = function(id) {
-    var parts = id.split("!");
-    var person = people[parts[0]];
-    return (person && person.secured);
-}
+    idIsAuthenticated(id) {
+        var parts = id.split("!");
+        var person = this._people[parts[0]];
+        return (person && person.identified);
+    }
 
 
-exports.idIsAuthenticated = function(id) {
-    var parts = id.split("!");
-    var person = people[parts[0]];
-    return (person && person.identified);
-}
+    //Auxiliary methods
 
-
-exports.getRawObject = function() {
-    return client;
-}
-
-
-//Auxiliary
-
-
-function genericErrorHandler(err) {
-    if (!err) return;
-    for (var i = 0; i < cbError.length; i++) {
-        if (cbError[i](envname, err)) {
-            break;
+    addPeople(nick, channels, messageObj) {
+        if (!messageObj) return false;
+        if (!this._people[nick]) {
+            this._people[nick] = {
+                id: null,
+                channels: [],
+                identified: false,
+                secured: false
+            }
+            this._client.send('WHOIS ', nick);
         }
-    }
-}
-
-
-function addPeople(nick, channels, messageObj) {
-    if (!messageObj) return false;
-    if (!people[nick]) {
-        people[nick] = {
-            id: null,
-            channels: [],
-            identified: false,
-            secured: false
+        this._people[nick].id = nick + '!' + messageObj.user + '@' + messageObj.host;
+        for (let channel of channels) {
+            this._people[nick].channels.push(channel);
         }
-        client.send('WHOIS ', nick);
+        return true;
     }
-    people[nick].id = nick + '!' + messageObj.user + '@' + messageObj.host;
-    for (var i = 0; i < channels.length; i++) {
-        people[nick].channels.push(channels[i]);
-    }
-    return true;
-}
 
-function remPeople(nick, channels) {
-    if (!people[nick]) return false;
-    var newchans = people[nick].channels.filter(function(chan) {
-        return !channels.find(function(remchan) { return remchan == chan; });
-    });
-    if (newchans.length) {
-        people[nick].channels = newchans;
-    } else {
-        delete people[nick];
+    remPeople(nick, channels) {
+        if (!this._people[nick]) return false;
+        var newchans = this._people[nick].channels.filter(
+            (chan) => !channels.find(
+                (remchan) => (remchan == chan)
+            )
+        );
+        if (newchans.length) {
+            this._people[nick].channels = newchans;
+        } else {
+            delete this._people[nick];
+        }
+        return true;
     }
-    return true;
+    
 }
