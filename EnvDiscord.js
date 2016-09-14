@@ -170,7 +170,7 @@ class EnvDiscord extends Environment {
         }
         for (var rawchannelid in packages) {
             try {
-                this.client.sendMessage(
+                this._client.sendMessage(
                     packages[rawchannelid].targetchan,
                     packages[rawchannelid].messages.join("\n"),
                     {disableEveryone: true},

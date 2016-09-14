@@ -161,7 +161,7 @@ exports.initialize = function(envs, mods, moduleRequest) {
                 process.exit(1);
             }
             
-            modules.root.stopEnvironments();
+            modules.root.stopEnvironments(); //Note: Invalidates reply callback
             modules.root.resetContext();
             
             if (!modules.root.loadEnvironments()) {
@@ -177,7 +177,6 @@ exports.initialize = function(envs, mods, moduleRequest) {
             modules.root.runEnvironments();
         
             console.log('Reload successful.');
-            reply('Reload ended successfully.');
         }, 1);
     
         return true;
