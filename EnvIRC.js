@@ -102,7 +102,7 @@ class EnvIRC extends Environment {
         this._client.addListener('join', (channel, nick, messageObj) => {
             this.addPeople(nick, [channel], messageObj);
             if (nick.toLowerCase() == params.nickname.toLowerCase()) {
-                client.send('WHO', channel);
+                this._client.send('WHO', channel);
             }
         });
         
@@ -234,3 +234,6 @@ class EnvIRC extends Environment {
     }
     
 }
+
+
+module.exports = EnvIRC;

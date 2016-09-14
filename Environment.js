@@ -30,8 +30,9 @@ class Environment {
     
     initialize() {
         var params = {};
+
         try {
-            params = jsonfile.readFileSync("config/" + this._name + "." + this._envName + ".env.json");
+            params = jsonfile.readFileSync("config/" + this._name.toLowerCase() + "." + this._envName.toLowerCase() + ".env.json");
         } catch(e) {}
 
         for (let reqParam of this.requiredParams) {
