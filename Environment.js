@@ -1,5 +1,5 @@
 /* Environment -- This superclass should be extended by all environment implementations. */
-
+'use strict';
 var jsonfile = require('jsonfile');
 
 class Environment {

@@ -1,4 +1,5 @@
 /* Environment: Discord -- This environment connects to a Discord server/guild. */
+'use strict';
 
 var Environment = require('./Environment.js');
 var discord = require('discord.js');
@@ -34,7 +35,7 @@ class EnvDiscord extends Environment {
         var params = this.params;
     
         this._client = new discord.Client();
-
+        let self = this;
         this._client.on("ready", (message) => {
             this._server = this._client.servers.get("name", params.servername);
             
@@ -42,8 +43,11 @@ class EnvDiscord extends Environment {
             if (params.defaultchannel != this._server.defaultChannel.name) {
                 this._channels[params.defaultchannel] = this._server.channels.getAll("type", "text").get("name", params.defaultchannel);
             }
-            
-            this._carrier = setInterval(this.deliverMsgs, params.senddelay);
+
+            this._carrier = setInterval(
+                function() {
+                    self.deliverMsgs.apply(this,null)
+                }, params.senddelay);
         });
 
         this._client.on("message", (message) => {
