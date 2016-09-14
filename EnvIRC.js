@@ -124,7 +124,7 @@ class EnvIRC extends Environment {
         });
         
         this._client.addListener('raw', (messageObj) => {
-            if (messageObj.rawCommand == 005) { //VERSION reply
+            if (messageObj.rawCommand == '005') { //VERSION reply
                 for (let arg of messageObj.args) {
                     var getprefs;
                     if (getprefs = arg.match(/PREFIX=\([^\)]+\)(.+)/)) {
@@ -132,13 +132,13 @@ class EnvIRC extends Environment {
                     }
                 }
             }
-            if (messageObj.rawCommand == 352) { //WHO reply
+            if (messageObj.rawCommand == '352') { //WHO reply
                 this.addPeople(messageObj.args[5], [messageObj.args[1]], {user: messageObj.args[2], host: messageObj.args[3]});
             }
-            if (messageObj.rawCommand == 307) { //WHOIS reply - identified
+            if (messageObj.rawCommand == '307') { //WHOIS reply - identified
                 this._people[messageObj.args[0]].identified = true;
             }
-            if (messageObj.rawCommand == 671) { //WHOIS reply - secured
+            if (messageObj.rawCommand == '671') { //WHOIS reply - secured
                 this._people[messageObj.args[0]].secured = true;
             }
         });
