@@ -3,11 +3,14 @@ This file contains some notes on how to extend Rowboat.
 
 == ENVIRONMENTS ==
 
-Each environment represents a remote connection for exchanging messages. Environments are modules named EnvPROPERNAME.js and are declared in config.json under "environments".
+Each environment represents a remote connection for exchanging messages. Environments are classes named EnvPROPERNAME.js and are declared in config.json under "environments".
 Environments must never reference other environments or Rowboat modules, and all environments must export exactly the same literals and functions:
 
+envName
+    The name of the environment class/type. To avoid confusion, it should be equal to PROPERNAME (read above).
+    
 name
-    The name of the environment. This is used to reference the environment everywhere except in config.json. To avoid confusion, it should be equal to PROPERNAME (read above).
+    The proper name of the environment instance, provided by config.json . Used to reference the instance internally.
 
 initialize()
     Executed when the environment is loaded. The envirnment's parameters should be loaded here. Return true for success or false for failure.
@@ -48,25 +51,28 @@ idIsSecured(id)
 idIsAuthenticated(id)
     Returns true if the id should be considered by the calling module to be authenticated (the identity of the connection has been verified).
 
-getRawObject()
-    This returns an ENVIRONMENT-SPECIFIC object providing direct access to the remote connection to other modules, or null.
-
 
 == MODULES ==
 
-Modules provide behavior for Rowboat. Without modules, Rowboat will not do anything.  Modules are named ModPROPERNAME.js and are declares in config.json under "modules".
+Modules provide behavior for Rowboat. Without modules, Rowboat will not do anything.  Modules are named ModPROPERNAME.js and are declared in config.json under "modules".
 Modules can reference environments and other modules, in accordance with the rules described below.
 
-Every module must export the literals and functions listed below, and in addition can export any other functions for exposition to its dependents.
+Every module must have the properties and methods listed below, and in addition can expose any other functions for its dependents.
 
-name
-    The name of the module. This is used to reference the module everywhere except in config.json. To avoid confusion, it should be equal to PROPERNAME (read above).
+modName
+    The name of the module class/type. To avoid confusion, it should be equal to PROPERNAME (read above).
     
-requiredenvironments
+name
+    The proper name of the module instance, provided by config.json . Used to reference the instance internally.
+    
+isMultiInstanceable
+    Return true if the module can be used multiple times simultaneously. WARNING: Multi-instanceable modules can't be in the requiredModules list of any module.
+    
+requiredEnvironments
     A list of environments that must be loaded for the module to be allowed to load.
     All environments used by the declaring module should be listed here.
     
-requiredmodules
+requiredModules
     A list of modules that must have been previously loaded for the module to be allowed to load.
     All modules directly used by the declaring module should be listed here.
     

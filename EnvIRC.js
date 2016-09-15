@@ -68,7 +68,7 @@ class EnvIRC extends Environment {
                 channelid = authorid;
             }
             for (let callback of this._cbMessage) {
-                if (callback(this, type, message, authorid, channelid, messageObj)) {
+                if (this.invokeRegisteredCallback(callback, [this, type, message, authorid, channelid, messageObj])) {
                     break;
                 }
             }
@@ -83,7 +83,7 @@ class EnvIRC extends Environment {
                 channelid = authorid;
             }
             for (let callback of this._cbMessage) {
-                if (callback(this, type, message, authorid, channelid, messageObj)) {
+                if (this.invokeRegisteredCallback(callback, [this, type, message, authorid, channelid, messageObj])) {
                     break;
                 }
             }
@@ -136,10 +136,10 @@ class EnvIRC extends Environment {
                 this.addPeople(messageObj.args[5], [messageObj.args[1]], {user: messageObj.args[2], host: messageObj.args[3]});
             }
             if (messageObj.rawCommand == '307') { //WHOIS reply - identified
-                this._people[messageObj.args[0]].identified = true;
+                this._people[messageObj.args[1]].identified = true;
             }
             if (messageObj.rawCommand == '671') { //WHOIS reply - secured
-                this._people[messageObj.args[0]].secured = true;
+                this._people[messageObj.args[1]].secured = true;
             }
         });
         

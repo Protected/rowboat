@@ -1,5 +1,6 @@
 /* Environment -- This superclass should be extended by all environment implementations. */
 'use strict';
+
 var jsonfile = require('jsonfile');
 
 class Environment {
@@ -30,6 +31,8 @@ class Environment {
     
     initialize() {
         var params = {};
+        
+        //Load and check parameters
 
         try {
             params = jsonfile.readFileSync("config/" + this._name.toLowerCase() + "." + this._envName.toLowerCase() + ".env.json");
@@ -54,12 +57,29 @@ class Environment {
     msg(targetid, msg) {}
     
     
-    registerOnError(func) {
-        this._cbError.push(func);
+    registerOnError(func, self) {
+        if (!self) {
+            this._cbError.push(func);
+        } else {
+            this._cbError.push([func, self]);
+        }
     }
     
-    registerOnMessage(func) {
-        this._cbMessage.push(func);
+    registerOnMessage(func, self) {
+        if (!self) {
+            this._cbMessage.push(func);
+        } else {
+            this._cbMessage.push([func, self]);
+        }
+    }
+    
+    
+    invokeRegisteredCallback(desc, args) {
+        if (typeof desc == "function") {
+            return desc.apply(this, args);
+        } else {
+            return desc[0].apply(desc[1], args);
+        }
     }
     
     
@@ -73,7 +93,7 @@ class Environment {
     genericErrorHandler(err) {
         if (!err) return;
         for (let callback of this._cbError) {
-            if (callback(this, err)) {
+            if ((typeof callback == "function" ? callback(this, err) : callback[0].apply(callback[1], [this, err]))) {
                 break;
             }
         }

@@ -68,7 +68,7 @@ if (!loadMasterConfig()) return;
 
 var loadEnvironments = exports.loadEnvironments = function() {
 
-    for (var name in config.environments) {
+    for (let name in config.environments) {
         var envtype = requireUncached("./Env" + config.environments[name] + ".js");
         if (!envtype) {
             console.log("Could not load the environment: " + name + " . Is the environment source in Rowboat's directory?");
@@ -82,7 +82,7 @@ var loadEnvironments = exports.loadEnvironments = function() {
             return false;
         }
         
-        env.registerOnError(function(env, err) {
+        env.registerOnError((env, err) => {
             console.log("[" + env.name + "] Error: " + err);
         });
         environments[env.name] = env;
@@ -100,23 +100,39 @@ if (!loadEnvironments()) return;
 
 var loadModules = exports.loadModules = function() {
 
-    for (var i = 0; i < config.modules.length; i++) {
-        var mod = requireUncached("./Mod" + config.modules[i] + ".js");
-        if (!mod) {
-            console.log("Could not load the module: " + config.modules[i] + " . Is the module source in Rowboat's directory?");
+    for (let name of config.modules) {
+        
+        let type = null;
+        if (typeof name == "object") {
+            type = name[1];
+            name = name[0];
+        } else {
+            type = name;
+       }
+        
+        var modtype = requireUncached("./Mod" + type + ".js");
+        if (!modtype) {
+            console.log("Could not load the module: " + name + " . Is the module source in Rowboat's directory?");
             return false;
         }
         
-        for (var j = 0; j < mod.requiredenvironments.length; j++) {
-            if (!environments[mod.requiredenvironments[j]]) {
-                console.log("Could not initialize the module: " + mod.name + " because the required environment: " + mod.requiredenvironments[j] + " is not loaded.");
+        var mod = new modtype(name);
+        
+        if (!mod.isMultiInstanceable && name != mod.modName) {
+            console.log("Could not load the module: " + name + " . This module is not multi-instanceable; It MUST be configuered with the name: " + mod.modName);
+            return false;
+        }
+        
+        for (let reqenv of mod.requiredEnvironments) {
+            if (!environments[reqenv]) {
+                console.log("Could not initialize the module: " + mod.name + " because the required environment: " + reqenv + " is not loaded.");
                 return false;
             }
         }
         
-        for (var j = 0; j < mod.requiredmodules.length; j++) {
-            if (!modules[mod.requiredmodules[j]]) {
-                console.log("Could not initialize the module: " + mod.name + " because the required module: " + mod.requiredmodules[j] + " is not loaded.");
+        for (let reqmod of mod.requiredModules) {
+            if (!modules[reqmod]) {
+                console.log("Could not initialize the module: " + mod.name + " because the required module: " + reqmod + " is not loaded.");
                 return false;
             }
         }
@@ -124,7 +140,8 @@ var loadModules = exports.loadModules = function() {
         var passenvs = Object.assign({}, environments);
         var passmodules = Object.assign({}, modules);
         
-        if (mod.rootaccess) {
+        if (mod.isRootAccess) {
+            console.log("The module: " + mod.name + " requested access to the root module.");
             passmodules.root = self;
         }
         

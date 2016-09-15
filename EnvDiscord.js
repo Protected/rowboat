@@ -1,5 +1,4 @@
 /* Environment: Discord -- This environment connects to a Discord server/guild. */
-'use strict';
 
 var Environment = require('./Environment.js');
 var discord = require('discord.js');
@@ -62,7 +61,7 @@ class EnvDiscord extends Environment {
             }
 
             for (let callback of this._cbMessage) {
-                if (callback(this, type, message.content, message.author.id, channelid, message)) {
+                if (this.invokeRegisteredCallback(callback, [this, type, message.content, message.author.id, channelid, message])) {
                     break;
                 }
             }
