@@ -33,7 +33,7 @@ class ModCommands extends Module {
 
 
     initialize(envs, mods, moduleRequest) {
-        if (!super(envs, mods, moduleRequest)) return false;
+        if (!super.initialize(envs, mods, moduleRequest)) return false;
 
         if (!this.param('allowedenvs')) {
             this._params['allowedenvs'] = Object.keys(envs);

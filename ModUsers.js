@@ -25,7 +25,7 @@ class ModUsers extends Module {
 
 
     initialize(envs, mods, moduleRequest) {
-        if (!super(envs, mods, moduleRequest)) return false;
+        if (!super.initialize(envs, mods, moduleRequest)) return false;
        
         //Load data
         
