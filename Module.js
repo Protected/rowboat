@@ -66,13 +66,13 @@ class Module {
         var envtypes = {};
         var modtypes = {};
         
-        for (let env of Object.values(envs)) {
-            envtypes[env.envName] = true;
+        for (let label in envs) {
+            envtypes[envs[label].envName] = true;
         }
         
-        for (let mod of Object.values(mods)) {
-            if (mod.isMultiInstanceable) continue;
-            modtypes[mod.modName] = true;
+        for (let label in mods) {
+            if (mods[label].isMultiInstanceable) continue;
+            modtypes[mods[label].modName] = true;
         }
         
         for (let reqenv of this.requiredEnvironments) {
