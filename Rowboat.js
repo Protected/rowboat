@@ -100,8 +100,17 @@ if (!loadEnvironments()) return;
 
 var loadModules = exports.loadModules = function() {
 
-    for (let name in config.modules) {
-        var modtype = requireUncached("./Mod" + config.modules[name] + ".js");
+    for (let name of config.modules) {
+        
+        let type = null;
+        if (typeof name == "object") {
+            type = name[1];
+            name = name[0];
+        } else {
+            type = name;
+       }
+        
+        var modtype = requireUncached("./Mod" + type + ".js");
         if (!modtype) {
             console.log("Could not load the module: " + name + " . Is the module source in Rowboat's directory?");
             return false;
