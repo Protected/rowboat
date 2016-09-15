@@ -1,4 +1,4 @@
-/* Module: Bridge -- This module was designed to bridge a multi-channel Discord server with a single IRC channel. */
+/* Module: BridgeDiscordIRC -- This module was designed to bridge a multi-channel Discord server with a single IRC channel. */
 /* Required environments: Discord, IRC */
 
 var jsonfile = require('jsonfile');
@@ -11,11 +11,17 @@ delete emoji.asciiList['d:'];
 
 //== Module settings (bridge.mod.json)
 
-//*Name of an IRC channel the bot will join (including prefix)
-var ircchannel = null;
+//*Name of the Discord environment
+var envdiscord = null;
 
 //*Name of a Discord channel the bot will treat as default
 var defaultdiscordchannel = null;
+
+//*Name of the IRC environment
+var envirc = null;
+
+//*Name of an IRC channel the bot will join (including prefix)
+var ircchannel = null;
 
 //==
 
@@ -23,7 +29,7 @@ var environments = null;
 var modules = null;
 
 
-var modname = "Bridge";
+var modname = "BridgeDiscordIRC";
 exports.name = modname;
 
 
@@ -37,24 +43,31 @@ exports.initialize = function(envs, mods, moduleRequest) {
 
     var params = {};
     try {
-        params = jsonfile.readFileSync("bridge.mod.json");
+        params = jsonfile.readFileSync("config/bridgediscordirc.mod.json");
     } catch(e) {}
-    
-    if (params.ircchannel) ircchannel = params.ircchannel;
-    if (!ircchannel) return false;
+  
+    if (params.envdiscord) envdiscord = params.envdiscord;
+    if (!envdiscord) return false;
     
     if (params.defaultdiscordchannel) defaultdiscordchannel = params.defaultdiscordchannel;
     if (!defaultdiscordchannel) return false;
     
+    if (params.envirc) envirc = params.envirc;
+    if (!envirc) return false;
+    
+    if (params.ircchannel) ircchannel = params.ircchannel;
+    if (!ircchannel) return false;
+    
     if (!envs) return false;
     environments = envs;
     modules = mods;
-    
+
+    if (!envs[envirc] || !envs[envdiscord]) return false;
     
     //Register callbacks
     
-    envs.IRC.registerOnMessage(onIrcMessage);
-    envs.Discord.registerOnMessage(onDiscordMessage);
+    envs[envirc].registerOnMessage(onIrcMessage);
+    envs[envdiscord].registerOnMessage(onDiscordMessage);
     
     return true;
 };
@@ -178,13 +191,13 @@ function onIrcMessage(env, type, message, authorid, channelid, rawobject) {
     }
     
     finalmsg = finalmsg.replace(/@(([^ #]+)(#[0-9]{4})?)/, function(match, userornick) {
-        var refid = environments.Discord.displayNameToId(userornick);
+        var refid = environments[envdiscord].displayNameToId(userornick);
         if (refid) return "<@" + refid + ">";
         return match;
     });
     
     finalmsg = finalmsg.replace(/^([^:]+): /, function(match, userornick) {
-        var refid = environments.Discord.displayNameToId(userornick);
+        var refid = environments[envdiscord].displayNameToId(userornick);
         if (refid) return "<@" + refid + ">";
         return match;
     });
@@ -192,21 +205,21 @@ function onIrcMessage(env, type, message, authorid, channelid, rawobject) {
     finalmsg = emoji.shortnameToUnicode(finalmsg);
     
     if (type == "action") {
-        environments.Discord.msg(target, "_* `" + environments.IRC.idToDisplayName(authorid) + "` " + finalmsg + "_");
+        environments[envdiscord].msg(target, "_* `" + env.idToDisplayName(authorid) + "` " + finalmsg + "_");
     } else if (type == "regular") {
-        environments.Discord.msg(target, "`<" + environments.IRC.idToDisplayName(authorid) + ">` " + finalmsg);
+        environments[envdiscord].msg(target, "`<" + env.idToDisplayName(authorid) + ">` " + finalmsg);
     }
 }
 
 
 function onDiscordMessage(env, type, message, authorid, channelid, rawobject) {
     
-    var server = environments.Discord.getRawObject().server;
+    var server = env.server;
     var finalmsg = message;
     
     var action = false;
     
-    var authorname = environments.Discord.idToDisplayName(authorid);
+    var authorname = env.idToDisplayName(authorid);
     
     var roles = server.roles;
     for (var i = 0; i < roles.length; i++) {
@@ -241,7 +254,7 @@ function onDiscordMessage(env, type, message, authorid, channelid, rawobject) {
         if (action) {
             line = '* ' + authorname + " " + line;
         } else {
-            line = authorname + ": " + line;
+            line = '(' + authorname + ") " + line;
         }
         
         if (rawobject.channel.name != defaultdiscordchannel) {
@@ -249,7 +262,7 @@ function onDiscordMessage(env, type, message, authorid, channelid, rawobject) {
         }
         
         if (type == "regular") {
-            environments.IRC.msg(ircchannel, line);
+            environments[envirc].msg(ircchannel, line);
         }
     }
     

@@ -40,7 +40,7 @@ exports.initialize = function(envs, mods, moduleRequest) {
 
     var params = {};
     try {
-        params = jsonfile.readFileSync("commands.mod.json");
+        params = jsonfile.readFileSync("config/commands.mod.json");
     } catch(e) {}
     
     if (params.defaultprefix) defaultprefix = params.defaultprefix;
@@ -57,8 +57,8 @@ exports.initialize = function(envs, mods, moduleRequest) {
     
     //Register callbacks
     
-    for (var i = 0; i < allowedenvs.length; i++) {
-        envs[allowedenvs[i]].registerOnMessage(onCommandMessage);
+    for (let envname of allowedenvs) {
+        envs[envname].registerOnMessage(onCommandMessage);
     }
     
     
@@ -110,7 +110,7 @@ exports.initialize = function(envs, mods, moduleRequest) {
             for (var i = 0; i < commands.length; i++) {
                 var descriptor = commands[i];
                 
-                if (descriptor.environments && descriptor.environments.indexOf(env) < 0) {
+                if (descriptor.environments && descriptor.environments.indexOf(env.envName) < 0) {
                     continue;
                 }
                 
@@ -118,7 +118,7 @@ exports.initialize = function(envs, mods, moduleRequest) {
                     continue;
                 }
                 
-                var handles = modules.Users.getHandlesById(env, userid, true);
+                var handles = modules.Users.getHandlesById(env.name, userid, true);
                 var handle = (handles.length ? handles[0] : null);
                 if (descriptor.permissions) {
                     if (!handle) continue;
@@ -154,14 +154,14 @@ exports.initialize = function(envs, mods, moduleRequest) {
     
         setTimeout(function() {
             reply('Reloading...');
-            console.log('Reloading Rowboat by request from ' + handle + ' in ' + env);
+            console.log('Reloading Rowboat by request from ' + handle + ' in ' + env.name);
             
             if (!modules.root.loadMasterConfig()) {
                 reply('Failed to load master config.');
                 process.exit(1);
             }
             
-            modules.root.stopEnvironments();
+            modules.root.stopEnvironments(); //Note: Invalidates reply callback
             modules.root.resetContext();
             
             if (!modules.root.loadEnvironments()) {
@@ -177,7 +177,6 @@ exports.initialize = function(envs, mods, moduleRequest) {
             modules.root.runEnvironments();
         
             console.log('Reload successful.');
-            reply('Reload ended successfully.');
         }, 1);
     
         return true;
@@ -242,7 +241,7 @@ function getCommand(command) {
 function onCommandMessage(env, type, message, authorid, channelid, rawobject) {
 
     var prefix = defaultprefix;
-    if (prefixes[env]) prefix = prefixes[env];
+    if (prefixes[env.name]) prefix = prefixes[env.name];
     if (!message.startsWith(prefix)) return;
     
     var parts = message.substr(prefix.length);
@@ -253,7 +252,7 @@ function onCommandMessage(env, type, message, authorid, channelid, rawobject) {
     if (!index[command]) return;
     var descriptor = index[command];
     
-    if (descriptor.environments && descriptor.environments.indexOf(env) < 0) {
+    if (descriptor.environments && descriptor.environments.indexOf(env.envName) < 0) {
         return true;
     }
     
@@ -261,7 +260,7 @@ function onCommandMessage(env, type, message, authorid, channelid, rawobject) {
         return true;
     }
     
-    var handles = modules.Users.getHandlesById(env, authorid, true);
+    var handles = modules.Users.getHandlesById(env.name, authorid, true);
     var handle = (handles.length ? handles[0] : null);
     if (descriptor.permissions) {
         if (!handle) return true;
@@ -270,7 +269,7 @@ function onCommandMessage(env, type, message, authorid, channelid, rawobject) {
     }
     
     if (args.length < descriptor.minArgs) {
-        envionments[env].msg(authorid, "Syntax: " + prefix + buildCommandSyntax(command));
+        env.msg(authorid, "Syntax: " + prefix + buildCommandSyntax(command));
         return true;
     }
     
@@ -286,16 +285,16 @@ function onCommandMessage(env, type, message, authorid, channelid, rawobject) {
     
     if (!descriptor.callback(env, type, authorid, command, passargs, handle,
         function(msg) {
-            environments[env].msg(channelid, msg);
+            env.msg(channelid, msg);
         },
         function(msg) {
-            environments[env].msg((channelid == authorid ? null : channelid), msg);
+            env.msg((channelid == authorid ? null : channelid), msg);
         },
         function(msg) {
-            environments[env].msg(authorid, msg);
+            env.msg(authorid, msg);
         }
     )) {
-        envionments[env].msg(authorid, "Syntax: " + prefix + buildCommandSyntax(command));
+        env.msg(authorid, "Syntax: " + prefix + buildCommandSyntax(command));
     }
 
     return true;

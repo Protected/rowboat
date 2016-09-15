@@ -1,0 +1,7 @@
+{
+    "environments": {
+        "IRC": "IRC",
+        "Discord": "Discord"
+    },
+    "modules": ["Users", "Commands"]
+}

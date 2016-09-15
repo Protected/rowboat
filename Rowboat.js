@@ -36,13 +36,13 @@ var loadMasterConfig = exports.loadMasterConfig = function() {
     console.log("Loading master config...");
 
     try {
-        config = jsonfile.readFileSync("config.json");
+        config = jsonfile.readFileSync("config/config.json");
     } catch (e) {
         console.log("Failed to load master config. Error: " + e.message);
         return false;
     }
 
-    if (config.environments.length < 1) {
+    if (Object.keys(config.environments).length < 1) {
         console.log("Environments provide connectivity. Please configure at least one environment.");
         return false;
     }
@@ -68,20 +68,22 @@ if (!loadMasterConfig()) return;
 
 var loadEnvironments = exports.loadEnvironments = function() {
 
-    for (var i = 0; i < config.environments.length; i++) {
-        var env = requireUncached("./Env" + config.environments[i] + ".js");
-        if (!env) {
-            console.log("Could not load the environment: " + config.environments[i] + " . Is the environment source in Rowboat's directory?");
+    for (var name in config.environments) {
+        var envtype = requireUncached("./Env" + config.environments[name] + ".js");
+        if (!envtype) {
+            console.log("Could not load the environment: " + name + " . Is the environment source in Rowboat's directory?");
             return false;
         }
         
+        var env = new envtype(name);
+        
         if (!env.initialize()) {
-            console.log("Could not initialize the environment: " + config.environments[i] + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
+            console.log("Could not initialize the environment: " + name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
             return false;
         }
         
         env.registerOnError(function(env, err) {
-            console.log("[" + env + "] Error: " + err);
+            console.log("[" + env.name + "] Error: " + err);
         });
         environments[env.name] = env;
         
@@ -151,18 +153,16 @@ if (!loadModules()) return;
 //Run environments
 
 exports.stopEnvironments = function() {
-    var envs = Object.keys(environments);
-    for (var i = 0; i < envs.length; i++) {
-        console.log("Requesting disconnection of environment " + envs[i] + " ...");
-        environments[envs[i]].disconnect();
+    for (let name in environments) {
+        console.log("Requesting disconnection of environment " + name + " ...");
+        environments[name].disconnect();
     }
 }
 
 var runEnvironments = exports.runEnvironments = function() {
-    var envs = Object.keys(environments);
-    for (var i = 0; i < envs.length; i++) {
-        console.log("Requesting connection of environment " + envs[i] + " ...");
-        environments[envs[i]].connect();
+    for (let name in environments) {
+        console.log("Requesting connection of environment " + name + " ...");
+        environments[name].connect();
     }
 }
 
