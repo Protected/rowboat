@@ -189,7 +189,7 @@ class ModUsers extends Module {
                 reply('* ID patterns:');
                 if (account.ids) {
                     for (var i = 0; i < account.ids.length; i++) {
-                        reply('    {' + account.ids[i].env.name + '} ' + account.ids[i].idpattern);
+                        reply('    {' + account.ids[i].env + '} ' + account.ids[i].idpattern);
                     }
                 }
                 
