@@ -61,7 +61,7 @@ class EnvDiscord extends Environment {
             }
 
             for (let callback of this._cbMessage) {
-                if (callback(this, type, message.content, message.author.id, channelid, message)) {
+                if (this.invokeRegisteredCallback(callback, [this, type, message.content, message.author.id, channelid, message])) {
                     break;
                 }
             }

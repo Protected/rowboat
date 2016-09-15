@@ -68,7 +68,7 @@ class EnvIRC extends Environment {
                 channelid = authorid;
             }
             for (let callback of this._cbMessage) {
-                if (callback(this, type, message, authorid, channelid, messageObj)) {
+                if (this.invokeRegisteredCallback(callback, [this, type, message, authorid, channelid, messageObj])) {
                     break;
                 }
             }
@@ -83,7 +83,7 @@ class EnvIRC extends Environment {
                 channelid = authorid;
             }
             for (let callback of this._cbMessage) {
-                if (callback(this, type, message, authorid, channelid, messageObj)) {
+                if (this.invokeRegisteredCallback(callback, [this, type, message, authorid, channelid, messageObj])) {
                     break;
                 }
             }
