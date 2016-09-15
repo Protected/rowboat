@@ -46,7 +46,7 @@ class EnvDiscord extends Environment {
 
             this._carrier = setInterval(
                 function() {
-                    self.deliverMsgs.apply(this,null)
+                    self.deliverMsgs.apply(self,null)
                 }, params.senddelay);
         });
 
