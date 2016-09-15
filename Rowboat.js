@@ -123,14 +123,14 @@ var loadModules = exports.loadModules = function() {
             return false;
         }
         
-        for (let reqenv of mod.requiredenvironments) {
+        for (let reqenv of mod.requiredEnvironments) {
             if (!environments[reqenv]) {
                 console.log("Could not initialize the module: " + mod.name + " because the required environment: " + reqenv + " is not loaded.");
                 return false;
             }
         }
         
-        for (let reqmod of mod.requiredmodules) {
+        for (let reqmod of mod.requiredModules) {
             if (!modules[reqmod]) {
                 console.log("Could not initialize the module: " + mod.name + " because the required module: " + reqmod + " is not loaded.");
                 return false;
