@@ -66,11 +66,11 @@ class Module {
         var envtypes = {};
         var modtypes = {};
         
-        for (let env of envs) {
+        for (let env of Object.values(envs)) {
             envtypes[env.envName] = true;
         }
         
-        for (let mod of mods) {
+        for (let mod of Object.values(mods)) {
             if (mod.isMultiInstanceable) continue;
             modtypes[mod.modName] = true;
         }
