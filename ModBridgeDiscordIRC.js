@@ -11,6 +11,8 @@ delete emoji.asciiList['d:'];
 class ModBridgeDiscordIRC {
 
 
+    get isMultiInstanceable() { return true; }
+
     get requiredParams() { return [
         'envdiscord',           //Name of the Discord environment
         'defaultdiscordchannel',    //Name of a Discord channel the bot will treat as default
