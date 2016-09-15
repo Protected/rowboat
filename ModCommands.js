@@ -136,7 +136,7 @@ class ModCommands extends Module {
             permissions: [PERM_ADMIN]
         }, (env, type, userid, command, args, handle, reply) => {
         
-            setTimeout(function() {
+            setTimeout(() => {
                 reply('Reloading...');
                 console.log('Reloading Rowboat by request from ' + handle + ' in ' + env.name);
                 

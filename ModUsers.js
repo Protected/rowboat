@@ -390,7 +390,7 @@ class ModUsers extends Module {
         return true;
     }
 
-    function delPerms(handle, perms) {
+    delPerms(handle, perms) {
         if (!perms) return false;
         
         var changed = false;
@@ -410,13 +410,13 @@ class ModUsers extends Module {
         return true;
     }
 
-    function getPerms(handle) {
+    getPerms(handle) {
         var checkuser = this.getUser(handle);
         if (!checkuser) return [];
         return checkuser.perms;
     }
 
-    function hasAllPerms(handle, perms) {
+    hasAllPerms(handle, perms) {
         var checkuser = this.getUser(handle);
         if (!checkuser) return false;
         for (let perm of perms) {
@@ -428,7 +428,7 @@ class ModUsers extends Module {
         return true;
     }
 
-    function hasAnyPerm(handle, perms) {
+    hasAnyPerm(handle, perms) {
         var checkuser = this.getUser(handle);
         if (!checkuser) return false;
         for (let perm of perms) {
