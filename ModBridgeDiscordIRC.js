@@ -40,8 +40,8 @@ class ModBridgeDiscordIRC extends Module {
         
         //Register callbacks
         
-        this.irc.registerOnMessage(this.onIrcMessage);
-        this.discord.registerOnMessage(this.onDiscordMessage);
+        this.irc.registerOnMessage(this.onIrcMessage, this);
+        this.discord.registerOnMessage(this.onDiscordMessage, this);
         
         return true;
     }
