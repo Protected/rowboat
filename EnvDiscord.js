@@ -1,5 +1,4 @@
 /* Environment: Discord -- This environment connects to a Discord server/guild. */
-'use strict';
 
 var Environment = require('./Environment.js');
 var discord = require('discord.js');

@@ -1,5 +1,6 @@
 /* Environment -- This superclass should be extended by all environment implementations. */
 'use strict';
+
 var jsonfile = require('jsonfile');
 
 class Environment {
@@ -30,6 +31,8 @@ class Environment {
     
     initialize() {
         var params = {};
+        
+        //Load and check parameters
 
         try {
             params = jsonfile.readFileSync("config/" + this._name.toLowerCase() + "." + this._envName.toLowerCase() + ".env.json");

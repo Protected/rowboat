@@ -1,7 +1,6 @@
 /* Module: BridgeDiscordIRC -- This module was designed to bridge a multi-channel Discord server with a single IRC channel. */
-/* Required environments: Discord, IRC */
 
-var jsonfile = require('jsonfile');
+var Module = require('./Module.js');
 var cd = require('color-difference');
 var emoji = require('emojione');
 
@@ -9,96 +8,227 @@ emoji.ascii = true;
 delete emoji.asciiList['d:'];
 
 
-//== Module settings (bridge.mod.json)
-
-//*Name of the Discord environment
-var envdiscord = null;
-
-//*Name of a Discord channel the bot will treat as default
-var defaultdiscordchannel = null;
-
-//*Name of the IRC environment
-var envirc = null;
-
-//*Name of an IRC channel the bot will join (including prefix)
-var ircchannel = null;
-
-//==
-
-var environments = null;
-var modules = null;
+class ModBridgeDiscordIRC {
 
 
-var modname = "BridgeDiscordIRC";
-exports.name = modname;
+    get requiredParams() { return [
+        'envdiscord',           //Name of the Discord environment
+        'defaultdiscordchannel',    //Name of a Discord channel the bot will treat as default
+        'envirc',               //Name of the IRC environment
+        'ircchannel'            //Name of an IRC channel the bot will join (including prefix)
+    ]; }
+
+    constructor(name) {
+        super('BridgeDiscordIRC', name);
+    }
 
 
-exports.requiredenvironments = ["Discord", "IRC"];
-exports.requiredmodules = [];
-
-
-exports.initialize = function(envs, mods, moduleRequest) {
-
-    //Load parameters
-
-    var params = {};
-    try {
-        params = jsonfile.readFileSync("config/bridgediscordirc.mod.json");
-    } catch(e) {}
-  
-    if (params.envdiscord) envdiscord = params.envdiscord;
-    if (!envdiscord) return false;
+    get irc() {
+        return this.env(this.param('envirc'));
+    }
     
-    if (params.defaultdiscordchannel) defaultdiscordchannel = params.defaultdiscordchannel;
-    if (!defaultdiscordchannel) return false;
+    get discord() {
+        return this.env(this.param('envdiscord'));
+    }
     
-    if (params.envirc) envirc = params.envirc;
-    if (!envirc) return false;
-    
-    if (params.ircchannel) ircchannel = params.ircchannel;
-    if (!ircchannel) return false;
-    
-    if (!envs) return false;
-    environments = envs;
-    modules = mods;
 
-    if (!envs[envirc] || !envs[envdiscord]) return false;
-    
-    //Register callbacks
-    
-    envs[envirc].registerOnMessage(onIrcMessage);
-    envs[envdiscord].registerOnMessage(onDiscordMessage);
-    
-    return true;
-};
+    initialize(envs, mods, moduleRequest) {
+        if (!super(envs, mods, moduleRequest)) return false;
+        
+        
+        //Register callbacks
+        
+        this.irc.registerOnMessage(this.onIrcMessage);
+        this.discord.registerOnMessage(this.onDiscordMessage);
+        
+        return true;
+    }
 
 
-// # Module code below this line #
+    // # Module code below this line #
+
+
+    //Event handlers
+
+
+    onIrcMessage(env, type, message, authorid, channelid, rawobject) {
+
+        var target = null;
+
+        var directedmessage = /^\[#([a-zA-Z0-9]+)\] (.+)/.exec(message);
+        if (directedmessage) {
+            target = directedmessage[1];
+            message = directedmessage[2];
+        }
+
+        var bold = null;
+        var und = null;
+        var ita = null;
+        var order = [];
+        var finalmsg = message.replace(/([0-9]{1,2}(,[0-9]{1,2})?)?/g, "").replace(//g, "") + "";
+        for (var i = 0; i < finalmsg.length; i++) {
+            if (finalmsg[i] == "") {
+                if (und === null) {
+                    und = i;
+                    order.push('und');
+                } else {
+                    finalmsg = finalmsg.slice(0, und) + "__" + finalmsg.slice(und + 1, i) + "__" + finalmsg.slice(i + 1);
+                    und = null;
+                    i += 2;
+                    order.splice(order.indexOf('und'), 1);
+                }
+            } else if (finalmsg[i] == "") {
+                if (bold === null) {
+                    bold = i;
+                    order.push('bold');
+                } else {
+                    finalmsg = finalmsg.slice(0, bold) + "**" + finalmsg.slice(bold + 1, i) + "**" + finalmsg.slice(i + 1);
+                    bold = null;
+                    i += 2;
+                    order.splice(order.indexOf('bold'), 1);
+                }
+            } else if (finalmsg[i] == "") {
+                if (ita === null) {
+                    ita = i;
+                    order.push('ita');
+                } else {
+                    finalmsg = finalmsg.slice(0, ita) + "*" + finalmsg.slice(ita + 1, i) + "*" + finalmsg.slice(i + 1);
+                    ita = null;
+                    order.splice(order.indexOf('ita'), 1);
+                }
+            } else if (finalmsg[i] == "") {
+                var insert = '';
+                var offset = 0;
+                var next = null;
+                while (next = order.pop()) {
+                    if (next == 'ita' && ita !== null) {
+                        finalmsg = finalmsg.slice(0, ita) + "*" + finalmsg.slice(ita + 1);
+                        insert += '*';
+                    }
+                    if (next == 'bold' && bold !== null) {
+                        finalmsg = finalmsg.slice(0, bold) + "**" + finalmsg.slice(bold + 1);
+                        insert += '**';
+                        offset += 1;
+                    }
+                    if (next == 'und' && und !== null) {
+                        finalmsg = finalmsg.slice(0, und) + "__" + finalmsg.slice(und + 1);
+                        insert += '__';
+                        offset += 1;
+                    }
+                }
+                finalmsg = finalmsg.slice(0, i + offset) + insert + finalmsg.slice(i + offset + 1);
+                i += offset + insert.length;
+                bold = null;
+                und = null;
+                ita = null;
+            }
+        }
+        
+        finalmsg = finalmsg.replace(/@(([^ #]+)(#[0-9]{4})?)/, (match, userornick) => {
+            var refid = this.discord.displayNameToId(userornick);
+            if (refid) return "<@" + refid + ">";
+            return match;
+        });
+        
+        finalmsg = finalmsg.replace(/^([^:]+): /, (match, userornick) => {
+            var refid = this.discord.displayNameToId(userornick);
+            if (refid) return "<@" + refid + ">";
+            return match;
+        });
+        
+        finalmsg = emoji.shortnameToUnicode(finalmsg);
+        
+        if (type == "action") {
+            this.discord.msg(target, "_* `" + env.idToDisplayName(authorid) + "` " + finalmsg + "_");
+        } else if (type == "regular") {
+            this.discord.msg(target, "`<" + env.idToDisplayName(authorid) + ">` " + finalmsg);
+        }
+    }
+
+
+    onDiscordMessage(env, type, message, authorid, channelid, rawobject) {
+        
+        var server = env.server;
+        var finalmsg = message;
+        
+        var action = false;
+        
+        var authorname = env.idToDisplayName(authorid);
+        
+        var roles = server.roles;
+        for (let role of roles) {
+            if (rawobject.author.hasRole(role)) {
+                authorname = "" + closestTtyColor(role.colorAsHex()) + authorname + "";
+                break;
+            }
+        }
+        
+        finalmsg = finalmsg.replace(/<@!?([0-9]+)>/g, (match, id) => {
+            var user = server.members.get("id", id);
+            if (!user) return "";
+            return "@" + (server.detailsOfUser(user).nick ? server.detailsOfUser(user).nick : user.username);
+        });
+        
+        finalmsg = finalmsg.replace(/<#([0-9]+)>/g, (match, id) => {
+            var chan = server.channels.get("id", id);
+            if (!chan) return "";
+            return "#" + chan.name;
+        });
+        
+        action = !!/^_[^_](.*[^_])?_$/.exec(finalmsg);
+        
+        finalmsg = finalmsg.replace(/__(.*?)__/g, "$1").replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1").replace(/_(.*?)_/g, "$1");
+        finalmsg = emoji.shortnameToAscii(emoji.toShort(finalmsg));
+        
+        var lines = finalmsg.split("\n");
+        
+        for (let line of lines) {
+            if (action) {
+                line = '* ' + authorname + " " + line;
+            } else {
+                line = '(' + authorname + ") " + line;
+            }
+            
+            if (rawobject.channel.name != this.param('defaultdiscordchannel')) {
+                line = "[#" + rawobject.channel.name + "] " + line;
+            }
+            
+            if (type == "regular") {
+                this.irc.msg(this.param('ircchannel'), line);
+            }
+        }
+        
+    }
+    
+    
+}
+
+
+module.exports = ModBridgeDiscordIRC;
 
 
 //Auxiliary
 
-
 var colormap = [
-	"#FFFFFF",
-	"#000000",
-	"#00007F",
-	"#009300",
-	"#FF0000",
-	"#7F0000",
-	"#9C009C",
-	"#FC7F00",
-	"#FFFF00",
-	"#00FC00",
-	"#009393",
-	"#00FFFF",
-	"#0000FC",
-	"#FF00FF",
-	"#7F7F7F",
-	"#D2D2D2"
+    "#FFFFFF",
+    "#000000",
+    "#00007F",
+    "#009300",
+    "#FF0000",
+    "#7F0000",
+    "#9C009C",
+    "#FC7F00",
+    "#FFFF00",
+    "#00FC00",
+    "#009393",
+    "#00FFFF",
+    "#0000FC",
+    "#FF00FF",
+    "#7F7F7F",
+    "#D2D2D2"
 ];
 
-function closestTtyColor(hexrgb) {
+closestTtyColor(hexrgb) {
     var distance = 101;
     var color = 0;
     for (var i = 0; i < colormap.length; i++) {
@@ -112,158 +242,3 @@ function closestTtyColor(hexrgb) {
     if (color.length < 2) color = "0" + color;
     return color;
 }
-
-
-//Event handlers
-
-
-function onIrcMessage(env, type, message, authorid, channelid, rawobject) {
-
-    var target = null;
-
-    var directedmessage = /^\[#([a-zA-Z0-9]+)\] (.+)/.exec(message);
-    if (directedmessage) {
-        target = directedmessage[1];
-        message = directedmessage[2];
-    }
-
-    var bold = null;
-    var und = null;
-    var ita = null;
-    var order = [];
-    var finalmsg = message.replace(/([0-9]{1,2}(,[0-9]{1,2})?)?/g, "").replace(//g, "") + "";
-    for (var i = 0; i < finalmsg.length; i++) {
-        if (finalmsg[i] == "") {
-            if (und === null) {
-                und = i;
-                order.push('und');
-            } else {
-                finalmsg = finalmsg.slice(0, und) + "__" + finalmsg.slice(und + 1, i) + "__" + finalmsg.slice(i + 1);
-                und = null;
-                i += 2;
-                order.splice(order.indexOf('und'), 1);
-            }
-        } else if (finalmsg[i] == "") {
-            if (bold === null) {
-                bold = i;
-                order.push('bold');
-            } else {
-                finalmsg = finalmsg.slice(0, bold) + "**" + finalmsg.slice(bold + 1, i) + "**" + finalmsg.slice(i + 1);
-                bold = null;
-                i += 2;
-                order.splice(order.indexOf('bold'), 1);
-            }
-        } else if (finalmsg[i] == "") {
-            if (ita === null) {
-                ita = i;
-                order.push('ita');
-            } else {
-                finalmsg = finalmsg.slice(0, ita) + "*" + finalmsg.slice(ita + 1, i) + "*" + finalmsg.slice(i + 1);
-                ita = null;
-                order.splice(order.indexOf('ita'), 1);
-            }
-        } else if (finalmsg[i] == "") {
-            var insert = '';
-            var offset = 0;
-            var next = null;
-            while (next = order.pop()) {
-                if (next == 'ita' && ita !== null) {
-                    finalmsg = finalmsg.slice(0, ita) + "*" + finalmsg.slice(ita + 1);
-                    insert += '*';
-                }
-                if (next == 'bold' && bold !== null) {
-                    finalmsg = finalmsg.slice(0, bold) + "**" + finalmsg.slice(bold + 1);
-                    insert += '**';
-                    offset += 1;
-                }
-                if (next == 'und' && und !== null) {
-                    finalmsg = finalmsg.slice(0, und) + "__" + finalmsg.slice(und + 1);
-                    insert += '__';
-                    offset += 1;
-                }
-            }
-            finalmsg = finalmsg.slice(0, i + offset) + insert + finalmsg.slice(i + offset + 1);
-            i += offset + insert.length;
-            bold = null;
-            und = null;
-            ita = null;
-        }
-    }
-    
-    finalmsg = finalmsg.replace(/@(([^ #]+)(#[0-9]{4})?)/, function(match, userornick) {
-        var refid = environments[envdiscord].displayNameToId(userornick);
-        if (refid) return "<@" + refid + ">";
-        return match;
-    });
-    
-    finalmsg = finalmsg.replace(/^([^:]+): /, function(match, userornick) {
-        var refid = environments[envdiscord].displayNameToId(userornick);
-        if (refid) return "<@" + refid + ">";
-        return match;
-    });
-    
-    finalmsg = emoji.shortnameToUnicode(finalmsg);
-    
-    if (type == "action") {
-        environments[envdiscord].msg(target, "_* `" + env.idToDisplayName(authorid) + "` " + finalmsg + "_");
-    } else if (type == "regular") {
-        environments[envdiscord].msg(target, "`<" + env.idToDisplayName(authorid) + ">` " + finalmsg);
-    }
-}
-
-
-function onDiscordMessage(env, type, message, authorid, channelid, rawobject) {
-    
-    var server = env.server;
-    var finalmsg = message;
-    
-    var action = false;
-    
-    var authorname = env.idToDisplayName(authorid);
-    
-    var roles = server.roles;
-    for (var i = 0; i < roles.length; i++) {
-        if (rawobject.author.hasRole(roles[i])) {
-            authorname = "" + closestTtyColor(roles[i].colorAsHex()) + authorname + "";
-            break;
-        }
-    }
-    
-    finalmsg = finalmsg.replace(/<@!?([0-9]+)>/g, function(match, id) {
-        var user = server.members.get("id", id);
-        if (!user) return "";
-        return "@" + (server.detailsOfUser(user).nick ? server.detailsOfUser(user).nick : user.username);
-    });
-    
-    finalmsg = finalmsg.replace(/<#([0-9]+)>/g, function(match, id) {
-        var chan = server.channels.get("id", id);
-        if (!chan) return "";
-        return "#" + chan.name;
-    });
-    
-    action = !!/^_[^_](.*[^_])?_$/.exec(finalmsg);
-    
-    finalmsg = finalmsg.replace(/__(.*?)__/g, "$1").replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1").replace(/_(.*?)_/g, "$1");
-    finalmsg = emoji.shortnameToAscii(emoji.toShort(finalmsg));
-    
-    var lines = finalmsg.split("\n");
-    
-    for (var i = 0; i < lines.length; i++) {
-        var line = lines[i];
-    
-        if (action) {
-            line = '* ' + authorname + " " + line;
-        } else {
-            line = '(' + authorname + ") " + line;
-        }
-        
-        if (rawobject.channel.name != defaultdiscordchannel) {
-            line = "[#" + rawobject.channel.name + "] " + line;
-        }
-        
-        if (type == "regular") {
-            environments[envirc].msg(ircchannel, line);
-        }
-    }
-    
-};
