@@ -41,3 +41,7 @@ class ModRandom extends Module {
     };
 
 }
+
+
+module.exports = ModRandom;
+

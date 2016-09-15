@@ -29,7 +29,7 @@ class ModUsers extends Module {
        
         //Load data
         
-        if (!loadUsers()) return false;
+        if (!this.loadUsers()) return false;
 
         
         //Register callbacks

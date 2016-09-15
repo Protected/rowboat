@@ -8,7 +8,7 @@ emoji.ascii = true;
 delete emoji.asciiList['d:'];
 
 
-class ModBridgeDiscordIRC {
+class ModBridgeDiscordIRC extends Module {
 
 
     get isMultiInstanceable() { return true; }
@@ -230,7 +230,7 @@ var colormap = [
     "#D2D2D2"
 ];
 
-closestTtyColor(hexrgb) {
+function closestTtyColor(hexrgb) {
     var distance = 101;
     var color = 0;
     for (var i = 0; i < colormap.length; i++) {

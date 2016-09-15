@@ -42,7 +42,7 @@ class ModCommands extends Module {
         
         //Register callbacks
         
-        for (let envname of allowedenvs) {
+        for (let envname of this.param('allowedenvs')) {
             this.env(envname).registerOnMessage(this.onCommandMessage);
         }
         

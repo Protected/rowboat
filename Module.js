@@ -44,7 +44,7 @@ class Module {
         //Load and check parameters
         
         try {
-            var configname = this._envName.toLowerCase();
+            var configname = this._modName.toLowerCase();
             if (this.isMultiInstanceable) configname = this._name.toLowerCase() + "." + configname;
             params = jsonfile.readFileSync("config/" + configname + ".mod.json");
         } catch(e) {}
