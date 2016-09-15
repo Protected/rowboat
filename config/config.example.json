@@ -3,8 +3,8 @@
         "IRC": "IRC",
         "Discord": "Discord"
     },
-    "modules": {
-        "Users": "Users",
-        "Commands": "Commands"
-    }
+    "modules": [
+        "Users",
+        "Commands"
+    ]
 }
