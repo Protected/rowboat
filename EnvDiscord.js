@@ -43,7 +43,7 @@ class EnvDiscord extends Environment {
             
             this._channels[this._server.defaultChannel.name] = this._server.defaultChannel;
             if (params.defaultchannel != this._server.defaultChannel.name) {
-                this._channels[params.defaultchannel] = this._server.channels.findAll("type", "text").find("name", params.defaultchannel);
+                this._channels[params.defaultchannel] = this._server.channels.filter((channel) => (channel.type == "text")).find("name", params.defaultchannel);
             }
 
             this._carrier = setInterval(() => {
@@ -88,13 +88,13 @@ class EnvDiscord extends Environment {
 
         if (typeof targetid == "string") {
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.channels.findAll("type", "text").find("id", targetid);
+                this._channels[targetid] = this._server.channels.filter((channel) => (channel.type == "text")).find("id", targetid);
             }
             if (!this._channels[targetid]) {
                 this._channels[targetid] = this._server.members.find("id", targetid);
             }
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.channels.findAll("type", "text").find("name", targetid);
+                this._channels[targetid] = this._server.channels.filter((channel) => (channel.type == "text")).find("name", targetid);
             }
             if (!this._channels[targetid]) {
                 this._channels[targetid] = this._server.members.find("name", targetid);
@@ -126,9 +126,9 @@ class EnvDiscord extends Environment {
 
         var parts = displayname.split("#");
         if (parts[1]) {
-            refuser = this._server.members.findAll("user.username", parts[0]).find("user.discriminator", parts[1]);
+            refuser = this._server.members.filter((user) => (user.username == parts[0])).find("user.discriminator", parts[1]);
         } else {
-            var cache = this._server.members.findAll("user.username", displayname);
+            var cache = this._server.members.filter((user) => (user.username == displayname));
             if (cache.length == 1) {
                 refuser = cache[0];
             } else {
