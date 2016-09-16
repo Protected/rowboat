@@ -157,7 +157,7 @@ class ModBridgeDiscordIRC extends Module {
         
         var authorname = env.idToDisplayName(authorid);
         
-        var roles = server.roles;
+        var roles = server.roles.array();
         for (let role of roles) {
             if (rawobject.member.roles.find('id', role.id)) {
                 authorname = "" + closestTtyColor(role.hexColor) + authorname + "";
