@@ -57,7 +57,7 @@ class EnvDiscord extends Environment {
 
             var type = "regular";
             var channelid = message.channel.id;
-            if (message.channel instanceof discord.DMChannel) {
+            if (message.channel.type == "dm") {
                 type = "private";
                 channelid = message.author.id;
             }
