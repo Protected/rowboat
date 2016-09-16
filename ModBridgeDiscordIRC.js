@@ -159,7 +159,7 @@ class ModBridgeDiscordIRC extends Module {
         
         var roles = server.roles;
         for (let role of roles) {
-            if (rawobject.author.roles.find('id', role.id) {
+            if (rawobject.author.roles.find('id', role.id)) {
                 authorname = "" + closestTtyColor(role.hexColor) + authorname + "";
                 break;
             }
