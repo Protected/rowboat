@@ -31,6 +31,7 @@ class EnvDiscord extends Environment {
     
     connect() {
     
+        var self = this;
         var params = this.params;
     
         this._client = new discord.Client({
@@ -47,7 +48,7 @@ class EnvDiscord extends Environment {
             }
 
             this._carrier = setInterval(() => {
-                    this.deliverMsgs.apply(this, null)
+                    this.deliverMsgs.apply(self, null)
                 }, params.senddelay);
         });
 
@@ -115,8 +116,8 @@ class EnvDiscord extends Environment {
     
 
     idToDisplayName(id) {
-        var user = this._server.members.find("id", id);
-        if (user) return (user.nickname ? user.nickname : user.username);
+        var member = this._server.members.find("id", id);
+        if (member) return (member.nickname ? member.nickname : member.user.username);
         return id;
     }
     
@@ -126,9 +127,9 @@ class EnvDiscord extends Environment {
 
         var parts = displayname.split("#");
         if (parts[1]) {
-            refuser = this._server.members.filter((user) => (user.username == parts[0])).find("user.discriminator", parts[1]);
+            refuser = this._server.members.filter((member) => (member.user.username == parts[0])).find("user.discriminator", parts[1]);
         } else {
-            var cache = this._server.members.filter((user) => (user.username == displayname));
+            var cache = this._server.members.filter((member) => (member.user.username == displayname));
             if (cache.length == 1) {
                 refuser = cache[0];
             } else {
