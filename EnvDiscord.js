@@ -33,19 +33,21 @@ class EnvDiscord extends Environment {
     
         var params = this.params;
     
-        this._client = new discord.Client();
-        let self = this;
-        this._client.on("ready", (message) => {
-            this._server = this._client.servers.get("name", params.servername);
+        this._client = new discord.Client({
+            api_request_method: 'sequential',
+            fetch_all_members: true
+        });
+        
+        this._client.on("ready", () => {
+            this._server = this._client.guilds.find("name", params.servername);
             
             this._channels[this._server.defaultChannel.name] = this._server.defaultChannel;
             if (params.defaultchannel != this._server.defaultChannel.name) {
-                this._channels[params.defaultchannel] = this._server.channels.getAll("type", "text").get("name", params.defaultchannel);
+                this._channels[params.defaultchannel] = this._server.channels.findAll("type", "text").find("name", params.defaultchannel);
             }
 
-            this._carrier = setInterval(
-                function() {
-                    self.deliverMsgs.apply(self,null)
+            this._carrier = setInterval(() => {
+                    this.deliverMsgs.apply(this, null)
                 }, params.senddelay);
         });
 
@@ -55,7 +57,7 @@ class EnvDiscord extends Environment {
 
             var type = "regular";
             var channelid = message.channel.id;
-            if (message.channel instanceof discord.PMChannel) {
+            if (message.channel instanceof discord.DMChannel) {
                 type = "private";
                 channelid = message.author.id;
             }
@@ -68,14 +70,14 @@ class EnvDiscord extends Environment {
             
         });
 
-        this._client.loginWithToken(params.token, this.genericErrorHandler);
+        this._client.login(params.token).catch(this.genericErrorHandler);
         
     }
     
     
     disconnect() {
         if (this._carrier) clearInterval(this._carrier);
-        if (this._client) this._client.logout(this.genericErrorHandler);
+        if (this._client) this._client.destroy().catch(this.genericErrorHandler);
         this.carrier = null;
         this.client = null;
     }
@@ -86,16 +88,16 @@ class EnvDiscord extends Environment {
 
         if (typeof targetid == "string") {
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.channels.getAll("type", "text").get("id", targetid);
+                this._channels[targetid] = this._server.channels.findAll("type", "text").find("id", targetid);
             }
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.members.get("id", targetid);
+                this._channels[targetid] = this._server.members.find("id", targetid);
             }
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.channels.getAll("type", "text").get("name", targetid);
+                this._channels[targetid] = this._server.channels.findAll("type", "text").find("name", targetid);
             }
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.members.get("name", targetid);
+                this._channels[targetid] = this._server.members.find("name", targetid);
             }
             if (this._channels[targetid]) {
                 targetchan = this._channels[targetid];
@@ -113,12 +115,8 @@ class EnvDiscord extends Environment {
     
 
     idToDisplayName(id) {
-        var user = this._server.members.get("id", id);
-        if (user) {
-            var disp = this._server.detailsOfUser(user).nick;
-            if (!disp) disp = user.username;
-            return disp;
-        }
+        var user = this._server.members.find("id", id);
+        if (user) return (user.nickname ? user.nickname : user.username);
         return id;
     }
     
@@ -128,20 +126,14 @@ class EnvDiscord extends Environment {
 
         var parts = displayname.split("#");
         if (parts[1]) {
-            refuser = this._server.members.getAll("username", parts[0]).get("discriminator", parts[1]);
+            refuser = this._server.members.findAll("user.username", parts[0]).find("user.discriminator", parts[1]);
         } else {
-            var cache = this._server.members.getAll("username", displayname);
+            var cache = this._server.members.findAll("user.username", displayname);
             if (cache.length == 1) {
                 refuser = cache[0];
             } else {
                 displayname = displayname.toLowerCase();
-                for (let member of this._server.members) {
-                    var nick = this._server.detailsOfUser(member).nick;
-                    if (nick && nick.toLowerCase() == displayname) {
-                        refuser = member;
-                        break;
-                    }
-                }
+                refuser = this._server.members.find((member) => (member.nick && member.nick.toLowerCase() == displayname));
             }
         }
 
@@ -172,16 +164,10 @@ class EnvDiscord extends Environment {
             packages[rawchannelid].messages.push(this._outbox[i][1]);
         }
         for (var rawchannelid in packages) {
-            try {
-                this._client.sendMessage(
-                    packages[rawchannelid].targetchan,
-                    packages[rawchannelid].messages.join("\n"),
-                    {disableEveryone: true},
-                    this.genericErrorHandler
-                );
-            } catch (e) {
-                this.genericErrorHandler(e.message);
-            }
+            packages[rawchannelid].targetchan.sendMessage(
+                packages[rawchannelid].messages.join("\n")
+                {disable_everyone: true, split: true}
+            ).catch(this.genericErrorHandler);
         }
         this._outbox = [];
     }

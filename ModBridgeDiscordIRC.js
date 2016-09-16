@@ -159,20 +159,20 @@ class ModBridgeDiscordIRC extends Module {
         
         var roles = server.roles;
         for (let role of roles) {
-            if (rawobject.author.hasRole(role)) {
-                authorname = "" + closestTtyColor(role.colorAsHex()) + authorname + "";
+            if (rawobject.author.roles.find('id', role.id) {
+                authorname = "" + closestTtyColor(role.hexColor) + authorname + "";
                 break;
             }
         }
         
         finalmsg = finalmsg.replace(/<@!?([0-9]+)>/g, (match, id) => {
-            var user = server.members.get("id", id);
+            var user = server.members.find("id", id);
             if (!user) return "";
-            return "@" + (server.detailsOfUser(user).nick ? server.detailsOfUser(user).nick : user.username);
+            return "@" + (user.nickname ? user.nickname : user.username);
         });
         
         finalmsg = finalmsg.replace(/<#([0-9]+)>/g, (match, id) => {
-            var chan = server.channels.get("id", id);
+            var chan = server.channels.find("id", id);
             if (!chan) return "";
             return "#" + chan.name;
         });
