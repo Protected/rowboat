@@ -19,6 +19,10 @@ class ModBridgeDiscordIRC extends Module {
         'envirc',               //Name of the IRC environment
         'ircchannel'            //Name of an IRC channel the bot will join (including prefix)
     ]; }
+    
+    get requiredModules() { return [
+        'Users'
+    ]; }
 
     constructor(name) {
         super('BridgeDiscordIRC', name);
@@ -164,6 +168,12 @@ class ModBridgeDiscordIRC extends Module {
                 break;
             }
         }
+        
+        finalmsg = finalmsg.replace(/<@&([0-9]+)>/g, (match, id) => {
+            var role = server.roles.find("id", id);
+            if (!id) return "";
+            return "@" + role.name;
+        });
         
         finalmsg = finalmsg.replace(/<@!?([0-9]+)>/g, (match, id) => {
             var user = server.members.find("id", id);

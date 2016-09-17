@@ -4,3 +4,4 @@ config/*.env.json
 config/*.mod.json
 *.data.json
 test.js
+ModCustom*.js
