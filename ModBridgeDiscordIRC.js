@@ -58,6 +58,7 @@ class ModBridgeDiscordIRC extends Module {
 
 
     onIrcMessage(env, type, message, authorid, channelid, rawobject) {
+        if (type != "action" && type != "regular") return;
 
         var target = null;
 
@@ -153,6 +154,7 @@ class ModBridgeDiscordIRC extends Module {
 
 
     onDiscordMessage(env, type, message, authorid, channelid, rawobject) {
+        if (type != "regular") return;
         
         var server = env.server;
         var finalmsg = message;
