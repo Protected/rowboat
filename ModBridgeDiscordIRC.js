@@ -176,9 +176,14 @@ class ModBridgeDiscordIRC extends Module {
         });
         
         finalmsg = finalmsg.replace(/<@!?([0-9]+)>/g, (match, id) => {
-            var user = server.members.find("id", id);
-            if (!user) return "";
-            return "@" + (user.nickname ? user.nickname : user.username);
+            var ircid = this.translateAccountMentions(this.discord, id, this.irc, this.param('ircchannel'));
+            if (ircid) {
+                return "@" + this.irc.idToDisplayName(ircid);
+            } else {
+                var user = server.members.find("id", id);
+                if (!user) return "";
+                return "@" + (user.nickname ? user.nickname : user.username);
+            }
         });
         
         finalmsg = finalmsg.replace(/<#([0-9]+)>/g, (match, id) => {
@@ -210,6 +215,32 @@ class ModBridgeDiscordIRC extends Module {
             }
         }
         
+    }
+    
+    
+    //Auxiliary
+    
+    
+    translateAccountMentions(fromenv, fromid, toenv, tochan) {
+        if (!fromenv || !fromid || !toenv || !tochan) return null;
+
+        var handles = this.mod("Users").getHandlesById(fromenv, fromid);
+        if (!handles.length) return null;
+
+        var toids = toenv.listUserIds(tochan);
+        if (!toids.length) return null;
+
+        for (let handle of handles) {  //Accounts of users in the channel where the message was written
+            for (let possibleid of this.mod("Users").getIds(handle, toenv)) {  //ID patterns of those accounts
+                for (let toid of toids) {  //Cross check against IDs of users in the channel where the message will be sent
+                    if (RegExp(possibleid).exec(toid)) {
+                        return toid;
+                    }
+                }
+            }
+        }
+        
+        return null;
     }
     
     

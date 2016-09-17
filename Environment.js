@@ -88,6 +88,8 @@ class Environment {
     
     idIsSecured(id) { return false; }
     idIsAuthenticated(id) { return false; }
+    
+    listUserIds(channel) { return []; }
 
 
     genericErrorHandler(err) {

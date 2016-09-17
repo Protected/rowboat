@@ -84,7 +84,7 @@ class EnvDiscord extends Environment {
     }
     
     
-    msg(targetid, msg) {
+    getActualChanFromTarget(targetid) {
         var targetchan = null;
 
         if (typeof targetid == "string") {
@@ -106,6 +106,12 @@ class EnvDiscord extends Environment {
         } else {
             targetchan = targetid;
         }
+        
+        return targetchan;    
+    }
+    
+    msg(targetid, msg) {
+        var targetchan = this.getActualChanFromTarget(targetid);
 
         if (!targetchan) {
             targetchan = this._channels[this.param('defaultchannel')];
@@ -148,6 +154,28 @@ class EnvDiscord extends Environment {
     
     idIsSecured(id) { return true; }
     idIsAuthenticated(id) { return true; }
+    
+    
+    listUserIds(channel) {
+        var targetchan = this.getActualChanFromTarget(channel);
+        if (!targetchan) return [];
+        
+        if (targetchan.type == "dm") return [targetchan.recipient.id];
+        
+        var ids = [];
+        if (targetchan.type == "group") {
+            for (let user of targetchan.recipients.array()) {
+                ids.push(user.id);
+            }
+        }
+        if (targetchan.type == "text") {
+            for (let member of targetchan.members.array()) {
+                ids.push(member.id);
+            }
+        }
+        
+        return ids;
+    }
     
     
     //Auxiliary methods

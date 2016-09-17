@@ -196,6 +196,29 @@ class EnvIRC extends Environment {
         var person = this._people[parts[0]];
         return (person && person.identified);
     }
+    
+    
+    listUserIds(channel) {
+        if (!channel) return [];
+        
+        if (channel[0] != "#") {
+            //PM
+            if (this._people[channel]) {
+                return [this._people[channel].id];
+            }
+            return [];
+        }
+        
+        //#channel
+        var ids = [];
+        for (let nick in this._people) {
+            let desc = this._people[nick];
+            if (desc.channels.indexOf(channel) > -1) {
+                ids.push(desc.id);
+            }
+        }
+        return ids;
+    }
 
 
     //Auxiliary methods
