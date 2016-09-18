@@ -43,7 +43,9 @@ class ModBridgeSimple extends Module {
         //Register callbacks
         
         this.envA.registerOnMessage(this.onMessage, this);
-        this.envB.registerOnMessage(this.onMessage, this);
+        if (this.envA.name != this.envB.name) {
+            this.envB.registerOnMessage(this.onMessage, this);
+        }
         
         return true;
     }
@@ -62,18 +64,18 @@ class ModBridgeSimple extends Module {
         var targetchan = null;
         
         if (env.name == this.param('envA')) {
-            if (this.param('chanA') && channelid != this.param('chanA')) return;
-            
-            targetenv = this.envB;
-            targetchan = this.param('chanB');
-            
-        } else if (env.name == this.param('envB')) {
-            if (this.param('chanB') && channelid != this.param('chanB')) return;
-        
-            targetenv = this.envA;
-            targetchan = this.param('chanA');
-        
-        } else return;
+            if (!this.param('chanA') || channelid == this.param('chanA')) {            
+                targetenv = this.envB;
+                targetchan = this.param('chanB');
+            }        
+        } 
+        if (env.name == this.param('envB')) {
+            if (!this.param('chanB') || channelid == this.param('chanB')) {
+                targetenv = this.envA;
+                targetchan = this.param('chanA');
+             }
+        }
+        if (!targetenv) return;
         
         var finalmsg = '<' + env.idToDisplayName(authorid) + '> ' + message;
         
