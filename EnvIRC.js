@@ -58,6 +58,7 @@ class EnvIRC extends Environment {
         this._client.addListener('error', (message) => {
             this.genericErrorHandler(JSON.stringify(message, null, 4));
         });
+        
     
         this._client.addListener('message', (from, to, message, messageObj) => {
             var type = "regular";
@@ -97,31 +98,37 @@ class EnvIRC extends Environment {
             }
         });
     
-        //Keep track of people
         
         this._client.addListener('join', (channel, nick, messageObj) => {
             this.addPeople(nick, [channel], messageObj);
             if (nick.toLowerCase() == params.nickname.toLowerCase()) {
                 this._client.send('WHO', channel);
-            }
+            } 
+            this.triggerJoin(nick, [channel], messageObj);
         });
         
-        this._client.addListener('part', (channel, nick) => {
+        this._client.addListener('part', (channel, nick, reason, messageObj) => {
             this.remPeople(nick, [channel]);
+            this.triggerPart(nick, ['part', reason], [channel], messageObj);
         });
         
-        this._client.addListener('quit', (nick, x, channels) => {
+        this._client.addListener('quit', (nick, reason, channels, messageObj) => {
             this.remPeople(nick, channels);
+            this.triggerPart(nick, ['quit', reason], channels, messageObj);
         });
         
-        this._client.addListener('kick', (channel, nick) => {
+        this._client.addListener('kick', (channel, nick, by, reason, messageObj) => {
             this.remPeople(nick, [channel]);
+            this.triggerPart(nick, ['kick', reason, by], [channel], messageObj);
         });
         
         this._client.addListener('nick', (oldnick, newnick, channels, messageObj) => {
             this.remPeople(oldnick, channels);
+            this.triggerPart(oldnick, ['nick', 'Nickname change', newnick], channels, messageObj);
             this.addPeople(newnick, channels, messageObj);
+            this.triggerJoin(newnick, channels, messageObj);
         });
+        
         
         this._client.addListener('raw', (messageObj) => {
             if (messageObj.rawCommand == '005') { //VERSION reply
@@ -259,6 +266,31 @@ class EnvIRC extends Environment {
             delete this._people[nick];
         }
         return true;
+    }
+    
+    
+    triggerJoin(nick, channels, messageObj) {
+        var authorid = nick + '!' + messageObj.user + '@' + messageObj.host;
+        
+        for (let callback of this._cbJoin) {
+            for (let channelid of channels) {
+                if (this.invokeRegisteredCallback(callback, [this, authorid, channelid, messageObj])) {
+                    break;
+                }
+            }
+        }
+    }
+    
+    triggerPart(nick, reason, channels, messageObj) {
+        var authorid = nick + '!' + messageObj.user + '@' + messageObj.host;
+        
+        for (let callback of this._cbPart) {
+            for (let channelid of channels) {
+                if (this.invokeRegisteredCallback(callback, [this, authorid, channelid, reason, messageObj])) {
+                    break;
+                }
+            }
+        }
     }
     
 }

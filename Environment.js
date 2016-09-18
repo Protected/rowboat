@@ -21,6 +21,8 @@ class Environment {
         
         this._cbError = [];
         this._cbMessage = [];
+        this._cbJoin = [];
+        this._cbPart = [];
         
     }
     
@@ -70,6 +72,22 @@ class Environment {
             this._cbMessage.push(func);
         } else {
             this._cbMessage.push([func, self]);
+        }
+    }
+    
+    registerOnJoin(func, self) {
+        if (!self) {
+            this._cbJoin.push(func);
+        } else {
+            this._cbJoin.push([func, self]);
+        }
+    }
+    
+    registerOnPart(func, self) {
+        if (!self) {
+            this._cbPart.push(func);
+        } else {
+            this._cbPart.push([func, self]);
         }
     }
     

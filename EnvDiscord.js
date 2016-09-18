@@ -39,6 +39,7 @@ class EnvDiscord extends Environment {
             fetch_all_members: true
         });
         
+        
         this._client.on("ready", () => {
             this._server = this._client.guilds.find("name", params.servername);
             
@@ -51,6 +52,7 @@ class EnvDiscord extends Environment {
                     self.deliverMsgs.apply(self, null)
                 }, params.senddelay);
         });
+        
 
         this._client.on("message", (message) => {
 
@@ -70,6 +72,75 @@ class EnvDiscord extends Environment {
             }
             
         });
+        
+        
+        this._client.on("guildMemberAdd", (server, member) => {
+            var chans = this.findAccessChannels(member);
+            if (chans.length) {
+                this.triggerJoin(member.id, chans, {reason: "add"});
+            }
+        });
+        
+        
+        this._client.on("guildMemberRemove", (server, member) => {
+            if (member.user.status == "offline") return;
+            
+            var chans = this.findAccessChannels(member);
+            if (chans.length) {
+                this.triggerPart(member.id, chans, {reason: "remove"});
+            }
+        });
+        
+        
+        this._client.on("guildMemberUpdate", (server, oldMember, newMember) => {
+            if (newMember.user.status == "offline") return;
+        
+            var had = {};
+            for (let chan of this.findAccessChannels(oldMember)) {
+                had[chan.id] = chan;
+            }
+            
+            var tojoin = [];
+            var topart = [];
+            
+            for (let chan of this.findAccessChannels(newMember)) {
+                if (!had[chan.id]) tojoin.push(chan);
+                else delete had[chan.id];
+            }
+            for (let chanid in had) {
+                topart.push(had[chanid]);
+            }            
+        
+            if (tojoin.length) {
+                this.triggerJoin(newMember.id, tojoin, {reason: "permissions"});
+            }
+            if (topart.length) {
+                this.triggerPart(oldMember.id, topart, {reason: "permissions"});
+            }
+        });
+        
+        
+        this._client.on("presenceUpdate", (oldUser, newUser) => {
+            var reason = null;
+            if (oldUser.status == "offline" && newUser.status != "offline") {
+                reason = "join";
+            }
+            if (oldUser.status != "offline" && newUser.status == "offline") {
+                reason = "part";
+            }
+            if (!reason) return;
+            
+            var member = this._server.members.find('id', newUser.id);
+            var chans = this.findAccessChannels(member);
+            
+            if (reason == "join") {
+                this.triggerJoin(member.id, chans, {reason: reason, tostatus: newUser.status});
+            }
+            if (reason == "part") {
+                this.triggerPart(member.id, chans, {reason: reason, fromstatus: oldUser.status});
+            }
+        });
+        
 
         this._client.login(params.token).catch(this.genericErrorHandler);
         
@@ -83,32 +154,6 @@ class EnvDiscord extends Environment {
         this.client = null;
     }
     
-    
-    getActualChanFromTarget(targetid) {
-        var targetchan = null;
-
-        if (typeof targetid == "string") {
-            if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.channels.filter((channel) => (channel.type == "text")).find("id", targetid);
-            }
-            if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.members.find("id", targetid);
-            }
-            if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.channels.filter((channel) => (channel.type == "text")).find("name", targetid);
-            }
-            if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.members.find("name", targetid);
-            }
-            if (this._channels[targetid]) {
-                targetchan = this._channels[targetid];
-            }
-        } else {
-            targetchan = targetid;
-        }
-        
-        return targetchan;    
-    }
     
     msg(targetid, msg) {
         var targetchan = this.getActualChanFromTarget(targetid);
@@ -215,6 +260,71 @@ class EnvDiscord extends Environment {
     
     
     get server() { return this._server; }
+    
+    
+    getActualChanFromTarget(targetid) {
+        var targetchan = null;
+
+        if (typeof targetid == "string") {
+            if (!this._channels[targetid]) {
+                this._channels[targetid] = this._server.channels.filter((channel) => (channel.type == "text")).find("id", targetid);
+            }
+            if (!this._channels[targetid]) {
+                this._channels[targetid] = this._server.members.find("id", targetid);
+            }
+            if (!this._channels[targetid]) {
+                this._channels[targetid] = this._server.channels.filter((channel) => (channel.type == "text")).find("name", targetid);
+            }
+            if (!this._channels[targetid]) {
+                this._channels[targetid] = this._server.members.find("name", targetid);
+            }
+            if (this._channels[targetid]) {
+                targetchan = this._channels[targetid];
+            }
+        } else {
+            targetchan = targetid;
+        }
+        
+        return targetchan;    
+    }
+    
+    
+    findAccessChannels(member) {
+        var channels = [];
+        if (!member) return channels;
+        
+        var allchannels = member.guild.channels.array();
+        for (let channel of allchannels) {
+            if (channel.permissionsFor(member).hasPermission("READ_MESSAGES")) {
+                channels.push(channel);
+            }
+        }
+        
+        return channels;
+    }
+    
+    
+    triggerJoin(authorid, channels, info) {
+        if (!info) info = {};
+        for (let callback of this._cbJoin) {
+            for (let channelid of channels) {
+                if (this.invokeRegisteredCallback(callback, [this, authorid, channelid, info])) {
+                    break;
+                }
+            }
+        }
+    }
+    
+    triggerPart(authorid, channels, info) {
+        if (!info) info = {};
+        for (let callback of this._cbPart) {
+            for (let channelid of channels) {
+                if (this.invokeRegisteredCallback(callback, [this, authorid, channelid, info])) {
+                    break;
+                }
+            }
+        }
+    }
     
     
 };
