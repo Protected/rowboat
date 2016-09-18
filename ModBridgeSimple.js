@@ -77,7 +77,7 @@ class ModBridgeSimple extends Module {
         
         var finalmsg = '<' + env.idToDisplayName(authorid) + '> ' + message;
         
-        if (this.param('tagChannel')) finalmsg = '[' + channelid + '] ' + finalmsg;
+        if (this.param('tagChannel')) finalmsg = '[' + env.channelIdToDisplayName(channelid) + '] ' + finalmsg;
         if (this.param('tagEnvironment')) finalmsg = '{' + env.name + '} ' + finalmsg;
         
         targetenv.msg(targetchan, finalmsg);

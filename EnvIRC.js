@@ -219,6 +219,11 @@ class EnvIRC extends Environment {
         }
         return ids;
     }
+    
+    
+    channelIdToDisplayName(channelid) {
+        return channelid;
+    }
 
 
     //Auxiliary methods

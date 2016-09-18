@@ -90,6 +90,9 @@ class Environment {
     idIsAuthenticated(id) { return false; }
     
     listUserIds(channel) { return []; }
+    
+    
+    channelIdToDisplayName(channelid) { return null; }
 
 
     genericErrorHandler(err) {

@@ -180,6 +180,13 @@ class EnvDiscord extends Environment {
     }
     
     
+    channelIdToDisplayName(channelid) {
+        var channel = this._server.channels.find("id", channelid);
+        if (channel) return channel.name;
+        return channelid;
+    }
+    
+    
     //Auxiliary methods
     
     deliverMsgs() {
