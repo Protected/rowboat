@@ -131,17 +131,17 @@ class ModBridgeDiscordIRC extends Module {
             }
         }
         
-        finalmsg = finalmsg.replace(/@(([^ #]+)(#[0-9]{4})?)/, (match, userornick) => {
-            var refid = this.discord.displayNameToId(userornick);
+        var resolveMentions = (match, userornick) => {
+            var refid = this.irc.displayNameToId(userornick);
+            var discordid = this.translateAccountMentions(this.irc, refid, this.discord, target);
+            if (discordid) return "<@" + discordid + ">";
+            refid = this.discord.displayNameToId(userornick);
             if (refid) return "<@" + refid + ">";
             return match;
-        });
+        }
         
-        finalmsg = finalmsg.replace(/^([^:]+): /, (match, userornick) => {
-            var refid = this.discord.displayNameToId(userornick);
-            if (refid) return "<@" + refid + ">";
-            return match;
-        });
+        finalmsg = finalmsg.replace(/@(([^ #]+)(#[0-9]{4})?)/, resolveMentions);
+        finalmsg = finalmsg.replace(/^([^:]+): /, resolveMentions);
         
         finalmsg = emoji.shortnameToUnicode(finalmsg);
         
