@@ -197,7 +197,10 @@ class EnvDiscord extends Environment {
         for (var rawchannelid in packages) {
             packages[rawchannelid].targetchan.sendMessage(
                 packages[rawchannelid].messages.join("\n"),
-                {disable_everyone: true, split: true}
+                {
+                    disable_everyone: true,
+                    split: {char: "\n"}
+                }
             ).catch(this.genericErrorHandler);
         }
         this._outbox = [];
