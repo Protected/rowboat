@@ -171,6 +171,30 @@ class ModUsers extends Module {
             });
             
             
+            commands.registerCommand('userlist', {
+                args: ["perms", true],
+                description: "Lists the handles of the user accounts that have the given permissions.",
+                types: ["private"],
+                permissions: [PERM_ADMIN, PERM_MOD]
+            }, (env, type, userid, command, args, handle, reply) => {
+                
+                var handles = this.getHandlesByPerms(args.perms);
+                if (!handles.length) {
+                    reply("No handles were found with the given permission" + (args.perms.length != 1 ? "s" : "") + ".");
+                    return true;
+                }
+                
+                while(handles.length) {
+                    var outbound = handles.slice(0, 10);
+                    outbound = '"' + outbound.join('","') + '"';
+                    reply(outbound);
+                    handles = handles.slice(10);
+                }
+            
+                return true;
+            });
+            
+            
             commands.registerCommand('whois', {
                 args: ["handle"],
                 description: "Describe the user account identified by the handle.",
@@ -438,6 +462,18 @@ class ModUsers extends Module {
             }
         }
         return false;
+    }
+    
+    getHandlesByPerms(perms) {
+        var result = [];
+        
+        for (let eachuser of this._userdata) {
+            if (this.hasAllPerms(eachuser.handle, perms)) {
+                result.push(eachuser.handle);
+            }
+        }
+
+        return result;
     }
  
     
