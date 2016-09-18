@@ -141,7 +141,7 @@ class ModBridgeDiscordIRC extends Module {
         }
         
         finalmsg = finalmsg.replace(/@(([^ #]+)(#[0-9]{4})?)/, resolveMentions);
-        finalmsg = finalmsg.replace(/^([^:]+): /, resolveMentions);
+        finalmsg = finalmsg.replace(/^([^:]+):/, resolveMentions);
         
         finalmsg = emoji.shortnameToUnicode(finalmsg);
         
@@ -223,8 +223,8 @@ class ModBridgeDiscordIRC extends Module {
     //Auxiliary
     
     
-    translateAccountMentions(fromenv, fromid, toenv, tochan) {
-        if (!fromenv || !fromid || !toenv || !tochan) return null;
+    translateAccountMentions(fromenv, fromid, toenv, tochan) { 
+        if (!fromenv || !fromid || !toenv) return null;
 
         var handles = this.mod("Users").getHandlesById(fromenv.name, fromid);
         if (!handles.length) return null;

@@ -135,12 +135,12 @@ class EnvDiscord extends Environment {
         if (parts[1]) {
             refuser = this._server.members.filter((member) => (member.user.username == parts[0])).find("user.discriminator", parts[1]);
         } else {
-            var cache = this._server.members.filter((member) => (member.user.username == displayname));
+            var cache = this._server.members.filter((member) => (member.user.username == displayname)).array();
             if (cache.length == 1) {
                 refuser = cache[0];
             } else {
                 displayname = displayname.toLowerCase();
-                refuser = this._server.members.find((member) => (member.nick && member.nick.toLowerCase() == displayname));
+                refuser = this._server.members.find((member) => (member.nickname && member.nickname.toLowerCase() == displayname));
             }
         }
 
@@ -158,7 +158,9 @@ class EnvDiscord extends Environment {
     
     listUserIds(channel) {
         var targetchan = this.getActualChanFromTarget(channel);
-        if (!targetchan) return [];
+        if (!targetchan) {
+            targetchan = this._channels[this.param('defaultchannel')];
+        }
         
         if (targetchan.type == "dm") return [targetchan.recipient.id];
         
