@@ -86,7 +86,7 @@ class ModActivity extends Module {
             } else {
                 //Lookup by nickname
                 
-                let check = this._activitydata[envname][args[0].nickname.toLowerCase()];
+                let check = this._activitydata[envname][args.nickname.toLowerCase()];
                 if (check) register = check;
                 
             }
@@ -135,7 +135,7 @@ class ModActivity extends Module {
             } else {
                 //Lookup by nickname
                 
-                let check = this._activitydata[envname][args[0].nickname.toLowerCase()];
+                let check = this._activitydata[envname][args.nickname.toLowerCase()];
                 if (check) entries = check.last;
                 
             }
