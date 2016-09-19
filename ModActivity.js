@@ -86,7 +86,7 @@ class ModActivity extends Module {
             } else {
                 //Lookup by nickname
                 
-                let check = this._activitydata[envname][args[0].nickname.toLowerCase()];
+                let check = this._activitydata[envname][args.nickname.toLowerCase()];
                 if (check) register = check;
                 
             }
@@ -98,7 +98,12 @@ class ModActivity extends Module {
             } else if (register.seenreason === false) {
                 reply(args.nickname + " talked in " + register.seen[0] + " " + moment(register.seen[2]).fromNow() + ".");
             } else {
-                reply(args.nickname + " left " + register.seen[0] + " " + moment(register.seen[2]).fromNow() + " (reason: " + register.seenreason + ").");
+                let reason = 'unknown';
+                if (typeof register.seenreason == "object") {
+                    reason = register.seenreason[0];
+                    if (register.seenreason[1]) reason += ' (' + register.seenreason[1] + ')';
+                }
+                reply(args.nickname + " left " + register.seen[0] + " " + moment(register.seen[2]).fromNow() + " (reason: " + reason + ").");
             }
             
         });
@@ -130,7 +135,7 @@ class ModActivity extends Module {
             } else {
                 //Lookup by nickname
                 
-                let check = this._activitydata[envname][args[0].nickname.toLowerCase()];
+                let check = this._activitydata[envname][args.nickname.toLowerCase()];
                 if (check) entries = check.last;
                 
             }
