@@ -23,7 +23,7 @@ class ModActivity extends Module {
     constructor(name) {
         super('Activity', name);
         
-        this._params['datafile'] = 'activity.data.json';
+        this._params['datafile'] = 'users.data.json';
         this._params['linesPerUser'] = 5;
         
         //Main map: {ENV => {NICKNAME => {REGISTER}, ...}, ...}
@@ -86,8 +86,10 @@ class ModActivity extends Module {
             } else {
                 //Lookup by nickname
                 
-                let check = this._activitydata[envname][args.nickname.toLowerCase()];
-                if (check) register = check;
+                if (this._activitydata[envname]) {
+                    let check = this._activitydata[envname][args.nickname.toLowerCase()];
+                    if (check) register = check;
+                }
                 
             }
             
@@ -135,8 +137,10 @@ class ModActivity extends Module {
             } else {
                 //Lookup by nickname
                 
-                let check = this._activitydata[envname][args.nickname.toLowerCase()];
-                if (check) entries = check.last;
+                if (this._activitydata[envname]) {
+                    let check = this._activitydata[envname][args.nickname.toLowerCase()];
+                    if (check) entries = check.last;
+                }
                 
             }
             
