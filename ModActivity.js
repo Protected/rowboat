@@ -108,6 +108,7 @@ class ModActivity extends Module {
                 reply(args.nickname + " left " + register.seen[0] + " " + moment(register.seen[2]).fromNow() + " (reason: " + reason + ").");
             }
             
+            return true;
         });
         
         
@@ -155,6 +156,7 @@ class ModActivity extends Module {
                 }
             }
             
+            return true;
         });
         
         return true;
