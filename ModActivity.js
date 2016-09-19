@@ -23,7 +23,7 @@ class ModActivity extends Module {
     constructor(name) {
         super('Activity', name);
         
-        this._params['datafile'] = 'users.data.json';
+        this._params['datafile'] = 'activity.data.json';
         this._params['linesPerUser'] = 5;
         
         //Main map: {ENV => {NICKNAME => {REGISTER}, ...}, ...}
