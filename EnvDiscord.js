@@ -307,8 +307,8 @@ class EnvDiscord extends Environment {
     triggerJoin(authorid, channels, info) {
         if (!info) info = {};
         for (let callback of this._cbJoin) {
-            for (let channelid of channels) {
-                if (this.invokeRegisteredCallback(callback, [this, authorid, channelid, info])) {
+            for (let channel of channels) {
+                if (this.invokeRegisteredCallback(callback, [this, authorid, channel.id, info])) {
                     break;
                 }
             }
@@ -318,8 +318,8 @@ class EnvDiscord extends Environment {
     triggerPart(authorid, channels, info) {
         if (!info) info = {};
         for (let callback of this._cbPart) {
-            for (let channelid of channels) {
-                if (this.invokeRegisteredCallback(callback, [this, authorid, channelid, info])) {
+            for (let channel of channels) {
+                if (this.invokeRegisteredCallback(callback, [this, authorid, channel.id, info])) {
                     break;
                 }
             }
