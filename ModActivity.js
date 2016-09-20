@@ -23,7 +23,7 @@ class ModActivity extends Module {
     constructor(name) {
         super('Activity', name);
         
-        this._params['datafile'] = 'users.data.json';
+        this._params['datafile'] = 'activity.data.json';
         this._params['linesPerUser'] = 5;
         
         //Main map: {ENV => {NICKNAME => {REGISTER}, ...}, ...}
@@ -47,8 +47,8 @@ class ModActivity extends Module {
         
         var self = this;
         this._activitysaver = setInterval(() => {
-            self.saveActivity();
-        }, 60000);
+            self.saveActivity.apply(self, null);
+        }, 30000);
 
 
         //Register callbacks
@@ -67,9 +67,15 @@ class ModActivity extends Module {
             permissions: (this.param('permissionSeen') ? [this.param('permissionSeen')] : null)
         }, (env, type, userid, command, args, handle, reply) => {
             
+            var envobj = null;
             var envname = args.environment;
-            if (!envname) envname = env.name;
-            
+            if (!envname) {
+                envname = env.name;
+                envobj = env;
+            } else {
+                envobj = this.env(envname);
+            }
+                
             var register = null;
             
             if (args.nickname[0] == "=") {
@@ -96,16 +102,16 @@ class ModActivity extends Module {
             if (!register) {
                 reply("I have never seen " + args.nickname + " in " + envname + ".");
             } else if (register.seenreason === true) {
-                reply(args.nickname + " joined " + register.seen[0] + " " + moment(register.seen[2]).fromNow() + ".");
+                reply(args.nickname + " joined " + envobj.channelIdToDisplayName(register.seen[0]) + " " + moment.unix(register.seen[2]).fromNow() + ".");
             } else if (register.seenreason === false) {
-                reply(args.nickname + " talked in " + register.seen[0] + " " + moment(register.seen[2]).fromNow() + ".");
+                reply(args.nickname + " talked in " + envobj.channelIdToDisplayName(register.seen[0]) + " " + moment.unix(register.seen[2]).fromNow() + ".");
             } else {
                 let reason = 'unknown';
                 if (typeof register.seenreason == "object") {
                     reason = register.seenreason[0];
                     if (register.seenreason[1]) reason += ' (' + register.seenreason[1] + ')';
                 }
-                reply(args.nickname + " left " + register.seen[0] + " " + moment(register.seen[2]).fromNow() + " (reason: " + reason + ").");
+                reply(args.nickname + " left " + envobj.channelIdToDisplayName(register.seen[0]) + " " + moment.unix(register.seen[2]).fromNow() + " (reason: " + reason + ").");
             }
             
             return true;
@@ -119,8 +125,14 @@ class ModActivity extends Module {
             permissions: (this.param('permissionLast') ? [this.param('permissionLast')] : null)
         }, (env, type, userid, command, args, handle, reply) => {
         
+            var envobj = null;
             var envname = args.environment;
-            if (!envname) envname = env.name;
+            if (!envname) {
+                envname = env.name;
+                envobj = env;
+            } else {
+                envobj = this.env(envname);
+            }
             
             var entries = [];
             
@@ -150,9 +162,9 @@ class ModActivity extends Module {
             if (!entries.length) {
                 reply("I have never read anything by " + args.nickname + " in " + envname + ".");
             } else {
-                reply('Latest lines of ' + nickname + ' in ' + envname + ':');
-                for (entry of entries) {
-                    reply('[' + entry[0] + '] (' + moment(entry[2]).format('dddd YYYY-MM-DD HH:mm:ss') + ') ' + entry[3]);
+                reply('Latest lines of ' + args.nickname + ' in ' + envname + ':');
+                for (let entry of entries) {
+                    reply('[' + envobj.channelIdToDisplayName(entry[0]) + '] (' + moment.unix(entry[2]).format('ddd YYYY-MM-DD HH:mm:ss') + ') ' + entry[3]);
                 }
             }
             
@@ -174,7 +186,7 @@ class ModActivity extends Module {
         try {
             fs.accessSync(datafile, fs.F_OK);
         } catch (e) {
-            jsonfile.writeFile(datafile, {});
+            jsonfile.writeFileSync(datafile, {});
         }
 
         try {
@@ -200,7 +212,7 @@ class ModActivity extends Module {
     saveActivity() {
         var datafile = this.param('datafile');
         
-        jsonfile.writeFile(datafile, this._activitydata);
+        jsonfile.writeFileSync(datafile, this._activitydata);
     }
     
     

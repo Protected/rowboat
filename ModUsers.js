@@ -251,7 +251,7 @@ class ModUsers extends Module {
         try {
             fs.accessSync(datafile, fs.F_OK);
         } catch (e) {
-            jsonfile.writeFile(datafile, []);
+            jsonfile.writeFileSync(datafile, []);
         }
 
         try {
@@ -272,7 +272,7 @@ class ModUsers extends Module {
     saveUsers() {
         var datafile = this.param('datafile');
         
-        jsonfile.writeFile(datafile, this._userdata);
+        jsonfile.writeFileSync(datafile, this._userdata);
     }
 
 
