@@ -23,24 +23,22 @@ class ModRolePermission extends Module {
         
         //Register callbacks
         
-        for (let name in envs) {
-            var env = envs[name];
             this.mod('Users').registerPermissionProvider((passedname, userid, permissions) => {
-                if (passedname != env.name) return [];
+                var env = envs[passedname];
+                if (env.envName != 'Discord') return [];
             
-                var member = env.server().members.find('id', userid);
+                var member = env.server.members.find('id', userid);
                 if (!member) return [];
                 
                 var result = [];
             
-                for (let permission in permissions) {
+                for (let permission of permissions) {
                     let role = member.roles.find('name', permission);
                     if (role) result.push(permission);
                 }
             
                 return result;
             }, this);
-        }
         
         
         return true;

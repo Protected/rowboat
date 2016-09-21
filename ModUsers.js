@@ -494,6 +494,7 @@ class ModUsers extends Module {
     //callback(env, userid, permissions) -- Return a subset of permissions that the user has (empty for none).
  
     registerPermissionProvider(func, self) {
+        console.log('Registering permissions provider. Context: ' + self.constructor.name);
         if (!self) {
             this._permissionProviders.push(func);
         } else {
