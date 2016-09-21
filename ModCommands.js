@@ -102,12 +102,10 @@ class ModCommands extends Module {
                         continue;
                     }
                     
-                    var handles = this.mod('Users').getHandlesById(env.name, userid, true);
-                    var handle = (handles.length ? handles[0] : null);
                     if (descriptor.permissions) {
-                        if (!handle) continue;
-                        if (descriptor.requireAllPermissions && !this.mod('Users').hasAllPerms(handle, descriptor.permissions)) return;
-                        if (!descriptor.requireAllPermissions && !this.mod('Users').hasAnyPerm(handle, descriptor.permissions)) return;
+                        if (!this.mod('Users').testPermissions(env.name, userid, descriptor.permissions, descriptor.requireAllPermissions)) {
+                            continue;
+                        }
                     }
                     
                     reply('    ' + descriptor.command + ' - ' + descriptor.description);
@@ -249,10 +247,11 @@ class ModCommands extends Module {
         
         var handles = this.mod('Users').getHandlesById(env.name, authorid, true);
         var handle = (handles.length ? handles[0] : null);
+        
         if (descriptor.permissions) {
-            if (!handle) return true;
-            if (descriptor.requireAllPermissions && !this.mod('Users').hasAllPerms(handle, descriptor.permissions)) return true;
-            if (!descriptor.requireAllPermissions && !this.mod('Users').hasAnyPerm(handle, descriptor.permissions)) return true;
+            if (!this.mod('Users').testPermissions(env.name, authorid, descriptor.permissions, descriptor.requireAllPermissions, handle)) {
+                return true;
+            }
         }
         
         if (args.length < descriptor.minArgs) {

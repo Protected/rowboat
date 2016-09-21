@@ -20,6 +20,11 @@ class ModBridgeDiscordIRC extends Module {
         'ircchannel'            //Name of an IRC channel the bot will join (including prefix)
     ]; }
     
+    get requiredEnvironments() { return [
+        'Discord',
+        'IRC'
+    ]; }
+    
     get requiredModules() { return [
         'Users'
     ]; }

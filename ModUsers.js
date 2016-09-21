@@ -21,6 +21,7 @@ class ModUsers extends Module {
         
         this._userdata = [];
         this._userhandles = {};
+        this._permissionProviders = [];
     }
 
 
@@ -464,6 +465,18 @@ class ModUsers extends Module {
         return false;
     }
     
+    subsetPerms(handle, perms) {
+        var checkuser = this.getUser(handle);
+        if (!checkuser) return false;
+        var subset = [];
+        for (let perm of perms) {
+            if (checkuser.perms.find((checkperm) => (checkperm == perm.toLowerCase()))) {
+                subset.push(perm);
+            }
+        }
+        return subset;
+    }
+    
     getHandlesByPerms(perms) {
         var result = [];
         
@@ -475,7 +488,72 @@ class ModUsers extends Module {
 
         return result;
     }
+    
+    
+    //Programmatic permission providers (not persisted)
+    //callback(env, userid, permissions) -- Return a subset of permissions that the user has (empty for none).
  
+    registerPermissionProvider(func, self) {
+        if (!self) {
+            this._permissionProviders.push(func);
+        } else {
+            this._permissionProviders.push([func, self]);
+        }
+    }
+    
+    
+    testPermissions(env, userid, permissions, requireall, handle) {
+    
+        var removeduplicates = {};
+        for (let perm of permissions) {
+            removeduplicates[perm] = true;
+        }
+    
+        var ascertained = {};
+    
+        //From providers
+    
+        for (let provider of this._permissionProviders) {
+            let subset = [];
+            if (typeof provider == "function") {
+                subset = provider.apply(this, [env, userid, permissions]);
+            } else {
+                subset = provider[0].apply(provider[1], [env, userid, permissions]);
+            }
+            for (let perm of subset) {
+                ascertained[perm] = true;
+            }
+        }
+        
+        //From account
+    
+        var handles = this.getHandlesById(env, userid, true);
+        if (!handle) {
+            handle = (handles.length ? handles[0] : null);
+        } else {
+            let confirmed = false;
+            for (let checkhandle of handles) {
+                if (checkhandle == handle) {
+                    confirmed = true;
+                    break;
+                }
+            }
+            if (!confirmed) handle = null;
+        }
+        
+        if (handle) {
+            for (let perm of this.subsetPerms(handle, permissions)) {
+                ascertained[perm] = true;
+            }
+        }
+        
+        //Result
+        
+        return (!requireall && Object.keys(ascertained).length
+                || requireall && Object.keys(ascertained).length == Object.keys(removeduplicates).length);
+        
+    }
+    
     
 }
 
