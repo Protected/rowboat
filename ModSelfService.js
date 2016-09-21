@@ -2,7 +2,7 @@
 
 var Module = require('./Module.js');
 var random = require('meteor-random');
-var random = require('moment');
+var moment = require('moment');
 var md5 = require('js-md5');
 
 var tokenChars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -139,7 +139,7 @@ class ModSelfService extends Module {
         
         if (this.param('idLinkage')) {
             this.mod("Commands").registerCommand('link', {
-                description: 'Create a token for linking your current ID or pass a previously created token to link it with your current account.'
+                description: 'Create a token for linking your current ID or pass a previously created token to link it with your current account.',
                 args: ["token"],
                 minArgs: 0,
                 permissions: (typeof this.param('idLinkage') == "string" ? [this.param('idLinkage')] : null),

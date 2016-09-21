@@ -254,6 +254,8 @@ class ModCommands extends Module {
             }
         }
         
+        if (typeof descriptor.minArgs != "number") descriptor.minArgs = descriptor.args.length;
+
         if (args.length < descriptor.minArgs) {
             env.msg(authorid, "Syntax: " + prefix + this.buildCommandSyntax(command));
             return true;
