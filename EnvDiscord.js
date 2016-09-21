@@ -77,7 +77,7 @@ class EnvDiscord extends Environment {
         this._client.on("guildMemberAdd", (server, member) => {
             var chans = this.findAccessChannels(member);
             if (chans.length) {
-                this.triggerJoin(member.id, chans, {reason: "add"});
+                this.triggerJoin(member.id, chans, ["add"]);
             }
         });
         
@@ -87,7 +87,7 @@ class EnvDiscord extends Environment {
             
             var chans = this.findAccessChannels(member);
             if (chans.length) {
-                this.triggerPart(member.id, chans, {reason: "remove"});
+                this.triggerPart(member.id, chans, ["remove"]);
             }
         });
         
@@ -112,10 +112,10 @@ class EnvDiscord extends Environment {
             }            
         
             if (tojoin.length) {
-                this.triggerJoin(newMember.id, tojoin, {reason: "permissions"});
+                this.triggerJoin(newMember.id, tojoin, ["permissions"]);
             }
             if (topart.length) {
-                this.triggerPart(oldMember.id, topart, {reason: "permissions"});
+                this.triggerPart(oldMember.id, topart, ["permissions"]);
             }
         });
         
@@ -134,10 +134,10 @@ class EnvDiscord extends Environment {
             var chans = this.findAccessChannels(member);
             
             if (reason == "join") {
-                this.triggerJoin(member.id, chans, {reason: reason, tostatus: newUser.status});
+                this.triggerJoin(member.id, chans, [reason, newUser.status]);
             }
             if (reason == "part") {
-                this.triggerPart(member.id, chans, {reason: reason, fromstatus: oldUser.status});
+                this.triggerPart(member.id, chans, [reason, oldUser.status]);
             }
         });
         
