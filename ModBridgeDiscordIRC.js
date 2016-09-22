@@ -15,9 +15,13 @@ class ModBridgeDiscordIRC extends Module {
 
     get requiredParams() { return [
         'envdiscord',           //Name of the Discord environment
-        'defaultdiscordchannel',    //Name of a Discord channel the bot will treat as default
+        'defaultdiscordchannel',    //ID of a Discord channel the bot will treat as default
         'envirc',               //Name of the IRC environment
-        'ircchannel'            //Name of an IRC channel the bot will join (including prefix)
+        'ircchannel'            //ID/name of an IRC channel the bot will join (including prefix)
+    ]; }
+    
+    get optionalParams() { return [
+        'discordBlacklist'      //Discord channels NOT to bridge (list of IDs)
     ]; }
     
     get requiredEnvironments() { return [
@@ -31,6 +35,8 @@ class ModBridgeDiscordIRC extends Module {
 
     constructor(name) {
         super('BridgeDiscordIRC', name);
+        
+        this._params['discordBlacklist'] = [];
     }
 
 
@@ -71,6 +77,9 @@ class ModBridgeDiscordIRC extends Module {
         if (directedmessage) {
             target = directedmessage[1];
             message = directedmessage[2];
+            
+            let targetid = this.discord.server.channels.find('name', target);
+            if (this.param('discordBlacklist').indexOf(targetid) > -1) return;
         }
 
         var bold = null;
@@ -160,6 +169,7 @@ class ModBridgeDiscordIRC extends Module {
 
     onDiscordMessage(env, type, message, authorid, channelid, rawobject) {
         if (type != "regular") return;
+        if (this.param('discordBlacklist').indexOf(channelid) > -1) return;
         
         var server = env.server;
         var finalmsg = message;
@@ -213,7 +223,7 @@ class ModBridgeDiscordIRC extends Module {
                 line = '(' + authorname + ") " + line;
             }
             
-            if (rawobject.channel.name != this.param('defaultdiscordchannel')) {
+            if (rawobject.channel.id != this.param('defaultdiscordchannel')) {
                 line = "[#" + rawobject.channel.name + "] " + line;
             }
             
