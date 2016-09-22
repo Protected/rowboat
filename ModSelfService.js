@@ -12,11 +12,11 @@ class ModSelfService extends Module {
 
 
     get optionalParams() { return [
-        'enableSelfRegistration',
-        'idLinkage',
-        'initializeWithPermissions',
-        'tokenLength',
-        'tokenExpiration'
+        'enableSelfRegistration',       //Enable !register
+        'idLinkage',                    //Enable !link
+        'initializeWithPermissions',    //Permissions for newly registered accounts
+        'tokenLength',                  //Length of !link tokens
+        'tokenExpiration'               //Validity of !link tokens
     ]; }
     
     get requiredModules() { return [

@@ -10,9 +10,9 @@ class ModActivity extends Module {
 
     get optionalParams() { return [
         'datafile',
-        'permissionSeen',
-        'permissionLast',
-        'linesPerUser'
+        'permissionSeen',       //Permission required for !seen
+        'permissionLast',       //Permission required for !last
+        'linesPerUser'          //Amount of lines per user to keep (for !last)
     ]; }
     
     get requiredModules() { return [
