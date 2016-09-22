@@ -123,7 +123,7 @@ class ModFreeRoles extends Module {
             
                 return true;
             });
-        });
+        }
         
         
         return true;
