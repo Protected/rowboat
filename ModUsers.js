@@ -72,7 +72,7 @@ class ModUsers extends Module {
             });
             
             
-            comands.registerCommand('userrename', {
+            commands.registerCommand('userrename', {
                 args: ["fromhandle", "tohandle"],
                 description: "Rename an existing account.",
                 types: ["private"],
