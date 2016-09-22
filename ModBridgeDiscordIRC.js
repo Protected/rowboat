@@ -78,7 +78,7 @@ class ModBridgeDiscordIRC extends Module {
             target = directedmessage[1];
             message = directedmessage[2];
             
-            let targechan = this.discord.server.channels.find('name', target);
+            let targetchan = this.discord.server.channels.find('name', target);
             if (targetchan && this.param('discordBlacklist').indexOf(targetchan.id) > -1) return;
         }
 
