@@ -72,6 +72,23 @@ class ModUsers extends Module {
             });
             
             
+            comands.registerCommand('userrename', {
+                args: ["fromhandle", "tohandle"],
+                description: "Rename an existing account.",
+                types: ["private"],
+                permissions: [PERM_ADMIN]
+            }, (env, type, userid, command, args, handle, reply) => {
+            
+                if (this.renameUser(args.fromhandle, args.tohandle)) {
+                    reply("The account " + args.fromhandle + " was successfuly renamed to " + args.tohandle + ".");
+                } else{
+                    reply("The account " + args.fromhandle + " could not be renamed.");
+                }
+            
+                return true;
+            });
+            
+            
             commands.registerCommand('idadd', {
                 args: ["handle", "environment", "idpattern"],
                 description: "Add an ID pattern (regex) to authenticate the user account identified by the handle in the specified environment.",
@@ -174,6 +191,7 @@ class ModUsers extends Module {
             
             commands.registerCommand('userlist', {
                 args: ["perms", true],
+                minArgs: 0,
                 description: "Lists the handles of the user accounts that have the given permissions.",
                 types: ["private"],
                 permissions: [PERM_ADMIN, PERM_MOD]
@@ -308,6 +326,19 @@ class ModUsers extends Module {
 
     getUser(handle) {
         return this._userhandles[handle];
+    }
+    
+    renameUser(fromhandle, tohandle) {
+        var desc = this._userhandles[fromhandle];
+        if (!desc) return false;
+        if (this._userhandles[tohandle]) return false;
+        
+        desc.handle = tohandle;
+        delete this._userhandles[fromhandle];
+        this._userhandles[tohandle] = desc;
+        
+        this.saveUsers();
+        return true;
     }
 
 
