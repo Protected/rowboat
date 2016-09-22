@@ -67,7 +67,8 @@ class ModFreeRoles extends Module {
                     return true;
                 }
                 
-                if (!env.server.roles.find('name', args.role)) {
+                var roleobj = env.server.roles.find('name', args.role);
+                if (!roleobj) {
                     reply("The role \"" + args.role + "\" doesn't currently exist in this environment.");
                     return true;
                 }
@@ -78,8 +79,8 @@ class ModFreeRoles extends Module {
                     return true;
                 }
                 
-                member.addRole(args.role).then(() => {
-                    reply("Role \"" + args.role + "\" successfully assigned!");
+                member.addRole(roleobj).then(() => {
+                    reply("Role \"" + roleobj.name + "\" successfully assigned!");
                 }).catch((err) => {
                     reply(err);
                 });
@@ -104,7 +105,8 @@ class ModFreeRoles extends Module {
                     return true;
                 }
                 
-                if (!env.server.roles.find('name', args.role)) {
+                var roleobj = env.server.roles.find('name', args.role);
+                if (!roleobj) {
                     reply("The role \"" + args.role + "\" doesn't currently exist in this environment.");
                     return true;
                 }
@@ -115,8 +117,8 @@ class ModFreeRoles extends Module {
                     return true;
                 }
                 
-                member.removeRole(args.role).then(() => {
-                    reply("Role \"" + args.role + "\" successfully unassigned!");
+                member.removeRole(roleobj).then(() => {
+                    reply("Role \"" + roleobj.name + "\" successfully unassigned!");
                 }).catch((err) => {
                     reply(err);
                 });
