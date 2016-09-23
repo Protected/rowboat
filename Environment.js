@@ -57,6 +57,7 @@ class Environment {
     connect() {}
     disconnect() {}
     msg(targetid, msg) {}
+    notice(targetid, msg) {}
     
     
     registerOnError(func, self) {

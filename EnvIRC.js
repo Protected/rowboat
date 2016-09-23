@@ -175,6 +175,24 @@ class EnvIRC extends Environment {
             this.genericErrorHandler(e.message);
         }
     }
+    
+    
+    notice(targetid, msg) {
+        if (!targetid) targetid = channels[0];
+        
+        var parts;
+        
+        try {
+            if (parts = targetid.match(/^([^!]+)![^@]+@.+$/)) {
+                this._client.notice(parts[1], msg);
+            }
+            if (parts = targetid.match(/^#.+$/)) {
+                this._client.notice(targetid, msg);
+            }
+        } catch (e) {
+            this.genericErrorHandler(e.message);
+        }
+    }
 
 
     idToDisplayName(id) {

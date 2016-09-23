@@ -41,7 +41,6 @@ class ModUsers extends Module {
             commands.registerCommand('useradd', {
                 args: ["handle"],
                 description: "Create a new empty user account with the given handle.",
-                types: ["private"],
                 permissions: [PERM_ADMIN]
             }, (env, type, userid, command, args, handle, reply) => {
             
@@ -58,7 +57,6 @@ class ModUsers extends Module {
             commands.registerCommand('userdel', {
                 args: ["handle"],
                 description: "Delete an existing user account identified by the given handle.",
-                types: ["private"],
                 permissions: [PERM_ADMIN]
             }, (env, type, userid, command, args, handle, reply) => {
             
@@ -75,7 +73,6 @@ class ModUsers extends Module {
             commands.registerCommand('userrename', {
                 args: ["fromhandle", "tohandle"],
                 description: "Rename an existing account.",
-                types: ["private"],
                 permissions: [PERM_ADMIN]
             }, (env, type, userid, command, args, handle, reply) => {
             
@@ -92,7 +89,6 @@ class ModUsers extends Module {
             commands.registerCommand('idadd', {
                 args: ["handle", "environment", "idpattern"],
                 description: "Add an ID pattern (regex) to authenticate the user account identified by the handle in the specified environment.",
-                types: ["private"],
                 permissions: [PERM_ADMIN]
             }, (env, type, userid, command, args, handle, reply) => {
             
@@ -115,7 +111,6 @@ class ModUsers extends Module {
             commands.registerCommand('iddel', {
                 args: ["handle", "environment", "idpattern"],
                 description: "Remove an existing ID pattern from a user such that it will no longer authenticate the user account identified by the handle.",
-                types: ["private"],
                 permissions: [PERM_ADMIN]
             }, (env, type, userid, command, args, handle, reply) => {
                 
@@ -168,7 +163,6 @@ class ModUsers extends Module {
             commands.registerCommand('userfind', {
                 args: ["environment", "id"],
                 description: "List the handles of the user accounts that match the given id and environment.",
-                types: ["private"],
                 permissions: [PERM_ADMIN, PERM_MOD]
             }, (env, type, userid, command, args, handle, reply) => {
             
@@ -193,7 +187,6 @@ class ModUsers extends Module {
                 args: ["perms", true],
                 minArgs: 0,
                 description: "Lists the handles of the user accounts that have the given permissions.",
-                types: ["private"],
                 permissions: [PERM_ADMIN, PERM_MOD]
             }, (env, type, userid, command, args, handle, reply) => {
                 
@@ -217,7 +210,6 @@ class ModUsers extends Module {
             commands.registerCommand('whois', {
                 args: ["handle"],
                 description: "Describe the user account identified by the handle.",
-                types: ["private"],
                 permissions: [PERM_ADMIN, PERM_MOD]
             }, (env, type, userid, command, args, handle, reply) => {
             

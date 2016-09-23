@@ -165,6 +165,11 @@ class EnvDiscord extends Environment {
         this._outbox.push([targetchan, msg]);
     }
     
+    
+    notice(targetid, msg) {
+        this.msg(targetid, msg);
+    }
+    
 
     idToDisplayName(id) {
         var member = this._server.members.find("id", id);

@@ -50,8 +50,9 @@ class ModCommands extends Module {
         this.registerCommand('help', {
             description: "Obtain a list of commands or information about a specific command.",
             args: ["command"],
-            minArgs: 0
-        }, (env, type, userid, command, args, handle, reply) => {
+            minArgs: 0,
+            unobtrusive: true
+        }, (env, type, userid, command, args, handle, reply, pub, priv) => {
         
             if (args.command) {
                 var descriptor = this._index[args.command.toLowerCase()];
@@ -62,7 +63,6 @@ class ModCommands extends Module {
             
                 reply('  ' + this.buildCommandSyntax(descriptor.command));
                 reply('    ' + descriptor.description);
-                reply('.');
                 
                 if (descriptor.environments) {
                     reply('    Environment(s): ' + descriptor.environments.join(', '));
@@ -85,12 +85,10 @@ class ModCommands extends Module {
                     }
                     reply('    Permissions required: ' + permstring);
                 }
-                
-                reply('---');
             
             } else {
             
-                reply('Available commands (use help COMMAND for more information):');
+                priv('Available commands (use help COMMAND for more information):');
                 
                 for (let descriptor of this._commands) {
 
@@ -108,10 +106,8 @@ class ModCommands extends Module {
                         }
                     }
                     
-                    reply('    ' + descriptor.command + ' - ' + descriptor.description);
+                    priv('    ' + descriptor.command + ' - ' + descriptor.description);
                 }
-                
-                reply('---');
             }
         
             return true;
@@ -194,6 +190,7 @@ class ModCommands extends Module {
             types: null,                        //List of message types the command can be invoked from, or null for all message types (onMessage environment callback only).
             permissions: null,                  //List of individual sufficient permissions required for invoking this command, or null for universal use (only null allows users without accounts to invoke the command).
             requireAllPermissions: false,       //If this boolean is true, the above list becomes a list of necessary permissions (all listed permissions will be simultaneously required).
+            unobtrusive: false                  //If this boolean is true, priv will send a notice rather than a message.
         }
         
         if (options) {
@@ -204,6 +201,7 @@ class ModCommands extends Module {
             if (options.types) descriptor.types = options.types;
             if (options.permissions) descriptor.permissions = options.permissions;
             if (options.requireAllPermissions) descriptor.requireAllPermissions = options.requireAllPermissions;
+            if (options.unobtrusive) descriptor.unobtrusive = options.unobtrusive;
         }
         
         this._commands.push(descriptor);
@@ -257,7 +255,11 @@ class ModCommands extends Module {
         if (typeof descriptor.minArgs != "number") descriptor.minArgs = descriptor.args.length;
 
         if (args.length < descriptor.minArgs) {
-            env.msg(authorid, "Syntax: " + prefix + this.buildCommandSyntax(command));
+            if (descriptor.unobtrusive) {
+                env.notice(authorid, "Syntax: " + prefix + this.buildCommandSyntax(command));
+            } else {
+                env.msg(authorid, "Syntax: " + prefix + this.buildCommandSyntax(command));
+            }
             return true;
         }
         
@@ -283,10 +285,18 @@ class ModCommands extends Module {
                 env.msg((channelid == authorid ? null : channelid), msg);
             },
             function(msg) {
-                env.msg(authorid, msg);
+                if (descriptor.unobtrusive) {
+                    env.notice(authorid, msg);
+                } else {
+                    env.msg(authorid, msg);
+                }
             }
         )) {
-            env.msg(authorid, "Syntax: " + prefix + this.buildCommandSyntax(command));
+            if (descriptor.unobtrusive) {
+                env.notice(authorid, "Syntax: " + prefix + this.buildCommandSyntax(command));
+            } else {
+                env.msg(authorid, "Syntax: " + prefix + this.buildCommandSyntax(command));
+            }
         }
 
         return true;
