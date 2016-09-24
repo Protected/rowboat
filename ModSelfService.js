@@ -82,12 +82,10 @@ class ModSelfService extends Module {
                 while (perms.length) {
                     var outbound = perms.slice(0, 10);
                     outbound = outbound.join(', ');
-                    reply(outbound);
+                    reply('    ' + outbound);
                     perms = perms.slice(10);
                 }
             }
-            
-            reply('.');
         
             return true;
         });
