@@ -25,6 +25,7 @@
     "meteor-random": "0.0.3",
     "moment": "^2.14.1",
     "underscore": "^1.8.3",
+    "winston": "^2.2.0",
     "yargs": "^5.0.0"
   }
 }

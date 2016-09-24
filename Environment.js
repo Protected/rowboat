@@ -2,6 +2,7 @@
 'use strict';
 
 var jsonfile = require('jsonfile');
+var logger = require('./Logger');
 
 class Environment {
 
@@ -33,15 +34,21 @@ class Environment {
         var params = {};
         
         //Load and check parameters
-
+        var fileName = "config/" + this._name.toLowerCase() + "." + this._envName.toLowerCase() + ".env.json";
         try {
-            params = jsonfile.readFileSync("config/" + this._name.toLowerCase() + "." + this._envName.toLowerCase() + ".env.json");
-        } catch(e) {}
+            params = jsonfile.readFileSync(fileName);
+            logger.info(`Initializing environment ${this._envName} with name ${this._name}.`);
+        } catch(e) {
+            logger.error(`Error trying to load the config file ${fileName} because of: ${e}`);
+        }
 
         for (let reqParam of this.requiredParams) {
             if (params[reqParam]) this._params[reqParam] = params[reqParam];
-            if (this._params[reqParam] === undefined) return false;
-        };
+            if (this._params[reqParam] === undefined) {
+                logger.error(`Failed loading required parameter: ${reqParam}`);
+                return false;
+            }
+        }
         
         for (let optParam of this.optionalParams) {
             if (params[optParam]) this._params[optParam] = params[optParam];
