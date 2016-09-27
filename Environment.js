@@ -124,7 +124,17 @@ class Environment {
     genericErrorHandler(err) {
         if (!err) return;
         for (let callback of this._cbError) {
-            if ((typeof callback == "function" ? callback(this, err) : callback[0].apply(callback[1], [this, err]))) {
+            let result;
+            logger.debug(`Checking for ${callback}`);
+            if ( typeof callback == "function" ){
+                logger.debug(`It was a function.`);
+                result = callback(this, err);
+            } else {
+                logger.debug(`It was not a function.`);
+                result = callback[0].apply(callback[1], [this, err]);
+            }
+            logger.debug(`Result was ${result}`);
+            if ( result ) {
                 break;
             }
         }
