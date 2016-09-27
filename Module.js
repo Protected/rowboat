@@ -2,6 +2,7 @@
 'use strict';
 
 var jsonfile = require('jsonfile');
+var logger = require('./Logger');
 
 class Module {
 
@@ -42,7 +43,7 @@ class Module {
         var params = {};
         
         //Load and check parameters
-        
+        logger.info(`Initializing modules ${mods} on environments ${envs}`);
         try {
             var configname = this._modName.toLowerCase();
             if (this.isMultiInstanceable) configname = this._name.toLowerCase() + "." + configname;

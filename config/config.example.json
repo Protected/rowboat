@@ -6,5 +6,8 @@
     "modules": [
         "Users",
         "Commands"
-    ]
+    ],
+    "logger": {
+        "outputFile": "log/main.log"
+    }
 }
