@@ -76,17 +76,17 @@ class ModUsers extends Module {
                 description: "Rename an existing account.",
                 permissions: [PERM_ADMIN]
             }, (env, type, userid, command, args, handle, reply) => {
-            
+
                 if (this.renameUser(args.fromhandle, args.tohandle)) {
                     reply("The account " + args.fromhandle + " was successfuly renamed to " + args.tohandle + ".");
                 } else{
                     reply("The account " + args.fromhandle + " could not be renamed.");
                 }
-            
+
                 return true;
             });
-            
-            
+
+
             commands.registerCommand('idadd', {
                 args: ["handle", "environment", "idpattern"],
                 description: "Add an ID pattern (regex) to authenticate the user account identified by the handle in the specified environment.",
@@ -190,24 +190,24 @@ class ModUsers extends Module {
                 description: "Lists the handles of the user accounts that have the given permissions.",
                 permissions: [PERM_ADMIN, PERM_MOD]
             }, (env, type, userid, command, args, handle, reply) => {
-                
+
                 var handles = this.getHandlesByPerms(args.perms);
                 if (!handles.length) {
                     reply("No handles were found with the given permission" + (args.perms.length != 1 ? "s" : "") + ".");
                     return true;
                 }
-                
+
                 while(handles.length) {
                     var outbound = handles.slice(0, 10);
                     outbound = '"' + outbound.join('","') + '"';
                     reply(outbound);
                     handles = handles.slice(10);
                 }
-            
+
                 return true;
             });
-            
-            
+
+
             commands.registerCommand('whois', {
                 args: ["handle"],
                 description: "Describe the user account identified by the handle.",
@@ -295,10 +295,12 @@ class ModUsers extends Module {
             handle: handle,
             ids: [],
             perms: []
-        }
+        };
         this._userdata.push(newuser);
         this._userhandles[handle] = newuser;
-        
+
+        logger.info(`New user added: ${newuser}`);
+
         this.saveUsers();
         return true;
     }
@@ -312,7 +314,8 @@ class ModUsers extends Module {
         
         if (i > -1) this._userdata.splice(i, 1);
         delete this._userhandles[handle];
-        
+
+        logger.info(`Deleted user ${handle}`); //Eh? This should probably be logged before the deletes with the proper information.
         this.saveUsers();
         return true;
     }
@@ -320,16 +323,16 @@ class ModUsers extends Module {
     getUser(handle) {
         return this._userhandles[handle];
     }
-    
+
     renameUser(fromhandle, tohandle) {
         var desc = this._userhandles[fromhandle];
         if (!desc) return false;
         if (this._userhandles[tohandle]) return false;
-        
+
         desc.handle = tohandle;
         delete this._userhandles[fromhandle];
         this._userhandles[tohandle] = desc;
-        
+
         this.saveUsers();
         return true;
     }
@@ -435,7 +438,10 @@ class ModUsers extends Module {
             }
         }
         
-        if (changed) this.saveUsers();
+        if (changed) {
+            this.saveUsers();
+            logger.info(`Successfuly added ${perms} to user ${handle}`);
+        }
         return true;
     }
 
@@ -455,7 +461,10 @@ class ModUsers extends Module {
             }
         }
         
-        if (changed) this.saveUsers();
+        if (changed) {
+            logger.info(`Successfuly removed ${perms} from user ${handle}`);
+            this.saveUsers();
+        }
         return true;
     }
 
@@ -488,7 +497,7 @@ class ModUsers extends Module {
         }
         return false;
     }
-    
+
     subsetPerms(handle, perms) {
         var checkuser = this.getUser(handle);
         if (!checkuser) return false;
@@ -500,10 +509,10 @@ class ModUsers extends Module {
         }
         return subset;
     }
-    
+
     getHandlesByPerms(perms) {
         var result = [];
-        
+
         for (let eachuser of this._userdata) {
             if (this.hasAllPerms(eachuser.handle, perms)) {
                 result.push(eachuser.handle);
@@ -512,11 +521,11 @@ class ModUsers extends Module {
 
         return result;
     }
-    
-    
+
+
     //Programmatic permission providers (not persisted)
     //callback(env, userid, permissions) -- Return a subset of permissions that the user has (empty for none).
- 
+
     registerPermissionProvider(func, self) {
         console.log('Registering permissions provider. Context: ' + self.constructor.name);
         if (!self) {
@@ -525,19 +534,19 @@ class ModUsers extends Module {
             this._permissionProviders.push([func, self]);
         }
     }
-    
-    
+
+
     testPermissions(env, userid, permissions, requireall, handle) {
-    
+
         var removeduplicates = {};
         for (let perm of permissions) {
             removeduplicates[perm] = true;
         }
-    
+
         var ascertained = {};
-    
+
         //From providers
-    
+
         for (let provider of this._permissionProviders) {
             let subset = [];
             if (typeof provider == "function") {
@@ -549,9 +558,9 @@ class ModUsers extends Module {
                 ascertained[perm] = true;
             }
         }
-        
+
         //From account
-    
+
         var handles = this.getHandlesById(env, userid, true);
         if (!handle) {
             handle = (handles.length ? handles[0] : null);
@@ -565,20 +574,20 @@ class ModUsers extends Module {
             }
             if (!confirmed) handle = null;
         }
-        
+
         if (handle) {
             for (let perm of this.subsetPerms(handle, permissions)) {
                 ascertained[perm] = true;
             }
         }
-        
+
         //Result
-        
+
         return (!requireall && Object.keys(ascertained).length
                 || requireall && Object.keys(ascertained).length == Object.keys(removeduplicates).length);
-        
+
     }
-    
+
     
 }
 
