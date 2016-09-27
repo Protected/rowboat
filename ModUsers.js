@@ -3,6 +3,7 @@
 var Module = require('./Module.js');
 var fs = require('fs');
 var jsonfile = require('jsonfile');
+var logger = require('./Logger');
 
 var PERM_ADMIN = 'administrator';
 var PERM_MOD = 'moderator';
@@ -228,11 +229,13 @@ class ModUsers extends Module {
             fs.accessSync(datafile, fs.F_OK);
         } catch (e) {
             jsonfile.writeFile(datafile, []);
+            logger.error("Error accessing data file.");
         }
 
         try {
             this._userdata = jsonfile.readFileSync(datafile);
         } catch (e) {
+            logger.error(`Error reading datafile: ${e}`);
             return false;
         }
         if (!this._userdata) this._userdata = [];
