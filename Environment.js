@@ -126,7 +126,7 @@ class Environment {
         for (let callback of this._cbError) {
             let result;
             logger.debug(`Checking for ${callback}`);
-            if ( typeof callback == "function" ){
+            if (typeof callback == "function") {
                 logger.debug(`It was a function.`);
                 result = callback(this, err);
             } else {
@@ -134,7 +134,7 @@ class Environment {
                 result = callback[0].apply(callback[1], [this, err]);
             }
             logger.debug(`Result was ${result}`);
-            if ( result ) {
+            if (result) {
                 break;
             }
         }
