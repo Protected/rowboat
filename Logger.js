@@ -37,7 +37,7 @@ function ready() {
 }
 
 
-function log(method, subject) {
+var log = exports.log = function(method, subject) {
     
     if (!ready()) {
         if (typeof subject != "object") {

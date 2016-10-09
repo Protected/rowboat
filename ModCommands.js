@@ -132,7 +132,7 @@ class ModCommands extends Module {
         
             setTimeout(() => {
                 reply('Reloading...');
-                console.log('Reloading Rowboat by request from ' + handle + ' in ' + env.name);
+                this.log('Reloading Rowboat by request from ' + handle + ' in ' + env.name);
                 
                 if (!this.mod('root').loadMasterConfig()) {
                     reply('Failed to load master config.');
@@ -143,18 +143,18 @@ class ModCommands extends Module {
                 this.mod('root').resetContext();
                 
                 if (!this.mod('root').loadEnvironments()) {
-                    console.log('Failed to load environments.');
+                    this.log('error','Failed to load environments.');
                     process.exit(1);
                 }
                 
                 if (!this.mod('root').loadModules()) {
-                    console.log('Failed to load modules.');
+                    this.log('error','Failed to load modules.');
                     process.exit(1);
                 }
                 
                 this.mod('root').runEnvironments();
             
-                console.log('Reload successful.');
+                this.log('Reload successful.');
             }, 1);
         
             return true;
