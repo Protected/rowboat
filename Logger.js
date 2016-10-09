@@ -26,7 +26,7 @@ function ready() {
                     filename: path,
                     json: false,
                     timestamp: () => moment().format('YYYY-MM-DD HH:mm:ss'),
-                    formatter: (args) => '[' + args.level.toUpperCase() + '] ' + args.message
+                    formatter: (args) => moment().format('YYYY-MM-DD HH:mm:ss') + ' [' + args.level.toUpperCase() + '] ' + args.message
                 })
             ]
         });
