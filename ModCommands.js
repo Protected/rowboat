@@ -270,6 +270,7 @@ class ModCommands extends Module {
             var argname = descriptor.args[i];
             if (i == descriptor.args.length - 2 && descriptor.args[descriptor.args.length - 1] === true) {
                 passargs[argname] = args.slice(i);
+                break;
             } else {
                 passargs[argname] = args[i];
             }
