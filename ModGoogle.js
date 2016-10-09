@@ -93,7 +93,7 @@ class ModGoogle extends Module {
         
             request(url, (error, response, body) => {
                     if (error) {
-                        this.log('warning', error);
+                        this.log('warn', error);
                         return true;
                     }
                     try {
@@ -106,7 +106,7 @@ class ModGoogle extends Module {
                             }
                         }
                     } catch (err) {
-                        this.log('warning', err);
+                        this.log('warn', err);
                     }
                     return true;
                 }

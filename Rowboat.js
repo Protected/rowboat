@@ -48,12 +48,12 @@ var loadMasterConfig = exports.loadMasterConfig = function() {
     }
 
     if (Object.keys(config.environments).length < 1) {
-        logger.warning("Environments provide connectivity. Please configure at least one environment.");
+        logger.warn("Environments provide connectivity. Please configure at least one environment.");
         return false;
     }
 
     if (config.modules.length < 1) {
-        logger.warning("Modules provide behavior. Please configure at least one module.");
+        logger.warn("Modules provide behavior. Please configure at least one module.");
         return false;
     }
     
@@ -88,7 +88,7 @@ var loadEnvironments = exports.loadEnvironments = function() {
         }
         
         env.registerOnError((env, err) => {
-            logger.warning("[" + env.name + "] Error: " + err);
+            logger.warn("[" + env.name + "] Error: " + err);
         });
         environments[env.name] = env;
         
