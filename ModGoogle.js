@@ -27,7 +27,7 @@ class ModGoogle extends Module {
         this.mod('Commands').registerCommand('google', {
             description: "Let me google that for you.",
             args: ["string"],
-            types: ["public"],
+            types: ["regular"],
             permissions: ["trusted","admin"]
         }, (env, type, userid, command, args, handle, reply) => {
         

@@ -22,7 +22,11 @@ function ready() {
         console.log('Log open: ' + path);
         logger = new (winston.Logger)({
             transports: [
-                new (winston.transports.File)({ filename: path })
+                new (winston.transports.File)({
+                    filename: path,
+                    json: false,
+                    timestamp: () => moment().format('YYYY-MM-DD HH:mm:ss')
+                })
             ]
         });
     }
