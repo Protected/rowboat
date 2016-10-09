@@ -25,10 +25,12 @@ function ready() {
                 new (winston.transports.File)({
                     filename: path,
                     json: false,
-                    timestamp: () => moment().format('YYYY-MM-DD HH:mm:ss')
+                    timestamp: () => moment().format('YYYY-MM-DD HH:mm:ss'),
+                    formatter: (args) => '[' + args.level.toUpperCase() + '] ' + args.message
                 })
             ]
         });
+        logger.info('Session start');
     }
     
     return !!logger;

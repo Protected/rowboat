@@ -60,6 +60,15 @@ class Environment {
         return true;
     }
     
+    
+    log(method, subject) {
+        if (!subject) {
+            subject = method;
+            method = 'info';
+        }
+        logger.log(method, '{'+ this._name + '} ' + subject);
+    }
+    
 
     connect() {}
     disconnect() {}

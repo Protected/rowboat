@@ -2,7 +2,6 @@
 
 var Environment = require('./Environment.js');
 var irc = require('irc');
-var logger = require('./Logger');
 
 class EnvIRC extends Environment {
 
@@ -56,7 +55,7 @@ class EnvIRC extends Environment {
             password: null
         });
 
-        logger.info(`Connecting to ${params.serverhost}.`);
+        this.log(`Connecting to ${params.serverhost}.`);
         
         this._client.addListener('error', (message) => {
             this.genericErrorHandler(JSON.stringify(message, null, 4));

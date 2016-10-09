@@ -3,7 +3,6 @@
 var Module = require('./Module.js');
 var fs = require('fs');
 var jsonfile = require('jsonfile');
-var logger = require('./Logger');
 
 var PERM_ADMIN = 'administrator';
 var PERM_MOD = 'moderator';
@@ -262,13 +261,13 @@ class ModUsers extends Module {
             fs.accessSync(datafile, fs.F_OK);
         } catch (e) {
             jsonfile.writeFileSync(datafile, []);
-            logger.error("Error accessing data file.");
+            this.log('error', "Error accessing data file.");
         }
 
         try {
             this._userdata = jsonfile.readFileSync(datafile);
         } catch (e) {
-            logger.error(`Error reading datafile: ${e}`);
+            this.log('error', `Error reading datafile: ${e}`);
             return false;
         }
         if (!this._userdata) this._userdata = [];
@@ -299,7 +298,7 @@ class ModUsers extends Module {
         this._userdata.push(newuser);
         this._userhandles[handle] = newuser;
 
-        logger.info(`New user added: ${newuser}`);
+        this.log(`New user added: ${newuser}`);
 
         this.saveUsers();
         return true;
@@ -315,7 +314,7 @@ class ModUsers extends Module {
         if (i > -1) this._userdata.splice(i, 1);
         delete this._userhandles[handle];
 
-        logger.info(`Deleted user ${handle}`); //Eh? This should probably be logged before the deletes with the proper information.
+        this.log(`Deleted user ${handle}`); //Eh? This should probably be logged before the deletes with the proper information.
         this.saveUsers();
         return true;
     }
@@ -440,7 +439,7 @@ class ModUsers extends Module {
         
         if (changed) {
             this.saveUsers();
-            logger.info(`Successfuly added ${perms} to user ${handle}`);
+            this.log(`Successfuly added ${perms} to user ${handle}`);
         }
         return true;
     }
@@ -462,7 +461,7 @@ class ModUsers extends Module {
         }
         
         if (changed) {
-            logger.info(`Successfuly removed ${perms} from user ${handle}`);
+            this.log(`Successfuly removed ${perms} from user ${handle}`);
             this.saveUsers();
         }
         return true;

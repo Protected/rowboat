@@ -2,7 +2,6 @@
 
 var Environment = require('./Environment.js');
 var discord = require('discord.js');
-var logger = require('./Logger');
 
 
 class EnvDiscord extends Environment {
@@ -36,7 +35,7 @@ class EnvDiscord extends Environment {
         var self = this;
         var params = this.params;
 
-        logger.info(`Connecting to ${params.servername}`);
+        this.log(`Connecting to ${params.servername}`);
 
         this._client = new discord.Client({
             api_request_method: 'sequential',
@@ -56,7 +55,7 @@ class EnvDiscord extends Environment {
                     self.deliverMsgs.apply(self, null)
                 }, params.senddelay);
 
-            logger.info("Environment is now ready!");
+            this.log("Environment is now ready!");
         });
         
 
@@ -158,7 +157,7 @@ class EnvDiscord extends Environment {
         if (this._client) this._client.destroy().catch(this.genericErrorHandler);
         this.carrier = null;
         this.client = null;
-        logger.info(`Disconnected from ${this._name}`);
+        this.log(`Disconnected from ${this._name}`);
     }
     
     
