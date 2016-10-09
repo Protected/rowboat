@@ -252,7 +252,12 @@ class ModCommands extends Module {
             }
         }
         
-        if (typeof descriptor.minArgs != "number") descriptor.minArgs = descriptor.args.length;
+        if (typeof descriptor.minArgs != "number") {
+            descriptor.minArgs = descriptor.args.length;
+            if (descriptor.args[descriptor.args.length - 1] === true) {
+                descriptor.minArgs -= 1;
+            }
+        }
 
         if (args.length < descriptor.minArgs) {
             if (descriptor.unobtrusive) {
