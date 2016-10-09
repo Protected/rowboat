@@ -1,15 +1,66 @@
 var winston = require('winston');
-var jsonfile = require('jsonfile');
+var moment = require('moment');
 
-var config = jsonfile.readFileSync("config/config.json");
+var pathTemplate = null;
+var path = null;
+var logger = null;
 
-if (config && config.logger && config.logger.outputFile) {
-    let loggerFile = config.logger.outputFile;
-    module.exports = new (winston.Logger)({
-        transports: [
-            new (winston.transports.File)({ filename: loggerFile })
-        ]
-    });
-} else {
-    module.exports = null;
+exports.setPathTemplate = function(newPathTemplate) {
+    if (pathTemplate == newPathTemplate) return;
+    pathTemplate = newPathTemplate;
+    path = null;
+    logger = null;
+}
+
+
+function ready() {
+    if (!pathTemplate) return false;
+    
+    var desiredPath = moment().format(pathTemplate);
+    if (!logger || path != desiredPath) {
+        path = desiredPath;
+        console.log('Log open: ' + path);
+        logger = new (winston.Logger)({
+            transports: [
+                new (winston.transports.File)({ filename: path })
+            ]
+        });
+    }
+    
+    return !!logger;
+}
+
+
+function log(method, subject) {
+    
+    if (!ready()) {
+        if (typeof subject != "object") {
+            console.log('[' + method.toUpperCase() + '] ' + subject);
+        } else {
+            console.log('[' + method.toUpperCase() + '] <<<');
+            console.log(subject);
+            console.log('>>>');
+        }
+        return null;
+    }
+    
+    var actualMethod;
+    switch (method) {
+        case 'warning': actualMethod = logger.warning; break;
+        case 'error': actualMethod = logger.error; break;
+        default: actualMethod = logger.info;
+    }
+    
+    return actualMethod.apply(null, [subject]);
+
+}
+
+exports.info = function(subject) {
+    return log('info', subject);
+}
+exports.warning = function(subject) {
+    return log('warning', subject);
+}
+exports.error = function(subject) {
+    return log('error', subject);
 }

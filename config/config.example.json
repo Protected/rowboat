@@ -8,6 +8,6 @@
         "Commands"
     ],
     "logger": {
-        "outputFile": "[log/]Y-MM-DD[.log]"
+        "outputFile": "[logs/]Y-MM-DD[.log]"
     }
 }

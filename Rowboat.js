@@ -1,4 +1,5 @@
 var jsonfile = require('jsonfile');
+var logger = require('./Logger.js');
 
 var config;
 var environments = {};
@@ -30,25 +31,29 @@ function moduleRequest(modname, callback) {
 
 //Load master config
 
-console.log("Welcome to Rowboat!");
+logger.info("Welcome to Rowboat!");
 
 var loadMasterConfig = exports.loadMasterConfig = function() {
-    console.log("Loading master config...");
+    logger.info("Loading master config...");
 
     try {
         config = jsonfile.readFileSync("config/config.json");
     } catch (e) {
-        console.log("Failed to load master config. Error: " + e.message);
+        logger.error("Failed to load master config. Error: " + e.message);
         return false;
+    }
+    
+    if (config.logger && config.logger.outputFile) {
+        logger.setPathTemplate(config.logger.outputFile);
     }
 
     if (Object.keys(config.environments).length < 1) {
-        console.log("Environments provide connectivity. Please configure at least one environment.");
+        logger.warning("Environments provide connectivity. Please configure at least one environment.");
         return false;
     }
 
     if (config.modules.length < 1) {
-        console.log("Modules provide behavior. Please configure at least one module.");
+        logger.warning("Modules provide behavior. Please configure at least one module.");
         return false;
     }
     
@@ -71,23 +76,23 @@ var loadEnvironments = exports.loadEnvironments = function() {
     for (let name in config.environments) {
         var envtype = requireUncached("./Env" + config.environments[name] + ".js");
         if (!envtype) {
-            console.log("Could not load the environment: " + name + " . Is the environment source in Rowboat's directory?");
+            logger.error("Could not load the environment: " + name + " . Is the environment source in Rowboat's directory?");
             return false;
         }
         
         var env = new envtype(name);
         
         if (!env.initialize()) {
-            console.log("Could not initialize the environment: " + name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
+            logger.error("Could not initialize the environment: " + name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
             return false;
         }
         
         env.registerOnError((env, err) => {
-            console.log("[" + env.name + "] Error: " + err);
+            logger.warning("[" + env.name + "] Error: " + err);
         });
         environments[env.name] = env;
         
-        console.log("Successfully loaded environment: " + env.name);
+        logger.info("Successfully loaded environment: " + env.name);
     }
     
     return true;
@@ -112,27 +117,27 @@ var loadModules = exports.loadModules = function() {
         
         var modtype = requireUncached("./Mod" + type + ".js");
         if (!modtype) {
-            console.log("Could not load the module: " + name + " . Is the module source in Rowboat's directory?");
+            logger.error("Could not load the module: " + name + " . Is the module source in Rowboat's directory?");
             return false;
         }
         
         var mod = new modtype(name);
         
         if (!mod.isMultiInstanceable && name != mod.modName) {
-            console.log("Could not load the module: " + name + " . This module is not multi-instanceable; It MUST be configuered with the name: " + mod.modName);
+            logger.error("Could not load the module: " + name + " . This module is not multi-instanceable; It MUST be configuered with the name: " + mod.modName);
             return false;
         }
         
         for (let reqenv of mod.requiredEnvironments) {
             if (!environments[reqenv]) {
-                console.log("Could not initialize the module: " + mod.name + " because the required environment: " + reqenv + " is not loaded.");
+                logger.error("Could not initialize the module: " + mod.name + " because the required environment: " + reqenv + " is not loaded.");
                 return false;
             }
         }
         
         for (let reqmod of mod.requiredModules) {
             if (!modules[reqmod]) {
-                console.log("Could not initialize the module: " + mod.name + " because the required module: " + reqmod + " is not loaded.");
+                logger.error("Could not initialize the module: " + mod.name + " because the required module: " + reqmod + " is not loaded.");
                 return false;
             }
         }
@@ -141,17 +146,17 @@ var loadModules = exports.loadModules = function() {
         var passmodules = Object.assign({}, modules);
         
         if (mod.isRootAccess) {
-            console.log("The module: " + mod.name + " requested access to the root module.");
+            logger.info("The module: " + mod.name + " requested access to the root module.");
             passmodules.root = self;
         }
         
         if (!mod.initialize(passenvs, passmodules, moduleRequest)) {
-            console.log("Could not initialize the module: " + mod.name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
+            logger.error("Could not initialize the module: " + mod.name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
             return false;
         }
         
         modules[mod.name] = mod;
-        console.log("Successfully loaded module: " + mod.name);
+        logger.info("Successfully loaded module: " + mod.name);
         
         if (modulerequests[mod.name]) {
             for (var j = 0; j < modulerequests[mod.name].length; j++) {
@@ -171,17 +176,17 @@ if (!loadModules()) return;
 
 exports.stopEnvironments = function() {
     for (let name in environments) {
-        console.log("Requesting disconnection of environment " + name + " ...");
+        logger.info("Requesting disconnection of environment " + name + " ...");
         environments[name].disconnect();
     }
 }
 
 var runEnvironments = exports.runEnvironments = function() {
     for (let name in environments) {
-        console.log("Requesting connection of environment " + name + " ...");
+        logger.info("Requesting connection of environment " + name + " ...");
         environments[name].connect();
     }
 }
 
 runEnvironments();
-console.log("Rowboat is now running.");
+logger.info("Rowboat is now running.");
