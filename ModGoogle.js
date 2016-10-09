@@ -98,7 +98,7 @@ class ModGoogle extends Module {
                     }
                     try {
                         let items = JSON.parse(body)['items'];
-                        if (!items.length) {
+                        if (!items || !items.length) {
                             reply("No results found!");
                         } else {
                             for (let i = 0; i < items.length && i < this.param('results'); i++) {

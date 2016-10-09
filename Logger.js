@@ -20,16 +20,27 @@ function ready() {
     if (!logger || path != desiredPath) {
         path = desiredPath;
         console.log('Log open: ' + path);
+
         logger = new (winston.Logger)({
             transports: [
                 new (winston.transports.File)({
                     filename: path,
                     json: false,
                     timestamp: () => moment().format('YYYY-MM-DD HH:mm:ss'),
-                    formatter: (args) => moment().format('YYYY-MM-DD HH:mm:ss') + ' [' + args.level.toUpperCase() + '] ' + args.message
+                    prettyPrint: true,
+                    formatter: (args) => {
+                        var result = moment().format('YYYY-MM-DD HH:mm:ss') + ' [' + args.level.toUpperCase() + '] ';
+                        if (typeof args.message == "object") {
+                            result += "<<<\n" + JSON.stringify(args.message) + "\n>>>";
+                        } else {
+                            result += args.message;
+                        }
+                        return result;
+                    }
                 })
             ]
         });
+
         logger.info('Session start');
     }
     
@@ -57,8 +68,8 @@ var log = exports.log = function(method, subject) {
         default: actualMethod = logger.info;
     }
     
-    return actualMethod.apply(null, [subject]);
 
+    return actualMethod.apply(null, [subject]);
 }
 
 exports.info = function(subject) {
