@@ -199,7 +199,7 @@ class ModBridgeDiscordIRC extends Module {
             } else {
                 var user = server.members.find("id", id);
                 if (!user) return "";
-                return "@" + (user.nickname ? user.nickname : user.username);
+                return "@" + (user.nickname ? user.nickname : user.user.username);
             }
         });
         
