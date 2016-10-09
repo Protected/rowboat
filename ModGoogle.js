@@ -53,7 +53,7 @@ class ModGoogle extends Module {
             var hq = false;
             var extras = {};
 
-            var words = args.string.split(' ');
+            var words = args.string;
             for (var i = 0; i < words.length; i++) {
                 let word = words[i];
                 if (word.indexOf("--") < 0) break;
@@ -97,9 +97,16 @@ class ModGoogle extends Module {
                         return true;
                     }
                     try {
-                        reply(JSON.parse(body)['items'][0]['title'] + ' - ' + JSON.parse(body)['items'][0]['link']);
+                        let items = JSON.parse(body)['items'];
+                        if (!items.length) {
+                            reply("No results found!");
+                        } else {
+                            for (let i = 0; i < items.length && i < this.param('results'); i++) {
+                                reply(items[i]['title'] + ' - ' + items[i]['link']);
+                            }
+                        }
                     } catch (err) {
-                        this.log('warning', error);
+                        this.log('warning', err);
                     }
                     return true;
                 }

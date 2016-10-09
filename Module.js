@@ -95,11 +95,11 @@ class Module {
     
     
     log(method, subject) {
-        if (!subject) {
+        if (subject === undefined) {
             subject = method;
             method = 'info';
         }
-        logger.log(method, '{{'+ this._name + '}} ' + subject);
+        logger.log(method, '|'+ this._name + '| ' + subject);
     }
     
         
