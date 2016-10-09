@@ -50,7 +50,6 @@ class ModGoogle extends Module {
 
             //Read extra API parameters from arguments
 
-            var hq = false;
             var extras = {};
 
             var words = args.string;
@@ -74,14 +73,13 @@ class ModGoogle extends Module {
                 }
                 
                 if (!value.length) continue;
-                if (key == 'hq') hq = true;
                 extras[key] = value;
             }
             
             //Complete URL for API request
             
             var search = words.slice(i).join(' ');
-            if (!search.length && !hq) return false;
+            if (!search.length) return false;
             
             for (let key in extras) {
                 url += '&' + key + '=' + encodeURI(extras[key]);
@@ -92,25 +90,24 @@ class ModGoogle extends Module {
             //Perform API request
         
             request(url, (error, response, body) => {
-                    if (error) {
-                        this.log('warn', error);
-                        return true;
-                    }
-                    try {
-                        let items = JSON.parse(body)['items'];
-                        if (!items || !items.length) {
-                            reply("No results found!");
-                        } else {
-                            for (let i = 0; i < items.length && i < this.param('results'); i++) {
-                                reply(items[i]['title'] + ' - ' + items[i]['link']);
-                            }
-                        }
-                    } catch (err) {
-                        this.log('warn', err);
-                    }
+                if (error) {
+                    this.log('warn', error);
                     return true;
                 }
-            );
+                try {
+                    let items = JSON.parse(body)['items'];
+                    if (!items || !items.length) {
+                        reply("No results found!");
+                    } else {
+                        for (let j = 0; j < items.length && j < this.param('results'); j++) {
+                            reply(items[j]['title'] + ' - ' + items[j]['link']);
+                        }
+                    }
+                } catch (err) {
+                    this.log('warn', err);
+                }
+                return true;
+            });
         
             return true;
         });
