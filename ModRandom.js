@@ -25,8 +25,23 @@ class ModRandom extends Module {
             minArgs: 0
         }, (env, type, userid, command, args, handle, reply, pub) => {
         
-            var val = random.fraction();
-            if (args.max) val = Math.floor(val * args.max);
+            var val;
+        
+            if (args.max) {
+                let facets = args.max.match(/^([1-9])d([1-9][0-9]?)$/);
+                if (facets) {
+                    val = 0;
+                    for (let i = 0; i < facets[1]; i++) {
+                        val += Math.floor(random.fraction() * facets[2]);
+                    }
+                } else if (args.max.match(/^[0-9]+$/)) {
+                    val = Math.floor(random.fraction() * args.max);
+                } else {
+                    reply("Invalid argument.");
+                }
+            } else {
+                val = random.fraction();
+            }
             
             if (args.pub) {
                 pub(val);

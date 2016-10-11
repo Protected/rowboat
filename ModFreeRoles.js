@@ -45,7 +45,7 @@ class ModFreeRoles extends Module {
             if (roles) roles = roles[env.name];
             
             for (let role in roles) {
-                reply(role + ' - ' + roles[role]);
+                reply('**' + role + '** - ' + roles[role]);
             }
         
             return true;

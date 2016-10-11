@@ -65,11 +65,11 @@ class ModCommands extends Module {
                 reply('    ' + descriptor.description);
                 
                 if (descriptor.environments) {
-                    reply('    Environment(s): ' + descriptor.environments.join(', '));
+                    reply('    Environment(s): *' + descriptor.environments.join('*, *') + '*');
                 }
                 
                 if (descriptor.types) {
-                    reply('    Message type(s): ' + descriptor.types.join(', '));
+                    reply('    Message type(s): *' + descriptor.types.join('*, *') + '*');
                 }
                 
                 if (descriptor.permissions) {
@@ -79,9 +79,9 @@ class ModCommands extends Module {
                     } else {
                         if (descriptor.permissions.length > 1) {
                             if (descriptor.requireAllPermissions) permstring = 'All of: ';
-                            else permstring = 'One of: ';
+                            else permstring = 'One of: *';
                         }
-                        permstring = permstring + descriptor.permissions.join(', ');
+                        permstring = permstring + descriptor.permissions.join('*, *') + '*';
                     }
                     reply('    Permissions required: ' + permstring);
                 }
@@ -106,7 +106,7 @@ class ModCommands extends Module {
                         }
                     }
                     
-                    priv('    ' + descriptor.command + ' - ' + descriptor.description);
+                    priv('    **' + descriptor.command + '** - ' + descriptor.description);
                 }
             }
         
@@ -285,16 +285,16 @@ class ModCommands extends Module {
         
         if (!descriptor.callback(env, type, authorid, command, passargs, handle,
             function(msg) {
-                env.msg(channelid, msg);
+                env.msg(channelid, env.applyFormatting(msg));
             },
             function(msg) {
-                env.msg((channelid == authorid ? null : channelid), msg);
+                env.msg((channelid == authorid ? null : channelid), env.applyFormatting(msg));
             },
             function(msg) {
                 if (descriptor.unobtrusive) {
-                    env.notice(authorid, msg);
+                    env.notice(authorid, env.applyFormatting(msg));
                 } else {
-                    env.msg(authorid, msg);
+                    env.msg(authorid, env.applyFormatting(msg));
                 }
             }
         )) {
@@ -314,7 +314,7 @@ class ModCommands extends Module {
     buildCommandSyntax(command) {
         if (!this._index[command]) return "";
         var descriptor = this._index[command];
-        var syntax = command;
+        var syntax = '**' + command + '**';
         var optionals = false;
         for (var i = 0; i < descriptor.args.length; i++) {
             syntax += ' ';
@@ -325,7 +325,7 @@ class ModCommands extends Module {
             if (descriptor.args[i] === true) {
                 syntax += '...';
             } else {
-                syntax += descriptor.args[i].toUpperCase();
+                syntax += '*' + descriptor.args[i].toUpperCase() + '*';
             }
         }
         if (optionals) syntax += ']';

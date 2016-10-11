@@ -128,6 +128,14 @@ class Environment {
     
     
     channelIdToDisplayName(channelid) { return null; }
+    
+    
+    normalizeFormatting(text) { return text; }
+    applyFormatting(text) { return text; }
+    
+    stripNormalizedFormatting(text) {
+        return text.replace(/__(.*?)__/g, "$1").replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1");
+    }
 
 
     genericErrorHandler(err) {

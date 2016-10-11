@@ -67,7 +67,7 @@ class ModSelfService extends Module {
             var account = this.mod("Users").getUser(handle);
             if (!account) return true;
             
-            reply('========== ' + account.handle + ' ==========');
+            reply('========== __' + account.handle + '__ ==========');
             
             reply('* ID patterns:');
             if (account.ids) {

@@ -82,68 +82,7 @@ class ModBridgeDiscordIRC extends Module {
             if (targetchan && this.param('discordBlacklist').indexOf(targetchan.id) > -1) return;
         }
 
-        var bold = null;
-        var und = null;
-        var ita = null;
-        var order = [];
-        var finalmsg = message.replace(/([0-9]{1,2}(,[0-9]{1,2})?)?/g, "").replace(//g, "") + "";
-        for (var i = 0; i < finalmsg.length; i++) {
-            if (finalmsg[i] == "") {
-                if (und === null) {
-                    und = i;
-                    order.push('und');
-                } else {
-                    finalmsg = finalmsg.slice(0, und) + "__" + finalmsg.slice(und + 1, i) + "__" + finalmsg.slice(i + 1);
-                    und = null;
-                    i += 2;
-                    order.splice(order.indexOf('und'), 1);
-                }
-            } else if (finalmsg[i] == "") {
-                if (bold === null) {
-                    bold = i;
-                    order.push('bold');
-                } else {
-                    finalmsg = finalmsg.slice(0, bold) + "**" + finalmsg.slice(bold + 1, i) + "**" + finalmsg.slice(i + 1);
-                    bold = null;
-                    i += 2;
-                    order.splice(order.indexOf('bold'), 1);
-                }
-            } else if (finalmsg[i] == "") {
-                if (ita === null) {
-                    ita = i;
-                    order.push('ita');
-                } else {
-                    finalmsg = finalmsg.slice(0, ita) + "*" + finalmsg.slice(ita + 1, i) + "*" + finalmsg.slice(i + 1);
-                    ita = null;
-                    order.splice(order.indexOf('ita'), 1);
-                }
-            } else if (finalmsg[i] == "") {
-                var insert = '';
-                var offset = 0;
-                var next = null;
-                while (next = order.pop()) {
-                    if (next == 'ita' && ita !== null) {
-                        finalmsg = finalmsg.slice(0, ita) + "*" + finalmsg.slice(ita + 1);
-                        insert += '*';
-                    }
-                    if (next == 'bold' && bold !== null) {
-                        finalmsg = finalmsg.slice(0, bold) + "**" + finalmsg.slice(bold + 1);
-                        insert += '**';
-                        offset += 1;
-                    }
-                    if (next == 'und' && und !== null) {
-                        finalmsg = finalmsg.slice(0, und) + "__" + finalmsg.slice(und + 1);
-                        insert += '__';
-                        offset += 1;
-                    }
-                }
-                finalmsg = finalmsg.slice(0, i + offset) + insert + finalmsg.slice(i + offset + 1);
-                i += offset + insert.length;
-                bold = null;
-                und = null;
-                ita = null;
-            }
-        }
+        var finalmsg = this.discord.applyFormatting(this.irc.normalizeFormatting(message));
         
         var resolveMentions = (match, userornick) => {
             var refid = this.irc.displayNameToId(userornick);
@@ -186,33 +125,16 @@ class ModBridgeDiscordIRC extends Module {
             }
         }
         
-        finalmsg = finalmsg.replace(/<@&([0-9]+)>/g, (match, id) => {
-            var role = server.roles.find("id", id);
-            if (!id) return "";
-            return "@" + role.name;
-        });
-        
         finalmsg = finalmsg.replace(/<@!?([0-9]+)>/g, (match, id) => {
             var ircid = this.translateAccountMentions(this.discord, id, this.irc, this.param('ircchannel'));
-            if (ircid) {
-                return "@" + this.irc.idToDisplayName(ircid);
-            } else {
-                var user = server.members.find("id", id);
-                if (!user) return "";
-                return "@" + (user.nickname ? user.nickname : user.user.username);
-            }
+            if (ircid) return "@" + this.irc.idToDisplayName(ircid);
+            return match;
         });
         
-        finalmsg = finalmsg.replace(/<#([0-9]+)>/g, (match, id) => {
-            var chan = server.channels.find("id", id);
-            if (!chan) return "";
-            return "#" + chan.name;
-        });
+        finalmsg = this.irc.applyFormatting(this.discord.normalizeFormatting(finalmsg));
+        finalmsg = emoji.shortnameToAscii(emoji.toShort(finalmsg));
         
         action = !!/^_[^_](.*[^_])?_$/.exec(finalmsg);
-        
-        finalmsg = finalmsg.replace(/__(.*?)__/g, "$1").replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1").replace(/_(.*?)_/g, "$1");
-        finalmsg = emoji.shortnameToAscii(emoji.toShort(finalmsg));
         
         var lines = finalmsg.split("\n");
         

@@ -243,6 +243,35 @@ class EnvDiscord extends Environment {
     }
     
     
+    normalizeFormatting(text) {
+        text = text.replace(/<@&([0-9]+)>/g, (match, id) => {
+            let role = this._server.roles.find("id", id);
+            if (!role) return "";
+            return "@" + role.name;
+        });
+        
+        text = text.replace(/<@!?([0-9]+)>/g, (match, id) => {
+            let user = this._server.members.find("id", id);
+            if (!user) return "";
+            return "@" + (user.nickname ? user.nickname : user.user.username);
+        });
+        
+        text = text.replace(/<#([0-9]+)>/g, (match, id) => {
+            let chan = this._server.channels.find("id", id);
+            if (!chan) return "";
+            return "#" + chan.name;
+        });
+    
+        return text.replace(/~~(.*?)~~/g, "$1").replace(/(^|[^a-z0-9])_(.*?)_([^a-z0-9]|$)/gi, "$1*$2*$3");
+    }
+    
+    
+    applyFormatting(text) {
+        //Normalized formatting is already fully compatible with Discord
+        return text;
+    }
+    
+    
     //Auxiliary methods
     
     deliverMsgs() {

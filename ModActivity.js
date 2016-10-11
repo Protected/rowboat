@@ -100,18 +100,18 @@ class ModActivity extends Module {
             }
             
             if (!register) {
-                reply("I have never seen " + args.nickname + " in " + envname + ".");
+                reply("I have never seen __" + args.nickname + "__ in *" + envname + "*.");
             } else if (register.seenreason === true) {
-                reply(args.nickname + " joined " + envobj.channelIdToDisplayName(register.seen[0]) + " " + moment.unix(register.seen[2]).fromNow() + ".");
+                reply("__" + args.nickname + "__ joined *" + envobj.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
             } else if (register.seenreason === false) {
-                reply(args.nickname + " talked in " + envobj.channelIdToDisplayName(register.seen[0]) + " " + moment.unix(register.seen[2]).fromNow() + ".");
+                reply("__" + args.nickname + "__ talked in *" + envobj.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
             } else {
                 let reason = 'unknown';
                 if (typeof register.seenreason == "object") {
                     reason = register.seenreason[0];
                     if (register.seenreason[1]) reason += ' (' + register.seenreason[1] + ')';
                 }
-                reply(args.nickname + " left " + envobj.channelIdToDisplayName(register.seen[0]) + " " + moment.unix(register.seen[2]).fromNow() + " (reason: " + reason + ").");
+                reply("__" + args.nickname + "__ left *" + envobj.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + " (reason: " + reason + ").");
             }
             
             return true;

@@ -251,6 +251,78 @@ class EnvIRC extends Environment {
     channelIdToDisplayName(channelid) {
         return channelid;
     }
+    
+    
+    normalizeFormatting(text) {
+        var bold = null;
+        var und = null;
+        var ita = null;
+        var order = [];
+        var text = text.replace(/([0-9]{1,2}(,[0-9]{1,2})?)?/g, "").replace(//g, "") + "";
+        for (var i = 0; i < text.length; i++) {
+            if (text[i] == "") {
+                if (und === null) {
+                    und = i;
+                    order.push('und');
+                } else {
+                    text = text.slice(0, und) + "__" + text.slice(und + 1, i) + "__" + text.slice(i + 1);
+                    und = null;
+                    i += 2;
+                    order.splice(order.indexOf('und'), 1);
+                }
+            } else if (text[i] == "") {
+                if (bold === null) {
+                    bold = i;
+                    order.push('bold');
+                } else {
+                    text = text.slice(0, bold) + "**" + text.slice(bold + 1, i) + "**" + text.slice(i + 1);
+                    bold = null;
+                    i += 2;
+                    order.splice(order.indexOf('bold'), 1);
+                }
+            } else if (text[i] == "") {
+                if (ita === null) {
+                    ita = i;
+                    order.push('ita');
+                } else {
+                    text = text.slice(0, ita) + "*" + text.slice(ita + 1, i) + "*" + text.slice(i + 1);
+                    ita = null;
+                    order.splice(order.indexOf('ita'), 1);
+                }
+            } else if (text[i] == "") {
+                var insert = '';
+                var offset = 0;
+                var next = null;
+                while (next = order.pop()) {
+                    if (next == 'ita' && ita !== null) {
+                        text = text.slice(0, ita) + "*" + text.slice(ita + 1);
+                        insert += '*';
+                    }
+                    if (next == 'bold' && bold !== null) {
+                        text = text.slice(0, bold) + "**" + text.slice(bold + 1);
+                        insert += '**';
+                        offset += 1;
+                    }
+                    if (next == 'und' && und !== null) {
+                        text = text.slice(0, und) + "__" + text.slice(und + 1);
+                        insert += '__';
+                        offset += 1;
+                    }
+                }
+                text = text.slice(0, i + offset) + insert + text.slice(i + offset + 1);
+                i += offset + insert.length;
+                bold = null;
+                und = null;
+                ita = null;
+            }
+        }
+        return text;
+    }
+    
+    
+    applyFormatting(text) {
+        return text.replace(/__(.*?)__/g, "$1").replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1");
+    }
 
 
     //Auxiliary methods

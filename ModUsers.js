@@ -219,7 +219,7 @@ class ModUsers extends Module {
                     return true;
                 }
                 
-                reply('========== ' + account.handle + ' ==========');
+                reply('========== __' + account.handle + '__ ==========');
                 
                 reply('* ID patterns:');
                 if (account.ids) {
@@ -314,7 +314,7 @@ class ModUsers extends Module {
         if (i > -1) this._userdata.splice(i, 1);
         delete this._userhandles[handle];
 
-        this.log(`Deleted user ${handle}`); //Eh? This should probably be logged before the deletes with the proper information.
+        this.log(`Deleted user ${handle}`);
         this.saveUsers();
         return true;
     }
