@@ -261,9 +261,9 @@ class ModCommands extends Module {
 
         if (args.length < descriptor.minArgs) {
             if (descriptor.unobtrusive) {
-                env.notice(authorid, "Syntax: " + prefix + this.buildCommandSyntax(command));
+                env.notice(authorid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
             } else {
-                env.msg(authorid, "Syntax: " + prefix + this.buildCommandSyntax(command));
+                env.msg(authorid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
             }
             return true;
         }
@@ -299,9 +299,9 @@ class ModCommands extends Module {
             }
         )) {
             if (descriptor.unobtrusive) {
-                env.notice(authorid, "Syntax: " + prefix + this.buildCommandSyntax(command));
+                env.notice(authorid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
             } else {
-                env.msg(authorid, "Syntax: " + prefix + this.buildCommandSyntax(command));
+                env.msg(authorid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
             }
         }
 
