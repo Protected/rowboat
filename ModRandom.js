@@ -38,6 +38,7 @@ class ModRandom extends Module {
                     val = Math.floor(random.fraction() * args.max);
                 } else {
                     reply("Invalid argument.");
+                    return false;
                 }
             } else {
                 val = random.fraction();

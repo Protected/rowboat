@@ -258,7 +258,7 @@ class EnvIRC extends Environment {
         var und = null;
         var ita = null;
         var order = [];
-        var text = text.replace(/([0-9]{1,2}(,[0-9]{1,2})?)?/g, "").replace(//g, "") + "";
+        text = String(text).replace(/([0-9]{1,2}(,[0-9]{1,2})?)?/g, "").replace(//g, "") + "";
         for (var i = 0; i < text.length; i++) {
             if (text[i] == "") {
                 if (und === null) {
@@ -321,7 +321,7 @@ class EnvIRC extends Environment {
     
     
     applyFormatting(text) {
-        return text.replace(/__(.*?)__/g, "$1").replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1");
+        return String(text).replace(/__(.*?)__/g, "$1").replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1");
     }
 
 

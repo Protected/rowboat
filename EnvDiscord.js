@@ -244,7 +244,7 @@ class EnvDiscord extends Environment {
     
     
     normalizeFormatting(text) {
-        text = text.replace(/<@&([0-9]+)>/g, (match, id) => {
+        text = String(text).replace(/<@&([0-9]+)>/g, (match, id) => {
             let role = this._server.roles.find("id", id);
             if (!role) return "";
             return "@" + role.name;
@@ -268,7 +268,7 @@ class EnvDiscord extends Environment {
     
     applyFormatting(text) {
         //Normalized formatting is already fully compatible with Discord
-        return text;
+        return String(text);
     }
     
     
