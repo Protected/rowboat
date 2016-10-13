@@ -67,6 +67,7 @@ class EnvIRC extends Environment {
         
         this._client.addListener('registered', (messageObj) => {
             if (this._client.nick != params.nickname) {
+                this.log('warning', "I am " + this._client.nick + " but should be " + params.nickname + "; Will try to retake.");
                 this._retake = setInterval(() => {
                     self.retakeNickname.apply(self, null);
                 }, 15000);
@@ -348,7 +349,7 @@ class EnvIRC extends Environment {
             return;
         }
         if (this.param('nickpass')) {
-            this._client.say(params.nickservnick, "GHOST " + this.param('nickname') + " " + params.nickpass);
+            this._client.say(this.param('nickservnick'), "GHOST " + this.param('nickname') + " " + this.param('nickpass'));
         }
     }
     
