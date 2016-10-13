@@ -36,11 +36,14 @@ class EnvIRC extends Environment {
         this._client = null;
         this._prefixes = [];
         this._people = {};
+        
+        this._retake = null;
     }
 
 
     connect() {
 
+        var self = this;
         var params = this.params;
 
         this._client = new irc.Client(params.serverhost, params.nickname, {
@@ -59,6 +62,15 @@ class EnvIRC extends Environment {
         
         this._client.addListener('error', (message) => {
             this.genericErrorHandler(JSON.stringify(message, null, 4));
+        });
+        
+        
+        this._client.addListener('registered', (messageObj) => {
+            if (this._client.nick != params.nickname) {
+                this._retake = setInterval(() => {
+                    self.retakeNickname.apply(self, null);
+                }, 15000);
+            }
         });
         
     
@@ -326,6 +338,20 @@ class EnvIRC extends Environment {
 
 
     //Auxiliary methods
+    
+    
+    retakeNickname() {
+        this._client.send('NICK ', this.param('nickname'));
+        if (this._client.nick == this.param('nickname')) {
+            clearInterval(this._retake);
+            this._retake = null;
+            return;
+        }
+        if (this.param('nickpass')) {
+            this._client.say(params.nickservnick, "GHOST " + this.param('nickname') + " " + params.nickpass);
+        }
+    }
+    
 
     addPeople(nick, channels, messageObj) {
         if (!messageObj) return false;
