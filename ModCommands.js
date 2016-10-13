@@ -252,6 +252,16 @@ class ModCommands extends Module {
             }
         }
         
+        for (let i = 0; i < args.length - 1; i++) {
+            while (args[i].match(/^".*[^"]$/) && i < args.length - 1) {
+                args[i] = args[i] + ' ' + args[i+1];
+                i += 1;
+                args.splice(i);
+            }
+            let m = args[i].match(/^"(.*)"$/);
+            if (m) args[i] = m[1];
+        }
+        
         if (typeof descriptor.minArgs != "number") {
             descriptor.minArgs = descriptor.args.length;
             if (descriptor.args[descriptor.args.length - 1] === true) {
