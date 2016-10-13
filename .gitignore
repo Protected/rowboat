@@ -6,3 +6,4 @@ config/*.mod.json
 test.js
 ModCustom*.js
 logs/*.log
+*.swp

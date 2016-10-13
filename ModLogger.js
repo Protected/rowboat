@@ -103,7 +103,7 @@ class ModLogger extends Module {
 
                 let lines = "";
                 try {
-                    lines = cp.execSync('grep -P "' + pattern + '" "' + logpath + '"');
+                    lines = cp.execSync('grep -E "' + pattern + '" -- "' + logpath + '" 2>/dev/null');
                 } catch (e) {}
                 lines = lines.toString().split("\n");
 
