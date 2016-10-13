@@ -99,7 +99,9 @@ class ModLogger extends Module {
         
             var results = 0;
         
-            for (let logpath of this.getLogPaths(filepattern)) {
+            for (let loginfo of this.getLogPaths(filepattern)) {
+                let logpath = loginfo[0];
+                let logname = loginfo[1];
 
                 let lines = "";
                 try {
@@ -110,7 +112,7 @@ class ModLogger extends Module {
                 for (let line of lines) {
                     if (!line.trim()) continue;
                 
-                    reply('  ' + line);
+                    reply(logname + ' ' + line);
                 
                     results += 1;
                     if (maxResults && results >= maxResults) break;
@@ -199,7 +201,13 @@ class ModLogger extends Module {
     
     
     onPart(env, authorid, channelid, reason, rawobj) {
-        this.templateWrite("part", this.param("templatePart"), {env: env.name, userid: authorid, user: env.idToDisplayName(authorid), channelid: channelid, channel: env.channelIdToDisplayName(channelid), reason: reason});
+        var reasonstr = reason;
+        if (typeof reason == "object") {
+            reasonstr = reason[0];
+            if (reason[2]) reasonstr += ' by ' + reason[2];
+            if (reason[1]) reasonstr += ' (' + reason[1] + ')';
+        }
+        this.templateWrite("part", this.param("templatePart"), {env: env.name, userid: authorid, user: env.idToDisplayName(authorid), channelid: channelid, channel: env.channelIdToDisplayName(channelid), reason: reasonstr});
     }
     
     
@@ -252,7 +260,7 @@ class ModLogger extends Module {
                 if (fs.statSync(filepath).isDirectory()) {
                     paths.push(filepath);
                 } else if (file.match(/\.log$/)) {
-                    result.push(filepath);
+                    result.push([filepath, file]);
                 }
             }
         }
