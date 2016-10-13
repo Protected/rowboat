@@ -5,7 +5,7 @@ var random = require('meteor-random');
 
 class ModRandom extends Module {
 
-    get RequiredModules() { return [
+    get requiredModules() { return [
         'Commands'
     ]; }
 
