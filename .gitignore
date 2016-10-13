@@ -5,5 +5,5 @@ config/*.mod.json
 *.data.json
 test.js
 ModCustom*.js
-logs/*.log
+*.log
 *.swp
