@@ -80,14 +80,17 @@ class ModLogger extends Module {
             var filepattern = null;
             if (args.filepattern) {
                 filepattern = args.filepattern;
-                if (!filepattern.match(/^\/.*\/$/)) {
-                    filepattern = '/^.*' + filepattern.replace(/ /g, '.*') + '.*$/';
+                let m = filepattern.match(/^\/(.*)\/$/);
+                if (m) {
+                    filepattern = m[1];
+                } else {
+                    filepattern = '^.*' + filepattern.replace(/ /g, '.*') + '.*$';
                 }
                 filepattern = RegExp(filepattern);
             }
             
             var pattern = args.pattern;
-            var m = pattern.match(/^\/(.*)\/$/);
+            let m = pattern.match(/^\/(.*)\/$/);
             if (m) {
                 pattern = m[1];
             } else {
