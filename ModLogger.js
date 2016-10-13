@@ -15,9 +15,9 @@ class ModLogger extends Module {
     ]; }
     
     get optionalParams() { return [
-        'templateJoin',         //Template for join event logs. Placeholders: %(MOMENT_FORMAT)% %env% %userid% %channelid%
-        'templatePart',         //Template for part event logs. Placeholders: %(MOMENT_FORMAT)% %env% %userid% %channelid% %reason%
-        'templateMessage',      //Template for message event logs. Placeholders: %(MOMENT_FORMAT)% %env% %userid% %channelid% %type% %message%
+        'templateJoin',         //Template for join event logs. Placeholders: %(MOMENT_FORMAT)% %env% %userid% %user% %channelid% %channel%
+        'templatePart',         //Template for part event logs. Placeholders: %(MOMENT_FORMAT)% %env% %userid% %user% %channelid% %channel% %reason%
+        'templateMessage',      //Template for message event logs. Placeholders: %(MOMENT_FORMAT)% %env% %userid% %user% %channelid% %channel% %type% %message%
         'maxResults'            //Maximum results per search
     ]; }
 
@@ -44,10 +44,10 @@ class ModLogger extends Module {
 
         //Index channels
         
-        this._logs = this.params('logs');
+        this._logs = this.param('logs');
         for (let log of this._logs) {
-            if (!log.outputFile || !log.outputFile.match(/\.log$/)) continue;
-            if (log.channels || log.channels.length) continue;
+            if (!log.outputFile || !log.outputFile.match(/\.log\]$/)) continue;
+            if (!log.channels || !log.channels.length) continue;
             
             log.logger = null;
             log.openPath = null;
@@ -81,14 +81,17 @@ class ModLogger extends Module {
             if (args.filepattern) {
                 filepattern = args.filepattern;
                 if (!filepattern.match(/^\/.*\/$/)) {
-                    filepattern = '/^' + filepattern.replace(/ /, '.*') + '$/';
+                    filepattern = '/^.*' + filepattern.replace(/ /g, '.*') + '.*$/';
                 }
                 filepattern = RegExp(filepattern);
             }
             
             var pattern = args.pattern;
-            if (!pattern.match(/^\/.*\/$/)) {
-                pattern = '/^' + pattern.replace(/ /, '.*') + '$/';
+            var m = pattern.match(/^\/(.*)\/$/);
+            if (m) {
+                pattern = m[1];
+            } else {
+                pattern = '^.*' + pattern.replace(/ /g, '.*') + '.*$';
             }
             
             var maxResults = this.param('maxResults');
@@ -98,8 +101,11 @@ class ModLogger extends Module {
         
             for (let logpath of this.getLogPaths(filepattern)) {
 
-                let lines = cp.execSync('grep -P ' + pattern + ' "' + logpath + '"');
-                lines = lines.split("\n");
+                let lines = "";
+                try {
+                    lines = cp.execSync('grep -P "' + pattern + '" "' + logpath + '"');
+                } catch (e) {}
+                lines = lines.toString().split("\n");
 
                 for (let line of lines) {
                     if (!line.trim()) continue;
@@ -132,7 +138,7 @@ class ModLogger extends Module {
     //Write to log; call this from dependent modules to log custom events
     
     write(logchannel, message) {
-        if (!logchannel) return 0;
+        if (!logchannel || !this._channels[logchannel]) return 0;
         
         var writes = 0;
         for (let log of this._channels[logchannel]) {
@@ -160,11 +166,11 @@ class ModLogger extends Module {
         if (!template) template = "";
         var message = template;
         
-        message.replace(/%\(([^)]+)\)%/g, (match, format) => {
+        message = message.replace(/%\(([^)]+)\)%/g, (match, format) => {
             return moment().format(format);
         });
         
-        message.replace(/%([^%]+)%/g, (match, placeholder) => {
+        message = message.replace(/%([^%]+)%/g, (match, placeholder) => {
             if (fields[placeholder]) return fields[placeholder];
             return "";
         });
@@ -188,12 +194,12 @@ class ModLogger extends Module {
     //Event handlers
     
     onJoin(env, authorid, channelid, rawobj) {
-        return this.templateWrite("join", this.param("templateJoin"), {env: env.name, userid: authorid, channelid: channelid});
+        this.templateWrite("join", this.param("templateJoin"), {env: env.name, userid: authorid, user: env.idToDisplayName(authorid), channelid: channelid, channel: env.channelIdToDisplayName(channelid)});
     }
     
     
     onPart(env, authorid, channelid, reason, rawobj) {
-        return this.templateWrite("part", this.param("templatePart"), {env: env.name, userid: authorid, channelid: channelid, reason: reason});
+        this.templateWrite("part", this.param("templatePart"), {env: env.name, userid: authorid, user: env.idToDisplayName(authorid), channelid: channelid, channel: env.channelIdToDisplayName(channelid), reason: reason});
     }
     
     
@@ -201,7 +207,7 @@ class ModLogger extends Module {
         var channel = 'default';
         if (type == "regular" || type == "action") channel = 'public';
         if (type == "private" || type == "privateaction") channel = 'private';
-        return this.templateWrite(channel, this.param("templateMessage"), {env: env.name, userid: authorid, channelid: channelid, type: type, message: env.normalizeFormatting(message)});
+        this.templateWrite(channel, this.param("templateMessage"), {env: env.name, userid: authorid, user: env.idToDisplayName(authorid), channelid: channelid, channel: env.channelIdToDisplayName(channelid), type: type, message: env.normalizeFormatting(message)});
     }
     
     
@@ -210,7 +216,7 @@ class ModLogger extends Module {
     ready(log) {
         if (!log.outputFile) return false;
         
-        var desiredPath = this.param('basePath') + moment().format(log.outputFile);
+        var desiredPath = this.param('basePath') + '/' + moment().format(log.outputFile);
         if (!log.logger || log.openPath != desiredPath) {
             log.openPath = desiredPath;
             this.log('Log open: ' + desiredPath);
@@ -236,8 +242,9 @@ class ModLogger extends Module {
     
     getLogPaths(filter) {
         var result = [];
-        var paths = [this.params('basePath')];
-        while (let path = paths.shift()) {
+        var paths = [this.param('basePath')];
+        var path;
+        while (path = paths.shift()) {
             for (let file of fs.readdirSync(path)) {
                 if (file.match(/^\./)) continue;
                 let filepath = path + '/' + file;

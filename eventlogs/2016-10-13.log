@@ -1,0 +1,17 @@
+%(YYYY-MM-DD HH:mm:ss)% {%env%} [%channelid%] * Joins: %userid%
+%(YYYY-MM-DD HH:mm:ss)% {%env%} [%channelid%] <%userid%> %message%
+%(YYYY-MM-DD HH:mm:ss)% {%env%} [%channelid%] * Parts: %userid% (%reason%)
+2016-10-13 21:06:06 {IRC} [#discworld] * Joins: Rowboat!myshelter@Rizon-856F8800.net
+2016-10-13 21:06:15 {IRC} [#discworld] <Protected!~Join@my.shelter> test
+2016-10-13 21:06:18 {Discord} [219575076993892353] <92390098603098112> fdfdf
+21:13:37 {Discord} [rizon] <Protected> sdfsdf
+21:13:44 {IRC} [#discworld] * Joins: Rowboat (Rowboat!~myshelter@E789E73C.34CE9B2D.F2CD335B.IP)
+21:13:52 {IRC} [#discworld] <Protected> sdgffgf
+21:15:00 {IRC} [#discworld] * Joins: Rowboat (Rowboat!~myshelter@E789E73C.34CE9B2D.F2CD335B.IP)
+21:15:05 {IRC} [#discworld] <Protected> aaaaa
+21:15:08 {Discord} [rizon] <Protected> bbbbb
+21:21:00 {IRC} [#discworld] * Joins: Rowboat (Rowboat!myshelter@Rizon-856F8800.net)
+21:23:02 {IRC} [#discworld] * Joins: Rowboat (Rowboat!myshelter@Rizon-856F8800.net)
+21:24:00 {IRC} [#discworld] * Joins: Rowboat (Rowboat!myshelter@Rizon-856F8800.net)
+21:26:12 {IRC} [#discworld] * Joins: Rowboat (Rowboat!myshelter@Rizon-856F8800.net)
+21:36:11 {IRC} [#discworld] * Joins: Rowboat (Rowboat!~myshelter@E789E73C.34CE9B2D.F2CD335B.IP)
