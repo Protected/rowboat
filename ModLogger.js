@@ -108,7 +108,7 @@ class ModLogger extends Module {
 
                 let lines = "";
                 try {
-                    lines = cp.execSync('grep -E "' + pattern + '" -- "' + logpath + '" 2>/dev/null');
+                    lines = cp.execSync('grep -E ' + escapeShell(pattern) + ' -- ' + escapeShell(logpath) + ' 2>/dev/null');
                 } catch (e) {}
                 lines = lines.toString().split("\n");
 
@@ -272,6 +272,11 @@ class ModLogger extends Module {
     
 
 }
+
+
+function escapeShell(cmd) {
+    return '"' + cmd.replace(/(["\s'$`\\])/g, '\\$1') + '"';
+};
 
 
 module.exports = ModLogger;
