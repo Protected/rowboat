@@ -233,7 +233,10 @@ class EnvIRC extends Environment {
     idIsAuthenticated(id) {
         var parts = id.split("!");
         var person = this._people[parts[0]];
-        return (person && person.identified);
+        if (!person) return false;
+        if (person.identified) return true;
+        this._client.send('WHOIS ', parts[0]);
+        return false;
     }
     
     
