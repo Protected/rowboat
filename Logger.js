@@ -63,6 +63,7 @@ var log = exports.log = function(method, subject) {
     
     var actualMethod;
     switch (method) {
+        case 'debug': actualMethod = logger.debug; break;
         case 'warn': actualMethod = logger.warn; break;
         case 'error': actualMethod = logger.error; break;
         default: actualMethod = logger.info;
@@ -72,6 +73,9 @@ var log = exports.log = function(method, subject) {
     return actualMethod.apply(null, [subject]);
 }
 
+exports.debug = function(subject) {
+    return log('debug', subject);
+}
 exports.info = function(subject) {
     return log('info', subject);
 }
