@@ -110,7 +110,7 @@ class ModLogger extends Module {
                 try {
                     lines = cp.execSync('grep -E ' + escapeShell(pattern) + ' -- ' + escapeShell(logpath) + ' 2>/dev/null');
                 } catch (e) {}
-                lines = lines.toString().split("\n");
+                lines = lines.toString().split("\n").reverse();
 
                 for (let line of lines) {
                     if (!line.trim()) continue;
@@ -267,7 +267,7 @@ class ModLogger extends Module {
                 }
             }
         }
-        return result;        
+        return result.reverse();
     };
     
 
