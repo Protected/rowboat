@@ -216,7 +216,8 @@ class ModCommands extends Module {
         this._commands.push(descriptor);
         this._index[commandid] = descriptor;
         
-        this.log('Registered command: ' + this.buildCommandSyntax(command) + (descriptor.permissions ? ' (permissions: ' + (descriptor.requireAllPermissions ? 'all of ' : 'any of ') + descriptor.permissions.join(', ') + ')' : ''));
+        this.log('Registered command: ' + this.stripNormalizedFormatting(this.buildCommandSyntax(command))
+                + (descriptor.permissions ? ' (permissions: ' + (descriptor.requireAllPermissions ? 'all of ' : 'any of ') + descriptor.permissions.join(', ') + ')' : ''));
         
         return true;
     }

@@ -102,6 +102,11 @@ class Module {
         logger.log(method, '|'+ this._name + '| ' + subject);
     }
     
+
+    stripNormalizedFormatting(text) {
+        return text.replace(/__(.*?)__/g, "$1").replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1");
+    }
+    
         
 }
 
