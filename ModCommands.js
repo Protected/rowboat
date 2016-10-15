@@ -1,5 +1,7 @@
 /* Module: Commands -- Framework for providing responses to triggers in a standardized format. */
 
+//If ModLogger is present, will log to channel "command" using "templateCommand". Placeholders: %(MOMENT_FORMAT)% %env% %userid% %user% %channelid% %channel% %message%
+
 var Module = require('./Module.js');
 var moment = require('moment');
 
@@ -29,6 +31,8 @@ class ModCommands extends Module {
     
         this._commands = [];
         this._index = {};
+        
+        this._modLogger = null;
     }
 
 
@@ -38,6 +42,11 @@ class ModCommands extends Module {
         if (!this.param('allowedenvs')) {
             this._params['allowedenvs'] = Object.keys(envs);
         }
+        
+        
+        moduleRequest('Logger', (logger) => {
+            this._modLogger = logger;
+        });
 
         
         //Register callbacks
@@ -207,6 +216,20 @@ class ModCommands extends Module {
         this._commands.push(descriptor);
         this._index[commandid] = descriptor;
         
+        this.log('Registered command: ' + this.buildCommandSyntax(command) + (permissions ? ' (permissions: ' + (descriptor.requireAllPermissions ? 'all of ' : 'any of ') + descriptor.permissions.join(', ') + ')' : ''));
+        
+        return true;
+    }
+    
+    unregisterCommand(command) {
+        var commandid = command.toLowerCase();
+        if (!this.getCommand(commandid)) return false;
+        
+        this._commands = this._commands.filter((descriptor) => (descriptor.command.toLowerCase() != commandid));
+        if (this._index[commandid]) delete this._index[commandid];
+        
+        this.log('Unregistered command: ' + command);
+        
         return true;
     }
 
@@ -248,19 +271,16 @@ class ModCommands extends Module {
         
         if (descriptor.permissions) {
             if (!this.mod('Users').testPermissions(env.name, authorid, descriptor.permissions, descriptor.requireAllPermissions, handle)) {
+                this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + ': Failed permission check.');
                 return true;
             }
         }
         
         for (var i = 0; i < args.length - 1; i++) {
-            let j = 0;
             while (i < args.length - 1 && args[i].match(/^".*[^"]$/)) {
                 args[i] = args[i] + ' ' + args[i+1];
-                i += 1;
-                j += 1;
-                args.splice(i);
+                args.splice(i+1);
             }
-            i -= j;
         }
 
         for (var i = 0; i < args.length; i++) {
@@ -282,6 +302,7 @@ class ModCommands extends Module {
             } else {
                 env.msg(authorid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
             }
+            this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : '') + ': Incorrect syntax.');
             return true;
         }
         
@@ -315,14 +336,31 @@ class ModCommands extends Module {
                 }
             }
         )) {
+            this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : '') + ': Rejected by handler.');
             if (descriptor.unobtrusive) {
                 env.notice(authorid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
             } else {
                 env.msg(authorid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
             }
+        } else {
+            this.eventLog(env, authorid, channelid, descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : ''));
         }
 
         return true;
+    }
+    
+    
+    eventLog(env, userid, channelid, message) {
+        if (this._modLogger) {
+            this._modLogger.templateNameWrite('command', 'command', {
+                env: env.name,
+                userid: userid,
+                user: env.idToDisplayName(userid),
+                channelid: channelid,
+                channel: (channelid ? env.channelIdToDisplayName(channelid) : null),
+                message: message
+            });
+        }
     }
 
 
