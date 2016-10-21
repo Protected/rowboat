@@ -285,7 +285,7 @@ class ModCommands extends Module {
         }
 
         for (var i = 0; i < args.length; i++) {
-            let m = args[i].match(/^"([^ ]* [^ ]*)"$/);
+            let m = args[i].match(/^"([^ ]* .*)"$/);
             if (m) args[i] = m[1];
         }
 

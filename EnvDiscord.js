@@ -142,7 +142,7 @@ class EnvDiscord extends Environment {
                 this.triggerJoin(member.id, chans, [reason, newUser.status]);
             }
             if (reason == "part") {
-                this.triggerPart(member.id, chans, [reason, oldUser.status]);
+                if (member) this.triggerPart(member.id, chans, [reason, oldUser.status]);
             }
         });
         
@@ -208,8 +208,15 @@ class EnvDiscord extends Environment {
     }
     
     
-    idIsSecured(id) { return true; }
-    idIsAuthenticated(id) { return true; }
+    idIsSecured(id) {
+        var member = this._server.members.find("id", id);
+        return !!member;
+    }
+    
+    idIsAuthenticated(id) {
+        var member = this._server.members.find("id", id);
+        return !!member;
+    }
     
     
     listUserIds(channel) {
