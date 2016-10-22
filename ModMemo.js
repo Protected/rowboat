@@ -667,8 +667,8 @@ class ModMemo extends Module {
             }
         }
         
-        if (this.memoToUserid[env.name] && this.memoToUserid[env.name][authorid]) {
-            for (let register of this.memoToUserid[env.name][authorid]) {
+        if (this._memoToUserid[env.name] && this._memoToUserid[env.name][authorid]) {
+            for (let register of this._memoToUserid[env.name][authorid]) {
                 if (register.strong && !strong) continue;
                 if (!this.getMatchingRecipients(register, env.name, authorid, display, null, isauth, true).length) continue;
                 receive[register.id] = register;
