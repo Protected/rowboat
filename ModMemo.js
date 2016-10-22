@@ -524,6 +524,11 @@ class ModMemo extends Module {
                 let otherid = envobj.displayNameToId(recipient);
                 let otherdisplay = envobj.idToDisplayName(recipient);
                 
+                if (otherid == otherdisplay) {
+                    otherid = null;
+                    otherdisplay = null;
+                }
+                
                 if (!otherid && !otherdisplay) {
                     item.display = recipient;
                     item.userid = recipient;
@@ -650,21 +655,21 @@ class ModMemo extends Module {
         return changed;
     }
     
-    deliverMemo(register, envobj, targetid) {
+    deliverMemo(register, envobj, targetid, channelid) {
         var targetdisplay = envobj.idToDisplayName(targetid);
-        envobj.msg(targetid, envobj.applyFormatting('Message from **' + (register.from.display || register.from.userid) + '** to **' + (targetdisplay || targetid) + '** sent on ' + moment(register.ts).format(this.param('tsFormat')) + ':'));
-        envobj.msg(targetid, '    ' + register.msg);
+        envobj.msg(channelid, envobj.applyFormatting('Message from **' + (register.from.display || register.from.userid) + '** to **' + (targetdisplay || targetid) + '** sent on ' + moment(register.ts).format(this.param('tsFormat')) + ':'));
+        envobj.msg(channelid, '    ' + register.msg);
     }
     
     onJoin(env, authorid, channelid, rawobj) {
-        this.triggerMemoDelivery(env, authorid, false);
+        this.triggerMemoDelivery(env, authorid, channelid, false);
     }
     
     onMessage(env, type, message, authorid, channelid, rawobj) {
-        this.triggerMemoDelivery(env, authorid, true);
+        this.triggerMemoDelivery(env, authorid, channelid, true);
     }
     
-    triggerMemoDelivery(env, authorid, strong) {
+    triggerMemoDelivery(env, authorid, channelid, strong) {
         var handles = this.mod('Users').getHandlesById(env.name, authorid, true);
         var display = env.idToDisplayName(authorid);
         var isauth = env.idIsAuthenticated(authorid);
@@ -698,7 +703,7 @@ class ModMemo extends Module {
         receive = this.objectValues(receive).sort((a, b) => (a.id - b.id));
         var changed = 0;
         for (let register of receive) {
-            this.deliverMemo(register, env, authorid);
+            this.deliverMemo(register, env, authorid, channelid);
             changed += this.markMemoAsDelivered(register, env.name, authorid, display, handles[0], isauth);
         }
         
