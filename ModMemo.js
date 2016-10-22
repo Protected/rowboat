@@ -215,7 +215,7 @@ class ModMemo extends Module {
                         return true;
                     }
 
-                    let recipients = getMatchingRecipients(register, env.name, userid, display, handle, isauth);
+                    let recipients = this.getMatchingRecipients(register, env.name, userid, display, handle, isauth);
                     if (!recipients.length) {
                         priv("You have not received a message with the ID " + id);
                         return true;
@@ -524,20 +524,8 @@ class ModMemo extends Module {
                 let otherid = envobj.displayNameToId(recipient);
                 let otherdisplay = envobj.idToDisplayName(recipient);
                 
-                if (otherid == otherdisplay) {
-                    otherid = null;
-                    otherdisplay = null;
-                }
-                
-                if (!otherid && !otherdisplay) {
-                    item.display = recipient;
-                    item.userid = recipient;
-                } else if (!otherdisplay) {
-                    item.display = recipient;
-                    item.userid = otherid;
-                } else {
-                    item.userid = recipient;
-                }
+                item.display = otherdisplay || recipient;
+                item.userid = otherid || recipient;
             
                 result.to.push(item);
             }
