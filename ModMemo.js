@@ -63,13 +63,14 @@ class ModMemo extends Module {
         this.mod("Commands").registerCommand('memo', {
             description: "Send or cancel a message. Actions: 'save|strongsave [{env}] (=handle|[+]displayname|[+]userid) [& ...] message ...', 'cancel ID', 'outbox', 'inbox'",
             args: ["action", "descriptor", true],
-            minArgs: 2,
+            minArgs: 1,
             permissions: (this.param('permission') ? [this.param('permission')] : null),
             unobtrusive: true
         }, (env, type, userid, command, args, handle, reply, pub, priv) => {
             
             if (!env.idIsAuthenticated(userid)) {
                 reply("Your environment (" + env.name + ") ID is not authenticated. Only authenticated users can use this command.");
+                return true;
             }
             
             if (args.action == "save" || args.action == "strongsave") {
@@ -127,7 +128,7 @@ class ModMemo extends Module {
                 //Cancel a memo or remove all undelivered recipients
             
                 let id = parseInt(args.descriptor);
-                if (id == NaN) {
+                if (isNaN(id)) {
                     priv("Please provide the numeric ID of the message you wish to cancel.");
                     return true;
                 }
@@ -157,14 +158,16 @@ class ModMemo extends Module {
                 //Obtain information on memos I sent
             
                 let id = parseInt(args.descriptor);
-                if (id == NaN) {
+                if (isNaN(id)) {
             
                     let outbox = this.createOutbox(env.name, userid, handle).slice(0, this.param("outboxSize"));
                     
-                    for (let register in outbox) {
-                        let delivered = register.to.filter((recipient) => recipient.done).length;
-                        priv("(**" + register.id + "**) " + moment(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + " [Delivery: " + delivered + "/" + register.to.length + "]");
-                    }
+                    if (outbox.length) {
+                        for (let register of outbox) {
+                            let delivered = register.to.filter((recipient) => recipient.done).length;
+                            priv("(**" + register.id + "**) " + moment(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + " [Delivery: " + delivered + "/" + register.to.length + "]");
+                        }
+                    } else priv("Your outbox is empty.");
                     
                 } else {
                 
@@ -192,15 +195,17 @@ class ModMemo extends Module {
 
             
                 let id = parseInt(args.descriptor);
-                if (id == NaN) {
+                if (isNaN(id)) {
                 
                     let inbox = this.createInbox(env.name, userid, display, handle, isauth, this.param("inboxTsCutoff")).slice(0, this.param("inboxDisplaySize"));
                     
-                    for (let register in inbox) {
-                        let isnew = this.markMemoAsDelivered(register, env.name, userid, display, handle, isauth);
-                        if (isnew) changes += 1;
-                        priv("(**" + register.id + "**) " + moment(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + (isnew ? " [NEW]" : ""));
-                    }
+                    if (inbox.length) {
+                        for (let register of inbox) {
+                            let isnew = this.markMemoAsDelivered(register, env.name, userid, display, handle, isauth);
+                            if (isnew) changes += 1;
+                            priv("(**" + register.id + "**) " + moment(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + (isnew ? " [NEW]" : ""));
+                        }
+                    } else priv("Your inbox is empty.");
                     
                 } else {
                 
@@ -371,7 +376,9 @@ class ModMemo extends Module {
             var envindex = this._memoToDisplay[recipient.env];
             if (!envindex) envindex = this._memoToDisplay[recipient.env] = {};
             
-            let lcdisplay = recipient.display.toLowerCase();
+            let lcdisplay = recipient.display;
+            if (!lcdisplay) continue;
+            lcdisplay = lcdisplay.toLowerCase();
             
             if (!envindex[lcdisplay]) {
                 envindex[lcdisplay] = [];
@@ -470,7 +477,7 @@ class ModMemo extends Module {
                 return {error: 1};
             }
             
-            let checkhandle = /^=(.*)$/.match(recipient);
+            let checkhandle = /^=(.*)$/.exec(recipient);
             if (checkhandle) {
                 //=handle
             
@@ -490,7 +497,7 @@ class ModMemo extends Module {
                 //+name_or_id
                 
                 let auth = false;
-                let checkauth = /^\+(.*)$/.match(recipient);
+                let checkauth = /^\+(.*)$/.exec(recipient);
                 if (checkauth) {
                     auth = true;
                     recipient = recipient[1];
@@ -550,7 +557,7 @@ class ModMemo extends Module {
         if (this._memoFromHandle[handle]) {
             for (let register of this._memoFromHandle[handle]) {
                 if (register.to.filter((recipient) => !recipient.done).length) {
-                    outbox[id] = register;
+                    outbox[register.id] = register;
                 }
             }
         }
@@ -558,7 +565,7 @@ class ModMemo extends Module {
         if (this._memoFromUserid[env] && this._memoFromUserid[env][userid]) {
             for (let register of this._memoFromUserid[env][userid]) {
                 if (register.to.filter((recipient) => !recipient.done).length) {
-                    outbox[id] = register;
+                    outbox[register.id] = register;
                 }
             }
         }
@@ -602,7 +609,7 @@ class ModMemo extends Module {
         if (this._memoToHandle[handle]) {
             for (let register of this._memoToHandle[handle]) {
                 if (register.ts < tsthreshold) continue;
-                inbox[id] = register;
+                inbox[register.id] = register;
             }
         }
         
@@ -610,7 +617,7 @@ class ModMemo extends Module {
             for (let register of this._memoToUserid[env][userid]) {
             
                 if (register.ts < tsthreshold && this.getMatchingRecipients(register, env, userid, display, handle, isauth).length) {
-                    inbox[id] = register;
+                    inbox[register.id] = register;
                 }
                 
             }
@@ -620,7 +627,7 @@ class ModMemo extends Module {
             for (let register of this._memoToDisplay[env][display]) {
             
                 if (register.ts < tsthreshold && this.getMatchingRecipients(register, env, userid, display, handle, isauth).length) {
-                    inbox[id] = register;
+                    inbox[register.id] = register;
                 }
                 
             }
