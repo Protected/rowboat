@@ -250,6 +250,19 @@ class ModMemo extends Module {
     // # Module code below this line #
 
 
+    //Miscellaneous
+    
+    objectValues(obj) {
+        var vals = [];
+        for (var key in obj) {
+            if (obj.propertyIsEnumerable(key)) {
+                vals.push(obj[key]);
+            }
+        }
+        return vals;
+    }
+    
+    
     //Memo file manipulation
 
     loadMemos() {
@@ -550,7 +563,7 @@ class ModMemo extends Module {
             }
         }
         
-        return Object.values(outbox).sort((a, b) => (a.id - b.id));
+        return this.objectValues(outbox).sort((a, b) => (a.id - b.id));
     }
     
     
@@ -613,7 +626,7 @@ class ModMemo extends Module {
             }
         }
     
-        return Object.values(inbox).sort((a, b) => (b.id - a.id));
+        return this.objectValues(inbox).sort((a, b) => (b.id - a.id));
     }
     
     
@@ -675,7 +688,7 @@ class ModMemo extends Module {
             }
         }
         
-        receive = Object.values(receive).sort((a, b) => (a.id - b.id));
+        receive = this.objectValues(receive).sort((a, b) => (a.id - b.id));
         var changed = 0;
         for (let register of receive) {
             this.deliverMemo(register, env, authorid);
