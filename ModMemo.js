@@ -5,6 +5,8 @@ var fs = require('fs');
 var jsonfile = require('jsonfile');
 var moment = require('moment');
 
+var PERM_ADMIN = 'administrator';
+
 class ModMemo extends Module {
 
 
@@ -121,20 +123,24 @@ class ModMemo extends Module {
                 this.indexToUserid(register);
                 
                 priv("Your message has successfully been scheduled for delivery with the ID **" + register.id + "**.");
+                this.log('Registered new message ' + id + ' for delivery: ' + userid + ' on ' + env.name + '. Recipients: ' + elements.to.length);
                 
                 this.saveMemos();
                 
             } else if (args.action == "cancel") {
                 //Cancel a memo or remove all undelivered recipients
             
-                let id = parseInt(args.descriptor);
+                let id = parseInt(args.descriptor[0]);
                 if (isNaN(id)) {
                     priv("Please provide the numeric ID of the message you wish to cancel.");
                     return true;
                 }
                 
                 let register = this._memo[id];
-                if (!register || (register.from.env != env.name || register.from.userid != userid) && (!register.from.handle || register.from.handle != handle)) {
+                if (!register
+                        || (register.from.env != env.name || register.from.userid != userid)
+                            && (!register.from.handle || register.from.handle != handle)
+                            && !this.mod("Users").testPermissions(env.name, userid, [PERM_ADMIN], false, handle)) {
                     priv("You do not have a message with the ID " + id);
                     return true;
                 }
@@ -146,10 +152,12 @@ class ModMemo extends Module {
                 } else if (delivered.length) {
                     register.to = delivered;
                     priv("The message with the ID **" + id + "** had already been delivered to " + delivered.length + " recipient" + (delivered.length != 1 ? "s" : "") + ". All undelivered recipients were removed.");
+                    this.log('Removed undelivered recipients from message ' + id + ' by request from ' + userid + ' on ' + env.name);
                 } else {
                     this.removeFromIndices(register);
                     delete this._memo[register.id];
                     priv("The message with the ID **" + id + "** was successfully canceled.");
+                    this.log('Canceled message ' + id + ' by request from ' + userid + ' on ' + env.name);
                 }
                 
                 this.saveMemos();
@@ -157,10 +165,20 @@ class ModMemo extends Module {
             } else if (args.action == "outbox") {
                 //Obtain information on memos I sent
             
-                let id = parseInt(args.descriptor);
+                let id = parseInt(args.descriptor[0]);
                 if (isNaN(id)) {
+                
+                    let target_envname = env.name;
+                    let target_userid = userid;
+                    let target_handle = handle;
+                    
+                    if (this.mod("Users").testPermissions(env.name, userid, [PERM_ADMIN], false, handle) && args.descriptor.length > 1) {
+                        target_userid = args.descriptor[1];
+                        target_envname = args.descriptor[2] || env.name;
+                        target_handle = args.descriptor[3];
+                    }
             
-                    let outbox = this.createOutbox(env.name, userid, handle).slice(0, this.param("outboxSize"));
+                    let outbox = this.createOutbox(target_envname, target_userid, target_handle).slice(0, this.param("outboxSize"));
                     
                     if (outbox.length) {
                         for (let register of outbox) {
@@ -172,7 +190,10 @@ class ModMemo extends Module {
                 } else {
                 
                     let register = this._memo[id];
-                    if (!register || (register.from.env != env.name || register.from.userid != userid) && (!register.from.handle || register.from.handle != handle)) {
+                    if (!register
+                            || (register.from.env != env.name || register.from.userid != userid)
+                                && (!register.from.handle || register.from.handle != handle)
+                                && !this.mod("Users").testPermissions(env.name, userid, [PERM_ADMIN], false, handle)) {
                         priv("You have not sent a message with the ID " + id);
                         return true;
                     }
@@ -194,7 +215,7 @@ class ModMemo extends Module {
                 let isauth = env.idIsAuthenticated(userid);
 
             
-                let id = parseInt(args.descriptor);
+                let id = parseInt(args.descriptor[0]);
                 if (isNaN(id)) {
                 
                     let inbox = this.createInbox(env.name, userid, display, handle, isauth, this.param("inboxTsCutoff")).slice(0, this.param("inboxDisplaySize"));
@@ -202,7 +223,10 @@ class ModMemo extends Module {
                     if (inbox.length) {
                         for (let register of inbox) {
                             let isnew = this.markMemoAsDelivered(register, env.name, userid, display, handle, isauth);
-                            if (isnew) changes += 1;
+                            if (isnew) {
+                                changes += 1;
+                                this.log('Delivered message ' + register.id + ' to ' + userid + ' on environment ' + env.name + ' while listing inbox.');
+                            }
                             priv("(**" + register.id + "**) " + moment(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + (isnew ? " [NEW]" : ""));
                         }
                     } else priv("Your inbox is empty.");
@@ -705,6 +729,7 @@ class ModMemo extends Module {
             let deliveries = this.markMemoAsDelivered(register, env.name, authorid, display, handles[0], isauth);
             if (deliveries) {
                 this.deliverMemo(register, env, authorid, channelid);
+                this.log('Delivered message ' + register.id + ' to ' + authorid + ' on environment ' + env.name + ' and channel ' + channelid);
                 changed += deliveries;
             }
         }

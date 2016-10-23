@@ -1,4 +1,4 @@
-/* Module: RolePermission -- This module is a permissions provider that turns Discord roles into permissions. */
+/* Module: RolePermission -- This module is a permissions provider that turns Discord roles into ModUsers permissions. */
 
 var Module = require('./Module.js');
 
