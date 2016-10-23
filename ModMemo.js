@@ -504,7 +504,7 @@ class ModMemo extends Module {
                 let checkauth = /^\+(.*)$/.exec(recipient);
                 if (checkauth) {
                     auth = true;
-                    recipient = recipient[1];
+                    recipient = checkauth[1];
                 }
                 
                 while (descriptor.length && recipient.match(/^".*[^"]$/)) {
