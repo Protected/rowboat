@@ -579,14 +579,15 @@ class ModMemo extends Module {
         var result = [];
 
         for (let recipient of register.to) {
-            if (handle && recipient.handle == handle) {
+            if (handle && recipient.handle == handle
+                    && (!notdone || !recipient.done)) {
                 
                 result.push(recipient);
                 
             } else if (env && recipient.env == env
                     && (userid && recipient.userid == userid || display && recipient.display && recipient.display.toLowerCase() == display.toLowerCase())
-                    && isauth || !recipient.auth
-                    && !notdone || !recipient.done) {
+                    && (isauth || !recipient.auth)
+                    && (!notdone || !recipient.done)) {
                     
                 result.push(recipient);
                 
