@@ -382,7 +382,7 @@ class ModMemo extends Module {
             
             if (!envindex[lcdisplay]) {
                 envindex[lcdisplay] = [];
-            } else if (envindex[lcdisplay].find((indexed) => (indexedid == register.id))) {
+            } else if (envindex[lcdisplay].find((indexed) => (indexed.id == register.id))) {
                 continue;
             }
             
