@@ -701,8 +701,11 @@ class ModMemo extends Module {
         receive = this.objectValues(receive).sort((a, b) => (a.id - b.id));
         var changed = 0;
         for (let register of receive) {
-            this.deliverMemo(register, env, authorid, channelid);
-            changed += this.markMemoAsDelivered(register, env.name, authorid, display, handles[0], isauth);
+            let deliveries = this.markMemoAsDelivered(register, env.name, authorid, display, handles[0], isauth);
+            if (deliveries) {
+                this.deliverMemo(register, env, authorid, channelid);
+                changed += deliveries;
+            }
         }
         
         if (changed) this.saveMemos();
