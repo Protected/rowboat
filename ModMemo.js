@@ -613,7 +613,7 @@ class ModMemo extends Module {
         if (this._memoToUserid[env] && this._memoToUserid[env][userid]) {
             for (let register of this._memoToUserid[env][userid]) {
             
-                if (register.ts < tsthreshold && this.getMatchingRecipients(register, env, userid, display, handle, isauth).length) {
+                if (register.ts > tsthreshold && this.getMatchingRecipients(register, env, userid, display, handle, isauth).length) {
                     inbox[register.id] = register;
                 }
                 
