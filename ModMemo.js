@@ -123,7 +123,7 @@ class ModMemo extends Module {
                 this.indexToUserid(register);
                 
                 priv("Your message has successfully been scheduled for delivery with the ID **" + register.id + "**.");
-                this.log('Registered new message ' + id + ' for delivery: ' + userid + ' on ' + env.name + '. Recipients: ' + elements.to.length);
+                this.log('Registered new message ' + register.id + ' for delivery: ' + userid + ' on ' + env.name + '. Recipients: ' + elements.to.length);
                 
                 this.saveMemos();
                 
