@@ -401,8 +401,8 @@ class ModMemo extends Module {
 
         for (let recipient of register.to) {
 
-            var envindex = this._memoToDisplay[recipient.env];
-            if (!envindex) envindex = this._memoToDisplay[recipient.env] = {};
+            var envindex = this._memoToUserid[recipient.env];
+            if (!envindex) envindex = this._memoToUserid[recipient.env] = {};
             
             if (!envindex[recipient.userid]) {
                 envindex[recipient.userid] = [];
@@ -437,8 +437,12 @@ class ModMemo extends Module {
                     this.memoToHandle[recipient.handle] = this.memoToHandle[recipient.handle].filter((indexed) => (indexed.id != register.id));
                 }
                 
-                if (recipient.env && recipient.display && this._memoToDisplay[recipient.env] && this._memoToDisplay[recipient.env][recipient.display]) {
-                    this._memoToDisplay[recipient.env][recipient.display] = this._memoToDisplay[recipient.env][recipient.display].filter((indexed) => (indexed.id != register.id));
+                let lcdisplay = recipient.display;
+                if (lcdisplay) {
+                    lcdisplay = lcdisplay.toLowerCase();
+                    if (recipient.env && this._memoToDisplay[recipient.env] && this._memoToDisplay[recipient.env][lcdisplay]) {
+                        this._memoToDisplay[recipient.env][lcdisplay] = this._memoToDisplay[recipient.env][lcdisplay].filter((indexed) => (indexed.id != register.id));
+                    }
                 }
                 
                 if (recipient.env && recipient.userid && this._memoToUserid[recipient.env] && this._memoToUserid[recipient.env][recipient.userid]) {
@@ -580,7 +584,7 @@ class ModMemo extends Module {
                 result.push(recipient);
                 
             } else if (env && recipient.env == env
-                    && (userid && recipient.userid == userid || display && recipient.display == display)
+                    && (userid && recipient.userid == userid || display && recipient.display && recipient.display.toLowerCase() == display.toLowerCase())
                     && isauth || !recipient.auth
                     && !notdone || !recipient.done) {
                     
@@ -616,13 +620,16 @@ class ModMemo extends Module {
             }
         }
         
-        if (this._memoToDisplay[env] && this._memoToDisplay[env][display]) {
-            for (let register of this._memoToDisplay[env][display]) {
-            
-                if (register.ts < tsthreshold && this.getMatchingRecipients(register, env, userid, display, handle, isauth).length) {
-                    inbox[register.id] = register;
-                }
+        if (display) {
+            let lcdisplay = display.toLowerCase();
+            if (this._memoToDisplay[env] && this._memoToDisplay[env][lcdisplay]) {
+                for (let register of this._memoToDisplay[env][lcdisplay]) {
                 
+                    if (register.ts < tsthreshold && this.getMatchingRecipients(register, env, userid, display, handle, isauth).length) {
+                        inbox[register.id] = register;
+                    }
+                    
+                }
             }
         }
     
@@ -672,11 +679,14 @@ class ModMemo extends Module {
             }
         }
         
-        if (this._memoToDisplay[env.name] && this._memoToDisplay[env.name][display]) {
-            for (let register of this._memoToDisplay[env.name][display]) {
-                if (register.strong && !strong) continue;
-                if (!this.getMatchingRecipients(register, env.name, authorid, display, null, isauth, true).length) continue;
-                receive[register.id] = register;
+        if (display) {
+            let lcdisplay = display.toLowerCase();
+            if (this._memoToDisplay[env.name] && this._memoToDisplay[env.name][lcdisplay]) {
+                for (let register of this._memoToDisplay[env.name][lcdisplay]) {
+                    if (register.strong && !strong) continue;
+                    if (!this.getMatchingRecipients(register, env.name, authorid, display, null, isauth, true).length) continue;
+                    receive[register.id] = register;
+                }
             }
         }
         
