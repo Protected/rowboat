@@ -181,7 +181,7 @@ class ModMemo extends Module {
                     priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment(register.ts).format(this.param('tsFormat')));
                     
                     for (let recipient of register.to) {
-                        priv("  " + (recipient.done ? "**DELIVERED**" : "Pending") + " To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "")));
+                        priv("  " + (recipient.done ? "**DELIVERED**" : "Pending") + " To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "") + " on " + recipient.env));
                     }
                 
                 }
@@ -234,7 +234,7 @@ class ModMemo extends Module {
                     priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment(register.ts).format(this.param('tsFormat')));
                     
                     for (let recipient of recipients) {
-                        priv("  (Delivered " + moment(recipient.done).format(this.param('tsFormat')) + ") To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "")));
+                        priv("  (Delivered " + moment(recipient.done).format(this.param('tsFormat')) + ") To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "") + " on " + recipient.env));
                     }
                 
                 }
@@ -421,20 +421,20 @@ class ModMemo extends Module {
     removeFromIndices(register) {
         if (!register || !register.id) return false;
         
-        if (register.from && register.from.handle && this.memoFromHandle[register.from.handle]) {
-            this.memoFromHandle[register.from.handle] = this.memoFromHandle[register.from.handle].filter((indexed) => (indexed.id != register.id));
+        if (register.from && register.from.handle && this._memoFromHandle[register.from.handle]) {
+            this._memoFromHandle[register.from.handle] = this._memoFromHandle[register.from.handle].filter((indexed) => (indexed.id != register.id));
         }
         
-        if (register.from && register.from.env && register.from.userid && this.memoFromUserid[register.from.env] && this.memoFromUserid[register.from.env][register.from.userid]) {
-            this.memoFromUserid[register.from.env][register.from.userid]
-                    = this.memoFromUserid[register.from.env][register.from.userid].filter((indexed) => (indexed.id != register.id));
+        if (register.from && register.from.env && register.from.userid && this._memoFromUserid[register.from.env] && this._memoFromUserid[register.from.env][register.from.userid]) {
+            this._memoFromUserid[register.from.env][register.from.userid]
+                    = this._memoFromUserid[register.from.env][register.from.userid].filter((indexed) => (indexed.id != register.id));
         }
         
         if (register.to && register.to.length) {
             for (let recipient of register.to) {
                 
-                if (recipient.handle && this.memoToHandle[recipient.handle]) {
-                    this.memoToHandle[recipient.handle] = this.memoToHandle[recipient.handle].filter((indexed) => (indexed.id != register.id));
+                if (recipient.handle && this._memoToHandle[recipient.handle]) {
+                    this._memoToHandle[recipient.handle] = this._memoToHandle[recipient.handle].filter((indexed) => (indexed.id != register.id));
                 }
                 
                 let lcdisplay = recipient.display;
