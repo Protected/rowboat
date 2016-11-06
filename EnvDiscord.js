@@ -79,7 +79,7 @@ class EnvDiscord extends Environment {
         });
         
         
-        this._client.on("guildMemberAdd", (server, member) => {
+        this._client.on("guildMemberAdd", (member) => {
             var chans = this.findAccessChannels(member);
             if (chans.length) {
                 this.triggerJoin(member.id, chans, ["add"]);
@@ -87,8 +87,8 @@ class EnvDiscord extends Environment {
         });
         
         
-        this._client.on("guildMemberRemove", (server, member) => {
-            if (member.user.status == "offline") return;
+        this._client.on("guildMemberRemove", (member) => {
+            if (member.user.presence.status == "offline") return;
             
             var chans = this.findAccessChannels(member);
             if (chans.length) {
@@ -97,8 +97,8 @@ class EnvDiscord extends Environment {
         });
         
         
-        this._client.on("guildMemberUpdate", (server, oldMember, newMember) => {
-            if (newMember.user.status == "offline") return;
+        this._client.on("guildMemberUpdate", (oldMember, newMember) => {
+            if (newMember.user.presence.status == "offline") return;
         
             var had = {};
             for (let chan of this.findAccessChannels(oldMember)) {
@@ -127,10 +127,10 @@ class EnvDiscord extends Environment {
         
         this._client.on("presenceUpdate", (oldUser, newUser) => {
             var reason = null;
-            if (oldUser.status == "offline" && newUser.status != "offline") {
+            if (oldUser.presence.status == "offline" && newUser.presence.status != "offline") {
                 reason = "join";
             }
-            if (oldUser.status != "offline" && newUser.status == "offline") {
+            if (oldUser.presence.status != "offline" && newUser.presence.status == "offline") {
                 reason = "part";
             }
             if (!reason) return;
@@ -139,10 +139,10 @@ class EnvDiscord extends Environment {
             var chans = this.findAccessChannels(member);
             
             if (reason == "join") {
-                this.triggerJoin(member.id, chans, [reason, newUser.status]);
+                this.triggerJoin(member.id, chans, [reason, newUser.presence.status]);
             }
             if (reason == "part") {
-                if (member) this.triggerPart(member.id, chans, [reason, oldUser.status]);
+                if (member) this.triggerPart(member.id, chans, [reason, oldUser.presence.status]);
             }
         });
         
