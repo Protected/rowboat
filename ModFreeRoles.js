@@ -54,8 +54,12 @@ class ModFreeRoles extends Module {
             var roles = this._freeRoles[env.name];
             if (!roles) return true;
             
-            for (let role in roles) {
-                reply('**' + roles[role].name + '** - ' + roles[role].desc);
+            if (roles.length) {
+                for (let role in roles) {
+                    reply('**' + roles[role].name + '** - ' + roles[role].desc);
+                }
+            } else {
+                reply('No free roles configured.');
             }
         
             return true;
@@ -209,7 +213,9 @@ class ModFreeRoles extends Module {
                 desc: args.description.join(" ")
             };
             
-            this.savedata();
+            this.saveData();
+            
+            reply('Role "' + args.role + '" added successfully.');
             
             return true;
         });
@@ -232,7 +238,9 @@ class ModFreeRoles extends Module {
             
             delete roles[lcrole];
             
-            this.savedata();
+            this.saveData();
+            
+            reply('Role "' + args.role + '" removed successfully.');
             
             return true;
         });
