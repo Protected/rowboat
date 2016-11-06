@@ -2,13 +2,12 @@
 
 var Module = require('./Module.js');
 
+var PERM_ADMIN = 'administrator';
+
 class ModFreeRoles extends Module {
 
-    get requiredParams() { return [
-        'freeRoles'             //{ENVNAME: {ROLE: DESCRIPTION, ...}, ...}
-    ]; }
-    
     get optionalParams() { return [
+        'datafile',
         'allowBecome',          //Enable/permission for !become
         'allowReject'           //Enable/permission for !reject
     ]; }
@@ -24,28 +23,37 @@ class ModFreeRoles extends Module {
     constructor(name) {
         super('FreeRoles', name);
         
+        this._params['datafile'] = 'freeroles.data.json';
+        
         //Use a string to require a permission
         this._params['allowBecome'] = false;
         this._params['allowReject'] = true;
+        
+        //{ENVNAME: {LCROLE: {name: ROLE, desc: DESCRIPTION}, ...}, ...}
+        this._freeRoles = {};
     }
 
 
     initialize(envs, mods, moduleRequest) {
         if (!super.initialize(envs, mods, moduleRequest)) return false;
         
+        //Load data
+        
+        if (!this.loadData()) return false;
+        
         
         //Register callbacks
         
-        this.mod("Commands").registerCommand('freeroles', {
-            description: 'Show a list of roles that can be claimed by users.',
+        this.mod("Commands").registerCommand('roles', {
+            description: 'Show a list of free roles (that can be claimed by users).',
             environments: ['Discord']
         }, (env, type, userid, command, args, handle, reply) => {
         
-            var roles = this.param('freeRoles');
-            if (roles) roles = roles[env.name];
+            var roles = this._freeRoles[env.name];
+            if (!roles) return true;
             
             for (let role in roles) {
-                reply('**' + role + '** - ' + roles[role]);
+                reply('**' + roles[role].name + '** - ' + roles[role].desc);
             }
         
             return true;
@@ -60,22 +68,23 @@ class ModFreeRoles extends Module {
                 permissions: (typeof this.param('allowBecome') == "string" ? [this.param('allowBecome')] : null)
             }, (env, type, userid, command, args, handle, reply) => {
             
-                var roles = this.param('freeRoles');
-                if (roles) roles = roles[env.name];
-                if (!roles || !roles[args.role]) {
-                    reply('Role not allowed. Please use the "freeroles" command for a list of allowed roles.');
+                var lcrole = args.role.toLowerCase();
+            
+                var roles = this._freeRoles[env.name];
+                if (!roles || !roles[lcrole]) {
+                    reply('Role not allowed. Please use the "roles" command for a list of allowed roles.');
                     return true;
                 }
                 
-                var roleobj = env.server.roles.find('name', args.role);
+                var roleobj = env.server.roles.find('name', roles[lcrole].name);
                 if (!roleobj) {
-                    reply("The role \"" + args.role + "\" doesn't currently exist in this environment.");
+                    reply("The role \"" + roles[lcrole].name + "\" doesn't currently exist in this environment.");
                     return true;
                 }
                 
                 var member = env.server.member(userid);
-                if (member.roles.find('name', args.role)) {
-                    reply('You already have the role "' + args.role + '".');
+                if (member.roles.find('name', roles[lcrole].name)) {
+                    reply('You already have the role "' + roles[lcrole].name + '".');
                     return true;
                 }
                 
@@ -98,22 +107,23 @@ class ModFreeRoles extends Module {
                 permissions: (typeof this.param('allowReject') == "string" ? [this.param('allowReject')] : null)
             }, (env, type, userid, command, args, handle, reply) => {
             
-                var roles = this.param('freeRoles');
-                if (roles) roles = roles[env.name];
-                if (!roles || !roles[args.role]) {
-                    reply('Role not allowed. Please use the "freeroles" command for a list of allowed roles.');
+                var lcrole = args.role.toLowerCase();
+            
+                var roles = this._freeRoles[env.name];
+                if (!roles || !roles[lcrole]) {
+                    reply('Role not allowed. Please use the "roles" command for a list of allowed roles.');
                     return true;
                 }
                 
-                var roleobj = env.server.roles.find('name', args.role);
+                var roleobj = env.server.roles.find('name', roles[lcrole].name);
                 if (!roleobj) {
-                    reply("The role \"" + args.role + "\" doesn't currently exist in this environment.");
+                    reply("The role \"" + roles[lcrole].name + "\" doesn't currently exist in this environment.");
                     return true;
                 }
                 
                 var member = env.server.member(userid);
-                if (!member.roles.find('name', args.role)) {
-                    reply("You don't have the role \"" + args.role + "\".");
+                if (!member.roles.find('name', roles[lcrole].name)) {
+                    reply("You don't have the role \"" + roles[lcrole].name + "\".");
                     return true;
                 }
                 
@@ -128,7 +138,136 @@ class ModFreeRoles extends Module {
         }
         
         
+        this.mod("Commands").registerCommand('members', {
+            description: 'Lists the Discord users with the given free role.',
+            args: ['role'],
+            environments: ['Discord']
+        }, (env, type, userid, command, args, handle, reply) => {
+            
+            var lcrole = args.role.toLowerCase();
+            
+            var roles = this._freeRoles[env.name];
+            if (!roles || !roles[lcrole]) {
+                reply('Role not allowed. Please use the "roles" command for a list of allowed roles.');
+                return true;
+            }
+            
+            var roleobj = env.server.roles.find('name', roles[lcrole].name);
+            if (!roleobj) {
+                reply("The role \"" + roles[lcrole].name + "\" doesn't currently exist in this environment.");
+                return true;
+            }
+            
+            var results = [];
+            for (let member of roleobj.members.array()) {
+                results.push(env.idToDisplayName(member.id));
+            }
+            
+            if (results.length) {
+                while (results.length) {
+                    var outbound = results.slice(0, 10).join(', ');
+                    reply(outbound);
+                    results = results.slice(10);
+                }
+            } else {
+                reply("No members found.");
+            }
+            
+            return true;
+        });
+        
+        
+        this.mod("Commands").registerCommand('roleadd', {
+            description: 'Adds an existing Discord role to the list of free roles.',
+            args: ['role', 'description', true],
+            environments: ['Discord'],
+            permissions: [PERM_ADMIN]
+        }, (env, type, userid, command, args, handle, reply) => {
+            
+            var lcrole = args.role.toLowerCase();
+            
+            var roles = this._freeRoles[env.name];
+            if (!roles) {
+                roles = this._freeRoles[env.name] = {};
+            }
+            
+            if (roles[lcrole]) {
+                reply('The role ' + args.role + ' is already in the list of free roles. If you want to change the description, please delist it first.');
+                return true;
+            }
+            
+            var roleobj = env.server.roles.find('name', args.role);
+            if (!roleobj) {
+                reply("The role \"" + args.role + "\" doesn't currently exist in this environment.");
+                return true;
+            }
+            
+            roles[lcrole] = {
+                name: args.role,
+                desc: args.description.join(" ")
+            };
+            
+            this.savedata();
+            
+            return true;
+        });
+        
+        
+        this.mod("Commands").registerCommand('roledel', {
+            description: 'Removes an existing Discord role from the list of free roles.',
+            args: ['role'],
+            environments: ['Discord'],
+            permissions: [PERM_ADMIN]
+        }, (env, type, userid, command, args, handle, reply) => {
+            
+            var lcrole = args.role.toLowerCase();
+            
+            var roles = this._freeRoles[env.name];
+            if (!roles || !roles[lcrole]) {
+                reply('The role ' + args.role + ' is not in the list of free roles.');
+                return true;
+            }
+            
+            delete roles[lcrole];
+            
+            this.savedata();
+            
+            return true;
+        });
+        
+        
         return true;
+    }
+    
+    
+    // # Module code below this line #
+
+
+    //Data file manipulation
+
+    loadData() {
+        var datafile = this.param('datafile');
+     
+        try {
+            fs.accessSync(datafile, fs.F_OK);
+        } catch (e) {
+            jsonfile.writeFileSync(datafile, {});
+        }
+
+        try {
+            this._freeRoles = jsonfile.readFileSync(datafile);
+        } catch (e) {
+            return false;
+        }
+        if (!this._freeRoles) this._freeRoles = {};
+        
+        return true;
+    }
+
+    saveData() {
+        var datafile = this.param('datafile');
+        
+        jsonfile.writeFileSync(datafile, this._freeRoles);
     }
     
     
