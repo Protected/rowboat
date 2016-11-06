@@ -218,6 +218,7 @@ class ModCommands extends Module {
             if (options.args) descriptor.args = options.args;
             if (options.minArgs !== undefined) descriptor.minArgs = options.minArgs;
             if (options.description) descriptor.description = options.description;
+            if (options.details) descriptor.details = options.details;
             if (options.environments) descriptor.environments = options.environments;
             if (options.types) descriptor.types = options.types;
             if (options.permissions) descriptor.permissions = options.permissions;
