@@ -25,7 +25,8 @@ class ModRandom extends Module {
             details: [
                 "If MAX is not passed, a floating point number between 0 and 1 is returned.",
                 "If MAX Is a positive integer, an integer between 0 and MAX is returned.",
-                "If 0 is a dice descriptor with the format AdB, where A and B are integers, a roll of A dice with B facets is realistically simulated and the value returned. Up to 9 dice and 99 facets are accepted."
+                "If MAX is a dice descriptor with the format AdB, where A and B are integers, a roll of A dice with B facets is realistically simulated and the value returned. Up to 9 dice and 99 facets are accepted.",
+                "Pass PUB as 1 to display the resulting random number in public even if you used the command in private."
             ],
             minArgs: 0
         }, (env, type, userid, command, args, handle, reply, pub) => {

@@ -43,7 +43,7 @@ class ModGoogle extends Module {
             details: [
                 "Use --PARAM=VALUE before the search string to pass additional Google API parameters to the request.",
                 "Allowed parameters: " + this.param('googleparams').join(', '),
-                "For details on each parameter: https://developers.google.com/custom-search/json-api/v1/reference/cse/list"
+                "For details on each parameter: https://developers.google.com/custom-search/json-api/v1/reference/cse/list#parameters"
             ],
             types: ["regular"],
             permissions: ["trusted","administrator"]
