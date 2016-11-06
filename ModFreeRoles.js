@@ -54,7 +54,7 @@ class ModFreeRoles extends Module {
             var roles = this._freeRoles[env.name];
             if (!roles) return true;
             
-            if (roles.length) {
+            if (Object.keys(roles).length) {
                 for (let role in roles) {
                     reply('**' + roles[role].name + '** - ' + roles[role].desc);
                 }
