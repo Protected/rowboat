@@ -21,7 +21,8 @@ class ModBridgeDiscordIRC extends Module {
     ]; }
     
     get optionalParams() { return [
-        'discordBlacklist'      //Discord channels NOT to bridge (list of IDs)
+        'discordBlacklist',     //Discord channels NOT to bridge (list of IDs)
+        'discordOneWay'         //Discord channels that will broadcast to IRC, but IRC can't send to them
     ]; }
     
     get requiredEnvironments() { return [
@@ -37,6 +38,7 @@ class ModBridgeDiscordIRC extends Module {
         super('BridgeDiscordIRC', name);
         
         this._params['discordBlacklist'] = [];
+        this._params['discordOneWay'] = [];
     }
 
 
@@ -79,7 +81,9 @@ class ModBridgeDiscordIRC extends Module {
             message = directedmessage[2];
             
             let targetchan = this.discord.server.channels.find('name', target);
-            if (targetchan && this.param('discordBlacklist').indexOf(targetchan.id) > -1) return;
+            if (targetchan && (
+                this.param('discordBlacklist').indexOf(targetchan.id) > -1
+                || this.param('discordOneWay').indexOf(targetchan.id) > -1)) return;
         }
 
         var finalmsg = this.discord.applyFormatting(this.irc.normalizeFormatting(message));

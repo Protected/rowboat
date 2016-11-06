@@ -63,6 +63,7 @@ class ModActivity extends Module {
         this.mod("Commands").registerCommand('seen', {
             description: "Reports when a user was last seen (or if the user was never seen).",
             args: ["nickname", "environment"],
+            details: ["Prefix NICKNAME with = to reference a Rowboat user account instead."],
             minArgs: 1,
             permissions: (this.param('permissionSeen') ? [this.param('permissionSeen')] : null)
         }, (env, type, userid, command, args, handle, reply) => {
@@ -121,6 +122,7 @@ class ModActivity extends Module {
         this.mod("Commands").registerCommand('last', {
             description: "Repeats a user's latest chat lines in record.",
             args: ["nickname", "environment"],
+            details: ["Prefix NICKNAME with = to reference a Rowboat user account instead."],
             minArgs: 1,
             permissions: (this.param('permissionLast') ? [this.param('permissionLast')] : null)
         }, (env, type, userid, command, args, handle, reply) => {

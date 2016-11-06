@@ -40,6 +40,11 @@ class ModGoogle extends Module {
         this.mod('Commands').registerCommand('google', {
             description: "Let me google that for you.",
             args: ["string", true],
+            details: [
+                "Use --PARAM=VALUE before the search string to pass additional Google API parameters to the request.",
+                "Allowed parameters: " + this.param('googleparams').join(', '),
+                "For details on each parameter: https://developers.google.com/custom-search/json-api/v1/reference/cse/list"
+            ],
             types: ["regular"],
             permissions: ["trusted","administrator"]
         }, (env, type, userid, command, args, handle, reply) => {

@@ -16,7 +16,8 @@ class ModBridgeSimple extends Module {
         'chanA',                //Name of a channel in the environment A
         'chanB',                //Name of a channel in the environment B
         'tagEnvironment',       //Prepend each message with the name of the source environment
-        'tagChannel'            //Prepend each message with the name of the source channel
+        'tagChannel',           //Prepend each message with the name of the source channel
+        'oneWay'                //Set to 'A' if only environment A can send messages, or 'B' if only B can send messages
     ]; }
 
     constructor(name) {
@@ -24,6 +25,7 @@ class ModBridgeSimple extends Module {
         
         this._params['tagEnvironment'] = false;
         this._params['tagChannel'] = false;
+        this._params['oneWay'] = null;
     }
 
 
@@ -64,13 +66,15 @@ class ModBridgeSimple extends Module {
         var targetchan = null;
         
         if (env.name == this.param('envA')) {
-            if (!this.param('chanA') || channelid == this.param('chanA')) {            
+            if (!this.param('chanA') || channelid == this.param('chanA')) {
+                if (this.param('oneWay') == 'B') return;
                 targetenv = this.envB;
                 targetchan = this.param('chanB');
             }        
         } 
         if (env.name == this.param('envB')) {
             if (!this.param('chanB') || channelid == this.param('chanB')) {
+                if (this.param('oneWay') == 'A') return;
                 targetenv = this.envA;
                 targetchan = this.param('chanA');
              }

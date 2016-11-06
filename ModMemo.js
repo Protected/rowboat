@@ -63,8 +63,22 @@ class ModMemo extends Module {
 
         
         this.mod("Commands").registerCommand('memo', {
-            description: "Send or cancel a message. Actions: 'save|strongsave [{env}] (=handle|[+]displayname|[+]userid) [& ...] message ...', 'cancel ID', 'outbox', 'inbox'",
+            description: "Send or cancel a message. Actions: save, strongsave, cancel, outbox, inbox",
             args: ["action", "descriptor", true],
+            details: [
+                "**save|strongsave** [{env}] (=handle|[+]displayname|[+]userid) [& ...] message ...",
+                "  Send a message to one or more recipients. Multiple recipients are separated by &. After the list of recipients, write the desired message.",
+                "  Each recipient by default is a nickname or ID of the user in the current environment. Prefix the recipient with {env} to target another environment.",
+                "  To force the recipient to be authenticated before delivering, prefix it with a '+' symbol. By default, the receipient doesn't have to be authenticated.",
+                "  Use =HANDLE as the recipient to target a Rowboat user account.",
+                "**cancel** ID",
+                "  Deletes a pending message. Use the ID you received when you sent the message.",
+                "  If at least one recipient already received the message, this command will only remove all pending recipients. The message will not be deleted.",
+                "**outbox** [ID]",
+                "  Shows a summarized list of messages you have sent whose delivery is not completed. Alternatively, pass an ID to see the details of a message you have sent.",
+                "**inbox** [ID]",
+                "  Shows a summarized list of messages you have recently received. Alternatively, pass an ID to see the details of a message you have received."
+            ],
             minArgs: 1,
             permissions: (this.param('permission') ? [this.param('permission')] : null),
             unobtrusive: true

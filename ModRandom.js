@@ -20,8 +20,13 @@ class ModRandom extends Module {
         //Register callbacks
         
         this.mod('Commands').registerCommand('random', {
-            description: "Generates a random number.",
+            description: "Generates a random number using a cryptographically secure source of randomness.",
             args: ["max", "pub"],
+            details: [
+                "If MAX is not passed, a floating point number between 0 and 1 is returned.",
+                "If MAX Is a positive integer, an integer between 0 and MAX is returned.",
+                "If 0 is a dice descriptor with the format AdB, where A and B are integers, a roll of A dice with B facets is realistically simulated and the value returned. Up to 9 dice and 99 facets are accepted."
+            ],
             minArgs: 0
         }, (env, type, userid, command, args, handle, reply, pub) => {
         

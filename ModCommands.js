@@ -73,6 +73,17 @@ class ModCommands extends Module {
                 reply('  ' + this.buildCommandSyntax(descriptor.command));
                 reply('    ' + descriptor.description);
                 
+                if (descriptor.details && descriptor.details.length) {
+                    reply('');
+                    for (let line of descriptor.details) {
+                        reply('    ' + line);
+                    }
+                }
+                
+                if (descriptor.environments || descriptor.types || descriptor.permissions) {
+                    reply('');  //Blank line
+                }
+                
                 if (descriptor.environments) {
                     reply('    Environment(s): *' + descriptor.environments.join('*, *') + '*');
                 }
@@ -194,7 +205,8 @@ class ModCommands extends Module {
                                                 //  -- userid is the environment-side id; args is a list; handle is from ModUsers; reply/pub/priv are functions for context, public and private reply respectively.
             args: [],                           //List of argument names. If the last element of the list is the boolean 'true', all additional arguments will be listed in the previous argument.
             minArgs: null,                      //Minimum amount of arguments that must be passed for the callback to be invoked, or 'null' for all arguments.
-            description: "",                    //Description for the new command displayed by the help command.
+            description: "",                    //Short description for the new command displayed by the list of commands in "help".
+            details: [],                        //List of additional instructions displayed by "help COMMAND" (each item is one line).
             environments: null,                 //List of environment names the command can be invoked from, or null for all loaded environments.
             types: null,                        //List of message types the command can be invoked from, or null for all message types (onMessage environment callback only).
             permissions: null,                  //List of individual sufficient permissions required for invoking this command, or null for universal use (only null allows users without accounts to invoke the command).
