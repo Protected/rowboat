@@ -690,7 +690,7 @@ class ModMemo extends Module {
     }
     
     deliverMemo(register, envobj, targetid, channelid) {
-        var targetdisplay = envobj.idToDisplayName(targetid);
+        var targetdisplay = envobj.idToMention(targetid);
         envobj.msg(channelid, envobj.applyFormatting('Message from **' + (register.from.display || register.from.userid) + '** to **' + (targetdisplay || targetid) + '** sent on ' + moment(register.ts).format(this.param('tsFormat')) + ':'));
         envobj.msg(channelid, '    ' + register.msg);
     }

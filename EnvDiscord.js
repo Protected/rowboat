@@ -208,6 +208,11 @@ class EnvDiscord extends Environment {
     }
     
     
+    idToMention(id) {
+        return "<@" + id + ">";
+    }
+    
+    
     idIsSecured(id) {
         var member = this._server.members.find("id", id);
         return !!member;

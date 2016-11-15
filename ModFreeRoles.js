@@ -151,16 +151,16 @@ class ModFreeRoles extends Module {
         }, (env, type, userid, command, args, handle, reply) => {
             
             var lcrole = args.role.toLowerCase();
+            var role = args.role;
             
             var roles = this._freeRoles[env.name];
-            if (!roles || !roles[lcrole]) {
-                reply('Role not allowed. Please use the "roles" command for a list of allowed roles.');
-                return true;
+            if (roles && roles[lcrole]) {
+                role = roles[lcrole].name;
             }
             
-            var roleobj = env.server.roles.find('name', roles[lcrole].name);
+            var roleobj = env.server.roles.find('name', role);
             if (!roleobj) {
-                reply("The role \"" + roles[lcrole].name + "\" doesn't currently exist in this environment.");
+                reply("The role \"" + role + "\" doesn't currently exist in this environment.");
                 return true;
             }
             

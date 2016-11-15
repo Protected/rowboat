@@ -121,6 +121,8 @@ class Environment {
     idToDisplayName(id) { return null; }
     displayNameToId(displayName) { return null; }
     
+    idToMention(id) { return null; }
+    
     idIsSecured(id) { return false; }
     idIsAuthenticated(id) { return false; }
     

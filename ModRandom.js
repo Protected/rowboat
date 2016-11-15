@@ -38,7 +38,7 @@ class ModRandom extends Module {
                 if (facets) {
                     val = 0;
                     for (let i = 0; i < facets[1]; i++) {
-                        val += Math.floor(random.fraction() * facets[2]);
+                        val += Math.floor(random.fraction() * facets[2]) + 1;
                     }
                 } else if (args.max.match(/^[0-9]+$/)) {
                     val = Math.floor(random.fraction() * args.max);

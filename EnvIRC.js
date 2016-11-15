@@ -222,6 +222,11 @@ class EnvIRC extends Environment {
         }
         return null;
     }
+    
+    
+    idToMention(id) {
+        return this.idToDisplayName(id);
+    }
 
 
     idIsSecured(id) {
