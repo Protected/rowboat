@@ -175,7 +175,7 @@ class EnvIRC extends Environment {
 
 
     msg(targetid, msg) {
-        if (!targetid) targetid = channels[0];
+        if (!targetid) targetid = this.param('channels')[0];
         
         var parts;
         
