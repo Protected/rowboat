@@ -12,24 +12,26 @@ class ModCardsAgainstHumanity extends Module {
         ];
     }
 
-
     constructor(name) {
         super('CardsAgainstHumanity', name);
         this.gameRunning = false;
         this.gameData = {};
 
-        this.whiteCards = jf.readFileSync("whiteCards.json");
+        this.whiteCards = jf.readFileSync("cah_whiteCards.json");
 
-        this.blackCards = jf.readFileSync("blackCards.json");
+        this.blackCards = jf.readFileSync("cah_blackCards.json");
 
     }
+    
 
     initialize(envs, mods, moduleRequest) {
         if (!super.initialize(envs, mods, moduleRequest)) return false;
 
         let self = this;
+        
 
-        //Callback functions
+        //Game phases
+        
         function _cahPlayEvent() {
 
             self.gameData.phase = 1;
@@ -39,7 +41,7 @@ class ModCardsAgainstHumanity extends Module {
             });
 
             _.each(self.gameData.players, function (player) {
-                self.env(self.gameData.envName).msg(player.nick, "Time to vote. Use !cahvote <number>");
+                self.env(self.gameData.envName).msg(player.nick, "Time to vote. Use __cahvote <number>__");
                 for (let chosenCardIdx in self.gameData.chosenCards) {
                     self.env(self.gameData.envName).msg(player.nick, (parseInt(chosenCardIdx) + 1) + ": " + self.gameData.chosenCards[chosenCardIdx].card.text);
 
@@ -70,7 +72,9 @@ class ModCardsAgainstHumanity extends Module {
             delete self.gameData;
         }
 
+
         //Register callbacks
+        
         this.mod('Commands').registerCommand('cah', {
             description: "Plays cards against humanity",
             args: [],
@@ -98,6 +102,7 @@ class ModCardsAgainstHumanity extends Module {
 
             return true;
         });
+        
 
         this.mod('Commands').registerCommand('cahjoin', {
             description: "Join a match of cards against humanity",
@@ -138,6 +143,7 @@ class ModCardsAgainstHumanity extends Module {
 
             return true;
         });
+
 
         this.mod('Commands').registerCommand('cahvote', {
             description: "Vote during a match of cards against humanity",
@@ -185,6 +191,7 @@ class ModCardsAgainstHumanity extends Module {
             return true;
         });
 
+
         this.mod('Commands').registerCommand('cahplay', {
             description: "Play a card during a match of cards against humanity",
             args: ['cardNumber'],
@@ -223,6 +230,7 @@ class ModCardsAgainstHumanity extends Module {
             return true;
         });
 
+
         return true;
     };
 
@@ -230,4 +238,3 @@ class ModCardsAgainstHumanity extends Module {
 
 
 module.exports = ModCardsAgainstHumanity;
-
