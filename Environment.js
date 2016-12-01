@@ -69,6 +69,15 @@ class Environment {
         logger.log(method, '{'+ this._name + '} ' + subject);
     }
     
+    makeCustomLogger() {
+        return {
+            debug: (subject) => this.log('debug', subject),
+            info: (subject) => this.log('info', subject),
+            warn: (subject) => this.log('warn', subject),
+            error: (subject) => this.log('error', subject)
+        }
+    }
+    
 
     connect() {}
     disconnect() {}
