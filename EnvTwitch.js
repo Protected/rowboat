@@ -82,15 +82,15 @@ class EnvTwitch extends Environment {
 
         
         this._client.on("join", (channel, username, self) => {
-            this.addPeople(nick, [channel]);
+            this.addPeople(username, [channel]);
             if (self) return;
-            this.triggerJoin(username, [channel], null);
+            this.triggerJoin(username, [channel], {});
         });
 
         this._client.on("part", (channel, username, self) => {
-            this.remPeople(nick, [channel]);
+            this.remPeople(username, [channel]);
             if (self) return;
-            this.triggerPart(username, [channel], null);
+            this.triggerPart(username, [channel], {});
         });
         
         
@@ -230,7 +230,7 @@ class EnvTwitch extends Environment {
         if (!info) info = {};
         for (let callback of this._cbJoin) {
             for (let channel of channels) {
-                if (this.invokeRegisteredCallback(callback, [this, authorid, channel.id, info])) {
+                if (this.invokeRegisteredCallback(callback, [this, authorid, channel, info])) {
                     break;
                 }
             }
@@ -241,7 +241,7 @@ class EnvTwitch extends Environment {
         if (!info) info = {};
         for (let callback of this._cbPart) {
             for (let channel of channels) {
-                if (this.invokeRegisteredCallback(callback, [this, authorid, channel.id, info])) {
+                if (this.invokeRegisteredCallback(callback, [this, authorid, channel, info])) {
                     break;
                 }
             }
