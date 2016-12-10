@@ -185,9 +185,9 @@ class ModActivity extends Module {
             let registers = {};
             
             for (let member of role.members.array()) {
-                if (this._activitydata[env.name]) {
+                if (this._authorseen[env.name]) {
                     let nickname = (member.nickname || member.user.username);
-                    let check = this._activitydata[env.name][nickname];
+                    let check = this._authorseen[env.name][member.id];
                     if (check) registers[nickname] = check;
                     else registers[nickname] = null;
                 }
@@ -198,16 +198,16 @@ class ModActivity extends Module {
                 if (!register) {
                     reply("__" + nickname + "__: Never seen.");
                 } else if (register.seenreason === true) {
-                    reply("__" + args.nickname + "__: Joined *" + env.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
+                    reply("__" + nickname + "__: Joined *" + env.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
                 } else if (register.seenreason === false) {
-                    reply("__" + args.nickname + "__: Talked in *" + env.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
+                    reply("__" + nickname + "__: Talked in *" + env.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
                 } else {
                     let reason = 'unknown';
                     if (typeof register.seenreason == "object") {
                         reason = register.seenreason[0];
                         if (register.seenreason[1]) reason += ' (' + register.seenreason[1] + ')';
                     }
-                    reply("__" + args.nickname + "__: Left *" + env.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
+                    reply("__" + nickname + "__: Left *" + env.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
                 }
             }
             
