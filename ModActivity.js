@@ -173,6 +173,47 @@ class ModActivity extends Module {
             return true;
         });
         
+        
+        this.mod("Commands").registerCommand('roleseen', {
+            description: "Short activity report for a role.",
+            args: ["role"],
+            permissions: (this.param('permissionSeen') ? [this.param('permissionSeen')] : null),
+            environments: ["Discord"]
+        }, (env, type, userid, command, args, handle, reply) => {
+            
+            let role = env.server.roles.find('name', args.role);
+            let registers = {};
+            
+            for (let member of role.members.array()) {
+                if (this._activitydata[env.name]) {
+                    let nickname = (member.nickname || member.user.username);
+                    let check = this._activitydata[env.name][nickname];
+                    if (check) registers[nickname] = check;
+                    else registers[nickname] = null;
+                }
+            }
+            
+            for (let nickname in registers) {
+                let register = registers[nickname];
+                if (!register) {
+                    reply("__" + nickname + "__: Never seen.");
+                } else if (register.seenreason === true) {
+                    reply("__" + args.nickname + "__: Joined *" + envobj.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
+                } else if (register.seenreason === false) {
+                    reply("__" + args.nickname + "__: Talked in *" + envobj.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
+                } else {
+                    let reason = 'unknown';
+                    if (typeof register.seenreason == "object") {
+                        reason = register.seenreason[0];
+                        if (register.seenreason[1]) reason += ' (' + register.seenreason[1] + ')';
+                    }
+                    reply("__" + args.nickname + "__: Left *" + envobj.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
+                }
+            }
+            
+            return true;
+        });
+        
         return true;
     }
     
