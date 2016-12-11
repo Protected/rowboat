@@ -507,6 +507,7 @@ class ModGrabber extends Module {
     dequeueAndScan() {
         if (!this._scanQueue) return;
         var item = this._scanQueue.shift();
+        if (!item) return;
         this.grabInMessage(item[0], item[1]);
     }
     
