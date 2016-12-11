@@ -158,10 +158,14 @@ class EnvIRC extends Environment {
                 this.addPeople(messageObj.args[5], [messageObj.args[1]], {user: messageObj.args[2], host: messageObj.args[3]});
             }
             if (messageObj.rawCommand == '307') { //WHOIS reply - identified
-                this._people[messageObj.args[1]].identified = true;
+                if (this._people[messageObj.args[1]]) {
+                    this._people[messageObj.args[1]].identified = true;
+                }
             }
             if (messageObj.rawCommand == '671') { //WHOIS reply - secured
-                this._people[messageObj.args[1]].secured = true;
+                if (this._people[messageObj.args[1]]) {
+                    this._people[messageObj.args[1]].secured = true;
+                }
             }
         });
         
