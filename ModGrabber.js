@@ -31,7 +31,8 @@ class ModGrabber extends Module {
         'downloadPath',         //Path to store the downloaded files (index.json will also be created)
         'minDuration',          //Minimum duration of the audio file (seconds)
         'maxDuration',          //Maximum duration of the audio file (seconds)
-        'maxDiskUsage'          //Amount of disk space grabber is allowed to use in the downloadPath excluding index (bytes)
+        'maxDiskUsage',         //Amount of disk space grabber is allowed to use in the downloadPath excluding index (bytes)
+        'maxSimDownloads'       //Maximum simultaneous downloads
     ]; }
 
     get requiredEnvironments() { return [
@@ -49,6 +50,7 @@ class ModGrabber extends Module {
         this._params['minDuration'] = 90;
         this._params['maxDuration'] = 1500;
         this._params['maxDiskUsage'] = null;
+        this._params['maxSimDownloads'] = 2;
         
         this._preparing = 0;  //Used for generating temporary filenames
         
@@ -60,7 +62,8 @@ class ModGrabber extends Module {
         
         this._scanQueue = [];  //Rate-limit song downloads. Each item is: [authorid, messageToScan]
         this._scanTimer = null;
-        this._scanDelay = 2000;
+        this._scanDelay = 1000;
+        this._downloads = 0;
     }
     
     
@@ -402,6 +405,8 @@ class ModGrabber extends Module {
                         }
                         
                         this.log('Grabbing from youtube: ' + url);
+                        
+                        this._downloads += 1;
                     
                         //Prepare video download and ffmpeg
                         let video = ytdl(url, {filter: 'audioonly'});
@@ -412,6 +417,8 @@ class ModGrabber extends Module {
                         let stream = fs.createWriteStream(temppath);
                         
                         stream.on('finish', () => {
+                            this._downloads -= 1;
+                        
                             //After the file is fully written, computer hash, rename file and add to index
                             fs.readFile(temppath, (err, data) => {
                                 if (err) throw err;
@@ -506,6 +513,7 @@ class ModGrabber extends Module {
     
     dequeueAndScan() {
         if (!this._scanQueue) return;
+        if (this._downloads >= this.param('maxSimDownloads')) return;
         var item = this._scanQueue.shift();
         if (!item) return;
         this.grabInMessage(item[0], item[1]);
