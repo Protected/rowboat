@@ -51,9 +51,9 @@ class ModRandom extends Module {
             }
             
             if (args.pub) {
-                pub(val);
+                pub(env.idToDisplayName(userid) + ': ' + val);
             } else {
-                reply(val);
+                reply(env.idToDisplayName(userid) + ': ' + val);
             }
         
             return true;

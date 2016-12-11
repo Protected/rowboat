@@ -221,6 +221,8 @@ class ModGrabber extends Module {
             
             this._index[args.hash][args.field] = args.value.join(' ');
             
+            this.saveIndex();
+            
             reply("Ok.");
         
             return true;
@@ -246,6 +248,56 @@ class ModGrabber extends Module {
             }
             
             reply('"' + this._index[args.hash][args.field] + '"');
+            
+            return true;
+        });
+        
+        
+        this.mod('Commands').registerCommand('songkw', {
+            description: 'Manipulate keywords associated with a song.',
+            details: [
+                "The actions can be 'list', 'add' or 'remove'.
+            ],
+            args: ['hash', 'action', 'keyword'],
+            minArgs: 1,
+            permissions: [PERM_MODERATOR, PERM_TRUSTED]
+        }, (env, type, userid, command, args, handle, reply) => {
+        
+            if (!this._index[args.hash]) {
+                reply("Song not found in index.");
+                return true;
+            }
+            
+            if (!this._index[args.hash].keywords || typeof this._index[args.hash].keywords != "object") {
+                this._index[args.hash].keywords = [];
+            }
+            
+            if (args.action == "add" && args.keyword) {
+                
+                if (this._index[args.hash].keywords.indexOf(args.keyword) < 0) {
+                    this._index[args.hash].keywords.push(args.keyword);
+                    this.saveIndex();
+                    reply("Ok.");
+                } else {
+                    reply("Already existed.");
+                }
+            
+            } else if (args.action == "remove" && args.keyword) {
+                
+                let ind = this._index[args.hash].keywords.indexOf(args.keyword);
+                if (ind > -1) {
+                    this._index[args.hash].keywords.splice(ind, 1);
+                    this.saveIndex();
+                    reply("Ok.");
+                } else {
+                    reply("Doesn't exist.");
+                }
+                
+            } else {
+            
+                reply("Keywords: " + this._index[args.hash].keywords.join(', '));
+            
+            }
             
             return true;
         });
@@ -288,7 +340,7 @@ class ModGrabber extends Module {
     }
 
     saveIndex() {
-        var indexfile = this.param('downloadPath') + '/' + INDEXFILE;+
+        var indexfile = this.param('downloadPath') + '/' + INDEXFILE;
         
         jsonfile.writeFileSync(indexfile, this._index, {spaces: 4});
     }
@@ -303,6 +355,12 @@ class ModGrabber extends Module {
     grabInMessage(author, message) {
         if (this.isDownloadPathFull() || !message) return false;
     
+        var dkeywords = message.match(/\[[A-Za-z0-9 _-]+\]/g);
+        var title = message.match(/\{(title|name)(=|:) ?([A-Za-z0-9 _-]+)\}/i);
+        if (title) title = title[3];
+        var author = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9 _-]+)\}/i);
+        if (author) author = author[3];
+    
         //Youtube
         var yturls = message.match(/(?:https?:\/\/|\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})(?![\w-])/g);
         if (yturls) {
@@ -314,6 +372,15 @@ class ModGrabber extends Module {
                         
                         if (info.length_seconds < this.param('minDuration') || info.length_seconds > this.param('maxDuration')) return;
                         if (this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.vid]) return;
+                        
+                        let keywords = info.keywords;
+                        if (dkeywords) {
+                            for (let dkeyword of dkeywords) {
+                                if (keywords.indexOf(dkeyword) < 0) {
+                                    keywords.push(dkeyword);
+                                }
+                            }
+                        }
                         
                         this.log('Grabbing from youtube: ' + url);
                     
@@ -360,9 +427,9 @@ class ModGrabber extends Module {
                                         sourceType: 'youtube',
                                         sourceSpecificId: info.vid,
                                         sourceLoudness: parseFloat(info.loudness),
-                                        name: info.title,
-                                        author: info.author,
-                                        keywords: info.keywords
+                                        name: (title || info.title),
+                                        author: (author || ''),
+                                        keywords: keywords
                                     };
                                     this.saveIndex();
                                     
@@ -390,7 +457,7 @@ class ModGrabber extends Module {
                 }
             }
         }
-    
+        
         return true;
     }
     

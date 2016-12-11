@@ -38,8 +38,8 @@ class EnvDiscord extends Environment {
         this.log(`Connecting to ${params.servername}`);
 
         this._client = new discord.Client({
-            api_request_method: 'sequential',
-            fetch_all_members: true
+            apiRequestMethod: 'sequential',
+            fetchAllMembers: true
         });
         
         
