@@ -1,4 +1,4 @@
-/* Module: Grabber -- Downloads song files referenced in a Discord channel. */
+/* Module: Grabber -- Downloads song files referenced in a Discord channel and maintains a dynamic index w/ API. */
 
 var Module = require('./Module.js');
 var fs = require('fs');
@@ -53,10 +53,14 @@ class ModGrabber extends Module {
         this._preparing = 0;  //Used for generating temporary filenames
         
         this._index = {};  //Main index (hash => info)
-        this._indexSourceTypeAndId = {};  //{sourceType: {sourceId: ...}}-
+        this._indexSourceTypeAndId = {};  //{sourceType: {sourceId: ...}}
         
         this._usage = 0;  //Cache disk usage (by mp3s only)
         this._sessionGrabs = [];  //History of hashes grabbed in this session
+        
+        this._scanQueue = [];  //Rate-limit song downloads. Each item is: [authorid, messageToScan]
+        this._scanTimer = null;
+        this._scanDelay = 2000;
     }
     
     
@@ -68,6 +72,13 @@ class ModGrabber extends Module {
         
         if (!this.loadIndex()) return false;
         this.calculateDownloadPathUsage();
+        
+        
+        //Queue processor
+        
+        this._scanTimer = setInterval(() => {
+                self.dequeueAndScan.apply(self, null)
+            }, this._scanDelay);
 
       
         //Register callbacks
@@ -98,14 +109,14 @@ class ModGrabber extends Module {
             var scanning = null;
             var scanner = () => {
                 channel.fetchMessages({
-                    limit: 100,
+                    limit: 10,
                     before: scanning
                 }).then((messages) => {
                     let messagesarr = messages.array();
                     if (messagesarr.length < 100) endNow = true;
                     for (let message of messagesarr) {
                         if (message.createdTimestamp <= cutoff) endNow = true;
-                        this.grabInMessage(message.author.id, message.content);
+                        this._scanQueue.push([message.author.id, message.content]);
                     }
                     if (endNow) {
                         reply("Scan complete.");
@@ -125,7 +136,7 @@ class ModGrabber extends Module {
             description: 'Undo a single recent grab from this session.',
             args: ['offset'],
             minArgs: 0,
-            permissions: [PERM_MODERATOR]
+            permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, command, args, handle, reply) => {
         
             if (!args.offset || args.offset < 1) args.offset = 1;
@@ -161,7 +172,7 @@ class ModGrabber extends Module {
         this.mod('Commands').registerCommand('grabdelete', {
             description: 'Delete an indexed song by hash.',
             args: ['hash'],
-            permissions: [PERM_MODERATOR]
+            permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, command, args, handle, reply) => {
                     
             if (this.removeByHash(args.hash)) {
@@ -206,7 +217,7 @@ class ModGrabber extends Module {
                 "Allowed fields: " + SET_FIELDS.join(', ')
             ],
             args: ['hash', 'field', 'value', true],
-            permissions: [PERM_MODERATOR, PERM_TRUSTED]
+            permissions: [PERM_ADMIN, PERM_MODERATOR, PERM_TRUSTED]
         }, (env, type, userid, command, args, handle, reply) => {
         
             if (!this._index[args.hash]) {
@@ -260,7 +271,7 @@ class ModGrabber extends Module {
             ],
             args: ['hash', 'action', 'keyword'],
             minArgs: 1,
-            permissions: [PERM_MODERATOR, PERM_TRUSTED]
+            permissions: [PERM_ADMIN, PERM_MODERATOR, PERM_TRUSTED]
         }, (env, type, userid, command, args, handle, reply) => {
         
             if (!this._index[args.hash]) {
@@ -348,7 +359,7 @@ class ModGrabber extends Module {
     
     onMessage(env, type, message, authorid, channelid, rawobj) {
         if (this.param('channels').indexOf(channelid) < 0) return true;
-        this.grabInMessage(authorid, message);
+        this._scanQueue.push([authorid, message]);
     }
     
     
@@ -488,6 +499,13 @@ class ModGrabber extends Module {
         fs.unlink(this.param('downloadPath') + '/' + hash + '.mp3');
         delete this._index[hash];
         return true;
+    }
+    
+    
+    dequeueAndScan() {
+        if (!this._scanQueue) return;
+        var item = this._scanQueue.shift();
+        this.grabInMessage(item[0], item[1]);
     }
     
 
