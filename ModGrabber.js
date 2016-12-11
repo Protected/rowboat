@@ -256,7 +256,7 @@ class ModGrabber extends Module {
         this.mod('Commands').registerCommand('songkw', {
             description: 'Manipulate keywords associated with a song.',
             details: [
-                "The actions can be 'list', 'add' or 'remove'.
+                "The actions can be 'list', 'add' or 'remove'."
             ],
             args: ['hash', 'action', 'keyword'],
             minArgs: 1,
