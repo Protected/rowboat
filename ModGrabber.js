@@ -371,7 +371,7 @@ class ModGrabber extends Module {
                         if (err) throw err;
                         
                         if (info.length_seconds < this.param('minDuration') || info.length_seconds > this.param('maxDuration')) return;
-                        if (this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.vid]) return;
+                        if (this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]) return;
                         
                         let keywords = info.keywords;
                         if (dkeywords) {
@@ -425,7 +425,7 @@ class ModGrabber extends Module {
                                         length: parseInt(info.length_seconds),
                                         source: url,
                                         sourceType: 'youtube',
-                                        sourceSpecificId: info.vid,
+                                        sourceSpecificId: info.video_id,
                                         sourceLoudness: parseFloat(info.loudness),
                                         name: (title || info.title),
                                         author: (artist || ''),
@@ -436,7 +436,7 @@ class ModGrabber extends Module {
                                     if (!this._indexSourceTypeAndId['youtube']) {
                                         this._indexSourceTypeAndId['youtube'] = {};
                                     }
-                                    this._indexSourceTypeAndId['youtube'][info.vid] = this._index[hash];
+                                    this._indexSourceTypeAndId['youtube'][info.video_id] = this._index[hash];
                                     
                                     this._sessionGrabs.push([hash, now]);
                                     
