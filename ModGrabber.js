@@ -380,8 +380,10 @@ class ModGrabber extends Module {
                         }
                         if (dkeywords) {
                             for (let dkeyword of dkeywords) {
-                                if (keywords.indexOf(dkeyword) < 0) {
-                                    keywords.push(dkeyword);
+                                let ikeyword = dkeyword.match(/^\[([^\]]+)\]$/);
+                                if (!ikeyword) continue;
+                                if (keywords.indexOf(ikeyword[1]) < 0) {
+                                    keywords.push(ikeyword[1]);
                                 }
                             }
                         }
