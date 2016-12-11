@@ -374,6 +374,10 @@ class ModGrabber extends Module {
                         if (this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]) return;
                         
                         let keywords = info.keywords;
+                        if (typeof keywords == "string") {
+                            if (keywords) keywords = keywords.split('');
+                            else keywords = [];
+                        }
                         if (dkeywords) {
                             for (let dkeyword of dkeywords) {
                                 if (keywords.indexOf(dkeyword) < 0) {
