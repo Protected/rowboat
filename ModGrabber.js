@@ -358,8 +358,8 @@ class ModGrabber extends Module {
         var dkeywords = message.match(/\[[A-Za-z0-9 _-]+\]/g);
         var title = message.match(/\{(title|name)(=|:) ?([A-Za-z0-9 _-]+)\}/i);
         if (title) title = title[3];
-        var author = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9 _-]+)\}/i);
-        if (author) author = author[3];
+        var artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9 _-]+)\}/i);
+        if (artist) artist = artist[3];
     
         //Youtube
         var yturls = message.match(/(?:https?:\/\/|\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})(?![\w-])/g);
@@ -428,7 +428,7 @@ class ModGrabber extends Module {
                                         sourceSpecificId: info.vid,
                                         sourceLoudness: parseFloat(info.loudness),
                                         name: (title || info.title),
-                                        author: (author || ''),
+                                        author: (artist || ''),
                                         keywords: keywords
                                     };
                                     this.saveIndex();
