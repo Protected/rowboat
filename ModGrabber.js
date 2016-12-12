@@ -32,7 +32,8 @@ class ModGrabber extends Module {
         'minDuration',          //Minimum duration of the audio file (seconds)
         'maxDuration',          //Maximum duration of the audio file (seconds)
         'maxDiskUsage',         //Amount of disk space grabber is allowed to use in the downloadPath excluding index (bytes)
-        'maxSimDownloads'       //Maximum simultaneous downloads
+        'maxSimDownloads',      //Maximum simultaneous downloads
+        'scanDelay'             //Delay between attempts to process messages (pending messages are queued) (ms)
     ]; }
 
     get requiredEnvironments() { return [
@@ -51,6 +52,7 @@ class ModGrabber extends Module {
         this._params['maxDuration'] = 1500;
         this._params['maxDiskUsage'] = null;
         this._params['maxSimDownloads'] = 2;
+        this._params['scanDelay'] = 200;
         
         this._preparing = 0;  //Used for generating temporary filenames
         
@@ -62,7 +64,6 @@ class ModGrabber extends Module {
         
         this._scanQueue = [];  //Rate-limit song downloads. Each item is: [authorid, messageToScan]
         this._scanTimer = null;
-        this._scanDelay = 1000;
         this._downloads = 0;
     }
     
@@ -83,7 +84,7 @@ class ModGrabber extends Module {
         
         this._scanTimer = setInterval(() => {
                 self.dequeueAndScan.apply(self, null)
-            }, this._scanDelay);
+            }, this.param('scanDelay'));
 
       
         //Register callbacks
