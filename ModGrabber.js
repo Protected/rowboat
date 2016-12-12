@@ -364,7 +364,7 @@ class ModGrabber extends Module {
     
     
     onMessage(env, type, message, authorid, channelid, rawobj) {
-        if (this.param('channels').indexOf(channelid) < 0) return true;
+        if (this.param('channels').indexOf(channelid) < 0) return false;
         this._scanQueue.push([authorid, message]);
     }
     
