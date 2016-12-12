@@ -406,7 +406,7 @@ class ModGrabber extends Module {
     
     
     grabInMessage(author, message, messageObj) {
-        if (this.isDownloadPathFull() || !message) return false;
+        if (this.isDownloadPathFull() || !message && !messageObj) return false;
     
         var dkeywords = message.match(/\[[A-Za-z0-9 _-]+\]/g);
         if (!dkeywords) dkeywords = [];
@@ -550,7 +550,7 @@ class ModGrabber extends Module {
                         this._downloads -= 1;
                         
                         //Get song info
-                        FFmpeg(temppath).ffprobe(function(err, data) {
+                        FFmpeg(temppath).ffprobe((err, data) => {
                             if (err) {
                                 this.log('warn', err);
                                 return;
