@@ -244,7 +244,7 @@ class ModGrabber extends Module {
             results = results.slice(page * 10, page * 10 + 10);
             
             for (let info of results) {
-                reply('`' + info.hash + ' ' + info.name + (info.author ? ' (' + info.author + ')`' : ''));
+                reply('`' + info.hash + ' ' + info.name + (info.author ? ' (' + info.author + ')' : '') + '`');
             }
         
             return true;
