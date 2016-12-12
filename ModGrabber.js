@@ -8,6 +8,7 @@ var crypto = require('crypto');
 var jsonfile = require('jsonfile');
 var moment = require('moment');
 var random = require('meteor-random');
+var request = require('request');
 
 var PERM_ADMIN = 'administrator';
 var PERM_MODERATOR = 'moderator';
@@ -529,7 +530,7 @@ class ModGrabber extends Module {
         //Attachment
         if (messageObj.attachments && messageObj.attachments.array().length) {
             for (let ma of messageObj.attachments.array()) {
-                if (!ma.filename.match(/\.(mp3|ogg|flac|wav|wma|aac|m4a)/) || ma.filesize < 20480) continue;
+                if (!ma.filename.match(/\.(mp3|ogg|flac|wav|wma|aac|m4a)$/) || ma.filesize < 20480) continue;
                 try {
                 
                     //Download attachment
