@@ -123,7 +123,7 @@ class ModGrabber extends Module {
                     if (messagesarr.length < 100) endNow = true;
                     for (let message of messagesarr) {
                         if (message.createdTimestamp <= cutoff) endNow = true;
-                        this._scanQueue.push([message.author.id, message.content]);
+                        this._scanQueue.push([message.author.id, message.content, message]);
                     }
                     if (endNow) {
                         reply("Scan complete.");
@@ -400,11 +400,11 @@ class ModGrabber extends Module {
     
     onMessage(env, type, message, authorid, channelid, rawobj) {
         if (this.param('channels').indexOf(channelid) < 0) return false;
-        this._scanQueue.push([authorid, message]);
+        this._scanQueue.push([authorid, message, rawobj]);
     }
     
     
-    grabInMessage(author, message) {
+    grabInMessage(author, message, messageObj) {
         if (this.isDownloadPathFull() || !message) return false;
     
         var dkeywords = message.match(/\[[A-Za-z0-9 _-]+\]/g);
@@ -527,9 +527,8 @@ class ModGrabber extends Module {
         
         
         //Attachment
-        let messageattachments = message.attachments;
-        if (messageattachments && messageattachments.array().length) {
-            for (let ma of messageattachments.array()) {
+        if (messageObj.attachments && messageObj.attachments.array().length) {
+            for (let ma of messageObj.attachments.array()) {
                 if (!ma.filename.match(/\.(mp3|ogg|flac|wav|wma|aac|m4a)/) || ma.filesize < 20480) continue;
                 try {
                 
@@ -665,7 +664,7 @@ class ModGrabber extends Module {
         if (this._downloads >= this.param('maxSimDownloads')) return;
         var item = this._scanQueue.shift();
         if (!item) return;
-        this.grabInMessage(item[0], item[1]);
+        this.grabInMessage(item[0], item[1], item[2]);
     }
     
     
