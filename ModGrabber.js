@@ -527,8 +527,9 @@ class ModGrabber extends Module {
         
         
         //Attachment
-        if (message.attachments.array().length) {
-            for (let ma of message.attachments.array()) {
+        let messageattachments = message.attachments;
+        if (messageattachments && messageattachments.array().length) {
+            for (let ma of messageattachments.array()) {
                 if (!ma.filename.match(/\.(mp3|ogg|flac|wav|wma|aac|m4a)/) || ma.filesize < 20480) continue;
                 try {
                 
