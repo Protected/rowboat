@@ -7,6 +7,7 @@ var FFmpeg = require('fluent-ffmpeg');
 var crypto = require('crypto');
 var jsonfile = require('jsonfile');
 var moment = require('moment');
+var random = require('meteor-random');
 
 var PERM_ADMIN = 'administrator';
 var PERM_MODERATOR = 'moderator';
@@ -192,25 +193,57 @@ class ModGrabber extends Module {
         });
         
         
+        this.mod('Commands').registerCommand('grablatest', {
+            description: 'Get the hash of a single recent song.',
+            args: ['offset'],
+            minArgs: 0
+        }, (env, type, userid, command, args, handle, reply) => {
+        
+            if (!args.offset || args.offset < 1) args.offset = 1;
+        
+            if (args.offset > 20) {
+                reply('Offset too high. Use songfind instead.');
+                return true;
+            }
+        
+            if (args.offset > this._sessionGrabs.length) {
+                reply('Offset not found in recent history.');
+                return true;
+            }
+            
+            reply('`' + this._sessionGrabs[args.offset - 1][0] + '`');
+            
+            return true;
+        });
+        
+        
         this.mod('Commands').registerCommand('songfind', {
             description: 'Find an indexed song.',
             args: ['searchstr', true]
         }, (env, type, userid, command, args, handle, reply) => {
         
-            var search = new RegExp(args.searchstr.join(' ').replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&').replace(' ', '.*'), 'i');
+            let page = 0;
+            let searchstr = args.searchstr;
             
-            var results = [];
-            for (let hash in this._index) {
-                let info = this._index[hash];
-                if (info.hash.match(search) || info.sharedBy.find((e, i, a) => e.match(search)) || info.source.match(search) || info.name.match(search) || info.author.match(search) || info.keywords.find((e, i, a) => e.match(search))) {
-                    results.push(info);
+            if (searchstr[0] == '-p' && typeof searchstr[1] == "number") {
+                if (searchstr[1] >= 0) {
+                    page = searchstr[1];
+                    searchstr.shift();
+                    searchstr.shift();
                 }
             }
             
-            results = results.slice(0, 10);
+            searchstr = searchstr.join(' ');
+        
+            let results = this.filterSongsBySearchString(searchstr);
+            if (!results.length) {
+                reply("No results.");
+            }
+            
+            results = results.slice(page * 10, page * 10 + 10);
             
             for (let info of results) {
-                reply(info.hash + ' ' + info.name + ' (' + info.author + ')');
+                reply('`' + info.hash + ' ' + info.name + (author ? ' (' + info.author + ')`' : ''));
             }
         
             return true;
@@ -264,7 +297,7 @@ class ModGrabber extends Module {
                 return true;
             }
             
-            reply('"' + this._index[args.hash][args.field] + '"');
+            reply(this._index[args.hash][args.field]);
             
             return true;
         });
@@ -363,6 +396,8 @@ class ModGrabber extends Module {
     }
     
     
+    //Message processing
+    
     onMessage(env, type, message, authorid, channelid, rawobj) {
         if (this.param('channels').indexOf(channelid) < 0) return false;
         this._scanQueue.push([authorid, message]);
@@ -373,10 +408,18 @@ class ModGrabber extends Module {
         if (this.isDownloadPathFull() || !message) return false;
     
         var dkeywords = message.match(/\[[A-Za-z0-9 _-]+\]/g);
+        if (!dkeywords) dkeywords = [];
+        dkeywords = dkeywords.map((item) => {
+            let ikeyword = item.match(/^\[([^\]]+)\]$/);
+            if (!ikeyword) return null;
+            return ikeyword[1];
+        }).filter((item) => item);
+        
         var title = message.match(/\{(title|name)(=|:) ?([A-Za-z0-9 _-]+)\}/i);
         if (title) title = title[3];
         var artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9 _-]+)\}/i);
         if (artist) artist = artist[3];
+        
     
         //Youtube
         var yturls = message.match(/(?:https?:\/\/|\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})(?![\w-])/g);
@@ -398,21 +441,15 @@ class ModGrabber extends Module {
                             if (keywords) keywords = keywords.split('');
                             else keywords = [];
                         }
-                        if (dkeywords) {
-                            for (let dkeyword of dkeywords) {
-                                let ikeyword = dkeyword.match(/^\[([^\]]+)\]$/);
-                                if (!ikeyword) continue;
-                                if (keywords.indexOf(ikeyword[1]) < 0) {
-                                    keywords.push(ikeyword[1]);
-                                }
-                            }
+                        for (let dkeyword of dkeywords) {
+                            keywords.push(dkeyword);
                         }
                         
                         this.log('Grabbing from youtube: ' + url);
                         
                         this._downloads += 1;
                     
-                        //Prepare video download and ffmpeg
+                        //Plug video download into ffmpeg
                         let video = ytdl(url, {filter: 'audioonly'});
                         let ffmpeg = new FFmpeg(video);
                         
@@ -423,7 +460,7 @@ class ModGrabber extends Module {
                         stream.on('finish', () => {
                             this._downloads -= 1;
                         
-                            //After the file is fully written, computer hash, rename file and add to index
+                            //After the file is fully written, compute hash, rename file and add to index
                             fs.readFile(temppath, (err, data) => {
                                 if (err) throw err;
                                 
@@ -477,7 +514,7 @@ class ModGrabber extends Module {
                             
                         });
                         
-                        //Download, convert and save file
+                        //Plug ffmpeg into writing stream
                         let output = ffmpeg.format('mp3').pipe(stream);
                         output.on('error', video.end.bind(video));
                         output.on('error', stream.emit.bind(stream, 'error'));
@@ -488,9 +525,114 @@ class ModGrabber extends Module {
             }
         }
         
+        
+        //Attachment
+        if (message.attachments.array().length) {
+            for (let ma of message.attachments.array()) {
+                if (!ma.filename.match(/\.(mp3|ogg|flac|wav|wma|aac|m4a)/) || ma.filesize < 20480) continue;
+                try {
+                
+                    //Download attachment
+                    this.log('Grabbing from attachment: ' + ma.filename + ' (' + ma.id + ')');
+                    
+                    this._downloads += 1;
+                
+                    //Plug attachment download into ffmpeg
+                    let attfiledl = request(ma.url);
+                    let ffmpeg = new FFmpeg(attfiledl);
+                    
+                    //Prepare stream for writing to disk
+                    let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
+                    let stream = fs.createWriteStream(temppath);
+                    
+                    stream.on('finish', () => {
+                        this._downloads -= 1;
+                        
+                        //Get song info
+                        FFmpeg(temppath).ffprobe(function(err, data) {
+                            if (err) {
+                                this.log('warn', err);
+                                return;
+                            }
+            
+                            let duration = parseFloat(data.format.duration || data.streams[0].duration);
+                            if (duration < this.param('minDuration') || duration > this.param('maxDuration')) return;
+                            
+                            let keywords = dkeywords;
+                            
+                            //Compute hash, rename file and add to index
+                            fs.readFile(temppath, (err, data) => {
+                                if (err) throw err;
+                                
+                                let hash = crypto.createHash('md5').update(data).digest('hex');
+                                let realpath = this.param('downloadPath') + '/' + hash + '.mp3';
+                                
+                                let now = moment().unix();
+                                
+                                if (fs.existsSync(realpath)) {
+                                    fs.unlink(temppath);
+                                    this._index[hash].seen.push(now);
+                                    if (this._index[hash].sharedBy.indexOf(author) < 0) {
+                                        this._index[hash].sharedBy.push(author);
+                                    }
+                                    this.saveIndex();
+                                    this.log('  Already existed: ' + ma.filename + '  (as ' + hash + ')');
+                                    return;
+                                }
+                                
+                                this._usage += fs.statSync(temppath).size;
+                                
+                                fs.rename(temppath, realpath, (err) => {
+                                    if (err) throw err;
+                                
+                                    this._index[hash] = {
+                                        hash: hash,
+                                        seen: [now],
+                                        sharedBy: [author],
+                                        length: Math.floor(duration),
+                                        source: ma.url,
+                                        sourceType: 'discord',
+                                        sourceSpecificId: ma.id,
+                                        sourceLoudness: null,
+                                        name: (data.format.tags.title || ma.filename),
+                                        author: (data.format.tags.artist || ''),
+                                        keywords: keywords
+                                    };
+                                    this.saveIndex();
+                                    
+                                    if (!this._indexSourceTypeAndId['discord']) {
+                                        this._indexSourceTypeAndId['discord'] = {};
+                                    }
+                                    this._indexSourceTypeAndId['discord'][ma.id] = this._index[hash];
+                                    
+                                    this._sessionGrabs.push([hash, now]);
+                                    
+                                    this.log('  Successfully grabbed from discord: ' + ma.filename + '  (as ' + hash + ')');
+                                });
+                                
+                            });
+                            
+                        });
+                        
+                    });
+                    
+                    //Plug ffmpeg into writing stream
+                    let output = ffmpeg.format('mp3').pipe(stream);
+                    output.on('error', attfiledl.end.bind(attfiledl));
+                    output.on('error', stream.emit.bind(stream, 'error'));
+                    
+                } catch (exception) {
+                    this.log('error', exception);
+                }
+            }
+        }
+        
+        
         return true;
     }
     
+    
+    //Download path
     
     calculateDownloadPathUsage() {
         var total = 0;
@@ -507,6 +649,8 @@ class ModGrabber extends Module {
     }
     
     
+    //Other auxiliary methods
+    
     removeByHash(hash) {
         if (!this._index[hash]) return false;
         fs.unlink(this.param('downloadPath') + '/' + hash + '.mp3');
@@ -521,6 +665,88 @@ class ModGrabber extends Module {
         var item = this._scanQueue.shift();
         if (!item) return;
         this.grabInMessage(item[0], item[1]);
+    }
+    
+    
+    filterSongsBySearchString(searchstr) {
+        var filters = searchstr.split(' & ');
+        if (!filters.length) return [];
+        
+        var results = [];
+        for (let hash in this._index) results.push(this._index[hash]);
+
+        for (let filter of filters) {
+            let regexfilter = new RegExp(filter.join(' ').replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&').replace(' ', '.*'), 'i');
+            results = results.filter(
+                (info) => info.hash.match(regexfilter) || info.sharedBy.find((e, i, a) => e.match(regexfilter)) || info.source.match(regexfilter) || info.name.match(regexfilter) || info.author.match(regexfilter) || info.keywords.find((e, i, a) => e.match(regexfilter))
+            );
+        }
+        
+        return results;
+    }
+    
+    
+    // # API #
+    
+    
+    randomSong() {
+        var allhashes = Object.keys(this._index);
+        var hash = allhashes[Math.floor(random.fraction() * allhashes.length)];
+        return this._index[hash];
+    }
+    
+    
+    latestSong() {
+        if (!this._sessionGrabs.length) return null;
+        return this._index[this._sessionGrabs[this._sessionGrabs.length - 1][0]];
+    }
+    
+    
+    findSong(searchstr) {
+        var songs = this.filterSongsBySearchString(searchstr);
+        if (songs.length) return songs[0];
+        return null;
+    }
+    
+    
+    hashSong(hash) {
+        return this._index[hash];
+    }
+    
+    songPathByHash(hash) {
+        return this.param('downloadPath') + '/' + hash + '.mp3';
+    }
+
+    
+    getSongMeta(hash, field) {
+        return this._index[hash][field];
+    }
+    
+    setSongMeta(hash, field, value) {
+        return this._index[hash][field] = value;
+        this.saveIndex();
+    }
+
+
+    addSongKeyword(hash, keyword) {
+        var ret = false;
+        if (this._index[hash].keywords.indexOf(keyword) < 0) {
+            this._index[hash].keywords.push(keyword);
+            this.saveIndex();
+            ret = true;
+        }
+        return ret;
+    }
+    
+    removeSongKeyword(hash, keyword) {
+        let ind = this._index[hash].keywords.indexOf(keyword);
+        var ret = false;
+        if (ind > -1) {
+            this._index[hash].keywords.splice(ind, 1);
+            this.saveIndex();
+            ret = true;
+        }
+        return ret;
     }
     
 
