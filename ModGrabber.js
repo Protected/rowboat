@@ -384,7 +384,10 @@ class ModGrabber extends Module {
                 try {
                     //Obtain metadata from youtube
                     ytdl.getInfo(url, (err, info) => {
-                        if (err) throw err;
+                        if (err) {
+                            this.log('warn', err);
+                            return;
+                        }
                         
                         if (info.length_seconds < this.param('minDuration') || info.length_seconds > this.param('maxDuration')) return;
                         if (this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]) return;
