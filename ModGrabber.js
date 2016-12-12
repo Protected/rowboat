@@ -550,13 +550,13 @@ class ModGrabber extends Module {
                         this._downloads -= 1;
                         
                         //Get song info
-                        FFmpeg(temppath).ffprobe((err, data) => {
+                        FFmpeg(temppath).ffprobe((err, info) => {
                             if (err) {
                                 this.log('warn', err);
                                 return;
                             }
             
-                            let duration = parseFloat(data.format.duration || data.streams[0].duration);
+                            let duration = parseFloat(info.format.duration || info.streams[0].duration);
                             if (duration < this.param('minDuration') || duration > this.param('maxDuration')) return;
                             
                             let keywords = dkeywords;
@@ -595,8 +595,8 @@ class ModGrabber extends Module {
                                         sourceType: 'discord',
                                         sourceSpecificId: ma.id,
                                         sourceLoudness: null,
-                                        name: (data.format.tags.title || ma.filename),
-                                        author: (data.format.tags.artist || ''),
+                                        name: (info.format.tags.title || ma.filename),
+                                        author: (info.format.tags.artist || ''),
                                         keywords: keywords
                                     };
                                     this.saveIndex();
