@@ -677,7 +677,7 @@ class ModGrabber extends Module {
         for (let hash in this._index) results.push(this._index[hash]);
 
         for (let filter of filters) {
-            let regexfilter = new RegExp(filter.join(' ').replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&').replace(' ', '.*'), 'i');
+            let regexfilter = new RegExp(filter.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&').replace(' ', '.*'), 'i');
             results = results.filter(
                 (info) => info.hash.match(regexfilter) || info.sharedBy.find((e, i, a) => e.match(regexfilter)) || info.source.match(regexfilter) || info.name.match(regexfilter) || info.author.match(regexfilter) || info.keywords.find((e, i, a) => e.match(regexfilter))
             );
