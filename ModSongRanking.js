@@ -149,6 +149,7 @@ class ModSongRanking extends Module {
     
     computeSongRank(hash, users) {  //users is a list of Discord userids
         var likmap = this.grabber.getSongMeta(hash, "like");
+        if (!likmap) return null;
         if (!users || !users.length) {
             users = Object.keys(likmap);
         }
@@ -160,6 +161,7 @@ class ModSongRanking extends Module {
                 i += 1;
             }
         }
+        if (!i) return null;
         acc /= i;
         return acc;
     }
