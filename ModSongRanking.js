@@ -19,8 +19,7 @@ class ModSongRanking extends Module {
     ]; }
 
     get requiredModules() { return [
-        'Commands',
-        'Grabber'
+        'Commands'
     ]; }
 
     constructor(name) {
