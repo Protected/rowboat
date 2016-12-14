@@ -93,7 +93,7 @@ class ModSongRanking extends Module {
         
             var lik = args.likeability || 0;
             lik = parseInt(lik);
-            if (lik == NaN) {
+            if (isNaN(lik)) {
                 if (LIKEABILITY_WORDS[args.likeability] !== undefined) lik = LIKEABILITY_WORDS[args.likeability];
                 else lik = 0;
             }

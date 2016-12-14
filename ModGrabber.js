@@ -228,7 +228,7 @@ class ModGrabber extends Module {
             let page = 0;
             let searchstr = args.searchstr;
             
-            if (searchstr[0] == '-p' && parseInt(searchstr[1]) != NaN) {
+            if (searchstr[0] == '-p' && !isNaN(parseInt(searchstr[1]))) {
                 if (parseInt(searchstr[1]) >= 0) {
                     page = parseInt(searchstr[1]);
                     searchstr.shift();
