@@ -423,8 +423,11 @@ class ModGrabber extends Module {
         var artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9 _-]+)\}/i);
         if (artist) artist = artist[3];
         
-        var interval = message.match(/<(([0-9:]+)?(,[0-9:]+)?)>/);
-        if (interval) interval = this.parseInterval(interval[1]);
+        var interval = null;
+        if (title) {
+            interval = message.match(/<(([0-9:]+)?(,[0-9:]+)?)>/);
+            if (interval) interval = this.parseInterval(interval[1]);
+        }
         
     
         //Youtube
