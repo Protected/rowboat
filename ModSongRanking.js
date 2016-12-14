@@ -116,7 +116,7 @@ class ModSongRanking extends Module {
         }, (env, type, userid, command, args, handle, reply) => {
         
             var rank = this.computeSongRank(args.hash);
-            if (rank) {
+            if (rank !== null) {
                 reply("Rank: " + rank);
             } else {
                 reply("Song is unranked.");
@@ -137,7 +137,7 @@ class ModSongRanking extends Module {
         var likmap = this.grabber.getSongMeta(hash, "like");
         if (!likmap) likmap = {};
         likmap[userid] = likeability;
-        this.grabber.setSongMeta(hash, "like", likmap);
+        return this.grabber.setSongMeta(hash, "like", likmap);
     }
     
     
