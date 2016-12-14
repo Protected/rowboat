@@ -134,3 +134,6 @@ class ModSongRanking extends Module {
     
     
 }
+
+
+module.exports = ModSongRanking;
