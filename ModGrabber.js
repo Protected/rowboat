@@ -439,7 +439,9 @@ class ModGrabber extends Module {
                             return;
                         }
                         
-                        if (info.length_seconds < this.param('minDuration') || info.length_seconds > this.param('maxDuration') && (!interval || interval[1] - interval[0] > this.param('maxDuration'))) return;
+                        if (info.length_seconds < this.param('minDuration') || interval && interval[1] - interval[0] < this.param('minDuration')
+                                || info.length_seconds > this.param('maxDuration') && (!interval || interval[1] - interval[0] > this.param('maxDuration'))) return;
+                                
                         if (this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]) return;
                         
                         let keywords = info.keywords;
