@@ -3,6 +3,34 @@
 var Module = require('./Module.js');
 
 
+var LIKEABILITY_WORDS = {
+    love: 1,
+    adore: 1,
+    blissful: 1,
+    enraptured: 1,
+    epiphany: 1,
+    wow: 1,
+    incredible: 1,
+    ok: 0,
+    like: 0,
+    decent: 0,
+    happy: 0,
+    acceptable: 0,
+    yes: 0,
+    mediocre: -1,
+    dislike: -1,
+    unhappy: -1,
+    unimpressed: -1,
+    underwhelming: -1,
+    no: -1,
+    hate: -2,
+    horrible: -2,
+    terrible: -2,
+    disgust: -2,
+    never: -2
+};
+
+
 class ModSongRanking extends Module {
 
     
@@ -35,7 +63,7 @@ class ModSongRanking extends Module {
     initialize(envs, mods, moduleRequest) {
         if (!super.initialize(envs, mods, moduleRequest)) return false;
 
-        if (!this.grabber || !this.grabber.modName != 'Grabber') return false;
+        if (!this.grabber || this.grabber.modName != 'Grabber') return false;
         
         
         //Register callbacks
@@ -61,8 +89,13 @@ class ModSongRanking extends Module {
             minArgs: 1
         }, (env, type, userid, command, args, handle, reply) => {
         
+            if (env.name != this.param('env')) return true;
+        
             var lik = args.likeability || 0;
-            if (parseInt(lik) == NaN) lik = 0;
+            if (parseInt(lik) == NaN) {
+                if (LIKEABILITY_WORDS[lik]) lik = LIKEABILITY_WORDS[lik];
+                else lik = 0;
+            }
             if (parseInt(lik) < -2) lik = -2;
             if (parseInt(lik) > 1) lik = 1;
         
