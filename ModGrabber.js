@@ -767,16 +767,20 @@ class ModGrabber extends Module {
 
     
     getSongMeta(hash, field) {
+        if (!this._index[hash]) return null;
         return this._index[hash][field];
     }
     
     setSongMeta(hash, field, value) {
-        return this._index[hash][field] = value;
+        if (!this._index[hash]) return false;
+        this._index[hash][field] = value;
         this.saveIndex();
+        return true;
     }
 
 
     addSongKeyword(hash, keyword) {
+        if (!this._index[hash]) return false;
         var ret = false;
         if (this._index[hash].keywords.indexOf(keyword) < 0) {
             this._index[hash].keywords.push(keyword);
@@ -787,6 +791,7 @@ class ModGrabber extends Module {
     }
     
     removeSongKeyword(hash, keyword) {
+        if (!this._index[hash]) return false;
         let ind = this._index[hash].keywords.indexOf(keyword);
         var ret = false;
         if (ind > -1) {

@@ -92,7 +92,7 @@ class ModSongRanking extends Module {
             if (env.name != this.param('env')) return true;
         
             var lik = args.likeability || 0;
-            like = parseInt(lik);
+            lik = parseInt(lik);
             if (lik == NaN) {
                 if (LIKEABILITY_WORDS[lik]) lik = LIKEABILITY_WORDS[lik];
                 else lik = 0;
