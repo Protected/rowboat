@@ -445,7 +445,8 @@ class ModGrabber extends Module {
                         if (info.length_seconds < this.param('minDuration') || interval && interval[1] - interval[0] < this.param('minDuration')
                                 || info.length_seconds > this.param('maxDuration') && (!interval || interval[1] - interval[0] > this.param('maxDuration'))) return;
                                 
-                        if (this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]) return;
+                        if (this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]
+                                && !this._indexSourceTypeAndId['youtube'][info.video_id].sourcePartial && !interval) return;
                         
                         let keywords = info.keywords;
                         if (typeof keywords == "string") {
@@ -507,6 +508,7 @@ class ModGrabber extends Module {
                                         sourceType: 'youtube',
                                         sourceSpecificId: info.video_id,
                                         sourceLoudness: parseFloat(info.loudness),
+                                        sourcePartial: interval,
                                         name: (title || info.title),
                                         author: (artist || ''),
                                         keywords: keywords
@@ -612,6 +614,7 @@ class ModGrabber extends Module {
                                         sourceType: 'discord',
                                         sourceSpecificId: ma.id,
                                         sourceLoudness: null,
+                                        sourcePartial: interval,
                                         name: (info.format.tags.title || ma.filename),
                                         author: (info.format.tags.artist || ''),
                                         keywords: keywords
