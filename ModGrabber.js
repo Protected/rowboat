@@ -67,6 +67,8 @@ class ModGrabber extends Module {
         this._scanQueue = [];  //Rate-limit song downloads. Each item is: [authorid, messageToScan]
         this._scanTimer = null;
         this._downloads = 0;
+        
+        this._apiCbNewSong = [];  //List of callback(hash) called when new songs are added. Return true to stop processing.
     }
     
     
@@ -421,6 +423,9 @@ class ModGrabber extends Module {
         var artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9 _-]+)\}/i);
         if (artist) artist = artist[3];
         
+        var interval = message.match(/<(([0-9:]+)?(,[0-9:]+)?)>/);
+        if (interval) interval = this.parseInterval(interval[1]);
+        
     
         //Youtube
         var yturls = message.match(/(?:https?:\/\/|\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})(?![\w-])/g);
@@ -434,7 +439,7 @@ class ModGrabber extends Module {
                             return;
                         }
                         
-                        if (info.length_seconds < this.param('minDuration') || info.length_seconds > this.param('maxDuration')) return;
+                        if (info.length_seconds < this.param('minDuration') || info.length_seconds > this.param('maxDuration') && (!interval || interval[1] - interval[0] > this.param('maxDuration'))) return;
                         if (this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]) return;
                         
                         let keywords = info.keywords;
@@ -453,6 +458,8 @@ class ModGrabber extends Module {
                         //Plug video download into ffmpeg
                         let video = ytdl(url, {filter: 'audioonly'});
                         let ffmpeg = new FFmpeg(video);
+                        
+                        if (interval) ffmpeg.seekInput(interval[0]).duration(interval[1] - interval[0]);
                         
                         //Prepare stream for writing to disk
                         let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
@@ -509,6 +516,9 @@ class ModGrabber extends Module {
                                     this._sessionGrabs.push([hash, now]);
                                     
                                     this.log('  Successfully grabbed from youtube: ' + url + '  (as ' + hash + ')');
+                                    
+                                    this.processOnNewSong(hash, author, message, messageObj);
+                                    
                                 });
                                 
                             });
@@ -541,6 +551,8 @@ class ModGrabber extends Module {
                     //Plug attachment download into ffmpeg
                     let attfiledl = request(ma.url);
                     let ffmpeg = new FFmpeg(attfiledl);
+                    
+                    if (interval) ffmpeg.seekInput(interval[0]).duration(interval[1] - interval[0]);
                     
                     //Prepare stream for writing to disk
                     let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
@@ -609,6 +621,9 @@ class ModGrabber extends Module {
                                     this._sessionGrabs.push([hash, now]);
                                     
                                     this.log('  Successfully grabbed from discord: ' + ma.filename + '  (as ' + hash + ')');
+                                    
+                                    this.processOnNewSong(hash, author, message, messageObj);
+                                    
                                 });
                                 
                             });
@@ -687,6 +702,38 @@ class ModGrabber extends Module {
     }
     
     
+    parseInterval(intervalstring) {  //"00:00:00,23:59:59" => [minseconds, maxseconds]
+        if (!intervalstring) return [0, 0];
+        var parts = intervalstring.split(',');
+        var min = parts[0] || "0";
+        var max = parts[1] || String(Number.MAX_SAFE_INTEGER);
+        var minparts = min.match(/((([0-9]+):)?([0-9]{1,2}):)?([0-9]+)/);
+        var actualmin = (minparts ? parseInt(minparts[5]) + (parseInt(minparts[4])||0) * 60 + (parseInt(minparts[3])||0) * 3600 : 0);
+        var maxparts = max.match(/((([0-9]+):)?([0-9]{1,2}):)?([0-9]+)/);
+        var actualmax = (maxparts ? parseInt(maxparts[5]) + (parseInt(maxparts[4])||0) * 60 + (parseInt(maxparts[3])||0) * 3600 : Number.MAX_SAFE_INTEGER);
+        if (actualmin > Number.MAX_SAFE_INTEGER) actualmin = Number.MAX_SAFE_INTEGER;
+        if (actualmax < actualmin) actualmax = actualmin;
+        return [actualmin, actualmax];
+    }
+    
+    
+    processOnNewSong(hash, author, message, messageObj) {
+        for (let cb of this._apiCbNewSong) {
+            try {
+                let r;
+                if (typeof cb == "function") {
+                    r = cb.apply(this, [hash, author, message, messageObj]);
+                } else {
+                    r = cb[0].apply(cb[1], [hash, author, message, messageObj]);
+                }
+                if (r) break;
+            } catch (exception) {
+                this.log('error', 'Error in callback after adding ' + hash);
+            }
+        }
+    }
+    
+    
     // # API #
     
     
@@ -748,6 +795,16 @@ class ModGrabber extends Module {
             ret = true;
         }
         return ret;
+    }
+    
+    
+    registerOnNewSong(func, self) {
+        this.log('Registering new song callback. Context: ' + self.constructor.name);
+        if (!self) {
+            this._apiCbNewSong.push(func);
+        } else {
+            this._apiCbNewSong.push([func, self]);
+        }
     }
     
 
