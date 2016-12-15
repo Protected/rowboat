@@ -418,9 +418,9 @@ class ModGrabber extends Module {
             return ikeyword[1];
         }).filter((item) => item);
         
-        var title = message.match(/\{(title|name)(=|:) ?([A-Za-z0-9 _-]+)\}/i);
+        var title = message.match(/\{(title|name)(=|:) ?([\w -]+)\}/i);
         if (title) title = title[3];
-        var artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9 _-]+)\}/i);
+        var artist = message.match(/\{(author|artist|band)(=|:) ?([\w _-]+)\}/i);
         if (artist) artist = artist[3];
         
         var interval = null;
@@ -626,7 +626,7 @@ class ModGrabber extends Module {
                                     }
                                     this._indexSourceTypeAndId['discord'][ma.id] = this._index[hash];
                                     
-                                    this._sessionGrabs.push([hash, now]);
+                                    this._sessionGrabs.unshift([hash, now]);
                                     
                                     this.log('  Successfully grabbed from discord: ' + ma.filename + '  (as ' + hash + ')');
                                     
@@ -754,7 +754,7 @@ class ModGrabber extends Module {
     
     latestSong() {
         if (!this._sessionGrabs.length) return null;
-        return this._index[this._sessionGrabs[this._sessionGrabs.length - 1][0]];
+        return this._index[this._sessionGrabs[0][0]];
     }
     
     
