@@ -410,17 +410,17 @@ class ModGrabber extends Module {
     grabInMessage(author, message, messageObj) {
         if (this.isDownloadPathFull() || !message && !messageObj) return false;
     
-        var dkeywords = message.match(/\[[A-Za-z0-9 _-]+\]/g);
+        var dkeywords = message.match(/\[[A-Za-z0-9\u{4E00}-\u{9FFF}\(\) _-]+\]/gu);
         if (!dkeywords) dkeywords = [];
         dkeywords = dkeywords.map((item) => {
-            let ikeyword = item.match(/^\[([^\]]+)\]$/);
+            let ikeyword = item.match(/^\[([^\]]+)\]$/u);
             if (!ikeyword) return null;
             return ikeyword[1];
         }).filter((item) => item);
         
-        var title = message.match(/\{(title|name)(=|:) ?([\w -]+)\}/i);
+        var title = message.match(/\{(title|name)(=|:) ?([A-Za-z0-9\u{4E00}-\u{9FFF}\(\) _-]+)\}/iu);
         if (title) title = title[3];
-        var artist = message.match(/\{(author|artist|band)(=|:) ?([\w _-]+)\}/i);
+        var artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9\u{4E00}-\u{9FFF}\(\) _-]+)\}/iu);
         if (artist) artist = artist[3];
         
         var interval = null;
@@ -700,7 +700,7 @@ class ModGrabber extends Module {
         for (let hash in this._index) results.push(this._index[hash]);
 
         for (let filter of filters) {
-            let regexfilter = new RegExp(filter.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&').replace(' ', '.*'), 'i');
+            let regexfilter = new RegExp(filter.replace(/[-\/\\^$*+?.()|[\]{}]/gu, '\\$&').replace(' ', '.*'), 'i');
             results = results.filter(
                 (info) => info.hash.match(regexfilter) || info.sharedBy.find((e, i, a) => e.match(regexfilter)) || info.source.match(regexfilter) || info.name.match(regexfilter) || info.author.match(regexfilter) || info.keywords.find((e, i, a) => e.match(regexfilter))
             );
