@@ -185,7 +185,7 @@ class ModGrabber extends Module {
             permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, command, args, handle, reply) => {
                     
-            var hash = parseHashArg(args.hashoroffset);
+            var hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
                 reply('Offset not found in recent history.');
                 return true;
@@ -211,7 +211,7 @@ class ModGrabber extends Module {
             minArgs: 0
         }, (env, type, userid, command, args, handle, reply) => {
         
-            var hash = parseHashArg(args.hashoroffset);
+            var hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
                 reply('Offset not found in recent history.');
                 return true;
@@ -268,7 +268,7 @@ class ModGrabber extends Module {
             permissions: [PERM_ADMIN, PERM_MODERATOR, PERM_TRUSTED]
         }, (env, type, userid, command, args, handle, reply) => {
         
-            var hash = parseHashArg(args.hashoroffset);
+            var hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
                 reply('Offset not found in recent history.');
                 return true;
@@ -305,7 +305,7 @@ class ModGrabber extends Module {
             args: ['hashoroffset', 'field']
         }, (env, type, userid, command, args, handle, reply) => {
         
-            var hash = parseHashArg(args.hashoroffset);
+            var hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
                 reply('Offset not found in recent history.');
                 return true;
@@ -340,7 +340,7 @@ class ModGrabber extends Module {
             permissions: [PERM_ADMIN, PERM_MODERATOR, PERM_TRUSTED]
         }, (env, type, userid, command, args, handle, reply) => {
         
-            var hash = parseHashArg(args.hashoroffset);
+            var hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
                 reply('Offset not found in recent history.');
                 return true;
