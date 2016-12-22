@@ -311,6 +311,7 @@ class EnvDiscord extends Environment {
     }
     
     
+    get client() { return this._client; }
     get server() { return this._server; }
     
     

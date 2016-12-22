@@ -435,6 +435,7 @@ class ModGrabber extends Module {
     //Message processing
     
     onMessage(env, type, message, authorid, channelid, rawobj) {
+        if (env.name != this.param('env')) return false;
         if (this.param('channels').indexOf(channelid) < 0) return false;
         this._scanQueue.push([authorid, message, rawobj]);
     }
@@ -442,6 +443,8 @@ class ModGrabber extends Module {
     
     grabInMessage(author, message, messageObj) {
         if (this.isDownloadPathFull() || !message && !messageObj) return false;
+    
+        var warnauthor = !!message.match(/^!!/);
     
         var dkeywords = message.match(/\[[A-Za-z0-9\u{3040}-\u{D7AF}\(\)' _-]+\]/gu);
         if (!dkeywords) dkeywords = [];
@@ -557,6 +560,10 @@ class ModGrabber extends Module {
                                     
                                     this.log('  Successfully grabbed from youtube: ' + url + '  (as ' + hash + ')');
                                     
+                                    if (warnauthor) {
+                                        this.env(this.param('env')).msg(messageObj.channel.id, "Got it, " + this.env(this.param('env')).idToDisplayName(author) + ".");
+                                    }
+                                    
                                     this.processOnNewSong(hash, author, message, messageObj);
                                     
                                 });
@@ -662,6 +669,10 @@ class ModGrabber extends Module {
                                     this._sessionGrabs.unshift([hash, now]);
                                     
                                     this.log('  Successfully grabbed from discord: ' + ma.filename + '  (as ' + hash + ')');
+                                    
+                                    if (warnauthor) {
+                                        this.env(this.param('env')).msg(messageObj.channel.id, "Got it, " + this.env(this.param('env')).idToDisplayName(author) + ".");
+                                    }
                                     
                                     this.processOnNewSong(hash, author, message, messageObj);
                                     
@@ -799,6 +810,7 @@ class ModGrabber extends Module {
     
     randomSong() {
         var allhashes = Object.keys(this._index);
+        if (!allhashes.length) return null;
         var hash = allhashes[Math.floor(random.fraction() * allhashes.length)];
         return this._index[hash];
     }
