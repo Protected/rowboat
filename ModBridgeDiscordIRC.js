@@ -57,8 +57,8 @@ class ModBridgeDiscordIRC extends Module {
         
         //Register callbacks
         
-        this.irc.registerOnMessage(this.onIrcMessage, this);
-        this.discord.registerOnMessage(this.onDiscordMessage, this);
+        this.irc.on('message', this.onIrcMessage);
+        this.discord.on('message', this.onDiscordMessage);
         
         return true;
     }
@@ -123,7 +123,7 @@ class ModBridgeDiscordIRC extends Module {
         
         var roles = server.roles.array().sort((a, b) => (b.position - a.position));
         for (let role of roles) {
-            if (rawobject.member.roles.find('id', role.id)) {
+            if (rawobject.member.roles.get(role.id)) {
                 authorname = "" + closestTtyColor(role.hexColor) + authorname + "";
                 break;
             }

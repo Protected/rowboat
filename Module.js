@@ -2,7 +2,7 @@
 'use strict';
 
 var jsonfile = require('jsonfile');
-var logger = require('./Logger');
+var logger = require('./Logger.js');
 
 class Module {
 

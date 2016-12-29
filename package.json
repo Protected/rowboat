@@ -18,7 +18,7 @@
   "private": true,
   "dependencies": {
     "color-difference": "^0.3.4",
-    "discord.js": "^10.0.1",
+    "discord.js": "^11.0.0",
     "emojione": "^2.2.7",
     "fluent-ffmpeg": "^2.1.0",
     "irc": "^0.5.2",

@@ -3,6 +3,11 @@
 var Environment = require('./Environment.js');
 var irc = require('irc');
 
+var DISPLAY_MODES = {
+    o: 'operator',
+    v: 'voice'
+};
+
 class EnvIRC extends Environment {
 
 
@@ -66,6 +71,7 @@ class EnvIRC extends Environment {
         
         
         this._client.addListener('registered', (messageObj) => {
+            this.emit('connected');
             if (this._client.nick != params.nickname) {
                 this.log('warning', "I am " + this._client.nick + " but should be " + params.nickname + "; Will try to retake.");
                 this._retake = setInterval(() => {
@@ -83,11 +89,7 @@ class EnvIRC extends Environment {
                 type = "private";
                 channelid = authorid;
             }
-            for (let callback of this._cbMessage) {
-                if (this.invokeRegisteredCallback(callback, [this, type, message, authorid, channelid, messageObj])) {
-                    break;
-                }
-            }
+            this.emit('message', type, message, authorid, channelid, messageObj);
         });
     
         this._client.addListener('action', (from, to, message, messageObj) => {
@@ -98,11 +100,7 @@ class EnvIRC extends Environment {
                 type = "privateaction";
                 channelid = authorid;
             }
-            for (let callback of this._cbMessage) {
-                if (this.invokeRegisteredCallback(callback, [this, type, message, authorid, channelid, messageObj])) {
-                    break;
-                }
-            }
+            this.emit('message', type, message, authorid, channelid, messageObj);
         });
         
         this._client.addListener('notice', (from, to, message, messageObj) => {
@@ -138,10 +136,27 @@ class EnvIRC extends Environment {
         });
         
         this._client.addListener('nick', (oldnick, newnick, channels, messageObj) => {
+            let modes = this._people[oldnick].modes;
             this.remPeople(oldnick, channels);
             this.triggerPart(oldnick, ['nick', 'Nickname change', newnick], channels, messageObj);
-            this.addPeople(newnick, channels, messageObj);
+            this.addPeople(newnick, channels, messageObj, modes);
             this.triggerJoin(newnick, channels, messageObj);
+        });
+        
+        
+        this._client.addListener('+mode', (channel, by, mode, arg, messageObj) => {
+            if (!channel || !arg || !this._people[arg]) return;
+            if (!this._people[arg].modes[channel]) this._people[arg].modes[channel] = [];
+            this._people[arg].modes[channel].push(mode);
+            this.emit('gotRole', this._people[arg].id, mode, channel);
+        });
+        
+        this._client.addListener('-mode', (channel, by, mode, arg, messageObj) => {
+            if (!channel || !arg || !this._people[arg]) return;
+            if (this._people[arg].modes[channel]) {
+                this._people[arg].modes[channel] = this._people[arg].modes[channel].filter((eachmode) => eachmode != mode);
+            }
+            this.emit('lostRole', this._people[arg].id, mode, channel);
         });
         
         
@@ -175,6 +190,7 @@ class EnvIRC extends Environment {
     disconnect() {
         if (this._client) this._client.disconnect();
         this._client = null;
+        this.emit('disconnected');
     }
 
 
@@ -184,11 +200,17 @@ class EnvIRC extends Environment {
         var parts;
         
         try {
+            let sent = false;
             if (parts = targetid.match(/^([^!]+)![^@]+@.+$/)) {
                 this._client.say(parts[1], msg);
+                sent = true;
             }
             if (parts = targetid.match(/^#.+$/)) {
                 this._client.say(targetid, msg);
+                sent = true;
+            }
+            if (sent) {
+                this.emit('messageSent', targetid, msg);
             }
         } catch (e) {
             this.genericErrorHandler(e.message);
@@ -273,8 +295,38 @@ class EnvIRC extends Environment {
     }
     
     
+    listUserRoles(id, channel) {
+        if (!channel) return [];
+        var parts = id.split("!");
+        var person = this._people[parts[0]];
+        if (!person) return false;
+        var result = [];
+        if (person.modes[channel]) {
+            result = person.modes[channel].slice();
+        }
+        return result;
+    }
+    
+    
     channelIdToDisplayName(channelid) {
         return channelid;
+    }
+    
+    
+    roleIdToDisplayName(roleid) {
+        if (DISPLAY_MODES[roleid]) return DISPLAY_MODES[roleid];
+        return "mode_" + roleid;
+    }
+    
+    
+    displayNameToRoleId(displayName) {
+        if (!displayName) return null;
+        for (var mode of DISPLAY_MODES) {
+            if (DISPLAY_MODES[mode] == displayName) return mode;
+        }
+        var parts = displayName.split("_");
+        if (parts.length != 2 || parts[0] != "mode_" || parts[1].length != 1) return null;
+        return parts[1];
     }
     
     
@@ -366,12 +418,13 @@ class EnvIRC extends Environment {
     }
     
 
-    addPeople(nick, channels, messageObj) {
+    addPeople(nick, channels, messageObj, carryModes) {
         if (!messageObj) return false;
         if (!this._people[nick]) {
             this._people[nick] = {
                 id: null,
                 channels: [],
+                modes: {},
                 identified: false,
                 secured: false
             }
@@ -380,6 +433,11 @@ class EnvIRC extends Environment {
         this._people[nick].id = nick + '!' + messageObj.user + '@' + messageObj.host;
         for (let channel of channels) {
             this._people[nick].channels.push(channel);
+            if (carryModes && carryModes[channel]) {
+                this._people[nick].modes[channel] = carryModes[channel];
+            } else {
+                this._people[nick].modes[channel] = [];
+            }
         }
         return true;
     }
@@ -403,24 +461,17 @@ class EnvIRC extends Environment {
     triggerJoin(nick, channels, messageObj) {
         var authorid = nick + '!' + messageObj.user + '@' + messageObj.host;
         
-        for (let callback of this._cbJoin) {
-            for (let channelid of channels) {
-                if (this.invokeRegisteredCallback(callback, [this, authorid, channelid, messageObj])) {
-                    break;
-                }
-            }
+        for (let channelid of channels) {
+            this.emit('join', authorid, channelid, messageObj);
         }
     }
     
     triggerPart(nick, reason, channels, messageObj) {
         var authorid = nick + '!' + messageObj.user + '@' + messageObj.host;
+        messageObj.reason = reason;
         
-        for (let callback of this._cbPart) {
-            for (let channelid of channels) {
-                if (this.invokeRegisteredCallback(callback, [this, authorid, channelid, reason, messageObj])) {
-                    break;
-                }
-            }
+        for (let channelid of channels) {
+            this.emit('part', authorid, channelid, messageObj);
         }
     }
     

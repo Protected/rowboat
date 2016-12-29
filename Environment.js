@@ -2,9 +2,10 @@
 'use strict';
 
 var jsonfile = require('jsonfile');
-var logger = require('./Logger');
+var logger = require('./Logger.js');
+var CancellableEventEmitter = require('./CancellableEventEmitter.js');
 
-class Environment {
+class Environment extends CancellableEventEmitter {
 
     get name() { return this._name; }
     get envName() { return this._envName; }
@@ -19,11 +20,6 @@ class Environment {
         this._name = name;
         
         this._params = {};
-        
-        this._cbError = [];
-        this._cbMessage = [];
-        this._cbJoin = [];
-        this._cbPart = [];
         
     }
     
@@ -85,60 +81,36 @@ class Environment {
     notice(targetid, msg) {}
     
     
-    registerOnError(func, self) {
-        if (!self) {
-            this._cbError.push(func);
-        } else {
-            this._cbError.push([func, self]);
-        }
-    }
-    
-    registerOnMessage(func, self) {
-        if (!self) {
-            this._cbMessage.push(func);
-        } else {
-            this._cbMessage.push([func, self]);
-        }
-    }
-    
-    registerOnJoin(func, self) {
-        if (!self) {
-            this._cbJoin.push(func);
-        } else {
-            this._cbJoin.push([func, self]);
-        }
-    }
-    
-    registerOnPart(func, self) {
-        if (!self) {
-            this._cbPart.push(func);
-        } else {
-            this._cbPart.push([func, self]);
-        }
-    }
-    
-    
-    invokeRegisteredCallback(desc, args) {
-        if (typeof desc == "function") {
-            return desc.apply(this, args);
-        } else {
-            return desc[0].apply(desc[1], args);
-        }
-    }
+    /* Environments should emit the following events (arguments are for the listeners):
+        error: (error)                                                  An error has occured. The argument is the error message.
+        connected: ()                                                   The environment has connected successfully.
+        disconnected: ()                                                The environment has disconnected.
+        message: (type, message, authorid, channelid, messageObject)    A message was received. type is environment-specific but "regular" and "private" are expected. messageObject is environment-specific.
+        messageSent: (targetid, message)                                A message was sent. targetid can be a public or private channel.
+        join: (userid, channelid, info)                                 A user has joined the environment. info is an environment-specific map.
+        part: (userid, channelid, info)                                 A user has left the environment. info is an environment-specific map.
+        gotRole: (userid, roleid, channelid, ischange)                  A user has obtained a role within the current session. channelid can be null.
+        lostRole: (userid, roleid, channelid, ischange)                 A user has lost a role within the current session. channelid can be null.
+   */
     
     
     idToDisplayName(id) { return null; }
     displayNameToId(displayName) { return null; }
     
-    idToMention(id) { return null; }
+    idToMention(id) { return null; }                                    //Convert a user ID into a format most likely to trigger an alert
     
     idIsSecured(id) { return false; }
     idIsAuthenticated(id) { return false; }
     
-    listUserIds(channel) { return []; }
+    listUserIds(channel) { return []; }                                 //List IDs of users in a channel
+    
+    listUserRoles(id, channel) { return []; }                           //List a specific user's global roles and, if a channel is specified, roles specific to that channel
     
     
     channelIdToDisplayName(channelid) { return null; }
+    
+    roleIdToDisplayName(roleid) { return null; }
+    displayNameToRoleId(displayName) { return null; }
     
     
     normalizeFormatting(text) { return text; }
@@ -151,21 +123,7 @@ class Environment {
 
     genericErrorHandler(err) {
         if (!err) return;
-        for (let callback of this._cbError) {
-            let result;
-            logger.debug(`Checking for ${callback}`);
-            if (typeof callback == "function") {
-                logger.debug(`It was a function.`);
-                result = callback(this, err);
-            } else {
-                logger.debug(`It was not a function.`);
-                result = callback[0].apply(callback[1], [this, err]);
-            }
-            logger.debug(`Result was ${result}`);
-            if (result) {
-                break;
-            }
-        }
+        this.emit('error', err);
     }
 
 }

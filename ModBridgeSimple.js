@@ -44,9 +44,9 @@ class ModBridgeSimple extends Module {
         
         //Register callbacks
         
-        this.envA.registerOnMessage(this.onMessage, this);
+        this.envA.on('message', this.onMessage);
         if (this.envA.name != this.envB.name) {
-            this.envB.registerOnMessage(this.onMessage, this);
+            this.envB.on('message', this.onMessage);
         }
         
         return true;

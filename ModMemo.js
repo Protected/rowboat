@@ -57,8 +57,8 @@ class ModMemo extends Module {
         //Register callbacks
         
         for (var envname in envs) {
-            envs[envname].registerOnJoin(this.onJoin, this);
-            envs[envname].registerOnMessage(this.onMessage, this);
+            envs[envname].on('join', this.onJoin);
+            envs[envname].on('message', this.onMessage);
         }
 
         

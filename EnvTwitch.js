@@ -59,6 +59,7 @@ class EnvTwitch extends Environment {
                 }, this.param('senddelay'));
 
             this.log("Environment is now ready!");
+            this.emit('connected');
         });
         
 
@@ -72,12 +73,7 @@ class EnvTwitch extends Environment {
                 type = "private";
             }
 
-            for (let callback of this._cbMessage) {
-                if (this.invokeRegisteredCallback(callback, [this, type, message, userstate.username, channel, userstate])) {
-                    break;
-                }
-            }
-            
+            this.emit('message', type, message, userstate.username, channel, userstate);
         });
 
         
@@ -94,6 +90,21 @@ class EnvTwitch extends Environment {
         });
         
         
+        this._client.on("mod", (channel, username) => {
+            if (this._people[username]) {
+                this._people[username].mod[channel] = true;
+                this.emit('gotRole', username, 'mod', channel);
+            }
+        });
+        
+        this._client.on("unmod", (channel, username) => {
+            if (this._people[username]) {
+                this._people[username].mod[channel] = false;
+                this.emit('lostRole', username, 'mod', channel);
+            }
+        });
+        
+        
         this._client.connect();
     }
     
@@ -104,6 +115,7 @@ class EnvTwitch extends Environment {
         this.carrier = null;
         this.client = null;
         this.log(`Disconnected from ${this._name}`);
+        this.emit('disconnected');
     }
     
     
@@ -165,8 +177,26 @@ class EnvTwitch extends Environment {
     }
     
     
+    listUserRoles(id, channel) {
+        if (!channel) return [];
+        if (this._people[id] && this._people[id].mod[channel]) {
+            return ['mod'];
+        }
+        return [];
+    }
+    
+    
     channelIdToDisplayName(channelid) {
         return channelid;
+    }
+    
+    
+    roleIdToDisplayName(roleid) {
+        return roleid;
+    }
+    
+    displayNameToRoleId(displayName) {
+        return displayName;
     }
     
     
@@ -191,8 +221,10 @@ class EnvTwitch extends Environment {
         try {
             if (parts = item[0].match(/^#.+$/)) {
                 this._client.say(item[0], item[1]);
+                this.emit('messageSent', item[0], item[1]);
             } else {
                 this._client.whisper(item[0], item[1]);
+                this.emit('messageSent', item[0], item[1]);
             }
         } catch (e) {
             this.genericErrorHandler(e.message);
@@ -204,8 +236,12 @@ class EnvTwitch extends Environment {
         if (!this._people[username]) {
             this._people[username] = {
                 id: username,
-                channels: channels
+                channels: channels,
+                mod: {}
             }
+        }
+        for (let channel of channels) {
+            this._people[username].mod[channel] = false;
         }
         return true;
     }
@@ -228,23 +264,15 @@ class EnvTwitch extends Environment {
     
     triggerJoin(authorid, channels, info) {
         if (!info) info = {};
-        for (let callback of this._cbJoin) {
-            for (let channel of channels) {
-                if (this.invokeRegisteredCallback(callback, [this, authorid, channel, info])) {
-                    break;
-                }
-            }
+        for (let channel of channels) {
+            this.emit('join', authorid, channel, info);
         }
     }
     
     triggerPart(authorid, channels, info) {
         if (!info) info = {};
-        for (let callback of this._cbPart) {
-            for (let channel of channels) {
-                if (this.invokeRegisteredCallback(callback, [this, authorid, channel, info])) {
-                    break;
-                }
-            }
+        for (let channel of channels) {
+            this.emit('part', authorid, channel, info);
         }
     }
     
