@@ -19,6 +19,8 @@ class ModernEventEmitter {
         if (!this._events) {
             this._events = {};
             this._eventsCount = 0;
+        } else if (this._events.newListener) {
+            this.emit('newListener', type, listener);
         }
         
         existing = this._events[type];
@@ -102,7 +104,7 @@ class ModernEventEmitter {
             var listeners = arrayClone(handler, len);
             for (var i = 0; i < len; ++i) {
                 if (listeners[i].ctx) self = listeners[i].ctx;
-                if (!listeners[i].call(self)) break;
+                if (listeners[i].call(self)) break;
             }
         }
     }
@@ -115,7 +117,7 @@ class ModernEventEmitter {
             var listeners = arrayClone(handler, len);
             for (var i = 0; i < len; ++i) {
                 if (listeners[i].ctx) self = listeners[i].ctx;
-                if (!listeners[i].call(self, arg1)) break;
+                if (listeners[i].call(self, arg1)) break;
             }
         }
     }
@@ -128,7 +130,7 @@ class ModernEventEmitter {
             var listeners = arrayClone(handler, len);
             for (var i = 0; i < len; ++i) {
                 if (listeners[i].ctx) self = listeners[i].ctx;
-                if (!listeners[i].call(self, arg1, arg2)) break;
+                if (listeners[i].call(self, arg1, arg2)) break;
             }
         }
     }
@@ -141,7 +143,7 @@ class ModernEventEmitter {
             var listeners = arrayClone(handler, len);
             for (var i = 0; i < len; ++i) {
                 if (listeners[i].ctx) self = listeners[i].ctx;
-                if (!listeners[i].call(self, arg1, arg2, arg3)) break;
+                if (listeners[i].call(self, arg1, arg2, arg3)) break;
             }
         }
     }
@@ -154,7 +156,7 @@ class ModernEventEmitter {
             var listeners = arrayClone(handler, len);
             for (var i = 0; i < len; ++i) {
                 if (listeners[i].ctx) self = listeners[i].ctx;
-                if (!listeners[i].apply(self, args)) break;
+                if (listeners[i].apply(self, args)) break;
             }
         }
     }

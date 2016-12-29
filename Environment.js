@@ -53,6 +53,10 @@ class Environment extends ModernEventEmitter {
             if (params[optParam]) this._params[optParam] = params[optParam];
             if (this._params[optParam] === undefined) this._params[optParam] = null;
         }
+        
+        this.on('newListener', (type, handler) => {
+            this.log('Handler for *' + type + '* added' + (handler.ctx ? ' by |' + handler.ctx.name + '| .' : ''));
+        }, this);
 
         return true;
     }
