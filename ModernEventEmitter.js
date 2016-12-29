@@ -16,9 +16,49 @@ class ModernEventEmitter extends EventEmitter {
     };
 
 
+
+    emit(type) {
+        var er, handler, len, args, i, events;
+
+        events = this._events;
+        if (!events) return false;
+
+        handler = events[type];
+        if (!handler) return false;
+
+        var self = this;
+        var isFn = typeof handler === 'function';
+        if (isFn && handler.ctx) self = handler.ctx;
+        
+        len = arguments.length;
+        switch (len) {
+            // fast cases
+            case 1:
+                this.emitNone(handler, isFn, self);
+                break;
+            case 2:
+                this.emitOne(handler, isFn, self, arguments[1]);
+                break;
+            case 3:
+                this.emitTwo(handler, isFn, self, arguments[1], arguments[2]);
+                break;
+            case 4:
+                this.emitThree(handler, isFn, self, arguments[1], arguments[2], arguments[3]);
+                break;
+            // slower
+            default:
+                args = new Array(len - 1);
+                for (i = 1; i < len; i++)
+                    args[i - 1] = arguments[i];
+                this.emitMany(handler, isFn, self, args);
+        }
+
+        return true;
+    }
+
+
     emitNone (handler, isFn, self) {
         if (isFn) {
-            if (handler.ctx) self = handler.ctx;
             handler.call(self);
         } else {
             var len = handler.length;
@@ -32,7 +72,6 @@ class ModernEventEmitter extends EventEmitter {
     
     emitOne(handler, isFn, self, arg1) {
         if (isFn) {
-            if (handler.ctx) self = handler.ctx;
             handler.call(self, arg1);
         } else {
             var len = handler.length;
@@ -46,7 +85,6 @@ class ModernEventEmitter extends EventEmitter {
     
     emitTwo(handler, isFn, self, arg1, arg2) {
         if (isFn) {
-            if (handler.ctx) self = handler.ctx;
             handler.call(self, arg1, arg2);
         } else {
             var len = handler.length;
@@ -60,7 +98,6 @@ class ModernEventEmitter extends EventEmitter {
     
     emitThree(handler, isFn, self, arg1, arg2, arg3) {
         if (isFn) {
-            if (handler.ctx) self = handler.ctx;
             handler.call(self, arg1, arg2, arg3);
         } else {
             var len = handler.length;
@@ -74,7 +111,6 @@ class ModernEventEmitter extends EventEmitter {
 
     emitMany(handler, isFn, self, args) {
         if (isFn) {
-            if (handler.ctx) self = handler.ctx;
             handler.apply(self, args);
         } else {
             var len = handler.length;
