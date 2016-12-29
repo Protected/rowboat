@@ -15,6 +15,7 @@ class Environment extends CancellableEventEmitter {
     get optionalParams() { return []; }
     
     constructor(envName, name) {
+        super();
     
         this._envName = envName;
         this._name = name;

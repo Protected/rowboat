@@ -188,12 +188,12 @@ class EnvDiscord extends Environment {
     
     disconnect() {
         if (this._carrier) clearInterval(this._carrier);
-        if (this._client) this._client.destroy().then(
+        if (this._client) this._client.destroy().then(() => {
             this.carrier = null;
             this.client = null;
             this.log(`Disconnected from ${this._name}`);
             this.emit('disconnected');
-        ).catch(this.genericErrorHandler);
+        }).catch(this.genericErrorHandler);
     }
     
     
