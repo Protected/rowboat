@@ -4,9 +4,11 @@
 
 class ModernEventEmitter {
 
-    var _events = null;
-    var _eventsCount = 0;
-    
+     ModernEventEmitter() {
+         this._events = null;
+         this._eventsCount = 0;
+     }   
+
 
     _addListener(type, listener, prepend) {
         var existing;

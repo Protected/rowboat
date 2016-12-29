@@ -70,7 +70,7 @@ class EnvDiscord extends Environment {
                 channelid = message.author.id;
             }
 
-            this.emit('message', type, message.content, message.author.id, channelid, message);
+            this.emit('message', this, type, message.content, message.author.id, channelid, message);
         });
         
         
@@ -81,7 +81,7 @@ class EnvDiscord extends Environment {
             }
             var roles = member.roles.array();
             for (let role of roles) {
-                this.emit('gotRole', member.id, role.id);
+                this.emit('gotRole', this, member.id, role.id);
             }
         });
         
@@ -95,7 +95,7 @@ class EnvDiscord extends Environment {
             }
             var roles = member.roles.array();
             for (let role of roles) {
-                this.emit('lostRole', member.id, role.id);
+                this.emit('lostRole', this, member.id, role.id);
             }
         });
         
@@ -147,11 +147,11 @@ class EnvDiscord extends Environment {
             }
             
             for (let role of toget) {
-                this.emit('gotRole', newMember.id, role.id, null, true);
+                this.emit('gotRole', this, newMember.id, role.id, null, true);
             }
             
             for (let role of tolose) {
-                this.emit('lostRole', newMember.id, role.id, null, true);
+                this.emit('lostRole', this, newMember.id, role.id, null, true);
             }
             
         });
@@ -180,7 +180,7 @@ class EnvDiscord extends Environment {
         
 
         this._client.login(params.token).then(() => {
-            this.emit('connected');
+            this.emit('connected', this);
         }).catch(this.genericErrorHandler);
         
     }
@@ -192,7 +192,7 @@ class EnvDiscord extends Environment {
             this.carrier = null;
             this.client = null;
             this.log(`Disconnected from ${this._name}`);
-            this.emit('disconnected');
+            this.emit('disconnected', this);
         }).catch(this.genericErrorHandler);
     }
     
@@ -369,7 +369,7 @@ class EnvDiscord extends Environment {
                 }
             ).catch(this.genericErrorHandler);
             for (let message of packages[rawchannelid].messages) {
-                this.emit('messageSent', rawchannelid, message);
+                this.emit('messageSent', this, rawchannelid, message);
             }
         }
         this._outbox = [];
@@ -425,14 +425,14 @@ class EnvDiscord extends Environment {
     triggerJoin(authorid, channels, info) {
         if (!info) info = {};
         for (let channel of channels) {
-            this.emit('join', authorid, channel.id, info);
+            this.emit('join', this, authorid, channel.id, info);
         }
     }
     
     triggerPart(authorid, channels, info) {
         if (!info) info = {};
         for (let channel of channels) {
-            this.emit('part', authorid, channel.id, info);
+            this.emit0('part', this, authorid, channel.id, info);
         }
     }
     

@@ -71,7 +71,7 @@ class EnvIRC extends Environment {
         
         
         this._client.addListener('registered', (messageObj) => {
-            this.emit('connected');
+            this.emit('connected', this);
             if (this._client.nick != params.nickname) {
                 this.log('warning', "I am " + this._client.nick + " but should be " + params.nickname + "; Will try to retake.");
                 this._retake = setInterval(() => {
@@ -89,7 +89,7 @@ class EnvIRC extends Environment {
                 type = "private";
                 channelid = authorid;
             }
-            this.emit('message', type, message, authorid, channelid, messageObj);
+            this.emit('message', this, type, message, authorid, channelid, messageObj);
         });
     
         this._client.addListener('action', (from, to, message, messageObj) => {
@@ -100,7 +100,7 @@ class EnvIRC extends Environment {
                 type = "privateaction";
                 channelid = authorid;
             }
-            this.emit('message', type, message, authorid, channelid, messageObj);
+            this.emit('message', this, type, message, authorid, channelid, messageObj);
         });
         
         this._client.addListener('notice', (from, to, message, messageObj) => {
@@ -148,7 +148,7 @@ class EnvIRC extends Environment {
             if (!channel || !arg || !this._people[arg]) return;
             if (!this._people[arg].modes[channel]) this._people[arg].modes[channel] = [];
             this._people[arg].modes[channel].push(mode);
-            this.emit('gotRole', this._people[arg].id, mode, channel);
+            this.emit('gotRole', this, this._people[arg].id, mode, channel);
         });
         
         this._client.addListener('-mode', (channel, by, mode, arg, messageObj) => {
@@ -156,7 +156,7 @@ class EnvIRC extends Environment {
             if (this._people[arg].modes[channel]) {
                 this._people[arg].modes[channel] = this._people[arg].modes[channel].filter((eachmode) => eachmode != mode);
             }
-            this.emit('lostRole', this._people[arg].id, mode, channel);
+            this.emit('lostRole', this, this._people[arg].id, mode, channel);
         });
         
         
@@ -190,7 +190,7 @@ class EnvIRC extends Environment {
     disconnect() {
         if (this._client) this._client.disconnect();
         this._client = null;
-        this.emit('disconnected');
+        this.emit('disconnected', this);
     }
 
 
@@ -210,7 +210,7 @@ class EnvIRC extends Environment {
                 sent = true;
             }
             if (sent) {
-                this.emit('messageSent', targetid, msg);
+                this.emit('messageSent', this, targetid, msg);
             }
         } catch (e) {
             this.genericErrorHandler(e.message);
@@ -462,7 +462,7 @@ class EnvIRC extends Environment {
         var authorid = nick + '!' + messageObj.user + '@' + messageObj.host;
         
         for (let channelid of channels) {
-            this.emit('join', authorid, channelid, messageObj);
+            this.emit('join', this, authorid, channelid, messageObj);
         }
     }
     
@@ -471,7 +471,7 @@ class EnvIRC extends Environment {
         messageObj.reason = reason;
         
         for (let channelid of channels) {
-            this.emit('part', authorid, channelid, messageObj);
+            this.emit('part', this, authorid, channelid, messageObj);
         }
     }
     

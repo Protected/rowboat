@@ -59,7 +59,7 @@ class EnvTwitch extends Environment {
                 }, this.param('senddelay'));
 
             this.log("Environment is now ready!");
-            this.emit('connected');
+            this.emit('connected', this);
         });
         
 
@@ -73,7 +73,7 @@ class EnvTwitch extends Environment {
                 type = "private";
             }
 
-            this.emit('message', type, message, userstate.username, channel, userstate);
+            this.emit('message', this, type, message, userstate.username, channel, userstate);
         });
 
         
@@ -93,14 +93,14 @@ class EnvTwitch extends Environment {
         this._client.on("mod", (channel, username) => {
             if (this._people[username]) {
                 this._people[username].mod[channel] = true;
-                this.emit('gotRole', username, 'mod', channel);
+                this.emit('gotRole', this, username, 'mod', channel);
             }
         });
         
         this._client.on("unmod", (channel, username) => {
             if (this._people[username]) {
                 this._people[username].mod[channel] = false;
-                this.emit('lostRole', username, 'mod', channel);
+                this.emit('lostRole', this, username, 'mod', channel);
             }
         });
         
@@ -115,7 +115,7 @@ class EnvTwitch extends Environment {
         this.carrier = null;
         this.client = null;
         this.log(`Disconnected from ${this._name}`);
-        this.emit('disconnected');
+        this.emit('disconnected', this);
     }
     
     
@@ -221,10 +221,10 @@ class EnvTwitch extends Environment {
         try {
             if (parts = item[0].match(/^#.+$/)) {
                 this._client.say(item[0], item[1]);
-                this.emit('messageSent', item[0], item[1]);
+                this.emit('messageSent', this, item[0], item[1]);
             } else {
                 this._client.whisper(item[0], item[1]);
-                this.emit('messageSent', item[0], item[1]);
+                this.emit('messageSent', this, item[0], item[1]);
             }
         } catch (e) {
             this.genericErrorHandler(e.message);
@@ -265,14 +265,14 @@ class EnvTwitch extends Environment {
     triggerJoin(authorid, channels, info) {
         if (!info) info = {};
         for (let channel of channels) {
-            this.emit('join', authorid, channel, info);
+            this.emit('join', this, authorid, channel, info);
         }
     }
     
     triggerPart(authorid, channels, info) {
         if (!info) info = {};
         for (let channel of channels) {
-            this.emit('part', authorid, channel, info);
+            this.emit('part', this, authorid, channel, info);
         }
     }
     
