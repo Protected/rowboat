@@ -2,7 +2,19 @@
 
 var EventEmitter = require('events');
 
-class CancellableEventEmitter extends EventEmitter {
+class ModernEventEmitter extends EventEmitter {
+
+
+    addListener(type, listener, self) {
+        if (typeof listener == "function" && self) listener.ctx = self;
+        return _addListener(this, type, listener, false);
+    };
+    
+    prependListener(type, listener, self) {
+        if (typeof listener == "function" && self) listener.ctx = self;
+        return _addListener(this, type, listener, true);
+    };
+
 
     emitNone (handler, isFn, self) {
         if (isFn)
@@ -10,8 +22,10 @@ class CancellableEventEmitter extends EventEmitter {
         else {
             var len = handler.length;
             var listeners = arrayClone(handler, len);
-            for (var i = 0; i < len; ++i)
+            for (var i = 0; i < len; ++i) {
+                if (!self && listeners[i].ctx) self = listeners[i].ctx;
                 if (!listeners[i].call(self)) break;
+            }
         }
     }
     
@@ -21,8 +35,10 @@ class CancellableEventEmitter extends EventEmitter {
         else {
             var len = handler.length;
             var listeners = arrayClone(handler, len);
-            for (var i = 0; i < len; ++i)
+            for (var i = 0; i < len; ++i) {
+                if (!self && listeners[i].ctx) self = listeners[i].ctx;
                 if (!listeners[i].call(self, arg1)) break;
+            }
         }
     }
     
@@ -32,8 +48,10 @@ class CancellableEventEmitter extends EventEmitter {
         else {
             var len = handler.length;
             var listeners = arrayClone(handler, len);
-            for (var i = 0; i < len; ++i)
+            for (var i = 0; i < len; ++i) {
+                if (!self && listeners[i].ctx) self = listeners[i].ctx;
                 if (!listeners[i].call(self, arg1, arg2)) break;
+            }
         }
     }
     
@@ -43,8 +61,10 @@ class CancellableEventEmitter extends EventEmitter {
         else {
             var len = handler.length;
             var listeners = arrayClone(handler, len);
-            for (var i = 0; i < len; ++i)
+            for (var i = 0; i < len; ++i) {
+                if (!self && listeners[i].ctx) self = listeners[i].ctx;
                 if (!listeners[i].call(self, arg1, arg2, arg3)) break;
+            }
         }
     }
 
@@ -54,11 +74,13 @@ class CancellableEventEmitter extends EventEmitter {
         else {
             var len = handler.length;
             var listeners = arrayClone(handler, len);
-            for (var i = 0; i < len; ++i)
+            for (var i = 0; i < len; ++i) {
+                if (!self && listeners[i].ctx) self = listeners[i].ctx;
                 if (!listeners[i].apply(self, args)) break;
+            }
         }
     }
 
 }
 
-module.exports = CancellableEventEmitter;
+module.exports = ModernEventEmitter;

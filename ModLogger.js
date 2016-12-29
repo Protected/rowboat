@@ -64,9 +64,9 @@ class ModLogger extends Module {
         //Register callbacks
         
         for (var envname in envs) {
-            envs[envname].on('join', this.onJoin);
-            envs[envname].on('part', this.onPart);
-            envs[envname].on('message', this.onMessage);
+            envs[envname].on('join', this.onJoin, this);
+            envs[envname].on('part', this.onPart, this);
+            envs[envname].on('message', this.onMessage, this);
         }
         
         

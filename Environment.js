@@ -3,9 +3,9 @@
 
 var jsonfile = require('jsonfile');
 var logger = require('./Logger.js');
-var CancellableEventEmitter = require('./CancellableEventEmitter.js');
+var ModernEventEmitter = require('./ModernEventEmitter.js');
 
-class Environment extends CancellableEventEmitter {
+class Environment extends ModernEventEmitter {
 
     get name() { return this._name; }
     get envName() { return this._envName; }
