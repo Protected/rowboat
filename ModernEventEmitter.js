@@ -1,19 +1,56 @@
 'use strict';
 
-var EventEmitter = require('events');
+//Based on node.js EventEmitter as of node 7.x
 
-class ModernEventEmitter extends EventEmitter {
+class ModernEventEmitter {
+
+    var _events = null;
+    var _eventsCount = 0;
+    
+
+    _addListener(type, listener, prepend) {
+        var existing;
+
+        if (typeof listener !== 'function')
+            throw new TypeError('"listener" argument must be a function');
+
+        if (!this._events) {
+            this._events = {};
+            this._eventsCount = 0;
+        }
+        
+        existing = this._events[type];
+
+        if (!existing) {
+            existing = this._events[type] = listener;
+            ++this._eventsCount;
+        } else {
+            if (typeof existing === 'function') {
+                existing = this._events[type] = prepend ? [listener, existing] : [existing, listener];
+            } else {
+                if (prepend) {
+                    existing.unshift(listener);
+                } else {
+                    existing.push(listener);
+                }
+            }
+        }
+    }
 
 
     addListener(type, listener, self) {
         if (typeof listener == "function" && self) listener.ctx = self;
-        return _addListener(this, type, listener, false);
+        return this._addListener(type, listener, false);
     };
     
     prependListener(type, listener, self) {
         if (typeof listener == "function" && self) listener.ctx = self;
-        return _addListener(this, type, listener, true);
+        return this._addListener(type, listener, true);
     };
+    
+    on(type, listener, self) {
+        this.addListener(type, listener, self);
+    }
 
 
 
@@ -32,7 +69,6 @@ class ModernEventEmitter extends EventEmitter {
         
         len = arguments.length;
         switch (len) {
-            // fast cases
             case 1:
                 this.emitNone(handler, isFn, self);
                 break;
@@ -45,7 +81,6 @@ class ModernEventEmitter extends EventEmitter {
             case 4:
                 this.emitThree(handler, isFn, self, arguments[1], arguments[2], arguments[3]);
                 break;
-            // slower
             default:
                 args = new Array(len - 1);
                 for (i = 1; i < len; i++)
@@ -125,3 +160,11 @@ class ModernEventEmitter extends EventEmitter {
 }
 
 module.exports = ModernEventEmitter;
+
+
+
+function arrayClone(arr, i) {
+    var copy = new Array(i);
+    while (i--) copy[i] = arr[i];
+    return copy;
+}
