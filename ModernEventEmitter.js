@@ -17,65 +17,70 @@ class ModernEventEmitter extends EventEmitter {
 
 
     emitNone (handler, isFn, self) {
-        if (isFn)
+        if (isFn) {
+            if (handler.ctx) self = handler.ctx;
             handler.call(self);
-        else {
+        } else {
             var len = handler.length;
             var listeners = arrayClone(handler, len);
             for (var i = 0; i < len; ++i) {
-                if (!self && listeners[i].ctx) self = listeners[i].ctx;
+                if (listeners[i].ctx) self = listeners[i].ctx;
                 if (!listeners[i].call(self)) break;
             }
         }
     }
     
     emitOne(handler, isFn, self, arg1) {
-        if (isFn)
+        if (isFn) {
+            if (handler.ctx) self = handler.ctx;
             handler.call(self, arg1);
-        else {
+        } else {
             var len = handler.length;
             var listeners = arrayClone(handler, len);
             for (var i = 0; i < len; ++i) {
-                if (!self && listeners[i].ctx) self = listeners[i].ctx;
+                if (listeners[i].ctx) self = listeners[i].ctx;
                 if (!listeners[i].call(self, arg1)) break;
             }
         }
     }
     
     emitTwo(handler, isFn, self, arg1, arg2) {
-        if (isFn)
+        if (isFn) {
+            if (handler.ctx) self = handler.ctx;
             handler.call(self, arg1, arg2);
-        else {
+        } else {
             var len = handler.length;
             var listeners = arrayClone(handler, len);
             for (var i = 0; i < len; ++i) {
-                if (!self && listeners[i].ctx) self = listeners[i].ctx;
+                if (listeners[i].ctx) self = listeners[i].ctx;
                 if (!listeners[i].call(self, arg1, arg2)) break;
             }
         }
     }
     
     emitThree(handler, isFn, self, arg1, arg2, arg3) {
-        if (isFn)
+        if (isFn) {
+            if (handler.ctx) self = handler.ctx;
             handler.call(self, arg1, arg2, arg3);
-        else {
+        } else {
             var len = handler.length;
             var listeners = arrayClone(handler, len);
             for (var i = 0; i < len; ++i) {
-                if (!self && listeners[i].ctx) self = listeners[i].ctx;
+                if (listeners[i].ctx) self = listeners[i].ctx;
                 if (!listeners[i].call(self, arg1, arg2, arg3)) break;
             }
         }
     }
 
     emitMany(handler, isFn, self, args) {
-        if (isFn)
+        if (isFn) {
+            if (handler.ctx) self = handler.ctx;
             handler.apply(self, args);
-        else {
+        } else {
             var len = handler.length;
             var listeners = arrayClone(handler, len);
             for (var i = 0; i < len; ++i) {
-                if (!self && listeners[i].ctx) self = listeners[i].ctx;
+                if (listeners[i].ctx) self = listeners[i].ctx;
                 if (!listeners[i].apply(self, args)) break;
             }
         }
