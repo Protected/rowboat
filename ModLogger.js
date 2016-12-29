@@ -64,9 +64,9 @@ class ModLogger extends Module {
         //Register callbacks
         
         for (var envname in envs) {
-            envs[envname].registerOnJoin(this.onJoin, this);
-            envs[envname].registerOnPart(this.onPart, this);
-            envs[envname].registerOnMessage(this.onMessage, this);
+            envs[envname].on('join', this.onJoin);
+            envs[envname].on('part', this.onPart);
+            envs[envname].on('message', this.onMessage);
         }
         
         
@@ -203,8 +203,9 @@ class ModLogger extends Module {
     }
     
     
-    onPart(env, authorid, channelid, reason, rawobj) {
-        var reasonstr = reason;
+    onPart(env, authorid, channelid, rawobj) {
+        var reason = rawobj.reason;
+        var reasonstr = null;
         if (typeof reason == "object") {
             reasonstr = reason[0];
             if (reason[2]) reasonstr += ' by ' + reason[2];

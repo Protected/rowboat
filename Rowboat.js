@@ -87,7 +87,7 @@ var loadEnvironments = exports.loadEnvironments = function() {
             return false;
         }
         
-        env.registerOnError((env, err) => {
+        env.on('error', (err) => {
             logger.warn("[" + env.name + "] Error: " + err);
         });
         environments[env.name] = env;

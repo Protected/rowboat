@@ -70,19 +70,18 @@ class EnvDiscord extends Environment {
                 channelid = message.author.id;
             }
 
-            for (let callback of this._cbMessage) {
-                if (this.invokeRegisteredCallback(callback, [this, type, message.content, message.author.id, channelid, message])) {
-                    break;
-                }
-            }
-            
+            this.emit('message', type, message.content, message.author.id, channelid, message);
         });
         
         
         this._client.on("guildMemberAdd", (member) => {
             var chans = this.findAccessChannels(member);
             if (chans.length) {
-                this.triggerJoin(member.id, chans, ["add"]);
+                this.triggerJoin(member.id, chans, {reason: "add"});
+            }
+            var roles = member.roles.array();
+            for (let role of roles) {
+                this.emit('gotRole', member.id, role.id);
             }
         });
         
@@ -92,13 +91,19 @@ class EnvDiscord extends Environment {
             
             var chans = this.findAccessChannels(member);
             if (chans.length) {
-                this.triggerPart(member.id, chans, ["remove"]);
+                this.triggerPart(member.id, chans, {reason: "remove"});
+            }
+            var roles = member.roles.array();
+            for (let role of roles) {
+                this.emit('lostRole', member.id, role.id);
             }
         });
         
         
         this._client.on("guildMemberUpdate", (oldMember, newMember) => {
             if (newMember.user.presence.status == "offline") return;
+        
+            //Channels
         
             var had = {};
             for (let chan of this.findAccessChannels(oldMember)) {
@@ -117,11 +122,38 @@ class EnvDiscord extends Environment {
             }            
         
             if (tojoin.length) {
-                this.triggerJoin(newMember.id, tojoin, ["permissions"]);
+                this.triggerJoin(newMember.id, tojoin, {reason: "permissions"});
             }
             if (topart.length) {
-                this.triggerPart(oldMember.id, topart, ["permissions"]);
+                this.triggerPart(oldMember.id, topart, {reason: "permissions"});
             }
+            
+            //Roles
+            
+            had = {};
+            for (let role of oldMember.roles) {
+                had[role.id] = role;
+            }
+            
+            var toget = [];
+            var tolose = [];
+            
+            for (let role of newMember.roles) {
+                if (!had[role.id]) toget.push(role);
+                else delete had[role.id];
+            }
+            for (let roleid in had) {
+                tolose.push(had[roleid]);
+            }
+            
+            for (let role of toget) {
+                this.emit('gotRole', newMember.id, role.id, null, true);
+            }
+            
+            for (let role of tolose) {
+                this.emit('lostRole', newMember.id, role.id, null, true);
+            }
+            
         });
         
         
@@ -135,29 +167,33 @@ class EnvDiscord extends Environment {
             }
             if (!reason) return;
             
-            var member = this._server.members.find('id', newUser.id);
+            var member = this._server.members.get(newUser.id);
             var chans = this.findAccessChannels(member);
             
             if (reason == "join") {
-                this.triggerJoin(member.id, chans, [reason, newUser.presence.status]);
+                this.triggerJoin(member.id, chans, {reason: reason, status: newUser.presence.status});
             }
             if (reason == "part") {
-                if (member) this.triggerPart(member.id, chans, [reason, oldUser.presence.status]);
+                if (member) this.triggerPart(member.id, chans, {reason: reason, status: oldUser.presence.status});
             }
         });
         
 
-        this._client.login(params.token).catch(this.genericErrorHandler);
+        this._client.login(params.token).then(() => {
+            this.emit('connected');
+        }).catch(this.genericErrorHandler);
         
     }
     
     
     disconnect() {
         if (this._carrier) clearInterval(this._carrier);
-        if (this._client) this._client.destroy().catch(this.genericErrorHandler);
-        this.carrier = null;
-        this.client = null;
-        this.log(`Disconnected from ${this._name}`);
+        if (this._client) this._client.destroy().then(
+            this.carrier = null;
+            this.client = null;
+            this.log(`Disconnected from ${this._name}`);
+            this.emit('disconnected');
+        ).catch(this.genericErrorHandler);
     }
     
     
@@ -178,7 +214,7 @@ class EnvDiscord extends Environment {
     
 
     idToDisplayName(id) {
-        var member = this._server.members.find("id", id);
+        var member = this._server.members.get(id);
         if (member) return (member.nickname ? member.nickname : member.user.username);
         return id;
     }
@@ -214,12 +250,12 @@ class EnvDiscord extends Environment {
     
     
     idIsSecured(id) {
-        var member = this._server.members.find("id", id);
+        var member = this._server.members.get(id);
         return !!member;
     }
     
     idIsAuthenticated(id) {
-        var member = this._server.members.find("id", id);
+        var member = this._server.members.get(id);
         return !!member;
     }
     
@@ -248,28 +284,54 @@ class EnvDiscord extends Environment {
     }
     
     
+    listUserRoles(id, channel) {
+        var member = this._server.members.get(id);
+        if (!member) return [];
+        var result = [];
+        var roles = member.roles.array().sort((a, b) => (b.position - a.position));
+        for (let role of roles) {
+            result.push(role.id);
+        }
+        return result;
+    }
+    
+    
     channelIdToDisplayName(channelid) {
-        var channel = this._server.channels.find("id", channelid);
+        var channel = this._server.channels.get(channelid);
         if (channel) return channel.name;
         return channelid;
     }
     
     
+    roleIdToDisplayName(roleid) {
+        var role = this._server.roles.get(roleid);
+        if (role) return role.name;
+        return roleid;
+    }
+    
+    
+    displayNameToRoleId(displayName) {
+        var role = this._server.roles.find('name', displayName);
+        if (role) return role.id;
+        return null;
+    }
+    
+    
     normalizeFormatting(text) {
         text = String(text).replace(/<@&([0-9]+)>/g, (match, id) => {
-            let role = this._server.roles.find("id", id);
+            let role = this._server.roles.get(id);
             if (!role) return "";
             return "@" + role.name;
         });
         
         text = text.replace(/<@!?([0-9]+)>/g, (match, id) => {
-            let user = this._server.members.find("id", id);
+            let user = this._server.members.get(id);
             if (!user) return "";
             return "@" + (user.nickname ? user.nickname : user.user.username);
         });
         
         text = text.replace(/<#([0-9]+)>/g, (match, id) => {
-            let chan = this._server.channels.find("id", id);
+            let chan = this._server.channels.get(id);
             if (!chan) return "";
             return "#" + chan.name;
         });
@@ -306,6 +368,9 @@ class EnvDiscord extends Environment {
                     split: {char: "\n"}
                 }
             ).catch(this.genericErrorHandler);
+            for (let message of packages[rawchannelid].messages) {
+                this.emit('messageSent', rawchannelid, message);
+            }
         }
         this._outbox = [];
     }
@@ -320,10 +385,10 @@ class EnvDiscord extends Environment {
 
         if (typeof targetid == "string") {
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.channels.filter((channel) => (channel.type == "text")).find("id", targetid);
+                this._channels[targetid] = this._server.channels.filter((channel) => (channel.type == "text")).get(targetid);
             }
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.members.find("id", targetid);
+                this._channels[targetid] = this._server.members.get(targetid);
             }
             if (!this._channels[targetid]) {
                 this._channels[targetid] = this._server.channels.filter((channel) => (channel.type == "text")).find("name", targetid);
@@ -359,23 +424,15 @@ class EnvDiscord extends Environment {
     
     triggerJoin(authorid, channels, info) {
         if (!info) info = {};
-        for (let callback of this._cbJoin) {
-            for (let channel of channels) {
-                if (this.invokeRegisteredCallback(callback, [this, authorid, channel.id, info])) {
-                    break;
-                }
-            }
+        for (let channel of channels) {
+            this.emit('join', authorid, channel.id, info);
         }
     }
     
     triggerPart(authorid, channels, info) {
         if (!info) info = {};
-        for (let callback of this._cbPart) {
-            for (let channel of channels) {
-                if (this.invokeRegisteredCallback(callback, [this, authorid, channel.id, info])) {
-                    break;
-                }
-            }
+        for (let channel of channels) {
+            this.emit('part', authorid, channel.id, info);
         }
     }
     

@@ -27,7 +27,7 @@ class ModRolePermission extends Module {
                 var env = envs[passedname];
                 if (env.envName != 'Discord') return [];
             
-                var member = env.server.members.find('id', userid);
+                var member = env.server.members.get(userid);
                 if (!member) return [];
                 
                 var result = [];

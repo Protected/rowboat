@@ -52,7 +52,7 @@ class ModCommands extends Module {
         //Register callbacks
         
         for (let envname of this.param('allowedenvs')) {
-            this.env(envname).registerOnMessage(this.onCommandMessage, this);
+            this.env(envname).on('message', this.onCommandMessage);
         }
         
         

@@ -54,9 +54,9 @@ class ModActivity extends Module {
         //Register callbacks
         
         for (var envname in envs) {
-            envs[envname].registerOnJoin(this.onJoin, this);
-            envs[envname].registerOnPart(this.onPart, this);
-            envs[envname].registerOnMessage(this.onMessage, this);
+            envs[envname].on('join', this.onJoin);
+            envs[envname].on('part', this.onPart);
+            envs[envname].on('message', this.onMessage);
         }
 
         
@@ -318,12 +318,12 @@ class ModActivity extends Module {
     }
     
     
-    onPart(env, authorid, channelid, reason, rawobj) {
+    onPart(env, authorid, channelid, rawobj) {
         var nickname = env.idToDisplayName(authorid);
         var register = this.getNickRegister(env.name, nickname);
         
         register.seen = [channelid, authorid, moment().unix()];
-        register.seenreason = reason;
+        register.seenreason = rawobj.reason;
         
         this.authorSeen(env.name, register);
     }

@@ -98,7 +98,7 @@ class ModGrabber extends Module {
             return false;
         }
         
-        envs[this.param('env')].registerOnMessage(this.onMessage, this);
+        envs[this.param('env')].on('message', this.onMessage);
         
         
         this.mod('Commands').registerCommand('grabscan', {
