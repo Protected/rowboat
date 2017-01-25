@@ -59,6 +59,9 @@ class ModSongRanking extends Module {
         return this.mod(this.param('grabber'));
     }
     
+    get denv() {
+        return this.env(this.param('env'));
+    }    
     
     initialize(envs, mods, moduleRequest) {
         if (!super.initialize(envs, mods, moduleRequest)) return false;
@@ -76,10 +79,16 @@ class ModSongRanking extends Module {
         }, self);
         
         
-        this.env(this.param('env')).on('connected', (env) => {
-            env.client.on('messageUpdate', (oldMessage, newMessage) => {
-                //TODO
+        this.denv.on('connected', (env) => {
+        
+            env.client.on('messageReactionAdd', (messageReaction, user) => {
+                env.msg(messageReaction.message.channel.id, user.username + " added " + messageReaction.emoji.name);
             });
+            
+            env.client.on('messageReactionRemove', (messageReaction, user) => {
+                env.msg(messageReaction.message.channel.id, user.username + " removed " + messageReaction.emoji.name);
+            });
+            
         }, self);
         
         
