@@ -76,9 +76,11 @@ class ModSongRanking extends Module {
         }, self);
         
         
-        this.env(this.param('env')).client.on('messageUpdate', (oldMessage, newMessage) => {
-            //TODO
-        });
+        this.env(this.param('env')).on('connected', (env) => {
+            env.client.on('messageUpdate', (oldMessage, newMessage) => {
+                //TODO
+            });
+        }, self);
         
         
         this.mod('Commands').registerCommand('songlike', {
