@@ -76,6 +76,11 @@ class ModSongRanking extends Module {
         }, self);
         
         
+        this.env(this.param('env')).client.on('messageUpdate', (oldMessage, newMessage) => {
+            //TODO
+        });
+        
+        
         this.mod('Commands').registerCommand('songlike', {
             description: 'Assigns a personal like level to a song in the index.',
             args: ['hash', 'likeability'],

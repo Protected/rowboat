@@ -432,7 +432,7 @@ class EnvDiscord extends Environment {
     triggerPart(authorid, channels, info) {
         if (!info) info = {};
         for (let channel of channels) {
-            this.emit0('part', this, authorid, channel.id, info);
+            this.emit('part', this, authorid, channel.id, info);
         }
     }
     
