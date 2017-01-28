@@ -82,11 +82,11 @@ class ModSongRanking extends Module {
         this.denv.on('connected', (env) => {
         
             env.client.on('messageReactionAdd', (messageReaction, user) => {
-                env.msg(messageReaction.message.channel.id, user.username + " added " + messageReaction.emoji.name);
+                //env.msg(messageReaction.message.channel.id, user.username + " added " + messageReaction.emoji.name);
             });
             
             env.client.on('messageReactionRemove', (messageReaction, user) => {
-                env.msg(messageReaction.message.channel.id, user.username + " removed " + messageReaction.emoji.name);
+                //env.msg(messageReaction.message.channel.id, user.username + " removed " + messageReaction.emoji.name);
             });
             
         }, self);
