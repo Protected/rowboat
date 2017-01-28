@@ -293,12 +293,12 @@ class ModCommands extends Module {
         for (var i = 0; i < args.length - 1; i++) {
             while (i < args.length - 1 && args[i].match(/^".*[^"]$/)) {
                 args[i] = args[i] + ' ' + args[i+1];
-                args.splice(i+1);
+                args.splice(i+1, 1);
             }
         }
 
         for (var i = 0; i < args.length; i++) {
-            let m = args[i].match(/^"([^ ]* .*)"$/);
+            let m = args[i].match(/^"(.*)"$/);
             if (m) args[i] = m[1];
         }
 
