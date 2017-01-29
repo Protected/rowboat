@@ -373,13 +373,13 @@ class ModCommands extends Module {
         //callback(env, type, userid, channelid, command, args, handle, ep)
         
         if (!descriptor.callback[targetmod](env, type, authorid, channelid, command, passargs, handle, {
-                function(msg) {
+                reply: function(msg) {
                     env.msg(channelid, env.applyFormatting(msg));
                 },
-                function(msg) {
+                pub: function(msg) {
                     env.msg((channelid == authorid ? null : channelid), env.applyFormatting(msg));
                 },
-                function(msg) {
+                priv: function(msg) {
                     if (descriptor.unobtrusive) {
                         env.notice(authorid, env.applyFormatting(msg));
                     } else {
