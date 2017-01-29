@@ -304,7 +304,7 @@ class ModCommands extends Module {
         
         
         var targetmod = null;
-        if (args[0] && args[0].match(/^|.+|$/)) {
+        if (args[0] && args[0].match(/^\|.+\|$/)) {
             targetmod = args[0].substr(1, args[0].length - 2);
             args.splice(0, 1);
         }
