@@ -37,7 +37,7 @@ class ModGoogle extends Module {
       
         //Register callbacks
         
-        this.mod('Commands').registerCommand('google', {
+        this.mod('Commands').registerCommand(this, 'google', {
             description: "Let me google that for you.",
             args: ["string", true],
             details: [
@@ -47,7 +47,7 @@ class ModGoogle extends Module {
             ],
             types: ["regular"],
             permissions: ["trusted","administrator"]
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep)=> {
         
             var url = 'https://www.googleapis.com/customsearch/v1?key=' + this.param('apikey') + '&cx=' + this.param('cx')
                     + '&num=' + this.param('results')
@@ -103,10 +103,10 @@ class ModGoogle extends Module {
                 try {
                     let items = JSON.parse(body)['items'];
                     if (!items || !items.length) {
-                        reply("No results found!");
+                        ep.reply("No results found!");
                     } else {
                         for (let j = 0; j < items.length && j < this.param('results'); j++) {
-                            reply(items[j]['title'] + ' - ' + items[j]['link']);
+                            ep.reply(items[j]['title'] + ' - ' + items[j]['link']);
                         }
                     }
                 } catch (err) {

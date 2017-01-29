@@ -101,12 +101,12 @@ class ModGrabber extends Module {
         envs[this.param('env')].on('message', this.onMessage, this);
         
         
-        this.mod('Commands').registerCommand('grabscan', {
+        this.mod('Commands').registerCommand(this, 'grabscan', {
             description: 'Scans channel history until INTERVAL days ago and grabs any song files.',
             args: ['channelid', 'interval'],
             environments: ['Discord'],
             permissions: [PERM_ADMIN]
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var channel = env.server.channels.find('id', args.channelid);
             if (!channel) return false;
@@ -114,7 +114,7 @@ class ModGrabber extends Module {
             var endNow = false;
             var cutoff = (moment().unix() - args.interval * 86400) * 1000;
             
-            reply("Scanning...");
+            ep.reply("Scanning...");
             
             var scanning = null;
             var scanner = () => {
@@ -129,7 +129,7 @@ class ModGrabber extends Module {
                         this._scanQueue.push([message.author.id, message.content, message]);
                     }
                     if (endNow) {
-                        reply("Scan complete.");
+                        ep.reply("Scan complete.");
                     } else {
                         scanning = messagesarr[messagesarr.length - 1].id;
                         setTimeout(scanner, 250);
@@ -142,22 +142,22 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand('grabundo', {
+        this.mod('Commands').registerCommand(this, 'grabundo', {
             description: 'Undo a single recent grab from this session.',
             args: ['offset'],
             minArgs: 0,
             permissions: [PERM_ADMIN, PERM_MODERATOR]
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (!args.offset || args.offset > -1) args.offset = -1;
         
             if (args.offset < -20) {
-                reply('Offset too high. Use grabdelete instead.');
+                ep.reply('Offset too high. Use grabdelete instead.');
                 return true;
             }
         
             if (-args.offset > this._sessionGrabs.length) {
-                reply('Offset not found in recent history.');
+                ep.reply('Offset not found in recent history.');
                 return true;
             }
             
@@ -168,9 +168,9 @@ class ModGrabber extends Module {
                 } else {
                     this.removeByHash(info.hash);
                 }
-                reply('Ok.');
+                ep.reply('Ok.');
             } else {
-                reply('Historic hash not found in index! I will just remove it from the history.');
+                ep.reply('Historic hash not found in index! I will just remove it from the history.');
             }
             
             this._sessionGrabs.splice(-args.offset - 1, 1);
@@ -179,57 +179,57 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand('grabdelete', {
+        this.mod('Commands').registerCommand(this, 'grabdelete', {
             description: 'Delete an indexed song by hash.',
             args: ['hashoroffset'],
             permissions: [PERM_ADMIN, PERM_MODERATOR]
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
                     
             var hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
-                reply('Offset not found in recent history.');
+                ep.reply('Offset not found in recent history.');
                 return true;
             } else if (!hash) {
-                reply('Hash not found.');
+                ep.reply('Hash not found.');
                 return true;
             }
                     
             if (this.removeByHash(hash)) {
                 this._sessionGrabs = this._sessionGrabs.filter((item) => item[0] != hash);
-                reply('Ok.');
+                ep.reply('Ok.');
             } else {
-                reply('Hash not found.');
+                ep.reply('Hash not found.');
             }
         
             return true;
         });
         
         
-        this.mod('Commands').registerCommand('grablatest', {
+        this.mod('Commands').registerCommand(this, 'grablatest', {
             description: 'Get the hash of a single recent song.',
             args: ['hashoroffset'],
             minArgs: 0
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
-                reply('Offset not found in recent history.');
+                ep.reply('Offset not found in recent history.');
                 return true;
             } else if (!hash) {
-                reply('Hash not found.');
+                ep.reply('Hash not found.');
                 return true;
             }
             
-            reply('`' + hash + '`');
+            ep.reply('`' + hash + '`');
             
             return true;
         });
         
         
-        this.mod('Commands').registerCommand('songfind', {
+        this.mod('Commands').registerCommand(this, 'songfind', {
             description: 'Find an indexed song.',
             args: ['searchstr', true]
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let page = 0;
             let searchstr = args.searchstr;
@@ -246,44 +246,44 @@ class ModGrabber extends Module {
         
             let results = this.filterSongsBySearchString(searchstr);
             if (!results.length) {
-                reply("No results.");
+                ep.reply("No results.");
             }
             
             results = results.slice(page * 10, page * 10 + 10);
             
             for (let info of results) {
-                reply('`' + info.hash + ' ' + info.name + (info.author ? ' (' + info.author + ')' : '') + '`');
+                ep.reply('`' + info.hash + ' ' + info.name + (info.author ? ' (' + info.author + ')' : '') + '`');
             }
         
             return true;
         });
         
         
-        this.mod('Commands').registerCommand('songset', {
+        this.mod('Commands').registerCommand(this, 'songset', {
             description: 'Change metadata of an indexed song.',
             details: [
                 "Allowed fields: " + SET_FIELDS.join(', ')
             ],
             args: ['hashoroffset', 'field', 'value', true],
             permissions: [PERM_ADMIN, PERM_MODERATOR, PERM_TRUSTED]
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
-                reply('Offset not found in recent history.');
+                ep.reply('Offset not found in recent history.');
                 return true;
             } else if (!hash) {
-                reply('Hash not found.');
+                ep.reply('Hash not found.');
                 return true;
             }
         
             if (!this._index[hash]) {
-                reply("Song not found in index.");
+                ep.reply("Song not found in index.");
                 return true;
             }
             
             if (SET_FIELDS.indexOf(args.field) < 0) {
-                reply("Invalid field name.");
+                ep.reply("Invalid field name.");
                 return true;
             }
             
@@ -291,46 +291,46 @@ class ModGrabber extends Module {
             
             this.saveIndex();
             
-            reply("Ok.");
+            ep.reply("Ok.");
         
             return true;
         });
         
         
-        this.mod('Commands').registerCommand('songget', {
+        this.mod('Commands').registerCommand(this, 'songget', {
             description: 'Retrieve metadata of an indexed song.',
             details: [
                 "Allowed fields: " + GET_FIELDS.join(', ')
             ],
             args: ['hashoroffset', 'field']
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
-                reply('Offset not found in recent history.');
+                ep.reply('Offset not found in recent history.');
                 return true;
             } else if (!hash) {
-                reply('Hash not found.');
+                ep.reply('Hash not found.');
                 return true;
             }
         
             if (!this._index[hash]) {
-                reply("Song not found in index.");
+                ep.reply("Song not found in index.");
                 return true;
             }
             
             if (GET_FIELDS.indexOf(args.field) < 0) {
-                reply("Invalid field name.");
+                ep.reply("Invalid field name.");
                 return true;
             }
             
-            reply(this._index[hash][args.field]);
+            ep.reply(this._index[hash][args.field]);
             
             return true;
         });
         
         
-        this.mod('Commands').registerCommand('songkw', {
+        this.mod('Commands').registerCommand(this, 'songkw', {
             description: 'Manipulate keywords associated with a song.',
             details: [
                 "The actions can be 'list', 'add' or 'remove'."
@@ -338,19 +338,19 @@ class ModGrabber extends Module {
             args: ['hashoroffset', 'action', 'keyword'],
             minArgs: 1,
             permissions: [PERM_ADMIN, PERM_MODERATOR, PERM_TRUSTED]
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
-                reply('Offset not found in recent history.');
+                ep.reply('Offset not found in recent history.');
                 return true;
             } else if (!hash) {
-                reply('Hash not found.');
+                ep.reply('Hash not found.');
                 return true;
             }
         
             if (!this._index[hash]) {
-                reply("Song not found in index.");
+                ep.reply("Song not found in index.");
                 return true;
             }
             
@@ -363,9 +363,9 @@ class ModGrabber extends Module {
                 if (this._index[hash].keywords.indexOf(args.keyword) < 0) {
                     this._index[hash].keywords.push(args.keyword);
                     this.saveIndex();
-                    reply("Ok.");
+                    ep.reply("Ok.");
                 } else {
-                    reply("Already existed.");
+                    ep.reply("Already existed.");
                 }
             
             } else if (args.action == "remove" && args.keyword) {
@@ -374,14 +374,14 @@ class ModGrabber extends Module {
                 if (ind > -1) {
                     this._index[hash].keywords.splice(ind, 1);
                     this.saveIndex();
-                    reply("Ok.");
+                    ep.reply("Ok.");
                 } else {
-                    reply("Doesn't exist.");
+                    ep.reply("Doesn't exist.");
                 }
                 
             } else {
             
-                reply("Keywords: " + this._index[hash].keywords.join(', '));
+                ep.reply("Keywords: " + this._index[hash].keywords.join(', '));
             
             }
             

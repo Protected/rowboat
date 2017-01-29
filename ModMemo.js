@@ -62,7 +62,7 @@ class ModMemo extends Module {
         }
 
         
-        this.mod("Commands").registerCommand('memo', {
+        this.mod("Commands").registerCommand(this, 'memo', {
             description: "Send or cancel a message. Actions: save, strongsave, cancel, outbox, inbox",
             args: ["action", "descriptor", true],
             details: [
@@ -82,10 +82,10 @@ class ModMemo extends Module {
             minArgs: 1,
             permissions: (this.param('permission') ? [this.param('permission')] : null),
             unobtrusive: true
-        }, (env, type, userid, command, args, handle, reply, pub, priv) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
             
             if (!env.idIsAuthenticated(userid)) {
-                reply("Your environment (" + env.name + ") ID is not authenticated. Only authenticated users can use this command.");
+                ep.reply("Your environment (" + env.name + ") ID is not authenticated. Only authenticated users can use this command.");
                 return true;
             }
             
@@ -96,22 +96,22 @@ class ModMemo extends Module {
                 
                 if (elements.error) {
                     if (elements.error == 1) {
-                        priv("Malformed recipient: Environment doesn't exist or missing target user.");
+                        ep.priv("Malformed recipient: Environment doesn't exist or missing target user.");
                     } else if (elements.error == 2) {
-                        priv("User account not found: " + elements.subject);
+                        ep.priv("User account not found: " + elements.subject);
                     } else {
-                        priv("Parse error " + elements.error);
+                        ep.priv("Parse error " + elements.error);
                     }
                     return true;
                 }
                 
                 if (!elements.message || !elements.to.length) {
-                    priv("Please include a message to be delivered and at least one recipient.");
+                    ep.priv("Please include a message to be delivered and at least one recipient.");
                     return true;
                 }
                 
                 if (this.createOutbox(env.name, userid, handle).length >= this.param("outboxSize")) {
-                    priv("Your outbox is full. Please cancel one or more pending messages or wait for them to be delived.");
+                    ep.priv("Your outbox is full. Please cancel one or more pending messages or wait for them to be delived.");
                     return true;
                 }
                 
@@ -136,7 +136,7 @@ class ModMemo extends Module {
                 this.indexToDisplay(register);
                 this.indexToUserid(register);
                 
-                priv("Your message has successfully been scheduled for delivery with the ID **" + register.id + "**.");
+                ep.priv("Your message has successfully been scheduled for delivery with the ID **" + register.id + "**.");
                 this.log('Registered new message ' + register.id + ' for delivery: ' + userid + ' on ' + env.name + '. Recipients: ' + elements.to.length);
                 
                 this.saveMemos();
@@ -146,7 +146,7 @@ class ModMemo extends Module {
             
                 let id = parseInt(args.descriptor[0]);
                 if (isNaN(id)) {
-                    priv("Please provide the numeric ID of the message you wish to cancel.");
+                    ep.priv("Please provide the numeric ID of the message you wish to cancel.");
                     return true;
                 }
                 
@@ -155,22 +155,22 @@ class ModMemo extends Module {
                         || (register.from.env != env.name || register.from.userid != userid)
                             && (!register.from.handle || register.from.handle != handle)
                             && !this.mod("Users").testPermissions(env.name, userid, [PERM_ADMIN], false, handle)) {
-                    priv("You do not have a message with the ID " + id);
+                    ep.priv("You do not have a message with the ID " + id);
                     return true;
                 }
                 
                 let delivered = register.to.filter((recipient) => recipient.done);
                 
                 if (delivered.length == register.to.length) {
-                    priv("The message with the ID **" + id + "** has already been delivered!");
+                    ep.priv("The message with the ID **" + id + "** has already been delivered!");
                 } else if (delivered.length) {
                     register.to = delivered;
-                    priv("The message with the ID **" + id + "** had already been delivered to " + delivered.length + " recipient" + (delivered.length != 1 ? "s" : "") + ". All undelivered recipients were removed.");
+                    ep.priv("The message with the ID **" + id + "** had already been delivered to " + delivered.length + " recipient" + (delivered.length != 1 ? "s" : "") + ". All undelivered recipients were removed.");
                     this.log('Removed undelivered recipients from message ' + id + ' by request from ' + userid + ' on ' + env.name);
                 } else {
                     this.removeFromIndices(register);
                     delete this._memo[register.id];
-                    priv("The message with the ID **" + id + "** was successfully canceled.");
+                    ep.priv("The message with the ID **" + id + "** was successfully canceled.");
                     this.log('Canceled message ' + id + ' by request from ' + userid + ' on ' + env.name);
                 }
                 
@@ -197,9 +197,9 @@ class ModMemo extends Module {
                     if (outbox.length) {
                         for (let register of outbox) {
                             let delivered = register.to.filter((recipient) => recipient.done).length;
-                            priv("(**" + register.id + "**) " + moment(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + " [Delivery: " + delivered + "/" + register.to.length + "]");
+                            ep.priv("(**" + register.id + "**) " + moment(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + " [Delivery: " + delivered + "/" + register.to.length + "]");
                         }
-                    } else priv("Your outbox is empty.");
+                    } else ep.priv("Your outbox is empty.");
                     
                 } else {
                 
@@ -208,15 +208,15 @@ class ModMemo extends Module {
                             || (register.from.env != env.name || register.from.userid != userid)
                                 && (!register.from.handle || register.from.handle != handle)
                                 && !this.mod("Users").testPermissions(env.name, userid, [PERM_ADMIN], false, handle)) {
-                        priv("You have not sent a message with the ID " + id);
+                        ep.priv("You have not sent a message with the ID " + id);
                         return true;
                     }
                     
-                    priv("(**" + register.id + "**) " + (register.strong ? "[S] " : "") + register.msg);
-                    priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment(register.ts).format(this.param('tsFormat')));
+                    ep.priv("(**" + register.id + "**) " + (register.strong ? "[S] " : "") + register.msg);
+                    ep.priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment(register.ts).format(this.param('tsFormat')));
                     
                     for (let recipient of register.to) {
-                        priv("  " + (recipient.done ? "**DELIVERED**" : "Pending") + " To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "") + " on " + recipient.env));
+                        ep.priv("  " + (recipient.done ? "**DELIVERED**" : "Pending") + " To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "") + " on " + recipient.env));
                     }
                 
                 }
@@ -241,21 +241,21 @@ class ModMemo extends Module {
                                 changes += 1;
                                 this.log('Delivered message ' + register.id + ' to ' + userid + ' on environment ' + env.name + ' while listing inbox.');
                             }
-                            priv("(**" + register.id + "**) " + moment(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + (isnew ? " [NEW]" : ""));
+                            ep.priv("(**" + register.id + "**) " + moment(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + (isnew ? " [NEW]" : ""));
                         }
-                    } else priv("Your inbox is empty.");
+                    } else ep.priv("Your inbox is empty.");
                     
                 } else {
                 
                     let register = this._memo[id];
                     if (!register) {
-                        priv("You have not received a message with the ID " + id);
+                        ep.priv("You have not received a message with the ID " + id);
                         return true;
                     }
 
                     let recipients = this.getMatchingRecipients(register, env.name, userid, display, handle, isauth);
                     if (!recipients.length) {
-                        priv("You have not received a message with the ID " + id);
+                        ep.priv("You have not received a message with the ID " + id);
                         return true;
                     }
                 
@@ -268,11 +268,11 @@ class ModMemo extends Module {
                         }
                     }
                     
-                    priv("(**" + register.id + "**) " + (register.strong ? "[S] " : "") + register.msg);
-                    priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment(register.ts).format(this.param('tsFormat')));
+                    ep.priv("(**" + register.id + "**) " + (register.strong ? "[S] " : "") + register.msg);
+                    ep.priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment(register.ts).format(this.param('tsFormat')));
                     
                     for (let recipient of recipients) {
-                        priv("  (Delivered " + moment(recipient.done).format(this.param('tsFormat')) + ") To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "") + " on " + recipient.env));
+                        ep.priv("  (Delivered " + moment(recipient.done).format(this.param('tsFormat')) + ") To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "") + " on " + recipient.env));
                     }
                 
                 }
@@ -280,7 +280,7 @@ class ModMemo extends Module {
                 if (changes) this.saveMemos();
                         
             } else {
-                reply("I don't recognize that action.");
+                ep.reply("I don't recognize that action.");
             }
             
             return true;

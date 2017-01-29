@@ -56,40 +56,40 @@ class ModCommands extends Module {
         }
         
         
-        this.registerCommand('help', {
+        this.registerCommand(this, 'help', {
             description: "Obtain a list of commands or information about a specific command.",
             args: ["command"],
             minArgs: 0,
             unobtrusive: true
-        }, (env, type, userid, command, args, handle, reply, pub, priv) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (args.command) {
                 var descriptor = this._index[args.command.toLowerCase()];
                 if (!descriptor) {
-                    reply('No such command!');
+                    ep.reply('No such command!');
                     return true;
                 }
             
-                reply('  ' + this.buildCommandSyntax(descriptor.command));
-                reply('    ' + descriptor.description);
+                ep.reply('  ' + this.buildCommandSyntax(descriptor.command));
+                ep.reply('    ' + descriptor.description);
                 
                 if (descriptor.details && descriptor.details.length) {
-                    reply('');
+                    ep.reply('');
                     for (let line of descriptor.details) {
-                        reply('    ' + line);
+                        ep.reply('    ' + line);
                     }
                 }
                 
                 if (descriptor.environments || descriptor.types || descriptor.permissions) {
-                    reply('');  //Blank line
+                    ep.reply('');  //Blank line
                 }
                 
                 if (descriptor.environments) {
-                    reply('    Environment(s): *' + descriptor.environments.join('*, *') + '*');
+                    ep.reply('    Environment(s): *' + descriptor.environments.join('*, *') + '*');
                 }
                 
                 if (descriptor.types) {
-                    reply('    Message type(s): *' + descriptor.types.join('*, *') + '*');
+                    ep.reply('    Message type(s): *' + descriptor.types.join('*, *') + '*');
                 }
                 
                 if (descriptor.permissions) {
@@ -103,12 +103,12 @@ class ModCommands extends Module {
                         }
                         permstring = permstring + descriptor.permissions.join('*, *') + '*';
                     }
-                    reply('    Permissions required: ' + permstring);
+                    ep.reply('    Permissions required: ' + permstring);
                 }
             
             } else {
             
-                priv('Available commands (use help COMMAND for more information):');
+                ep.priv('Available commands (use help COMMAND for more information):');
                 
                 for (let descriptor of this._commands) {
 
@@ -126,7 +126,7 @@ class ModCommands extends Module {
                         }
                     }
                     
-                    priv('    **' + descriptor.command + '** - ' + descriptor.description);
+                    ep.priv('    **' + descriptor.command + '** - ' + descriptor.description);
                 }
             }
         
@@ -134,28 +134,28 @@ class ModCommands extends Module {
         });
         
         
-        this.registerCommand('time', {
+        this.registerCommand(this, 'time', {
             description: "Retrieve the current server time."
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            reply(moment().format('dddd YYYY-MM-DD HH:mm:ss'));
+            ep.reply(moment().format('dddd YYYY-MM-DD HH:mm:ss'));
         
             return true;
         });
         
         
-        this.registerCommand('reload', {
+        this.registerCommand(this, 'reload', {
             description: "Reload this application. All environments and modules will be reloaded.",
             types: ["private"],
             permissions: [PERM_ADMIN]
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             setTimeout(() => {
-                reply('Reloading...');
+                ep.reply('Reloading...');
                 this.log('Reloading Rowboat by request from ' + handle + ' in ' + env.name);
                 
                 if (!this.mod('root').loadMasterConfig()) {
-                    reply('Failed to load master config.');
+                    ep.reply('Failed to load master config.');
                     process.exit(1);
                 }
                 
@@ -188,7 +188,7 @@ class ModCommands extends Module {
     // # Module code below this line #
 
 
-    registerCommand(command, options, callback) {
+    registerCommand(mod, command, options, callback) {
         if (arguments.length == 2) {
             callback = options;
             options = {};
@@ -197,12 +197,12 @@ class ModCommands extends Module {
         if (!command || !callback) return false;
         
         var commandid = command.toLowerCase();
-        if (this.getCommand(commandid)) return false;
         
         var descriptor = {
+            modName: mod.modName,
             command: command,
-            callback: callback,                 //callback(env, type, userid, command, args, handle, reply, pub, priv)
-                                                //  -- userid is the environment-side id; args is a list; handle is from ModUsers; reply/pub/priv are functions for context, public and private reply respectively.
+            callback: {mod.name: callback},     //callback(env, type, userid, channelid, command, args, handle, ep)
+                                                //  -- userid is the environment-side id; args is a list; handle is from ModUsers; ep.reply/pub/priv are msg functions for context, public and private reply respectively.
             args: [],                           //List of argument names. If the last element of the list is the boolean 'true', all additional arguments will be listed in the previous argument.
             minArgs: null,                      //Minimum amount of arguments that must be passed for the callback to be invoked, or 'null' for all arguments.
             description: "",                    //Short description for the new command displayed by the list of commands in "help".
@@ -226,8 +226,18 @@ class ModCommands extends Module {
             if (options.unobtrusive) descriptor.unobtrusive = options.unobtrusive;
         }
         
-        this._commands.push(descriptor);
-        this._index[commandid] = descriptor;
+        var exists = this.getCommand(commandid);
+        if (exists) {
+            if (exists.modName != mod.modName) {
+                this.log('warn', 'Unable to register the command ID "' + commandid + '" because it was previously registered by |' + exists.modName + '|.');
+                return false;
+            } else {
+                exists.callback[mod.name] = callback;
+            }
+        } else {
+            this._commands.push(descriptor);
+            this._index[commandid] = descriptor;
+        }
         
         this.log('Registered command: ' + this.stripNormalizedFormatting(this.buildCommandSyntax(command))
                 + (descriptor.permissions ? ' (permissions: ' + (descriptor.requireAllPermissions ? 'all of ' : 'any of ') + descriptor.permissions.join(', ') + ')' : ''));
@@ -290,6 +300,30 @@ class ModCommands extends Module {
             }
         }
         
+        
+        var targetmod = null;
+        if (args[0] && args[0].match(/^|.+|$/)) {
+            targetmod = args[0].substr(1, args[0].length - 2);
+            args.splice(0, 1);
+        }
+
+        var knownmods = Object.keys(descriptor.callback);
+        if (!targetmod && knownmods.length == 1) {
+            targetmod = knownmods[0];
+        }
+        
+        if (!targetmod || !descriptor.callback[targetmod]) {
+            let baseerror = (targetmod ? 'No callback for target module |' + targetmod + '|' : 'Target module not found');
+            if (descriptor.unobtrusive) {
+                env.notice(authorid, env.applyFormatting(baseerror + '; Please choose one of: ' + knownmods.join(', ')));
+            } else {
+                env.msg(authorid, env.applyFormatting(baseerror + '; Please choose one of: ' + knownmods.join(', ')));
+            }
+            this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : '') + ': Unable to resolve target module.');
+            return true;
+        }
+        
+        
         for (var i = 0; i < args.length - 1; i++) {
             while (i < args.length - 1 && args[i].match(/^".*[^"]$/)) {
                 args[i] = args[i] + ' ' + args[i+1];
@@ -334,23 +368,25 @@ class ModCommands extends Module {
         }
         
         //Invoke command callback
+        //callback(env, type, userid, channelid, command, args, handle, ep)
         
-        if (!descriptor.callback(env, type, authorid, command, passargs, handle,
-            function(msg) {
-                env.msg(channelid, env.applyFormatting(msg));
-            },
-            function(msg) {
-                env.msg((channelid == authorid ? null : channelid), env.applyFormatting(msg));
-            },
-            function(msg) {
-                if (descriptor.unobtrusive) {
-                    env.notice(authorid, env.applyFormatting(msg));
-                } else {
-                    env.msg(authorid, env.applyFormatting(msg));
+        if (!descriptor.callback[targetmod](env, type, authorid, channelid, command, passargs, handle, {
+                function(msg) {
+                    env.msg(channelid, env.applyFormatting(msg));
+                },
+                function(msg) {
+                    env.msg((channelid == authorid ? null : channelid), env.applyFormatting(msg));
+                },
+                function(msg) {
+                    if (descriptor.unobtrusive) {
+                        env.notice(authorid, env.applyFormatting(msg));
+                    } else {
+                        env.msg(authorid, env.applyFormatting(msg));
+                    }
                 }
             }
         )) {
-            this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : '') + ': Rejected by handler.');
+            this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : '') + ': Rejected by handler of |' + targetmod + '|.');
             if (descriptor.unobtrusive) {
                 env.notice(authorid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
             } else {

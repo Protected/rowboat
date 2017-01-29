@@ -19,7 +19,7 @@ class ModRandom extends Module {
       
         //Register callbacks
         
-        this.mod('Commands').registerCommand('random', {
+        this.mod('Commands').registerCommand(this, 'random', {
             description: "Generates a random number using a cryptographically secure source of randomness.",
             args: ["max", "pub"],
             details: [
@@ -29,7 +29,7 @@ class ModRandom extends Module {
                 "Pass PUB as 1 to display the resulting random number in public even if you used the command in private."
             ],
             minArgs: 0
-        }, (env, type, userid, command, args, handle, reply, pub) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var val;
         
@@ -43,7 +43,7 @@ class ModRandom extends Module {
                 } else if (args.max.match(/^[0-9]+$/)) {
                     val = Math.floor(random.fraction() * args.max);
                 } else {
-                    reply("Invalid argument.");
+                    ep.reply("Invalid argument.");
                     return false;
                 }
             } else {
@@ -51,9 +51,9 @@ class ModRandom extends Module {
             }
             
             if (args.pub) {
-                pub(env.idToDisplayName(userid) + ': ' + val);
+                ep.pub(env.idToDisplayName(userid) + ': ' + val);
             } else {
-                reply(env.idToDisplayName(userid) + ': ' + val);
+                ep.reply(env.idToDisplayName(userid) + ': ' + val);
             }
         
             return true;

@@ -60,13 +60,13 @@ class ModActivity extends Module {
         }
 
         
-        this.mod("Commands").registerCommand('seen', {
+        this.mod("Commands").registerCommand(this, 'seen', {
             description: "Reports when a user was last seen (or if the user was never seen).",
             args: ["nickname", "environment"],
             details: ["Prefix NICKNAME with = to reference a Rowboat user account instead."],
             minArgs: 1,
             permissions: (this.param('permissionSeen') ? [this.param('permissionSeen')] : null)
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
             
             var envobj = null;
             var envname = args.environment;
@@ -101,31 +101,31 @@ class ModActivity extends Module {
             }
             
             if (!register) {
-                reply("I have never seen __" + args.nickname + "__ in *" + envname + "*.");
+                ep.reply("I have never seen __" + args.nickname + "__ in *" + envname + "*.");
             } else if (register.seenreason === true) {
-                reply("__" + args.nickname + "__ joined *" + envobj.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
+                ep.reply("__" + args.nickname + "__ joined *" + envobj.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
             } else if (register.seenreason === false) {
-                reply("__" + args.nickname + "__ talked in *" + envobj.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
+                ep.reply("__" + args.nickname + "__ talked in *" + envobj.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
             } else {
                 let reason = 'unknown';
                 if (typeof register.seenreason == "object") {
                     reason = register.seenreason[0];
                     if (register.seenreason[1]) reason += ' (' + register.seenreason[1] + ')';
                 }
-                reply("__" + args.nickname + "__ left *" + envobj.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + " (reason: " + reason + ").");
+                ep.reply("__" + args.nickname + "__ left *" + envobj.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + " (reason: " + reason + ").");
             }
             
             return true;
         });
         
         
-        this.mod("Commands").registerCommand('last', {
+        this.mod("Commands").registerCommand(this, 'last', {
             description: "Repeats a user's latest chat lines in record.",
             args: ["nickname", "environment"],
             details: ["Prefix NICKNAME with = to reference a Rowboat user account instead."],
             minArgs: 1,
             permissions: (this.param('permissionLast') ? [this.param('permissionLast')] : null)
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var envobj = null;
             var envname = args.environment;
@@ -162,11 +162,11 @@ class ModActivity extends Module {
             entries = entries.slice(-1 * this.param('linesPerUser'));
             
             if (!entries.length) {
-                reply("I have never read anything by " + args.nickname + " in " + envname + ".");
+                ep.reply("I have never read anything by " + args.nickname + " in " + envname + ".");
             } else {
-                reply('Latest lines of ' + args.nickname + ' in ' + envname + ':');
+                ep.reply('Latest lines of ' + args.nickname + ' in ' + envname + ':');
                 for (let entry of entries) {
-                    reply('[' + envobj.channelIdToDisplayName(entry[0]) + '] (' + moment.unix(entry[2]).format('ddd YYYY-MM-DD HH:mm:ss') + ') ' + entry[3]);
+                    ep.reply('[' + envobj.channelIdToDisplayName(entry[0]) + '] (' + moment.unix(entry[2]).format('ddd YYYY-MM-DD HH:mm:ss') + ') ' + entry[3]);
                 }
             }
             
@@ -174,12 +174,12 @@ class ModActivity extends Module {
         });
         
         
-        this.mod("Commands").registerCommand('roleseen', {
+        this.mod("Commands").registerCommand(this, 'roleseen', {
             description: "Short activity report for a role.",
             args: ["role"],
             permissions: (this.param('permissionSeen') ? [this.param('permissionSeen')] : null),
             environments: ["Discord"]
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
             
             let role = env.server.roles.find('name', args.role);
             let registers = {};
@@ -196,18 +196,18 @@ class ModActivity extends Module {
             for (let nickname in registers) {
                 let register = registers[nickname];
                 if (!register) {
-                    reply("__" + nickname + "__: Never seen.");
+                    ep.reply("__" + nickname + "__: Never seen.");
                 } else if (register.seenreason === true) {
-                    reply("__" + nickname + "__: Joined *" + env.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
+                    ep.reply("__" + nickname + "__: Joined *" + env.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
                 } else if (register.seenreason === false) {
-                    reply("__" + nickname + "__: Talked in *" + env.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
+                    ep.reply("__" + nickname + "__: Talked in *" + env.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
                 } else {
                     let reason = 'unknown';
                     if (typeof register.seenreason == "object") {
                         reason = register.seenreason[0];
                         if (register.seenreason[1]) reason += ' (' + register.seenreason[1] + ')';
                     }
-                    reply("__" + nickname + "__: Left *" + env.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
+                    ep.reply("__" + nickname + "__: Left *" + env.channelIdToDisplayName(register.seen[0]) + "* " + moment.unix(register.seen[2]).fromNow() + ".");
                 }
             }
             

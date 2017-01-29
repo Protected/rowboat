@@ -80,16 +80,16 @@ class ModRajio extends Module {
         });
 
         /*
-        this.mod('Commands').registerCommand('songrank', {
+        this.mod('Commands').registerCommand(this, 'songrank', {
             description: 'Displays the global (balanced) rank of a song.',
             args: ['hash']
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var rank = this.computeSongRank(args.hash);
             if (rank !== null) {
-                reply("Rank: " + rank);
+                ep.reply("Rank: " + rank);
             } else {
-                reply("Song is unranked.");
+                ep.reply("Song is unranked.");
             }
         
             return true;

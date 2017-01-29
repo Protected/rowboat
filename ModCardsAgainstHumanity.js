@@ -75,16 +75,16 @@ class ModCardsAgainstHumanity extends Module {
 
         //Register callbacks
         
-        this.mod('Commands').registerCommand('cah', {
+        this.mod('Commands').registerCommand(this, 'cah', {
             description: "Plays cards against humanity",
             args: [],
             minArgs: 0
-        }, (env, type, userid, command, args, handle, reply, pub) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
 
             if (this.gameRunning) {
-                pub("There's a game running already!");
+                ep.pub("There's a game running already!");
             } else {
-                pub("Starting a cah game.");
+                ep.pub("Starting a cah game.");
                 this.gameRunning = true;
                 this.gameData = {};
                 this.gameData.askee = userid;
@@ -93,32 +93,32 @@ class ModCardsAgainstHumanity extends Module {
                 this.gameData.card = card;
                 this.gameData.players = [];
                 this.gameData.phase = 0;
-                this.gameData.pub = pub;
+                this.gameData.pub = ep.pub;
                 this.gameData.envName = env.name;
                 this.gameData.playEvent = setTimeout(_cahPlayEvent, 60000);
-                pub("A new round of CaH has started! PM me with cahjoin to enter the round!! (60s)");
-                pub(card.text);
+                ep.pub("A new round of CaH has started! PM me with cahjoin to enter the round!! (60s)");
+                ep.pub(card.text);
             }
 
             return true;
         });
         
 
-        this.mod('Commands').registerCommand('cahjoin', {
+        this.mod('Commands').registerCommand(this, 'cahjoin', {
             description: "Join a match of cards against humanity",
             args: [],
             minArgs: 0
-        }, (env, type, userid, command, args, handle, reply, pub, priv) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
             if (this.gameRunning && this.gameData) {
                 var finder = _.find(this.gameData.players, function (player) {
                     return player.nick.toLowerCase() == userid;
                 });
                 if (this.gameData.phase != 0) {
-                    pub("This is not the joining phase.");
+                    ep.pub("This is not the joining phase.");
                     return false;
                 }
                 if (finder) {
-                    pub("You already joined.");
+                    ep.pub("You already joined.");
                     return false;
                 } else {
                     var playerObj = {};
@@ -132,43 +132,43 @@ class ModCardsAgainstHumanity extends Module {
                         }
                     }
                     this.gameData.players.push(playerObj);
-                    priv("Type: !cahplay <card number> to play. The black card is: " + this.gameData.card.text);
+                    ep.priv("Type: !cahplay <card number> to play. The black card is: " + this.gameData.card.text);
                     for (let i = 0; i < playerObj.cards.length; i++) {
-                        priv((i + 1) + ": " + playerObj.cards[i].text);
+                        ep.priv((i + 1) + ": " + playerObj.cards[i].text);
                     }
                 }
             } else {
-                reply("There is no game going right now.");
+                ep.reply("There is no game going right now.");
             }
 
             return true;
         });
 
 
-        this.mod('Commands').registerCommand('cahvote', {
+        this.mod('Commands').registerCommand(this, 'cahvote', {
             description: "Vote during a match of cards against humanity",
             args: ['cardNumber'],
             minArgs: 0
-        }, (env, type, userid, command, args, handle, reply, pub, priv) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
             if (this.gameRunning && this.gameData) {
                 var finder = _.find(this.gameData.players, function (player) {
                     return player.nick.toLowerCase() == userid.toLowerCase();
                 });
                 var choice = parseInt(args.cardNumber);
                 if (isNaN(choice)) {
-                    priv("Bad value...");
+                    ep.priv("Bad value...");
                     return false;
                 }
                 if (this.gameData.phase != 1) {
-                    reply("This is not voting phase.");
+                    ep.reply("This is not voting phase.");
                     return false;
                 }
                 if (!finder) {
-                    reply("You haven't joined this round.");
+                    ep.reply("You haven't joined this round.");
                     return false;
                 } else {
                     if (finder.hasVoted) {
-                        reply("You have already voted.");
+                        ep.reply("You have already voted.");
                         return false;
                     }
                     var chosenCards = this.gameData.chosenCards;
@@ -177,54 +177,54 @@ class ModCardsAgainstHumanity extends Module {
                         var card = chosenCards[choice - 1];
                         card.votes += 1;
                         finder.hasVoted = true;
-                        priv("You've voted for " + (choice) + ": " + card.card.text);
+                        ep.priv("You've voted for " + (choice) + ": " + card.card.text);
                     } else {
-                        reply("Bad value...");
+                        ep.reply("Bad value...");
                         return;
                     }
                 }
 
             } else {
-                reply("There is no game going right now.");
+                ep.reply("There is no game going right now.");
             }
 
             return true;
         });
 
 
-        this.mod('Commands').registerCommand('cahplay', {
+        this.mod('Commands').registerCommand(this, 'cahplay', {
             description: "Play a card during a match of cards against humanity",
             args: ['cardNumber'],
             minArgs: 0
-        }, (env, type, userid, command, args, handle, reply, pub, priv) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
             if (this.gameRunning && this.gameData) {
                 var finder = _.find(this.gameData.players, function (player) {
                     return player.nick.toLowerCase() == userid.toLowerCase();
                 });
                 var choice = parseInt(args.cardNumber);
                 if (isNaN(choice)) {
-                    reply("Bad value...");
+                    ep.reply("Bad value...");
                     return;
                 }
                 if (this.gameData.phase != 0) {
-                    reply("This is not playing phase.");
+                    ep.reply("This is not playing phase.");
                     return;
                 }
                 if (!finder) {
-                    reply("You haven't joined yet, try !cahjoin");
+                    ep.reply("You haven't joined yet, try !cahjoin");
                     return;
                 } else {
                     if (choice > 0 && choice <= finder.cards.length) {
                         finder.chosenCard = finder.cards[choice - 1];
-                        priv("Wait for the voting round. You've chosen " + (choice) + ": " + finder.chosenCard.text);
+                        ep.priv("Wait for the voting round. You've chosen " + (choice) + ": " + finder.chosenCard.text);
                     } else {
-                        priv("Bad value...");
+                        ep.priv("Bad value...");
                         return;
                     }
                 }
 
             } else {
-                reply("There is no game going right now.");
+                ep.reply("There is no game going right now.");
             }
 
             return true;

@@ -38,144 +38,144 @@ class ModUsers extends Module {
         moduleRequest('Commands', (commands) => {
         
         
-            commands.registerCommand('useradd', {
+            commands.registerCommand(this, 'useradd', {
                 args: ["handle"],
                 description: "Create a new empty user account with the given handle.",
                 permissions: [PERM_ADMIN]
-            }, (env, type, userid, command, args, handle, reply) => {
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 if (this.addUser(args.handle)) {
-                    reply("The account " + args.handle + " was successfuly created.");
+                    ep.reply("The account " + args.handle + " was successfuly created.");
                 } else {
-                    reply("There already exists an account identified by " + args.handle + "!");
+                    ep.reply("There already exists an account identified by " + args.handle + "!");
                 }
                 
                 return true;
             });
             
             
-            commands.registerCommand('userdel', {
+            commands.registerCommand(this, 'userdel', {
                 args: ["handle"],
                 description: "Delete an existing user account identified by the given handle.",
                 permissions: [PERM_ADMIN]
-            }, (env, type, userid, command, args, handle, reply) => {
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 if (this.delUser(args.handle)) {
-                    reply("The account " + args.handle + " was successfully deleted.");
+                    ep.reply("The account " + args.handle + " was successfully deleted.");
                 } else {
-                    reply("I could not find an account identified by " + args.handle + "!");
+                    ep.reply("I could not find an account identified by " + args.handle + "!");
                 }
                 
                 return true;
             });
             
             
-            commands.registerCommand('userrename', {
+            commands.registerCommand(this, 'userrename', {
                 args: ["fromhandle", "tohandle"],
                 description: "Rename an existing account.",
                 permissions: [PERM_ADMIN]
-            }, (env, type, userid, command, args, handle, reply) => {
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
 
                 if (this.renameUser(args.fromhandle, args.tohandle)) {
-                    reply("The account " + args.fromhandle + " was successfuly renamed to " + args.tohandle + ".");
+                    ep.reply("The account " + args.fromhandle + " was successfuly renamed to " + args.tohandle + ".");
                 } else{
-                    reply("The account " + args.fromhandle + " could not be renamed.");
+                    ep.reply("The account " + args.fromhandle + " could not be renamed.");
                 }
 
                 return true;
             });
 
 
-            commands.registerCommand('idadd', {
+            commands.registerCommand(this, 'idadd', {
                 args: ["handle", "environment", "idpattern"],
                 description: "Add an ID pattern (regex) to authenticate the user account identified by the handle in the specified environment.",
                 permissions: [PERM_ADMIN]
-            }, (env, type, userid, command, args, handle, reply) => {
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 args.idpattern = "^" + args.idpattern + "$";
                 if (!this._environments[args.environment]) {
-                    reply("There is no environment named " + args.environment + " at this time.");
+                    ep.reply("There is no environment named " + args.environment + " at this time.");
                     return true;
                 }
                 
                 if (this.addId(args.handle, args.environment, args.idpattern)) {
-                    reply("Successfully added the requested pattern to the account identified by " + args.handle + ".");
+                    ep.reply("Successfully added the requested pattern to the account identified by " + args.handle + ".");
                 } else {
-                    reply("I could not find an account identified by " + args.handle + "!");
+                    ep.reply("I could not find an account identified by " + args.handle + "!");
                 }
                 
                 return true;
             });
             
             
-            commands.registerCommand('iddel', {
+            commands.registerCommand(this, 'iddel', {
                 args: ["handle", "environment", "idpattern"],
                 description: "Remove an existing ID pattern from a user such that it will no longer authenticate the user account identified by the handle.",
                 permissions: [PERM_ADMIN]
-            }, (env, type, userid, command, args, handle, reply) => {
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
                 
                 args.idpattern = "^" + args.idpattern + "$";
                 
                 if (this.delId(args.handle, args.environment, args.idpattern)) {
-                    reply("Successfully removed the requested patterm from the account identified by " + args.handle + ".");
+                    ep.reply("Successfully removed the requested patterm from the account identified by " + args.handle + ".");
                 } else {
-                    reply("I could not find an account identified by " + args.handle + "!");
+                    ep.reply("I could not find an account identified by " + args.handle + "!");
                 }
                 
                 return true;
             });
             
             
-            commands.registerCommand('permadd', {
+            commands.registerCommand(this, 'permadd', {
                 args: ["handle", "permissions", true],
                 minArgs: 2,
                 description: "Add one or more permissions to the user account identified by the handle.",
                 permissions: [PERM_ADMIN]
-            }, (env, type, userid, command, args, handle, reply) => {
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 if (this.addPerms(args.handle, args.permissions)) {
-                    reply("The permissions listed were added to the account identified by " + args.handle + ".");
+                    ep.reply("The permissions listed were added to the account identified by " + args.handle + ".");
                 } else {
-                    reply("I could not find an account identified by " + args.handle + "!");
+                    ep.reply("I could not find an account identified by " + args.handle + "!");
                 }
             
                 return true;
             });
             
             
-            commands.registerCommand('permdel', {
+            commands.registerCommand(this, 'permdel', {
                 args: ["handle", "permissions", true],
                 minArgs: 2,
                 description: "Remove one or more permissions from the user account identified by the handle.",
                 permissions: [PERM_ADMIN]
-            }, (env, type, userid, command, args, handle, reply) => {
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 if (this.delPerms(args.handle, args.permissions)) {
-                    reply("The permissions listed were removed from the account identified by " + args.handle + ".");
+                    ep.reply("The permissions listed were removed from the account identified by " + args.handle + ".");
                 } else {
-                    reply("I could not find an account identified by " + args.handle + "!");
+                    ep.reply("I could not find an account identified by " + args.handle + "!");
                 }
             
                 return true;
             });
             
             
-            commands.registerCommand('userfind', {
+            commands.registerCommand(this, 'userfind', {
                 args: ["environment", "id"],
                 description: "List the handles of the user accounts that match the given id and environment.",
                 permissions: [PERM_ADMIN, PERM_MOD]
-            }, (env, type, userid, command, args, handle, reply) => {
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 var handles = this.getHandlesById(args.environment, args.id);
                 if (!handles.length) {
-                    reply("No handles were found matching the given environment and id.");
+                    ep.reply("No handles were found matching the given environment and id.");
                     return true;
                 }
                 
                 while(handles.length) {
                     var outbound = handles.slice(0, 10);
                     outbound = '"' + outbound.join('","') + '"';
-                    reply(outbound);
+                    ep.reply(outbound);
                     handles = handles.slice(10);
                 }
             
@@ -183,23 +183,23 @@ class ModUsers extends Module {
             });
             
             
-            commands.registerCommand('userlist', {
+            commands.registerCommand(this, 'userlist', {
                 args: ["perms", true],
                 minArgs: 0,
                 description: "Lists the handles of the user accounts that have the given permissions.",
                 permissions: [PERM_ADMIN, PERM_MOD]
-            }, (env, type, userid, command, args, handle, reply) => {
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
 
                 var handles = this.getHandlesByPerms(args.perms);
                 if (!handles.length) {
-                    reply("No handles were found with the given permission" + (args.perms.length != 1 ? "s" : "") + ".");
+                    ep.reply("No handles were found with the given permission" + (args.perms.length != 1 ? "s" : "") + ".");
                     return true;
                 }
 
                 while(handles.length) {
                     var outbound = handles.slice(0, 10);
                     outbound = '"' + outbound.join('","') + '"';
-                    reply(outbound);
+                    ep.reply(outbound);
                     handles = handles.slice(10);
                 }
 
@@ -207,34 +207,34 @@ class ModUsers extends Module {
             });
 
 
-            commands.registerCommand('whois', {
+            commands.registerCommand(this, 'whois', {
                 args: ["handle"],
                 description: "Describe the user account identified by the handle.",
                 permissions: [PERM_ADMIN, PERM_MOD]
-            }, (env, type, userid, command, args, handle, reply) => {
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 var account = this.getUser(args.handle);
                 if (!account) {
-                    reply("I could not find an account identified by " + args.handle + "!");
+                    ep.reply("I could not find an account identified by " + args.handle + "!");
                     return true;
                 }
                 
-                reply('========== __' + account.handle + '__ ==========');
+                ep.reply('========== __' + account.handle + '__ ==========');
                 
-                reply('* ID patterns:');
+                ep.reply('* ID patterns:');
                 if (account.ids) {
                     for (var i = 0; i < account.ids.length; i++) {
-                        reply('    {' + account.ids[i].env + '} `' + account.ids[i].idpattern + '`');
+                        ep.reply('    {' + account.ids[i].env + '} `' + account.ids[i].idpattern + '`');
                     }
                 }
                 
-                reply('* Permissions:');
+                ep.reply('* Permissions:');
                 var perms = account.perms;
                 if (perms) {
                     while (perms.length) {
                         var outbound = perms.slice(0, 10);
                         outbound = outbound.join(', ');
-                        reply('    ' + outbound);
+                        ep.reply('    ' + outbound);
                         perms = perms.slice(10);
                     }
                 }

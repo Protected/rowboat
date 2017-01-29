@@ -70,12 +70,12 @@ class ModLogger extends Module {
         }
         
         
-        this.mod('Commands').registerCommand('grep', {
+        this.mod('Commands').registerCommand(this, 'grep', {
             description: "Search the event logs.",
             args: ["pattern", "results", "filepattern"],
             minArgs: 1,
             permissions: ["administrator", "moderator", "trusted"]
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var filepattern = null;
             if (args.filepattern) {
@@ -115,7 +115,7 @@ class ModLogger extends Module {
                 for (let line of lines) {
                     if (!line.trim()) continue;
                 
-                    reply(logname + ' ' + line);
+                    ep.reply(logname + ' ' + line);
                 
                     results += 1;
                     if (maxResults && results >= maxResults) break;
@@ -125,9 +125,9 @@ class ModLogger extends Module {
             }
             
             if (results) {
-                reply('Found ' + results + ' result' + (results != 1 ? 's' : '') + (results == maxResults ? ' (max)' : '') + '.');
+                ep.reply('Found ' + results + ' result' + (results != 1 ? 's' : '') + (results == maxResults ? ' (max)' : '') + '.');
             } else {
-                reply('Found nothing.');
+                ep.reply('Found nothing.');
             }
         
             return true;

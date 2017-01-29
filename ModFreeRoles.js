@@ -46,20 +46,20 @@ class ModFreeRoles extends Module {
         
         //Register callbacks
         
-        this.mod("Commands").registerCommand('roles', {
+        this.mod("Commands").registerCommand(this, 'roles', {
             description: 'Show a list of free roles (that can be claimed by users).',
             environments: ['Discord']
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var roles = this._freeRoles[env.name];
             if (!roles) return true;
             
             if (Object.keys(roles).length) {
                 for (let role in roles) {
-                    reply('**' + roles[role].name + '** - ' + roles[role].desc);
+                    ep.reply('**' + roles[role].name + '** - ' + roles[role].desc);
                 }
             } else {
-                reply('No free roles configured.');
+                ep.reply('No free roles configured.');
             }
         
             return true;
@@ -67,37 +67,37 @@ class ModFreeRoles extends Module {
         
         
         if (this.param('allowBecome')) {
-            this.mod("Commands").registerCommand('become', {
+            this.mod("Commands").registerCommand(this, 'become', {
                 description: 'Request assignment of an allowed role to myself.',
                 args: ['role'],
                 environments: ['Discord'],
                 permissions: (typeof this.param('allowBecome') == "string" ? [this.param('allowBecome')] : null)
-            }, (env, type, userid, command, args, handle, reply) => {
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 var lcrole = args.role.toLowerCase();
             
                 var roles = this._freeRoles[env.name];
                 if (!roles || !roles[lcrole]) {
-                    reply('Role not allowed. Please use the "roles" command for a list of allowed roles.');
+                    ep.reply('Role not allowed. Please use the "roles" command for a list of allowed roles.');
                     return true;
                 }
                 
                 var roleobj = env.server.roles.find('name', roles[lcrole].name);
                 if (!roleobj) {
-                    reply("The role \"" + roles[lcrole].name + "\" doesn't currently exist in this environment.");
+                    ep.reply("The role \"" + roles[lcrole].name + "\" doesn't currently exist in this environment.");
                     return true;
                 }
                 
                 var member = env.server.member(userid);
                 if (member.roles.find('name', roles[lcrole].name)) {
-                    reply('You already have the role "' + roles[lcrole].name + '".');
+                    ep.reply('You already have the role "' + roles[lcrole].name + '".');
                     return true;
                 }
                 
                 member.addRole(roleobj).then(() => {
-                    reply("Role \"" + roleobj.name + "\" successfully assigned!");
+                    ep.reply("Role \"" + roleobj.name + "\" successfully assigned!");
                 }).catch((err) => {
-                    reply(err);
+                    ep.reply(err);
                 });
             
                 return true;
@@ -106,37 +106,37 @@ class ModFreeRoles extends Module {
         
         
         if (this.param('allowReject')) {
-            this.mod("Commands").registerCommand('reject', {
+            this.mod("Commands").registerCommand(this, 'reject', {
                 description: 'Request unassignment of an allowed role from myself.',
                 args: ['role'],
                 environments: ['Discord'],
                 permissions: (typeof this.param('allowReject') == "string" ? [this.param('allowReject')] : null)
-            }, (env, type, userid, command, args, handle, reply) => {
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 var lcrole = args.role.toLowerCase();
             
                 var roles = this._freeRoles[env.name];
                 if (!roles || !roles[lcrole]) {
-                    reply('Role not allowed. Please use the "roles" command for a list of allowed roles.');
+                    ep.reply('Role not allowed. Please use the "roles" command for a list of allowed roles.');
                     return true;
                 }
                 
                 var roleobj = env.server.roles.find('name', roles[lcrole].name);
                 if (!roleobj) {
-                    reply("The role \"" + roles[lcrole].name + "\" doesn't currently exist in this environment.");
+                    ep.reply("The role \"" + roles[lcrole].name + "\" doesn't currently exist in this environment.");
                     return true;
                 }
                 
                 var member = env.server.member(userid);
                 if (!member.roles.find('name', roles[lcrole].name)) {
-                    reply("You don't have the role \"" + roles[lcrole].name + "\".");
+                    ep.reply("You don't have the role \"" + roles[lcrole].name + "\".");
                     return true;
                 }
                 
                 member.removeRole(roleobj).then(() => {
-                    reply("Role \"" + roleobj.name + "\" successfully unassigned!");
+                    ep.reply("Role \"" + roleobj.name + "\" successfully unassigned!");
                 }).catch((err) => {
-                    reply(err);
+                    ep.reply(err);
                 });
             
                 return true;
@@ -144,11 +144,11 @@ class ModFreeRoles extends Module {
         }
         
         
-        this.mod("Commands").registerCommand('members', {
+        this.mod("Commands").registerCommand(this, 'members', {
             description: 'Lists the Discord users with the given free role.',
             args: ['role'],
             environments: ['Discord']
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
             
             var lcrole = args.role.toLowerCase();
             var role = args.role;
@@ -160,7 +160,7 @@ class ModFreeRoles extends Module {
             
             var roleobj = env.server.roles.find('name', role);
             if (!roleobj) {
-                reply("The role \"" + role + "\" doesn't currently exist in this environment.");
+                ep.reply("The role \"" + role + "\" doesn't currently exist in this environment.");
                 return true;
             }
             
@@ -172,23 +172,23 @@ class ModFreeRoles extends Module {
             if (results.length) {
                 while (results.length) {
                     var outbound = results.slice(0, 10).join(', ');
-                    reply(outbound);
+                    ep.reply(outbound);
                     results = results.slice(10);
                 }
             } else {
-                reply("No members found.");
+                ep.reply("No members found.");
             }
             
             return true;
         });
         
         
-        this.mod("Commands").registerCommand('roleadd', {
+        this.mod("Commands").registerCommand(this, 'roleadd', {
             description: 'Adds an existing Discord role to the list of free roles.',
             args: ['role', 'description', true],
             environments: ['Discord'],
             permissions: [PERM_ADMIN]
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
             
             var lcrole = args.role.toLowerCase();
             
@@ -198,13 +198,13 @@ class ModFreeRoles extends Module {
             }
             
             if (roles[lcrole]) {
-                reply('The role ' + args.role + ' is already in the list of free roles. If you want to change the description, please delist it first.');
+                ep.reply('The role ' + args.role + ' is already in the list of free roles. If you want to change the description, please delist it first.');
                 return true;
             }
             
             var roleobj = env.server.roles.find('name', args.role);
             if (!roleobj) {
-                reply("The role \"" + args.role + "\" doesn't currently exist in this environment.");
+                ep.reply("The role \"" + args.role + "\" doesn't currently exist in this environment.");
                 return true;
             }
             
@@ -215,24 +215,24 @@ class ModFreeRoles extends Module {
             
             this.saveData();
             
-            reply('Role "' + args.role + '" added successfully.');
+            ep.reply('Role "' + args.role + '" added successfully.');
             
             return true;
         });
         
         
-        this.mod("Commands").registerCommand('roledel', {
+        this.mod("Commands").registerCommand(this, 'roledel', {
             description: 'Removes an existing Discord role from the list of free roles.',
             args: ['role'],
             environments: ['Discord'],
             permissions: [PERM_ADMIN]
-        }, (env, type, userid, command, args, handle, reply) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
             
             var lcrole = args.role.toLowerCase();
             
             var roles = this._freeRoles[env.name];
             if (!roles || !roles[lcrole]) {
-                reply('The role ' + args.role + ' is not in the list of free roles.');
+                ep.reply('The role ' + args.role + ' is not in the list of free roles.');
                 return true;
             }
             
@@ -240,7 +240,7 @@ class ModFreeRoles extends Module {
             
             this.saveData();
             
-            reply('Role "' + args.role + '" removed successfully.');
+            ep.reply('Role "' + args.role + '" removed successfully.');
             
             return true;
         });
