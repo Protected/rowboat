@@ -201,7 +201,7 @@ class ModCommands extends Module {
         var descriptor = {
             modName: mod.modName,
             command: command,
-            callback: {mod.name: callback},     //callback(env, type, userid, channelid, command, args, handle, ep)
+            callback: {},                       //callback(env, type, userid, channelid, command, args, handle, ep)
                                                 //  -- userid is the environment-side id; args is a list; handle is from ModUsers; ep.reply/pub/priv are msg functions for context, public and private reply respectively.
             args: [],                           //List of argument names. If the last element of the list is the boolean 'true', all additional arguments will be listed in the previous argument.
             minArgs: null,                      //Minimum amount of arguments that must be passed for the callback to be invoked, or 'null' for all arguments.
@@ -213,6 +213,8 @@ class ModCommands extends Module {
             requireAllPermissions: false,       //If this boolean is true, the above list becomes a list of necessary permissions (all listed permissions will be simultaneously required).
             unobtrusive: false                  //If this boolean is true, priv will send a notice rather than a message.
         }
+        
+        descriptor.callback[mod.name] = callback;
         
         if (options) {
             if (options.args) descriptor.args = options.args;
