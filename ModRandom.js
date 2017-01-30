@@ -57,10 +57,19 @@ class ModRandom extends Module {
             description: "Generates a dice roll using a cryptographically secure source of randomness.",
             args: ["expr", true],
             details: [
-                "EXPR is an expression containing sums and subtractions between dice (in the format AdB where A and B are integers) and constants."
+                "EXPR is an expression containing sums and subtractions between dice and constants.",
+                "  EXPR ::= (DICE | CONSTANT) ((+ | -) EXPR)?",
+                "  DICE ::= *? AMOUNT? d FACETS EXCL_LOWEST? EXCL_HIGHEST?",
+                "  EXCL_LOWEST ::= \\ 0-9",
+                "  EXCL_HIGHEST ::= / 0-9",
+                "  The asterisk will expand individual rolls in a DICE expression.",
+                "  AMOUNT is the amount of dice in the roll, between 1 and 99 (defaults to 1).",
+                "  FACETS is the amount of facets per die in the roll, between 1 and 99."
             ],
             minArgs: 1
         }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            //Normalize expression
         
             var expr = args.expr.join(" ").replace(/(\+ *-|- *\+)/g, '-').replace(/([0-9])([+-])/g, '$1 $2').replace(/([+-])([0-9])/g, '$1 $2').replace(/ +/g, " ").split(" ");
             for (let i = 1; i < expr.length; i += 2) {
@@ -70,24 +79,38 @@ class ModRandom extends Module {
                 }
             }
         
+            //Roll all dice in expression (store expansion if needed)
+        
             var dicepos = {};
             var resolved = expr.slice();
             for (let i = 0; i < resolved.length; i++) {
-                let facets = resolved[i].match(/^(\*?)([1-9][0-9]?)?d([1-9][0-9]?)$/);
+                let facets = resolved[i].match(/^(\*?)([1-9][0-9]?)?d([1-9][0-9]?)(\\([1-9]))?(\/([1-9]))?$/);
                 if (facets) {
-                    let val = 0;
+                    //Dice
                     let dice = [];
                     for (let j = 0; j < (facets[2] || 1); j++) {
                         let die = Math.floor(random.fraction() * facets[3]) + 1;
                         dice.push(die);
-                        val += die;
+                    }
+                    let val;
+                    if (facets[5] || facets[7]) {
+                        //Exclude highest/lowest
+                        sort(dice);
+                        val = dice.reduce((sum, die, j) => (j >= (facets[5] || 0) && j < (dice.length - (facets[7] || 0)) ? sum + die : sum), 0);
+                        if (facets[5]) dice.splice(facets[5], 0, "\\");
+                        if (facets[7]) dice.splice(dice.length - 1 - facets[7], 0, "/");
+                    } else {
+                        val = dice.reduce((sum, die) => sum + die, 0);
                     }
                     resolved[i] = val;
                     dicepos[i] = (facets[1] ? dice : true);
                 } else if (resolved[i].match(/^[0-9]+$/)) {
+                    //Constant
                     resolved[i] = parseInt(resolved[i]);
                 }
             }
+            
+            //Prepare intermediate output
 
             var rep = expr.join(" ");
             
@@ -103,6 +126,8 @@ class ModRandom extends Module {
                     return val;
                 }).join(" ");
             }
+            
+            //Prepare total and reply
             
             if (resolved.length > 1) {
                 let result = resolved[0];
