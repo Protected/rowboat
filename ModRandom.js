@@ -95,7 +95,7 @@ class ModRandom extends Module {
                     let val;
                     if (facets[5] || facets[7]) {
                         //Exclude highest/lowest
-                        sort(dice);
+                        dice.sort();
                         val = dice.reduce((sum, die, j) => (j >= (facets[5] || 0) && j < (dice.length - (facets[7] || 0)) ? sum + die : sum), 0);
                         if (facets[5]) dice.splice(facets[5], 0, "\\");
                         if (facets[7]) dice.splice(dice.length - 1 - facets[7], 0, "/");
