@@ -73,14 +73,17 @@ class ModRandom extends Module {
             var dicepos = {};
             var resolved = expr.slice();
             for (let i = 0; i < resolved.length; i++) {
-                let facets = resolved[i].match(/^([1-9][0-9]?)?d([1-9][0-9]?)$/);
+                let facets = resolved[i].match(/^(#?)([1-9][0-9]?)?d([1-9][0-9]?)$/);
                 if (facets) {
                     let val = 0;
-                    for (let j = 0; j < (facets[1] || 1); j++) {
-                        val += Math.floor(random.fraction() * facets[2]) + 1;
+                    let dice = [];
+                    for (let j = 0; j < (facets[2] || 1); j++) {
+                        let die = Math.floor(random.fraction() * facets[3]) + 1;
+                        dice.push(die);
+                        val += die;
                     }
                     resolved[i] = val;
-                    dicepos[i] = true;
+                    dicepos[i] = (facets[1] ? dice : true);
                 } else if (resolved[i].match(/^[0-9]+$/)) {
                     resolved[i] = parseInt(resolved[i]);
                 }
@@ -89,9 +92,13 @@ class ModRandom extends Module {
             var rep = expr.join(" ");
             
             if (Object.keys(dicepos).length > 0) {
-                rep += ' = ' + resolved.map((val, i) => {
+                rep += '\n    = ' + resolved.map((val, i) => {
                     if (dicepos[i]) {
-                        return "__" + val + "__";
+                        if (dicepos[i] !== true) {
+                            return "__" + val + "__ [" + dicepos[i].join(" ") + "]";
+                        } else {
+                            return "__" + val + "__";
+                        }
                     }
                     return val;
                 }).join(" ");
@@ -106,7 +113,7 @@ class ModRandom extends Module {
                         result -= resolved[i];
                     }
                 }
-                rep += ' = **' + result + '**';
+                rep += '\n    = **' + result + '**';
             }
 
             ep.reply(env.idToDisplayName(userid) + ': ' + rep);
