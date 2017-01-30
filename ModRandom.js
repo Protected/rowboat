@@ -73,7 +73,7 @@ class ModRandom extends Module {
             var dicepos = {};
             var resolved = expr.slice();
             for (let i = 0; i < resolved.length; i++) {
-                let facets = resolved[i].match(/^(#?)([1-9][0-9]?)?d([1-9][0-9]?)$/);
+                let facets = resolved[i].match(/^(\*?)([1-9][0-9]?)?d([1-9][0-9]?)$/);
                 if (facets) {
                     let val = 0;
                     let dice = [];
