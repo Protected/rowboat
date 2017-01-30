@@ -102,7 +102,7 @@ class ModRandom extends Module {
                         dice.sort();
                         val = dice.reduce((sum, die, j) => (j >= (facets[5] || 0) && j < (dice.length - (facets[7] || 0)) ? sum + die : sum), 0);
                         if (facets[5]) dice.splice(facets[5], 0, "\\");
-                        if (facets[7]) dice.splice(dice.length - 1 - facets[7], 0, "/");
+                        if (facets[7]) dice.splice(dice.length - facets[7], 0, "/");
                     } else {
                         val = dice.reduce((sum, die) => sum + die, 0);
                     }
