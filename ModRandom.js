@@ -81,6 +81,8 @@ class ModRandom extends Module {
                     }
                     resolved[i] = val;
                     dicepos[i] = true;
+                } else if (resolved[i].match(/^[0-9]+$/)) {
+                    resolved[i] = parseInt(resolved[i]);
                 }
             }
 
