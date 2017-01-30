@@ -76,7 +76,7 @@ class ModRandom extends Module {
                 let facets = resolved[i].match(/^([1-9][0-9]?)?d([1-9][0-9]?)$/);
                 if (facets) {
                     let val = 0;
-                    for (let j = 0; j < facets[1]; j++) {
+                    for (let j = 0; j < (facets[1] || 1); j++) {
                         val += Math.floor(random.fraction() * facets[2]) + 1;
                     }
                     resolved[i] = val;
