@@ -91,6 +91,7 @@ class ModRandom extends Module {
                     if (dicepos[i]) {
                         return "__" + val + "__";
                     }
+                    return val;
                 }).join(" ");
             }
             
@@ -103,7 +104,7 @@ class ModRandom extends Module {
                         result -= resolved[i];
                     }
                 }
-                rep += ' = **' + result;
+                rep += ' = **' + result + '**';
             }
 
             ep.reply(env.idToDisplayName(userid) + ': ' + rep);
