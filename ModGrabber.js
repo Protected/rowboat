@@ -108,7 +108,7 @@ class ModGrabber extends Module {
             permissions: [PERM_ADMIN]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var channel = env.server.channels.find('id', args.channelid);
+            var channel = env.server.channels.get(args.channelid);
             if (!channel) return false;
             
             var endNow = false;
