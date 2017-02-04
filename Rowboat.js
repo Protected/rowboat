@@ -28,6 +28,25 @@ function moduleRequest(modname, callback) {
     }
 }
 
+function envNameLoaded(envname) {
+    for (let thatName in environments) {
+        if (environments[thatName].envName == envname) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function modNameLoaded(modname) {
+    for (let thatName in modules) {
+        if (modules[thatName].modName == modname) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
 
 //Auxiliary exports
 
@@ -140,15 +159,15 @@ var loadModules = exports.loadModules = function() {
         }
         
         for (let reqenv of mod.requiredEnvironments) {
-            if (!environments[reqenv]) {
-                logger.error("Could not initialize the module: " + mod.name + " because the required environment: " + reqenv + " is not loaded.");
+            if (!envNameLoaded(reqenv)) {
+                logger.error("Could not initialize the module: " + mod.name + " because the required environment type: " + reqenv + " is not loaded.");
                 return false;
             }
         }
         
         for (let reqmod of mod.requiredModules) {
-            if (!modules[reqmod]) {
-                logger.error("Could not initialize the module: " + mod.name + " because the required module: " + reqmod + " is not loaded.");
+            if (!modNameLoaded(reqmod)) {
+                logger.error("Could not initialize the module: " + mod.name + " because the required module type: " + reqmod + " is not loaded.");
                 return false;
             }
         }
