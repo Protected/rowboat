@@ -194,7 +194,7 @@ class ModCommands extends Module {
             
             for (let name in allenvs) {
                 let thatenv = allenvs[name];
-                ep.reply ("  **{" + name + "}** - " + thatenv.envName);
+                ep.reply ("  {**" + name + "**} - " + thatenv.envName);
             }
         
             return true;
@@ -224,13 +224,13 @@ class ModCommands extends Module {
             
             for (let modName in display) {
                 if (!display[modName][0].isMultiInstanceable) {
-                    ep.reply ("  **|" + modName + "|**");
+                    ep.reply ("  |**" + modName + "**|");
                 } else {
                     let line = [];
                     for (let mod of display[modName]) {
                         line.push("|" + mod.name + "|");
                     }
-                    ep.reply ("  " + modName + ": " + line.join(", "));
+                    ep.reply ("  **" + modName + "**: " + line.join(", "));
                 }
             }
         
