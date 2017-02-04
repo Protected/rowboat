@@ -46,6 +46,33 @@ class ModFreeRoles extends Module {
         
         //Register callbacks
         
+        for (var envname in envs) {
+            let env = envs[envname];
+            if (env.envName != 'Discord') continue;
+            
+            env.client.on('roleUpdate', (oldRole, newRole) => {
+                let lcrole = oldRole.name.toLowerCase();
+                let lcrolenew = newRole.name.toLowerCase();
+                if (lcrole == lcrolenew) return;
+                
+                if (this._freeRoles[env.name][lcrole]) {
+                    this._freeRoles[env.name][lcrolenew] = this._freeRoles[env.name][lcrole];
+                    delete this._freeRoles[env.name][lcrole];
+                    this._freeRoles[env.name][lcrolenew].name = newRole.name;
+                    this.saveData();
+                }
+            });
+            
+            env.client.on('roleDelete', (role) => {
+                let lcrole = role.name.toLowerCase();
+                if (this._freeRoles[env.name][lcrole]) {
+                    delete this._freeRoles[env.name][lcrole];
+                    this.saveData();
+                }
+            });
+        }
+        
+        
         this.mod("Commands").registerCommand(this, 'roles', {
             description: 'Show a list of free roles (that can be claimed by users).',
             environments: ['Discord']
