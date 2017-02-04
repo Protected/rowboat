@@ -50,25 +50,27 @@ class ModFreeRoles extends Module {
             let env = envs[envname];
             if (env.envName != 'Discord') continue;
             
-            env.client.on('roleUpdate', (oldRole, newRole) => {
-                let lcrole = oldRole.name.toLowerCase();
-                let lcrolenew = newRole.name.toLowerCase();
-                if (lcrole == lcrolenew) return;
+            env.on('connected', (env) => {
+                env.client.on('roleUpdate', (oldRole, newRole) => {
+                    let lcrole = oldRole.name.toLowerCase();
+                    let lcrolenew = newRole.name.toLowerCase();
+                    if (lcrole == lcrolenew) return;
+                    
+                    if (this._freeRoles[env.name][lcrole]) {
+                        this._freeRoles[env.name][lcrolenew] = this._freeRoles[env.name][lcrole];
+                        delete this._freeRoles[env.name][lcrole];
+                        this._freeRoles[env.name][lcrolenew].name = newRole.name;
+                        this.saveData();
+                    }
+                });
                 
-                if (this._freeRoles[env.name][lcrole]) {
-                    this._freeRoles[env.name][lcrolenew] = this._freeRoles[env.name][lcrole];
-                    delete this._freeRoles[env.name][lcrole];
-                    this._freeRoles[env.name][lcrolenew].name = newRole.name;
-                    this.saveData();
-                }
-            });
-            
-            env.client.on('roleDelete', (role) => {
-                let lcrole = role.name.toLowerCase();
-                if (this._freeRoles[env.name][lcrole]) {
-                    delete this._freeRoles[env.name][lcrole];
-                    this.saveData();
-                }
+                env.client.on('roleDelete', (role) => {
+                    let lcrole = role.name.toLowerCase();
+                    if (this._freeRoles[env.name][lcrole]) {
+                        delete this._freeRoles[env.name][lcrole];
+                        this.saveData();
+                    }
+                });
             });
         }
         
