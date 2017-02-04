@@ -198,7 +198,7 @@ class ModCommands extends Module {
             }
         
             return true;
-        );
+        });
         
         
         this.registerCommand(this, 'modules', {
@@ -235,7 +235,7 @@ class ModCommands extends Module {
             }
         
             return true;
-        );
+        });
         
         
         return true;
