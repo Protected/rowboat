@@ -479,10 +479,24 @@ class ModGrabber extends Module {
                         }
                         
                         if (info.length_seconds < this.param('minDuration') || interval && interval[1] - interval[0] < this.param('minDuration')
-                                || info.length_seconds > this.param('maxDuration') && (!interval || interval[1] - interval[0] > this.param('maxDuration'))) return;
+                                || info.length_seconds > this.param('maxDuration') && (!interval || interval[1] - interval[0] > this.param('maxDuration'))) {
+                                
+                            if (warnauthor) {
+                                this.env(this.param('env')).msg(messageObj.channel.id, this.env(this.param('env')).idToDisplayName(author) + ", I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds.");
+                            }
+                                
+                            return;
+                        }
                                 
                         if (this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]
-                                && !this._indexSourceTypeAndId['youtube'][info.video_id].sourcePartial && !interval) return;
+                                && !this._indexSourceTypeAndId['youtube'][info.video_id].sourcePartial && !interval) {
+                                
+                            if (warnauthor) {
+                                this.env(this.param('env')).msg(messageObj.channel.id, this.env(this.param('env')).idToDisplayName(author) + ", the song was already known (" + this._indexSourceTypeAndId['youtube'][info.video_id].hash + ").");
+                            }
+                                
+                            return;
+                        }
                         
                         let keywords = info.keywords;
                         if (typeof keywords == "string") {
@@ -527,6 +541,9 @@ class ModGrabber extends Module {
                                     }
                                     this.saveIndex();
                                     this.log('  Already existed: ' + url + '  (as ' + hash + ')');
+                                    if (warnauthor) {
+                                        this.env(this.param('env')).msg(messageObj.channel.id, this.env(this.param('env')).idToDisplayName(author) + ", the song was already known (" + hash + ").");
+                                    }
                                     return;
                                 }
                                 
@@ -616,7 +633,14 @@ class ModGrabber extends Module {
                             }
             
                             let duration = parseFloat(info.format.duration || info.streams[0].duration);
-                            if (duration < this.param('minDuration') || duration > this.param('maxDuration')) return;
+                            if (duration < this.param('minDuration') || duration > this.param('maxDuration')) {
+                            
+                                if (warnauthor) {
+                                    this.env(this.param('env')).msg(messageObj.channel.id, this.env(this.param('env')).idToDisplayName(author) + ", I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds.");
+                                }
+                            
+                                return;
+                            }
                             
                             let keywords = dkeywords;
                             
@@ -637,6 +661,9 @@ class ModGrabber extends Module {
                                     }
                                     this.saveIndex();
                                     this.log('  Already existed: ' + ma.filename + '  (as ' + hash + ')');
+                                    if (warnauthor) {
+                                        this.env(this.param('env')).msg(messageObj.channel.id, this.env(this.param('env')).idToDisplayName(author) + ", the song was already known (" + hash + ").");
+                                    }
                                     return;
                                 }
                                 
