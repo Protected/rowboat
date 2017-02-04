@@ -181,6 +181,63 @@ class ModCommands extends Module {
         });
         
         
+        this.registerCommand(this, 'environments', {
+            description: "Lists the configured enviroments.",
+            permissions: [PERM_ADMIN]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            var allenvs = this.mod('root').getAllEnvironments();
+            if (!allenvs || !Object.keys(allenvs).length) {
+                reply ("No environments found.");
+                return true;
+            }
+            
+            for (let name in allenvs) {
+                let thatenv = allenvs[name];
+                reply ("  **{" + name + "}** - " + thatenv.envName);
+            }
+        
+            return true;
+        );
+        
+        
+        this.registerCommand(this, 'modules', {
+            description: "Lists the configured modules.",
+            permissions: [PERM_ADMIN]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            var allmods = this.mod('root').getAllModules();
+            if (!allmods || !Object.keys(allmods).length) {
+                reply ("No modules found.");
+                return true;
+            }
+            
+            let display = {};
+            
+            for (let name in allmods) {
+                let thatmod = allmods[name];
+                if (!display[thatmod.modName]) {
+                    display[thatmod.modName] = [];
+                }
+                display[thatmod.modName].push(thatmod);
+            }
+            
+            for (let modName in display) {
+                if (!display[modName].isMultiInstanceable) {
+                    reply ("  **|" + modName + "|**");
+                } else {
+                    let line = [];
+                    for (let mod of display[modName]) {
+                        line.push("|" + mod.name + "|");
+                    }
+                    reply ("  " + modName + ": " + line.join(", "));
+                }
+            }
+        
+            return true;
+        );
+        
+        
         return true;
     }
 

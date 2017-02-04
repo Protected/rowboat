@@ -29,6 +29,17 @@ function moduleRequest(modname, callback) {
 }
 
 
+//Auxiliary exports
+
+exports.getAllEnvironments = function() {
+    return environments;
+}
+
+exports.getAllModules = function() {
+    return modules;
+}
+
+
 //Load master config
 
 logger.info("Welcome to Rowboat!");
