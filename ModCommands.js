@@ -223,7 +223,7 @@ class ModCommands extends Module {
             }
             
             for (let modName in display) {
-                if (!display[modName].isMultiInstanceable) {
+                if (!display[modName][0].isMultiInstanceable) {
                     ep.reply ("  **|" + modName + "|**");
                 } else {
                     let line = [];
