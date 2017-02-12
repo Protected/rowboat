@@ -30,6 +30,36 @@ var LIKEABILITY_WORDS = {
     never: -2
 };
 
+var LIKEABILITY_REACTIONS = {
+    ok_hand: 1,
+    thumbsup: 1,
+    clap: 1,
+    laughing: 1,
+    satisfied: 1,
+    heart_eyes: 1,
+    heart: 1,
+    smile: 0,
+    smiley: 0,
+    slight_smile: 0,
+    grin: 0,
+    grinning: 0,
+    relieved: 0,
+    relaxed: 0,
+    slight_frown: -1,
+    expressionless: -1,
+    unamused: -1,
+    disappointed: -1,
+    worried: -1,
+    frowning: -1,
+    anguished: -1,
+    sleepy: -1,
+    poop: -2,
+    rage: -2,
+    thumbsdown: -2,
+    nauseated_face: -2,
+    sick: -2
+}
+
 
 class ModSongRanking extends Module {
 
@@ -83,10 +113,6 @@ class ModSongRanking extends Module {
         
             env.client.on('messageReactionAdd', (messageReaction, user) => {
                 //env.msg(messageReaction.message.channel.id, user.username + " added " + messageReaction.emoji.name);
-            });
-            
-            env.client.on('messageReactionRemove', (messageReaction, user) => {
-                //env.msg(messageReaction.message.channel.id, user.username + " removed " + messageReaction.emoji.name);
             });
             
         }, self);

@@ -56,7 +56,7 @@ class ModFreeRoles extends Module {
                     let lcrolenew = newRole.name.toLowerCase();
                     if (lcrole == lcrolenew) return;
                     
-                    if (this._freeRoles[env.name][lcrole]) {
+                    if (this._freeRoles[env.name] && this._freeRoles[env.name][lcrole]) {
                         this._freeRoles[env.name][lcrolenew] = this._freeRoles[env.name][lcrole];
                         delete this._freeRoles[env.name][lcrole];
                         this._freeRoles[env.name][lcrolenew].name = newRole.name;
@@ -66,7 +66,7 @@ class ModFreeRoles extends Module {
                 
                 env.client.on('roleDelete', (role) => {
                     let lcrole = role.name.toLowerCase();
-                    if (this._freeRoles[env.name][lcrole]) {
+                    if (this._freeRoles[env.name] && this._freeRoles[env.name][lcrole]) {
                         delete this._freeRoles[env.name][lcrole];
                         this.saveData();
                     }
