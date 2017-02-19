@@ -3,6 +3,7 @@
 var Module = require('./Module.js');
 var cd = require('color-difference');
 var emoji = require('emojione');
+var diff = require('diff');
 
 emoji.ascii = true;
 delete emoji.asciiList['d:'];
@@ -59,6 +60,18 @@ class ModBridgeDiscordIRC extends Module {
         
         this.irc.on('message', this.onIrcMessage, this);
         this.discord.on('message', this.onDiscordMessage, this);
+        
+        this.discord.on('connected', (env) => {
+            env.client.on('messageUpdate', (oldMessage, newMessage) => {
+                if (oldMessage.author.username == env.client.user.username) return;
+                if (oldMessage.channel.type == "dm") return;
+                if (this.param('discordBlacklist').indexOf(oldMessage.channel.id) > -1) return;
+                if (oldMessage.content == newMessage.content) return;
+                
+                let changes = diff.diffWords(oldMessage.content, newMessage.content);
+                onDiscordEdit(env, changes, oldMessage.author.id, oldMessage.channel.id, oldMessage, newMessage);
+            });
+        });
         
         return true;
     }
@@ -158,6 +171,53 @@ class ModBridgeDiscordIRC extends Module {
             }
         }
         
+    }
+    
+    
+    onDiscordEdit(env, changes, authorid, channelid, oldMessage, newMessage) {
+        var server = env.server;
+        
+        var authorname = env.idToDisplayName(authorid);
+        
+        var roles = server.roles.array().sort((a, b) => (b.position - a.position));
+        for (let role of roles) {
+            if (rawobject.member.roles.get(role.id)) {
+                authorname = "" + closestTtyColor(role.hexColor) + authorname + "";
+                break;
+            }
+        }
+        
+        var finalmsg = '';
+        for (let change of changes) {
+            if (change.added) {
+                finalmsg += "03" + change.value + "";
+            } else if (changed.removed) {
+                finalmsg += "04" + change.value + "";
+            } else {
+                finalmsg += change.value;
+            }
+        }
+
+        finalmsg = finalmsg.replace(/<@!?([0-9]+)>/g, (match, id) => {
+            var ircid = this.translateAccountMentions(this.discord, id, this.irc, this.param('ircchannel'));
+            if (ircid) return "@" + this.irc.idToDisplayName(ircid);
+            return match;
+        });
+        
+        finalmsg = this.irc.applyFormatting(this.discord.normalizeFormatting(finalmsg));
+        finalmsg = emoji.shortnameToAscii(emoji.toShort(finalmsg));
+        
+        var lines = finalmsg.split("\n");
+        
+        for (let line of lines) {
+            line = 'Edit by ' + authorname + ": " + line;
+            
+            if (rawobject.channel.id != this.param('defaultdiscordchannel')) {
+                line = "[#" + rawobject.channel.name + "] " + line;
+            }
+            
+            this.irc.msg(this.param('ircchannel'), line);
+        }
     }
     
     
