@@ -69,7 +69,7 @@ class ModBridgeDiscordIRC extends Module {
                 if (oldMessage.content == newMessage.content) return;
                 
                 let changes = diff.diffWords(oldMessage.content, newMessage.content);
-                onDiscordEdit(env, changes, oldMessage.author.id, oldMessage.channel.id, oldMessage, newMessage);
+                this.onDiscordEdit(env, changes, oldMessage.author.id, oldMessage.channel.id, oldMessage, newMessage);
             });
         });
         
