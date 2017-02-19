@@ -192,7 +192,7 @@ class ModBridgeDiscordIRC extends Module {
             if (change.added) {
                 finalmsg += "03" + change.value + "";
             } else if (change.removed) {
-                finalmsg += "04" + change.value + "";
+                finalmsg += "15" + change.value + "";
             } else {
                 finalmsg += change.value;
             }
