@@ -1,4 +1,4 @@
-/* Module: Random -- Adds a command, "random", which outputs a random number. */
+/* Module: CardsAgainstHumanity -- Play CAH. */
 
 var Module = require('./Module.js');
 var _ = require('lodash');

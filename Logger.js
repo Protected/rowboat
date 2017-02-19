@@ -4,12 +4,17 @@ var moment = require('moment');
 var pathTemplate = null;
 var path = null;
 var logger = null;
+var useConsole = false;
 
 exports.setPathTemplate = function(newPathTemplate) {
     if (pathTemplate == newPathTemplate) return;
     pathTemplate = newPathTemplate;
     path = null;
     logger = null;
+}
+
+exports.enableConsole = function() {
+    useConsole = true;
 }
 
 
@@ -40,6 +45,10 @@ function ready() {
                 })
             ]
         });
+        
+        if (useConsole) {
+            logger.add(winston.transports.Console, {});
+        }
 
         logger.info('Session start');
     }

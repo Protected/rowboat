@@ -117,7 +117,7 @@ class ModUsers extends Module {
                 args.idpattern = "^" + args.idpattern + "$";
                 
                 if (this.delId(args.handle, args.environment, args.idpattern)) {
-                    ep.reply("Successfully removed the requested patterm from the account identified by " + args.handle + ".");
+                    ep.reply("Successfully removed the requested pattern from the account identified by " + args.handle + ".");
                 } else {
                     ep.reply("I could not find an account identified by " + args.handle + "!");
                 }
