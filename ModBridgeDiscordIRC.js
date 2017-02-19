@@ -181,7 +181,7 @@ class ModBridgeDiscordIRC extends Module {
         
         var roles = server.roles.array().sort((a, b) => (b.position - a.position));
         for (let role of roles) {
-            if (rawobject.member.roles.get(role.id)) {
+            if (oldMessage.member.roles.get(role.id)) {
                 authorname = "" + closestTtyColor(role.hexColor) + authorname + "";
                 break;
             }
@@ -212,8 +212,8 @@ class ModBridgeDiscordIRC extends Module {
         for (let line of lines) {
             line = 'Edit by ' + authorname + ": " + line;
             
-            if (rawobject.channel.id != this.param('defaultdiscordchannel')) {
-                line = "[#" + rawobject.channel.name + "] " + line;
+            if (oldMessage.channel.id != this.param('defaultdiscordchannel')) {
+                line = "[#" + oldMessage.channel.name + "] " + line;
             }
             
             this.irc.msg(this.param('ircchannel'), line);
