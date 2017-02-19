@@ -68,7 +68,7 @@ class ModBridgeDiscordIRC extends Module {
                 if (this.param('discordBlacklist').indexOf(oldMessage.channel.id) > -1) return;
                 if (oldMessage.content == newMessage.content) return;
                 
-                let changes = diff.diffWords(oldMessage.content, newMessage.content);
+                let changes = diff.diffChars(oldMessage.content, newMessage.content);
                 this.onDiscordEdit(env, changes, oldMessage.author.id, oldMessage.channel.id, oldMessage, newMessage);
             });
         });
