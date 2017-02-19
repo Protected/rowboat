@@ -191,7 +191,7 @@ class ModBridgeDiscordIRC extends Module {
         for (let change of changes) {
             if (change.added) {
                 finalmsg += "03" + change.value + "";
-            } else if (changed.removed) {
+            } else if (change.removed) {
                 finalmsg += "04" + change.value + "";
             } else {
                 finalmsg += change.value;
