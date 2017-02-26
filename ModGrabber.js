@@ -126,7 +126,7 @@ class ModGrabber extends Module {
                     if (messagesarr.length < 100) endNow = true;
                     for (let message of messagesarr) {
                         if (message.createdTimestamp <= cutoff) endNow = true;
-                        this._scanQueue.push([message.author.id, message.content, message, true]);
+                        this._scanQueue.push([message]);
                     }
                     if (endNow) {
                         ep.reply("Scan complete.");
@@ -437,14 +437,22 @@ class ModGrabber extends Module {
     onMessage(env, type, message, authorid, channelid, rawobj) {
         if (env.name != this.param('env')) return false;
         if (this.param('channels').indexOf(channelid) < 0) return false;
-        this._scanQueue.push([authorid, message, rawobj, false]);
+        this._scanQueue.push([rawobj, {
+            accepted: (messageObj, messageAuthor, reply, hash) => {
+                if (reply) reply("Got it, " + messageAuthor + ".");
+            },
+            exists: (messageObj, messageAuthor, reply, hash) => {
+                if (reply) reply(messageAuthor + ", the song was already known (" + hash + ").");
+            },
+            errorDuration: (messageObj, messageAuthor, reply, label) => {
+                if (reply) reply(messageAuthor + ", I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds.");
+            }
+        }]);
     }
     
     
-    grabInMessage(author, message, messageObj, hush) {
-        if (this.isDownloadPathFull() || !message && !messageObj) return false;
-    
-        var warnauthor = !!message.match(/^!!/) && !hush;
+    extractMessageInfo(message) {
+        var warnauthor = !!message.match(/^!!/);
     
         var dkeywords = message.match(/\[[A-Za-z0-9\u{3040}-\u{D7AF}\(\)' _-]+\]/gu);
         if (!dkeywords) dkeywords = [];
@@ -454,7 +462,7 @@ class ModGrabber extends Module {
             return ikeyword[1];
         }).filter((item) => item);
         
-        var title = message.match(/\{(title|name)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' _-]+)\}/iu);
+        var title = message.match(/\{(title|name|song)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' _-]+)\}/iu);
         if (title) title = title[3];
         var artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' _-]+)\}/iu);
         if (artist) artist = artist[3];
@@ -465,6 +473,31 @@ class ModGrabber extends Module {
             if (interval) interval = this.parseInterval(interval[1]);
         }
         
+        return {
+            warnauthor: warnauthor,
+            keywords: dkeywords,
+            title: title,
+            artist: artist,
+            interval: interval
+        };
+    }
+    
+    
+    /* Callbacks:
+        accepted(messageObj, messageAuthor, reply, hash) - The song has just been indexed as a result of this call (details can be retrieved from the index)
+        exists(messageObj, messageAuthor, reply, hash) - A song already existed (details can be retrieved from the index)
+        errorDuration(messageObj, messageAuthor, reply, label) - A song fails a duration check
+        reply is either a function for replying to the environent (if the message is tagged for feedback) or null
+    */
+    grabInMessage(messageObj, callbacks, readOnly) {
+        if (this.isDownloadPathFull() || !messageObj) return false;
+        
+        var message = messageObj.content;
+        var messageAuthor = this.env(this.param('env')).idToDisplayName(message.author.id);
+        var reply = (messageInfo.warnauthor ? (out) => this.env(this.param('env')).msg(messageObj.channel.id, out) : null);
+        
+        var messageInfo = this.extractMessageInfo(message);
+        var interval = messageInfo.interval;
     
         //Youtube
         var yturls = message.match(/(?:https?:\/\/|\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})(?![\w-])/g);
@@ -480,21 +513,13 @@ class ModGrabber extends Module {
                         
                         if (info.length_seconds < this.param('minDuration') || interval && interval[1] - interval[0] < this.param('minDuration')
                                 || info.length_seconds > this.param('maxDuration') && (!interval || interval[1] - interval[0] > this.param('maxDuration'))) {
-                                
-                            if (warnauthor) {
-                                this.env(this.param('env')).msg(messageObj.channel.id, this.env(this.param('env')).idToDisplayName(author) + ", I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds.");
-                            }
-                                
+                            if (callbacks.errorDuration) callbacks.errorDuration(messageObj, messageAuthor, reply, info.title);
                             return;
                         }
                                 
                         if (this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]
                                 && !this._indexSourceTypeAndId['youtube'][info.video_id].sourcePartial && !interval) {
-                                
-                            if (warnauthor) {
-                                this.env(this.param('env')).msg(messageObj.channel.id, this.env(this.param('env')).idToDisplayName(author) + ", the song was already known (" + this._indexSourceTypeAndId['youtube'][info.video_id].hash + ").");
-                            }
-                                
+                            if (callbacks.exists) callbacks.exists(messageObj, messageAuthor, reply, this._indexSourceTypeAndId['youtube'][info.video_id].hash);
                             return;
                         }
                         
@@ -503,7 +528,7 @@ class ModGrabber extends Module {
                             if (keywords) keywords = keywords.split('');
                             else keywords = [];
                         }
-                        for (let dkeyword of dkeywords) {
+                        for (let dkeyword of messageInfo.keywords) {
                             keywords.push(dkeyword);
                         }
                         
@@ -535,15 +560,20 @@ class ModGrabber extends Module {
                                 
                                 if (fs.existsSync(realpath)) {
                                     fs.unlink(temppath);
-                                    this._index[hash].seen.push(now);
-                                    if (this._index[hash].sharedBy.indexOf(author) < 0) {
-                                        this._index[hash].sharedBy.push(author);
-                                    }
-                                    this.saveIndex();
                                     this.log('  Already existed: ' + url + '  (as ' + hash + ')');
-                                    if (warnauthor) {
-                                        this.env(this.param('env')).msg(messageObj.channel.id, this.env(this.param('env')).idToDisplayName(author) + ", the song was already known (" + hash + ").");
+                                    if (!readOnly) {
+                                        this._index[hash].seen.push(now);
+                                        if (this._index[hash].sharedBy.indexOf(author) < 0) {
+                                            this._index[hash].sharedBy.push(author);
+                                        }
+                                        this.saveIndex();
                                     }
+                                    if (callbacks.exists) callbacks.exists(messageObj, messageAuthor, reply, hash);
+                                    return;
+                                }
+                                
+                                if (readOnly) {
+                                    fs.unlink(temppath);
                                     return;
                                 }
                                 
@@ -562,8 +592,8 @@ class ModGrabber extends Module {
                                         sourceSpecificId: info.video_id,
                                         sourceLoudness: parseFloat(info.loudness),
                                         sourcePartial: interval,
-                                        name: (title || info.title),
-                                        author: (artist || ''),
+                                        name: (messageInfo.title || info.title),
+                                        author: (messageInfo.artist || ''),
                                         keywords: keywords
                                     };
                                     this.saveIndex();
@@ -576,13 +606,8 @@ class ModGrabber extends Module {
                                     this._sessionGrabs.unshift([hash, now]);
                                     
                                     this.log('  Successfully grabbed from youtube: ' + url + '  (as ' + hash + ')');
-                                    
-                                    if (warnauthor) {
-                                        this.env(this.param('env')).msg(messageObj.channel.id, "Got it, " + this.env(this.param('env')).idToDisplayName(author) + ".");
-                                    }
-                                    
-                                    this.processOnNewSong(hash, author, message, messageObj);
-                                    
+                                    if (callbacks.accepted) callbacks.accepted(messageObj, messageAuthor, reply, hash);
+                                    this.processOnNewSong(messageObj, messageAuthor, reply, hash);
                                 });
                                 
                             });
@@ -634,15 +659,11 @@ class ModGrabber extends Module {
             
                             let duration = parseFloat(info.format.duration || info.streams[0].duration);
                             if (duration < this.param('minDuration') || duration > this.param('maxDuration')) {
-                            
-                                if (warnauthor) {
-                                    this.env(this.param('env')).msg(messageObj.channel.id, this.env(this.param('env')).idToDisplayName(author) + ", I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds.");
-                                }
-                            
+                                if (callbacks.errorDuration) callbacks.errorDuration(messageObj, messageAuthor, reply, info.title);
                                 return;
                             }
                             
-                            let keywords = dkeywords;
+                            let keywords = messageInfo.dkeywords;
                             
                             //Compute hash, rename file and add to index
                             fs.readFile(temppath, (err, data) => {
@@ -655,15 +676,20 @@ class ModGrabber extends Module {
                                 
                                 if (fs.existsSync(realpath)) {
                                     fs.unlink(temppath);
-                                    this._index[hash].seen.push(now);
-                                    if (this._index[hash].sharedBy.indexOf(author) < 0) {
-                                        this._index[hash].sharedBy.push(author);
-                                    }
-                                    this.saveIndex();
                                     this.log('  Already existed: ' + ma.filename + '  (as ' + hash + ')');
-                                    if (warnauthor) {
-                                        this.env(this.param('env')).msg(messageObj.channel.id, this.env(this.param('env')).idToDisplayName(author) + ", the song was already known (" + hash + ").");
+                                    if (!readOnly) {
+                                        this._index[hash].seen.push(now);
+                                        if (this._index[hash].sharedBy.indexOf(author) < 0) {
+                                            this._index[hash].sharedBy.push(author);
+                                        }
+                                        this.saveIndex();
                                     }
+                                    if (callbacks.exists) callbacks.exists(messageObj, messageAuthor, reply, hash);
+                                    return;
+                                }
+                                
+                                if (readOnly) {
+                                    fs.unlink(temppath);
                                     return;
                                 }
                                 
@@ -678,8 +704,8 @@ class ModGrabber extends Module {
                                         if (info.format.tags.title) name = info.format.tags.title;
                                         if (info.format.tags.artist) author = info.format.tags.artist;
                                     }
-                                    if (title) name = title;
-                                    if (artist) name = artist;
+                                    if (messageInfo.title) name = messageInfo.title;
+                                    if (messageInfo.artist) author = messageInfo.artist;
                                 
                                     this._index[hash] = {
                                         hash: hash,
@@ -705,13 +731,8 @@ class ModGrabber extends Module {
                                     this._sessionGrabs.unshift([hash, now]);
                                     
                                     this.log('  Successfully grabbed from discord: ' + ma.filename + '  (as ' + hash + ')');
-                                    
-                                    if (warnauthor) {
-                                        this.env(this.param('env')).msg(messageObj.channel.id, "Got it, " + this.env(this.param('env')).idToDisplayName(author) + ".");
-                                    }
-                                    
-                                    this.processOnNewSong(hash, author, message, messageObj);
-                                    
+                                    if (callbacks.accepted) callbacks.accepted(messageObj, messageAuthor, reply, hash);
+                                    this.processOnNewSong(messageObj, messageAuthor, reply, hash);
                                 });
                                 
                             });
@@ -787,7 +808,9 @@ class ModGrabber extends Module {
         if (this._downloads >= this.param('maxSimDownloads')) return;
         var item = this._scanQueue.shift();
         if (!item) return;
-        this.grabInMessage(item[0], item[1], item[2], item[3]);
+        if (!item[1]) item[1] = {};
+        if (!item[2]) item[2] = false;
+        this.grabInMessage(item[0], item[1], item[2]);
     }
     
     
@@ -824,14 +847,14 @@ class ModGrabber extends Module {
     }
     
     
-    processOnNewSong(hash, author, message, messageObj) {
+    processOnNewSong(messageObj, messageAuthor, reply, hash) {
         for (let cb of this._apiCbNewSong) {
             try {
                 let r;
                 if (typeof cb == "function") {
-                    r = cb.apply(this, [hash, author, message, messageObj]);
+                    r = cb.apply(this, [messageObj, messageAuthor, reply, hash]);
                 } else {
-                    r = cb[0].apply(cb[1], [hash, author, message, messageObj]);
+                    r = cb[0].apply(cb[1], [messageObj, messageAuthor, reply, hash]);
                 }
                 if (r) break;
             } catch (exception) {
@@ -911,6 +934,7 @@ class ModGrabber extends Module {
     }
     
     
+    //Callback signature: messageObj, messageAuthor, reply, hash
     registerOnNewSong(func, self) {
         this.log('Registering new song callback. Context: ' + self.constructor.name);
         if (!self) {
@@ -918,6 +942,11 @@ class ModGrabber extends Module {
         } else {
             this._apiCbNewSong.push([func, self]);
         }
+    }
+    
+    
+    scanMessage(messageObj, callbacks, readOnly) {
+        this._scanQueue.push([messageObj, callbacks, readOnly]);
     }
     
 

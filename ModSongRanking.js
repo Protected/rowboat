@@ -102,9 +102,9 @@ class ModSongRanking extends Module {
         //Register callbacks
 
         var self = this;
-        this.grabber.registerOnNewSong((hash, author, message, messageObj) => {
+        this.grabber.registerOnNewSong((messageObj, messageAuthor, reply, hash) => {
             
-            this.setSongLikeability(hash, author, 0);
+            this.setSongLikeability(hash, messageObj.author.id, 0);
             
         }, self);
         
@@ -112,7 +112,12 @@ class ModSongRanking extends Module {
         this.denv.on('connected', (env) => {
         
             env.client.on('messageReactionAdd', (messageReaction, user) => {
-                //env.msg(messageReaction.message.channel.id, user.username + " added " + messageReaction.emoji.name);
+                this.grabber.scanMessage(messageReaction.message, {
+                    exists: (messageObj, messageAuthor, reply, hash) => {
+                        if (LIKEABILITY_REACTIONS[messageReaction.emoji.name] === undefined) return;
+                        this.setSongLikeability(hash, messageReaction.message.author.id, LIKEABILITY_REACTIONS[messageReaction.emoji.name]);
+                    }
+                }, true);
             });
             
         }, self);
