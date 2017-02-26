@@ -493,7 +493,8 @@ class ModGrabber extends Module {
         if (this.isDownloadPathFull() || !messageObj) return false;
         
         var message = messageObj.content;
-        var messageAuthor = this.env(this.param('env')).idToDisplayName(messageObj.author.id);
+        var author = messageObj.author.id;
+        var messageAuthor = this.env(this.param('env')).idToDisplayName(author);
         
         var messageInfo = this.extractMessageInfo(message);
         var interval = messageInfo.interval;
@@ -698,14 +699,14 @@ class ModGrabber extends Module {
                                 fs.rename(temppath, realpath, (err) => {
                                     if (err) throw err;
                                 
-                                    let name = ma.filename;
-                                    let author = '';
+                                    let title = ma.filename;
+                                    let artist = '';
                                     if (info.format && info.format.tags) {
-                                        if (info.format.tags.title) name = info.format.tags.title;
-                                        if (info.format.tags.artist) author = info.format.tags.artist;
+                                        if (info.format.tags.title) title = info.format.tags.title;
+                                        if (info.format.tags.artist) artist = info.format.tags.artist;
                                     }
-                                    if (messageInfo.title) name = messageInfo.title;
-                                    if (messageInfo.artist) author = messageInfo.artist;
+                                    if (messageInfo.title) title = messageInfo.title;
+                                    if (messageInfo.artist) artist = messageInfo.artist;
                                 
                                     this._index[hash] = {
                                         hash: hash,
@@ -717,8 +718,8 @@ class ModGrabber extends Module {
                                         sourceSpecificId: ma.id,
                                         sourceLoudness: null,
                                         sourcePartial: interval,
-                                        name: name,
-                                        author: author,
+                                        name: title,
+                                        author: artist,
                                         keywords: keywords
                                     };
                                     this.saveIndex();
