@@ -493,11 +493,11 @@ class ModGrabber extends Module {
         if (this.isDownloadPathFull() || !messageObj) return false;
         
         var message = messageObj.content;
-        var messageAuthor = this.env(this.param('env')).idToDisplayName(message.author.id);
-        var reply = (messageInfo.warnauthor ? (out) => this.env(this.param('env')).msg(messageObj.channel.id, out) : null);
+        var messageAuthor = this.env(this.param('env')).idToDisplayName(messageObj.author.id);
         
         var messageInfo = this.extractMessageInfo(message);
         var interval = messageInfo.interval;
+        var reply = (messageInfo.warnauthor ? (out) => this.env(this.param('env')).msg(messageObj.channel.id, out) : null);
     
         //Youtube
         var yturls = message.match(/(?:https?:\/\/|\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})(?![\w-])/g);
