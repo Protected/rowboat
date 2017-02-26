@@ -112,10 +112,15 @@ class ModSongRanking extends Module {
         this.denv.on('connected', (env) => {
         
             env.client.on('messageReactionAdd', (messageReaction, user) => {
+                var emojiname = '';
+                let extr = messageReaction.emoji.name.match(/\:([^:]+)\:/);
+                if (!extr) return;
+                emojiname = extr[1];
+                if (LIKEABILITY_REACTIONS[emojiname] === undefined) return;
+                
                 this.grabber.scanMessage(messageReaction.message, {
                     exists: (messageObj, messageAuthor, reply, hash) => {
-                        if (LIKEABILITY_REACTIONS[messageReaction.emoji.name] === undefined) return;
-                        this.setSongLikeability(hash, messageReaction.message.author.id, LIKEABILITY_REACTIONS[messageReaction.emoji.name]);
+                        this.setSongLikeability(hash, messageReaction.message.author.id, LIKEABILITY_REACTIONS[emojiname]);
                     }
                 }, true);
             });
