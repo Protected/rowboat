@@ -678,6 +678,8 @@ class ModGrabber extends Module {
                                         if (info.format.tags.title) name = info.format.tags.title;
                                         if (info.format.tags.artist) author = info.format.tags.artist;
                                     }
+                                    if (title) name = title;
+                                    if (artist) name = artist;
                                 
                                     this._index[hash] = {
                                         hash: hash,
