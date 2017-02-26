@@ -38,6 +38,7 @@ var LIKEABILITY_REACTIONS = {
     satisfied: 1,
     heart_eyes: 1,
     heart: 1,
+    hearts: 1,
     smile: 0,
     smiley: 0,
     slight_smile: 0,
