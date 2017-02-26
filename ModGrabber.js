@@ -126,7 +126,7 @@ class ModGrabber extends Module {
                     if (messagesarr.length < 100) endNow = true;
                     for (let message of messagesarr) {
                         if (message.createdTimestamp <= cutoff) endNow = true;
-                        this._scanQueue.push([message.author.id, message.content, message]);
+                        this._scanQueue.push([message.author.id, message.content, message, true]);
                     }
                     if (endNow) {
                         ep.reply("Scan complete.");
@@ -437,14 +437,14 @@ class ModGrabber extends Module {
     onMessage(env, type, message, authorid, channelid, rawobj) {
         if (env.name != this.param('env')) return false;
         if (this.param('channels').indexOf(channelid) < 0) return false;
-        this._scanQueue.push([authorid, message, rawobj]);
+        this._scanQueue.push([authorid, message, rawobj, false]);
     }
     
     
-    grabInMessage(author, message, messageObj) {
+    grabInMessage(author, message, messageObj, hush) {
         if (this.isDownloadPathFull() || !message && !messageObj) return false;
     
-        var warnauthor = !!message.match(/^!!/);
+        var warnauthor = !!message.match(/^!!/) && !hush;
     
         var dkeywords = message.match(/\[[A-Za-z0-9\u{3040}-\u{D7AF}\(\)' _-]+\]/gu);
         if (!dkeywords) dkeywords = [];
@@ -672,6 +672,13 @@ class ModGrabber extends Module {
                                 fs.rename(temppath, realpath, (err) => {
                                     if (err) throw err;
                                 
+                                    let name = ma.filename;
+                                    let author = '';
+                                    if (info.format && info.format.tags) {
+                                        if (info.format.tags.title) name = info.format.tags.title;
+                                        if (info.format.tags.artist) author = info.format.tags.artist;
+                                    }
+                                
                                     this._index[hash] = {
                                         hash: hash,
                                         seen: [now],
@@ -682,8 +689,8 @@ class ModGrabber extends Module {
                                         sourceSpecificId: ma.id,
                                         sourceLoudness: null,
                                         sourcePartial: interval,
-                                        name: (info.format.tags.title || ma.filename),
-                                        author: (info.format.tags.artist || ''),
+                                        name: name,
+                                        author: author,
                                         keywords: keywords
                                     };
                                     this.saveIndex();
@@ -778,7 +785,7 @@ class ModGrabber extends Module {
         if (this._downloads >= this.param('maxSimDownloads')) return;
         var item = this._scanQueue.shift();
         if (!item) return;
-        this.grabInMessage(item[0], item[1], item[2]);
+        this.grabInMessage(item[0], item[1], item[2], item[3]);
     }
     
     
