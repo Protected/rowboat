@@ -1,7 +1,7 @@
 /* Module: SongRanking -- Grabber add-on for liking/disliking songs and rating them. */
 
 var Module = require('./Module.js');
-
+var emoji = require('emojione');
 
 var LIKEABILITY_WORDS = {
     love: 1,
@@ -113,7 +113,7 @@ class ModSongRanking extends Module {
         
             env.client.on('messageReactionAdd', (messageReaction, user) => {
                 var emojiname = '';
-                let extr = messageReaction.emoji.name.match(/\:([^:]+)\:/);
+                let extr = emoji.toShort(messageReaction.emoji.name).match(/\:([^:]+)\:/);
                 if (!extr) return;
                 emojiname = extr[1];
                 if (LIKEABILITY_REACTIONS[emojiname] === undefined) return;
