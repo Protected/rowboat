@@ -46,6 +46,7 @@ var LIKEABILITY_REACTIONS = {
     grinning: 0,
     relieved: 0,
     relaxed: 0,
+    metal: 0,
     slight_frown: -1,
     expressionless: -1,
     unamused: -1,
@@ -103,9 +104,27 @@ class ModSongRanking extends Module {
         //Register callbacks
 
         var self = this;
+
         this.grabber.registerOnNewSong((messageObj, messageAuthor, reply, hash) => {
             
             this.setSongLikeability(hash, messageObj.author.id, 0);
+            
+        }, self);
+
+        this.grabber.registerOnGrabscanExists((messageObj, messageAuthor, reply, hash) => {
+
+            for (let messageReaction of messageObj.reactions.array()) {
+                let emojiname = '';
+                let extr = emoji.toShort(messageReaction.emoji.name).match(/\:([^:]+)\:/);
+                if (!extr) continue;
+                emojiname = extr[1];
+                if (LIKEABILITY_REACTIONS[emojiname] === undefined) continue;
+                
+                let likeability = LIKEABILITY_REACTIONS[emojiname];
+                if (this.getSongLikeability(hash, messageObj.author.id) === likeability) continue;
+                
+                this.setSongLikeability(hash, messageObj.author.id, likeability);
+            }
             
         }, self);
         
@@ -113,7 +132,7 @@ class ModSongRanking extends Module {
         this.denv.on('connected', (env) => {
         
             env.client.on('messageReactionAdd', (messageReaction, user) => {
-                var emojiname = '';
+                let emojiname = '';
                 let extr = emoji.toShort(messageReaction.emoji.name).match(/\:([^:]+)\:/);
                 if (!extr) return;
                 emojiname = extr[1];
@@ -190,6 +209,7 @@ class ModSongRanking extends Module {
         var likmap = this.grabber.getSongMeta(hash, "like");
         if (!likmap) likmap = {};
         likmap[userid] = likeability;
+        this.log('Setting ' + userid + ' likeability of ' + hash + ' to ' + likeability);
         return this.grabber.setSongMeta(hash, "like", likmap);
     }
     

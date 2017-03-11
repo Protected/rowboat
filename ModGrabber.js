@@ -68,7 +68,8 @@ class ModGrabber extends Module {
         this._scanTimer = null;
         this._downloads = 0;
         
-        this._apiCbNewSong = [];  //List of callback(hash) called when new songs are added. Return true to stop processing.
+        this._apiCbNewSong = [];  //List of callbacks called when new songs are added. Return true to stop processing.
+        this._apiCbGrabscanExists = [];  //List of callbacks called when existing songs are detected by a grabscan call. Return true to stop processing.
     }
     
     
@@ -126,7 +127,11 @@ class ModGrabber extends Module {
                     if (messagesarr.length < 100) endNow = true;
                     for (let message of messagesarr) {
                         if (message.createdTimestamp <= cutoff) endNow = true;
-                        this._scanQueue.push([message]);
+                        this._scanQueue.push([message, {
+                            exists: (messageObj, messageAuthor, reply, hash) => {
+                                this.processOnGrabscanExists(messageObj, messageAuthor, reply, hash);
+                            }
+                        }]);
                     }
                     if (endNow) {
                         ep.reply("Scan complete.");
@@ -865,6 +870,23 @@ class ModGrabber extends Module {
     }
     
     
+    processOnGrabscanExists(messageObj, messageAuthor, reply, hash) {
+        for (let cb of this._apiCbGrabscanExists) {
+            try {
+                let r;
+                if (typeof cb == "function") {
+                    r = cb.apply(this, [messageObj, messageAuthor, reply, hash]);
+                } else {
+                    r = cb[0].apply(cb[1], [messageObj, messageAuthor, reply, hash]);
+                }
+                if (r) break;
+            } catch (exception) {
+                this.log('error', 'Error in callback after detecting existing ' + hash);
+            }
+        }
+    }
+    
+    
     // # API #
     
     
@@ -942,6 +964,17 @@ class ModGrabber extends Module {
             this._apiCbNewSong.push(func);
         } else {
             this._apiCbNewSong.push([func, self]);
+        }
+    }
+    
+    
+    //Callback signature: messageObj, messageAuthor, reply, hash
+    registerOnGrabscanExists(func, self) {
+        this.log('Registering song found on scan callback. Context: ' + self.constructor.name);
+        if (!self) {
+            this._apiCbGrabscanExists.push(func);
+        } else {
+            this._apiCbGrabscanExists.push([func, self]);
         }
     }
     

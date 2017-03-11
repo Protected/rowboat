@@ -168,6 +168,7 @@ class EnvDiscord extends Environment {
             if (!reason) return;
             
             var member = this._server.members.get(newUser.id);
+            if (!member) return;
             var chans = this.findAccessChannels(member);
             
             if (reason == "join") {
