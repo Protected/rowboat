@@ -66,11 +66,12 @@ class ModMemo extends Module {
             description: "Send or cancel a message. Actions: save, strongsave, cancel, outbox, inbox",
             args: ["action", "descriptor", true],
             details: [
-                "**save|strongsave** [{env}] (=handle|[+]displayname|[+]userid) [& ...] message ...",
+                "**save|strongsave** [<delay>] [{env}] (=handle|[+]displayname|[+]userid) [& [{env}] ...] message ...",
                 "  Send a message to one or more recipients. Multiple recipients are separated by &. After the list of recipients, write the desired message.",
                 "  Each recipient by default is a nickname or ID of the user in the current environment. Prefix the recipient with {env} to target another environment.",
                 "  To force the recipient to be authenticated before delivering, prefix it with a '+' symbol. By default, the receipient doesn't have to be authenticated.",
                 "  Use =HANDLE as the recipient to target a Rowboat user account.",
+                "  If you prefix the parameters with <delay> the message can only be delivered after a delay. Specify the delay as [[hh:]mm:]ss or using #[dhms] where # is a number.",
                 "**cancel** ID",
                 "  Deletes a pending message. Use the ID you received when you sent the message.",
                 "  If at least one recipient already received the message, this command will only remove all pending recipients. The message will not be deleted.",
@@ -118,6 +119,7 @@ class ModMemo extends Module {
                 let register = {
                     id: this._nextId++,
                     ts: moment().unix(),
+                    delay: elements.delay,
                     from: {
                         env: env.name,
                         handle: handle,
@@ -212,8 +214,13 @@ class ModMemo extends Module {
                         return true;
                     }
                     
+                    let delaypart = '';
+                    if (register.delay) {
+                        delaypart = ' (w/ ' + moment.unix(register.delay).fromNow() + ' delay)';
+                    }
+                    
                     ep.priv("(**" + register.id + "**) " + (register.strong ? "[S] " : "") + register.msg);
-                    ep.priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment(register.ts).format(this.param('tsFormat')));
+                    ep.priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment(register.ts).format(this.param('tsFormat')) + delaypart);
                     
                     for (let recipient of register.to) {
                         ep.priv("  " + (recipient.done ? "**DELIVERED**" : "Pending") + " To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "") + " on " + recipient.env));
@@ -494,13 +501,34 @@ class ModMemo extends Module {
     }
     
     
-    //Descriptor parser - Input is "[{env}] (=handle|[+]displayname|[+]id) [& ...] message ...", return {to: [{env, handle, display, userid, auth}, ...], message}
+    //Descriptor parser - Input is "[<delay>] [{env}] (=handle|[+]displayname|[+]id) [& ...] message ...", return {delay: seconds, to: [{env, handle, display, userid, auth}, ...], message}
     
     parseDescriptor(currentenv, descriptor) {
         var result = {
+            delay: 0,
             to: [],
             message: null
         };
+        
+        //<delay>
+        
+        var delaydescriptor = descriptor[0].match(/<(.*)>/);
+        if (delaydescriptor) {
+            delaydescriptor = delaydescriptor[1];
+            
+            var parts = delaydescriptor.match(/((([0-9]+):)?([0-9]{1,2}):)?([0-9]+)/);
+            if (parts) {
+                result.delay = parseInt(parts[5]) + (parseInt(parts[4])||0) * 60 + (parseInt(parts[3])||0) * 3600;
+            } else {
+                parts = delaydescriptor.replace(/ /g, "").match(/(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s?)?/);
+                if (parts[8]) result.delay = parts[8];
+                if (parts[6]) result.delay += parts[6] * 60;
+                if (parts[4]) result.delay += parts[4] * 3600;
+                if (parts[2]) result.delay += parts[2] * 86400;
+            }
+        
+            descriptor.shift();
+        }
         
         while (descriptor.length) {
 
@@ -691,7 +719,11 @@ class ModMemo extends Module {
     
     deliverMemo(register, envobj, targetid, channelid) {
         var targetdisplay = envobj.idToMention(targetid);
-        envobj.msg(channelid, envobj.applyFormatting('Message from **' + (register.from.display || register.from.userid) + '** to **' + (targetdisplay || targetid) + '** sent on ' + moment(register.ts).format(this.param('tsFormat')) + ':'));
+        var delaypart = '';
+        if (register.delay) {
+            delaypart = ' (w/ ' + moment.unix(register.delay).fromNow() + ' delay)';
+        }
+        envobj.msg(channelid, envobj.applyFormatting('Message from **' + (register.from.display || register.from.userid) + '** to **' + (targetdisplay || targetid) + '** sent on ' + moment(register.ts).format(this.param('tsFormat')) + delaypart + ':'));
         envobj.msg(channelid, '    ' + register.msg);
     }
     
@@ -709,10 +741,13 @@ class ModMemo extends Module {
         var isauth = env.idIsAuthenticated(authorid);
         var receive = {};
         
+        var now = moment().unix();
+        
         for (let handle of handles) {
             if (!this._memoToHandle[handle]) continue;
             for (let register of this._memoToHandle[handle]) {
                 if (register.strong && !strong) continue;
+                if (register.delay && now < register.ts + register.delay) continue;
                 if (!this.getMatchingRecipients(register, env.name, authorid, display, handle, true, true).length) continue;
                 receive[register.id] = register;
             }
@@ -723,6 +758,7 @@ class ModMemo extends Module {
             if (this._memoToDisplay[env.name] && this._memoToDisplay[env.name][lcdisplay]) {
                 for (let register of this._memoToDisplay[env.name][lcdisplay]) {
                     if (register.strong && !strong) continue;
+                    if (register.delay && now < register.ts + register.delay) continue;
                     if (!this.getMatchingRecipients(register, env.name, authorid, display, null, isauth, true).length) continue;
                     receive[register.id] = register;
                 }
@@ -732,6 +768,7 @@ class ModMemo extends Module {
         if (this._memoToUserid[env.name] && this._memoToUserid[env.name][authorid]) {
             for (let register of this._memoToUserid[env.name][authorid]) {
                 if (register.strong && !strong) continue;
+                if (register.delay && now < register.ts + register.delay) continue;
                 if (!this.getMatchingRecipients(register, env.name, authorid, display, null, isauth, true).length) continue;
                 receive[register.id] = register;
             }
