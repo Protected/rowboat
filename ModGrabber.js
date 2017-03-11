@@ -233,6 +233,10 @@ class ModGrabber extends Module {
         
         this.mod('Commands').registerCommand(this, 'songfind', {
             description: 'Find an indexed song.',
+            details: [
+                'Use -p PAGE before the search string to access result pages beyond the first one (if available).',
+                'You can filter by multiple independent search strings by using SEARCHSTR & SEARCHSTR & ...'
+            ],
             args: ['searchstr', true]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         

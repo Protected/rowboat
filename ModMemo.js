@@ -216,7 +216,7 @@ class ModMemo extends Module {
                     
                     let delaypart = '';
                     if (register.delay) {
-                        delaypart = ' (w/ ' + moment.unix(register.delay).fromNow() + ' delay)';
+                        delaypart = ' (w/ ' + this.userFriendlyDelay(register.delay) + ' delay)';
                     }
                     
                     ep.priv("(**" + register.id + "**) " + (register.strong ? "[S] " : "") + register.msg);
@@ -310,6 +310,21 @@ class ModMemo extends Module {
             }
         }
         return vals;
+    }
+    
+    userFriendlyDelay(delay) {
+        var days = Math.floor(delay / 86400.0);
+        delay -= days * 86400;
+        var hours = Math.floor(delay / 3600.0);
+        delay -= hours * 3600;
+        var minutes = Math.floor(delay / 60.0);
+        delay -= minutes * 60;
+        var result = "";
+        if (days) result += (days + "d") + " ";
+        if (hours) result += (hours + "h") + " ";
+        if (minutes) result += (minutes + "m") + " ";
+        if (delay) result += (delay + "s") + " ";
+        return result.trim();
     }
     
     
@@ -721,7 +736,7 @@ class ModMemo extends Module {
         var targetdisplay = envobj.idToMention(targetid);
         var delaypart = '';
         if (register.delay) {
-            delaypart = ' (w/ ' + moment.unix(register.delay).fromNow() + ' delay)';
+            delaypart = ' (w/ ' + this.userFriendlyDelay(register.delay) + ' delay)';
         }
         envobj.msg(channelid, envobj.applyFormatting('Message from **' + (register.from.display || register.from.userid) + '** to **' + (targetdisplay || targetid) + '** sent on ' + moment(register.ts).format(this.param('tsFormat')) + delaypart + ':'));
         envobj.msg(channelid, '    ' + register.msg);
