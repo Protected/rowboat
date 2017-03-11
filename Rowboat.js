@@ -6,6 +6,7 @@ var environments = {};
 var modules = {};
 
 var modulerequests = {};
+var shared = {};
 
 var self = this;
 
@@ -112,7 +113,22 @@ var loadEnvironments = exports.loadEnvironments = function() {
         
         var env = new envtype(name);
         
-        if (!env.initialize()) {
+        var sharedInstances = {};
+        for (let sharedModule of env.sharedModules) {        
+            let sharedName = env.envName + '_' + sharedModule;
+            
+            if (!shared[sharedName]) {
+                shared[sharedName] = requireUncached("./" + sharedModule + ".js");
+                if (!shared[sharedName]) {
+                    logger.error("Could not initialize the environment: " + name + " . The shared module " + sharedModule + " could not be found.");
+                    return false;
+                }
+            }
+            
+            sharedInstances[sharedModule] = shared[sharedName];
+        }
+        
+        if (!env.initialize(sharedInstances)) {
             logger.error("Could not initialize the environment: " + name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
             return false;
         }

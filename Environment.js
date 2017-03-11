@@ -14,6 +14,8 @@ class Environment extends ModernEventEmitter {
     get requiredParams() { return []; }
     get optionalParams() { return []; }
     
+    get sharedModules() { return []; }
+    
     constructor(envName, name) {
         super();
     
@@ -29,7 +31,7 @@ class Environment extends ModernEventEmitter {
     get params() { return Object.assign({}, this._params); }
     
     
-    initialize() {
+    initialize(sharedInstances) {
         var params = {};
         
         //Load and check parameters

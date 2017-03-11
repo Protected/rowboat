@@ -16,6 +16,10 @@ class EnvDiscord extends Environment {
     get optionalParams() { return [
         'senddelay'             //Message queue send delay (ms)
     ]; }
+    
+    get sharedModules() { return [
+        'DiscordClient'
+    ]; }
 
     constructor(name) {
         super('Discord', name);
@@ -27,6 +31,15 @@ class EnvDiscord extends Environment {
         this._channels = {};
         this._outbox = [];
         this._carrier = null;
+    }
+    
+    
+    initialize(sharedInstances) {
+        if (!super.initialize(sharedInstances)) return false;
+        
+        //TODO
+        
+        return true;
     }
     
     
