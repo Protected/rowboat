@@ -150,7 +150,7 @@ class ModSongRanking extends Module {
         
         this.mod('Commands').registerCommand(this, 'songlike', {
             description: 'Assigns a personal like level to a song in the index.',
-            args: ['hash', 'likeability'],
+            args: ['hashoroffset', 'likeability'],
             details: [
                 "Likeability can be one of:",
                 " 1 = :ok_hand: = I especially like the song",
@@ -162,6 +162,18 @@ class ModSongRanking extends Module {
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (env.name != this.param('env')) return true;
+            
+            var hash = this.grabber.bestSongForHashArg(args.hashoroffset);
+            if (hash === false) {
+                ep.reply('Offset not found in recent history.');
+                return true;
+            } else if (hash === true) {
+                ep.reply('Reference matches more than one song; Please be more specific.');
+                return true;
+            } else if (!hash) {
+                ep.reply('Hash not found.');
+                return true;
+            }
         
             var lik = args.likeability || 0;
             lik = parseInt(lik);
@@ -172,7 +184,7 @@ class ModSongRanking extends Module {
             if (lik < -2) lik = -2;
             if (lik > 1) lik = 1;
         
-            if (this.setSongLikeability(args.hash, userid, parseInt(lik))) {
+            if (this.setSongLikeability(hash, userid, parseInt(lik))) {
                 ep.reply("Ok.");
             } else {
                 ep.reply("Song not found or invalid argument.");
@@ -184,10 +196,22 @@ class ModSongRanking extends Module {
         
         this.mod('Commands').registerCommand(this, 'songrank', {
             description: 'Displays the global (balanced) rank of a song.',
-            args: ['hash']
+            args: ['hashoroffset']
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var rank = this.computeSongRank(args.hash);
+            var hash = this.grabber.bestSongForHashArg(args.hashoroffset);
+            if (hash === false) {
+                ep.reply('Offset not found in recent history.');
+                return true;
+            } else if (hash === true) {
+                ep.reply('Reference matches more than one song; Please be more specific.');
+                return true;
+            } else if (!hash) {
+                ep.reply('Hash not found.');
+                return true;
+            }
+        
+            var rank = this.computeSongRank(hash);
             if (rank !== null) {
                 ep.reply("Rank: " + rank);
             } else {

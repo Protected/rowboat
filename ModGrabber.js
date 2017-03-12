@@ -194,6 +194,9 @@ class ModGrabber extends Module {
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
+            } else if (hash === true) {
+                ep.reply('Reference matches more than one song; Please be more specific.');
+                return true;
             } else if (!hash) {
                 ep.reply('Hash not found.');
                 return true;
@@ -219,6 +222,9 @@ class ModGrabber extends Module {
             var hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
+                return true;
+            } else if (hash === true) {
+                ep.reply('Reference matches more than one song; Please be more specific.');
                 return true;
             } else if (!hash) {
                 ep.reply('Hash not found.');
@@ -258,10 +264,16 @@ class ModGrabber extends Module {
                 ep.reply("No results.");
             }
             
+            let ltotal = results.length;
             results = results.slice(page * 10, page * 10 + 10);
             
-            for (let info of results) {
-                ep.reply('`' + info.hash + ' ' + info.name + (info.author ? ' (' + info.author + ')' : '') + '`');
+            if (!results.length) {
+                ep.reply('Found ' + ltotal + ' result' + (ltotal != 1 ? 's' : '') + '.');
+            } else {
+                ep.reply('Result' + (results.length != 1 ? 's' : '') + ' ' + (page * 10 + 1) + ' to ' + (page * 10 + results.length) + ' of ' + ltotal + '.');
+                for (let info of results) {
+                    ep.reply('`' + info.hash + ' ' + info.name + (info.author ? ' (' + info.author + ')' : '') + '`');
+                }
             }
         
             return true;
@@ -280,6 +292,9 @@ class ModGrabber extends Module {
             var hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
+                return true;
+            } else if (hash === true) {
+                ep.reply('Reference matches more than one song; Please be more specific.');
                 return true;
             } else if (!hash) {
                 ep.reply('Hash not found.');
@@ -318,6 +333,9 @@ class ModGrabber extends Module {
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
+            } else if (hash === true) {
+                ep.reply('Reference matches more than one song; Please be more specific.');
+                return true;
             } else if (!hash) {
                 ep.reply('Hash not found.');
                 return true;
@@ -352,6 +370,9 @@ class ModGrabber extends Module {
             var hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
+                return true;
+            } else if (hash === true) {
+                ep.reply('Reference matches more than one song; Please be more specific.');
                 return true;
             } else if (!hash) {
                 ep.reply('Hash not found.');
@@ -786,9 +807,20 @@ class ModGrabber extends Module {
     
     //Other auxiliary methods
     
+    /* Expand alternative syntaxes in 'hash' arguments. Returns:
+        true - Ambiguous (parameter matches more than one indexed song)
+        HASH - Parameter matches that song
+        false - Requested offset goes beyond current session history
+        null - Parameter matches nothing (song not found)
+    */
     parseHashArg(hashoroffset) {
+        let searchResult = this.parseSearchInMixedParam(hashoroffset);
+        if (searchResult === true) return true;
+        if (searchResult !== false) return searchResult.hash;
+        
         if (!hashoroffset) hashoroffset = "-";
         else if (typeof hashoroffset != "string") return null;
+        
         hashoroffset = hashoroffset.trim();
         var offset = hashoroffset.match(/^-([0-2]?[0-9])?/);
         if (offset) {
@@ -839,6 +871,18 @@ class ModGrabber extends Module {
         }
         
         return results;
+    }
+    
+    parseSearchInMixedParam(str) {
+        let extract = str.match(/\(([^)]+)\)/);
+        if (!extract) return null;
+        var songs = this.filterSongsBySearchString(extract[1]);
+        if (songs.length > 1) {
+            return true;
+        } else if (songs.length == 1) {
+            return songs[0];
+        }
+        return null;
     }
     
     
@@ -908,9 +952,15 @@ class ModGrabber extends Module {
     }
     
     
-    findSong(searchstr) {
+    findSong(searchstr, extended) {
         var songs = this.filterSongsBySearchString(searchstr);
-        if (songs.length) return songs[0];
+        if (songs.length) {
+            if (extended) {
+                return [songs[0], songs.length];
+            } else {
+                return songs[0];
+            }
+        }
         return null;
     }
     
@@ -921,6 +971,11 @@ class ModGrabber extends Module {
     
     songPathByHash(hash) {
         return this.param('downloadPath') + '/' + hash + '.mp3';
+    }
+    
+    
+    bestSongForHashArg(mixed) {
+        return this.parseHashArg(mixed);
     }
 
     
