@@ -874,7 +874,7 @@ class ModGrabber extends Module {
     }
     
     parseSearchInMixedParam(str) {
-        let extract = str.match(/\(([^)]+)\)/);
+        let extract = str.match(/^\(([^)]+)\)$/);
         if (!extract) return null;
         var songs = this.filterSongsBySearchString(extract[1]);
         if (songs.length > 1) {

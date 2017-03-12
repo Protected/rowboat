@@ -527,11 +527,11 @@ class ModMemo extends Module {
         
         //<delay>
         
-        var delaydescriptor = descriptor[0].match(/<(.*)>/);
+        var delaydescriptor = descriptor[0].match(/^<(.*)>$/);
         if (delaydescriptor) {
             delaydescriptor = delaydescriptor[1];
             
-            var parts = delaydescriptor.match(/((([0-9]+):)?([0-9]{1,2}):)?([0-9]+)/);
+            var parts = delaydescriptor.match(/^((([0-9]+):)?([0-9]{1,2}):)?([0-9]+)$/);
             if (parts) {
                 result.delay = parseInt(parts[5]) + (parseInt(parts[4])||0) * 60 + (parseInt(parts[3])||0) * 3600;
             } else {
@@ -552,7 +552,7 @@ class ModMemo extends Module {
             let env = currentenv;
             let recipient = descriptor.shift();
         
-            let checkenv = recipient.match(/\{(.*)\}/);
+            let checkenv = recipient.match(/^\{(.*)\}$/);
             if (checkenv) {
                 env = (this.env(checkenv[1]) ? checkenv[1] : null);
                 recipient = descriptor.shift();
