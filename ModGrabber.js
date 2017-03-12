@@ -816,7 +816,7 @@ class ModGrabber extends Module {
     parseHashArg(hashoroffset) {
         let searchResult = this.parseSearchInMixedParam(hashoroffset);
         if (searchResult === true) return true;
-        if (searchResult !== false) return searchResult.hash;
+        if (searchResult !== null) return searchResult.hash;
         
         if (!hashoroffset) hashoroffset = "-";
         else if (typeof hashoroffset != "string") return null;
