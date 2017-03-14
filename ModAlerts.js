@@ -89,6 +89,10 @@ class ModAlerts extends Module {
 
             rules = players[userid];
 
+            if ( Array.isArray(args["message"]) ) {
+                args["message"] = args["message"].join(" ");
+            }
+
             if ( !args["pattern"] ){
                 ep.reply("The pattern can't be empty.");
                 return;
