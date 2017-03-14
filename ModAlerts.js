@@ -89,6 +89,16 @@ class ModAlerts extends Module {
 
             rules = players[userid];
 
+            if ( !args["pattern"] ){
+                ep.reply("The pattern can't be empty.");
+                return;
+            }
+
+            if ( !args["message"] ){
+                ep.reply("The message can't be empty.");
+                return;
+            }
+
             rules[args["pattern"]] = args["message"];
 
             self.saveData();
