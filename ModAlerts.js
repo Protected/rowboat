@@ -30,50 +30,105 @@ class ModAlerts extends Module {
 
 
         //Register callbacks
-        this.mod('Commands').registerCommand('alert', {
+        this.mod('Commands').registerCommand(this, 'alert', {
             description: "Configures alerts.",
             args: ["action","pattern","message",true],
             minArgs: 1
-        }, (env, type, userid, command, args, handle, reply, pub) => {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
 
             switch(args["action"]){
-                case "list": doList(env, type, userid, command, args, handle, reply, pub); break;
+                case "list": doList(env, type, userid, channelid, command, args, handle, ep); break;
+                case "add": doAdd(env, type, userid, channelid, command, args, handle, ep); break;
+                case "del": doDel(env, type, userid, channelid, command, args, handle, ep); break;
+                default: {
+                    ep.reply("Invalid action.");
+                }
             }
 
 
             return true;
         });
 
-        function doList(env, type, userid, command, args, handle, reply, pub) {
+        function doList(env, type, userid, channelid, command, args, handle, ep) {
             let players, rules;
-            if ( !this.data[env] ) {
-                replyEmptyList(reply);
+            if ( !self.data[env.name] ) {
+                replyEmptyList(ep.reply);
                 return;
             }
-            players = this.data[env];
+            players = self.data[env.name];
 
             if ( !players[userid] ) {
-                replyEmptyList(reply);
+                replyEmptyList(ep.reply);
                 return;
             }
             rules = players[userid];
 
             if ( Object.keys(rules).length == 0 ) {
-                replyEmptyList(reply);
+                replyEmptyList(ep.reply);
                 return;
             }
 
-            reply("List of alerts: ");
+            ep.reply("List of alerts: ");
             for( let pattern in rules ){
                 if (rules.hasOwnProperty(pattern)) {
-                    reply(pattern + " -> " + rules[pattern]);
+                    ep.reply(pattern + " -> " + rules[pattern]);
                 }
             }
+        }
+
+        function doAdd(env, type, userid, channelid, command, args, handle, ep) {
+            let players, rules;
+            if ( !self.data[env.name] ) {
+                self.data[env.name] = {};
+            }
+            players = self.data[env.name];
+
+            if ( !players[userid] ) {
+                players[userid] = {};
+            }
+
+            rules = players[userid];
+
+            rules[args["pattern"]] = args["message"];
+
+            self.saveData();
+
+            ep.reply("Saved pattern \""+args["pattern"]+"\" with message \""+args["message"]+"\"");
+        }
+
+        function doDel(env, type, userid, channelid, command, args, handle, ep) {
+            let players, rules;
+            if ( !self.data[env.name] ) {
+                replyPatternNotFound(ep.reply);
+                return;
+            }
+            players = self.data[env.name];
+
+            if ( !players[userid] ) {
+                replyPatternNotFound(ep.reply);
+                return;
+            }
+            rules = players[userid];
+
+            if ( !rules[args["pattern"]] ){
+                replyPatternNotFound(ep.reply);
+                return;
+            }
+
+            delete rules[args["pattern"]];
+
+            self.saveData();
+
+            ep.reply("Deleted pattern \""+args["pattern"]+"\"");
         }
 
 
         function replyEmptyList(reply){
             reply("You have no alerts.");
+        }
+
+        function replyPatternNotFound(reply){
+            reply("You don't have that pattern.");
         }
 
         return true;
