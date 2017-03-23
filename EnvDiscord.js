@@ -172,6 +172,9 @@ class EnvDiscord extends Environment {
         
         this._client.on("presenceUpdate", (oldUser, newUser) => {
             var reason = null;
+
+            if (!oldUser.presence || !newUser.presence) return;
+
             if (oldUser.presence.status == "offline" && newUser.presence.status != "offline") {
                 reason = "join";
             }
@@ -203,8 +206,8 @@ class EnvDiscord extends Environment {
     disconnect() {
         if (this._carrier) clearInterval(this._carrier);
         if (this._client) this._client.destroy().then(() => {
-            this.carrier = null;
-            this.client = null;
+            this._carrier = null;
+            this._client = null;
             this.log(`Disconnected from ${this._name}`);
             this.emit('disconnected', this);
         }).catch(this.genericErrorHandler);
@@ -383,7 +386,9 @@ class EnvDiscord extends Environment {
                 }
             ).catch(this.genericErrorHandler);
             for (let message of packages[rawchannelid].messages) {
-                this.emit('messageSent', this, rawchannelid, message);
+                let type = !packages[rawchannelid].targetchan.type ? "private" : "regular";
+                let self = this;
+                setTimeout(() => { self.emit('messageSent', this, type, rawchannelid, message); }, 1);
             }
         }
         this._outbox = [];

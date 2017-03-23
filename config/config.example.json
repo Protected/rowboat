@@ -9,5 +9,8 @@
     ],
     "logger": {
         "outputFile": "[logs/]Y-MM-DD[.log]"
+    },
+    "dataFiles": {
+        "path": "var/data"
     }
 }

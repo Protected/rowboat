@@ -18,6 +18,9 @@ class Module {
     
     get requiredEnvironments() { return []; }
     get requiredModules() { return []; }
+
+    get globalConfig() { this._globalConfig; }
+    set globalConfig(conf) { this._globalConfig = conf; }
     
     constructor(modName, name) {
     

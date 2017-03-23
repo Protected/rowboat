@@ -190,11 +190,14 @@ var loadModules = exports.loadModules = function() {
         
         var passenvs = Object.assign({}, environments);
         var passmodules = Object.assign({}, modules);
+        var passconfig = Object.assign({}, config);
         
         if (mod.isRootAccess) {
             logger.info("The module: " + mod.name + " requested access to the root module.");
             passmodules.root = self;
         }
+
+        mod.globalConfig = passconfig;
         
         if (!mod.initialize(passenvs, passmodules, moduleRequest)) {
             logger.error("Could not initialize the module: " + mod.name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");

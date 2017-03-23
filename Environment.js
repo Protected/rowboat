@@ -93,7 +93,7 @@ class Environment extends ModernEventEmitter {
         connected: (env)                                                    The environment has connected successfully.
         disconnected: (env)                                                 The environment has disconnected.
         message: (env, type, message, authorid, channelid, messageObject)   A message was received. type is environment-specific but "regular" and "private" are expected. messageObject is environment-specific.
-        messageSent: (env, targetid, message)                               A message was sent. targetid can be a public or private channel.
+        messageSent: (env, type, targetid, message)                         A message was sent. targetid can be a public or private channel.
         join: (env, userid, channelid, info)                                A user has joined the environment. info is an environment-specific map.
         part: (env, userid, channelid, info)                                A user has left the environment. info is an environment-specific map.
         gotRole: (env, userid, roleid, channelid, ischange)                 A user has obtained a role within the current session. channelid can be null.
