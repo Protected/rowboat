@@ -7,10 +7,8 @@
         "Users",
         "Commands"
     ],
-    "logger": {
-        "outputFile": "[logs/]Y-MM-DD[.log]"
-    },
-    "dataFiles": {
-        "path": "var/data"
+    "paths": {
+        "logger": "[logs/]Y-MM-DD[.log]",
+        "data": "data/"
     }
 }

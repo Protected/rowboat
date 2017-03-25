@@ -23,7 +23,7 @@ class ModAlerts extends Module {
     initialize(envs, mods, moduleRequest) {
         if (!super.initialize(envs, mods, moduleRequest)) return false;
 
-        this.dataPath = this._globalConfig["dataFiles"] ? this._globalConfig["dataFiles"].path : ".";
+        this.dataPath = this._globalConfig["paths"] ? this._globalConfig["paths"].data : ".";
 
         this.loadData();
 
@@ -164,12 +164,12 @@ class ModAlerts extends Module {
     };
 
     saveData() {
-        let fullPath = this.dataPath + "/" + this.dataFileName;
+        let fullPath = this.dataPath + this.dataFileName;
         jf.writeFileSync(fullPath, this.data);
     }
 
     loadData() {
-        let fullPath = this.dataPath + "/" + this.dataFileName;
+        let fullPath = this.dataPath + this.dataFileName;
         try {
             fs.accessSync(fullPath, fs.F_OK);
         } catch (e) {

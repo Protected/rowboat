@@ -283,7 +283,7 @@ class EnvDiscord extends Environment {
             targetchan = this._channels[this.param('defaultchannel')];
         }
         
-        if (targetchan.type == "dm") return [targetchan.recipient.id];
+        if (targetchan.type == "dm" || !targetchan.type) return [targetchan.recipient.id];
         
         var ids = [];
         if (targetchan.type == "group") {
@@ -317,6 +317,13 @@ class EnvDiscord extends Environment {
         var channel = this._server.channels.get(channelid);
         if (channel) return channel.name;
         return channelid;
+    }
+    
+    channelIdToType(channelid) {
+        var chan = this.getActualChanFromTarget(channelid);
+        if (!chan) return "unknown";
+        if (!chan.type || chan.type == "dm") return "private";
+        return "regular";
     }
     
     
@@ -386,9 +393,8 @@ class EnvDiscord extends Environment {
                 }
             ).catch(this.genericErrorHandler);
             for (let message of packages[rawchannelid].messages) {
-                let type = !packages[rawchannelid].targetchan.type ? "private" : "regular";
                 let self = this;
-                setTimeout(() => { self.emit('messageSent', this, type, rawchannelid, message); }, 1);
+                setTimeout(() => { self.emit('messageSent', self, self.channelIdToType(packages[rawchannelid].targetchan), rawchannelid, message); }, 1);
             }
         }
         this._outbox = [];

@@ -164,15 +164,18 @@ try {
     config = jsonfile.readFileSync("config/config.json");
 } catch (e) {
     config.environments = {};
-    config.logger = {outputFile: "[logs/]Y-MM-DD[.log]"};
+    config.paths = {
+        logger: "[logs/]Y-MM-DD[.log]",
+        data: "data/"
+    };
 }
 
 if (args.log) {
-    if (!config.logger) config.logger = {};
-    config.logger.outputFile = args.log;
+    if (!config.paths) config.paths = {};
+    config.paths.logger = args.log;
 }
-if (config.logger && config.logger.outputFile) {
-    logger.setPathTemplate(config.logger.outputFile);
+if (config.paths && config.paths.logger) {
+    logger.setPathTemplate(config.paths.logger);
 }
 
 logger.info("== Master config setup");

@@ -115,6 +115,7 @@ class Environment extends ModernEventEmitter {
     
     
     channelIdToDisplayName(channelid) { return null; }
+    channelIdToType(channelid) { return "regular"; }                    //Obtain a channel's type (compatible with events)
     
     roleIdToDisplayName(roleid) { return null; }
     displayNameToRoleId(displayName) { return null; }

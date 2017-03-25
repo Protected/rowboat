@@ -190,6 +190,12 @@ class EnvTwitch extends Environment {
         return channelid;
     }
     
+    channelIdToType(channelid) {
+        if (!channelid) return "unknown";
+        if (channelid.match(/^#.+$/)) return "regular";
+        return "private";
+    }
+    
     
     roleIdToDisplayName(roleid) {
         return roleid;
@@ -219,12 +225,17 @@ class EnvTwitch extends Environment {
         
         var parts;
         try {
+            let sent = false;
             if (parts = item[0].match(/^#.+$/)) {
                 this._client.say(item[0], item[1]);
-                this.emit('messageSent', this, item[0], item[1]);
+                sent = true;
             } else {
                 this._client.whisper(item[0], item[1]);
-                this.emit('messageSent', this, item[0], item[1]);
+                sent = true;
+            }
+            if (sent) {
+                let self = this;
+                setTimeout(() => { self.emit('messageSent', self, self.channelIdToType(item[0]), item[0], item[1]); }, 1);
             }
         } catch (e) {
             this.genericErrorHandler(e.message);

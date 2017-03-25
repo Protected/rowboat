@@ -210,7 +210,8 @@ class EnvIRC extends Environment {
                 sent = true;
             }
             if (sent) {
-                this.emit('messageSent', this, targetid, msg);
+                let self = this;
+                setTimeout(() => { self.emit('messageSent', self, self.channelIdToType(targetid), targetid, msg); }, 1);
             }
         } catch (e) {
             this.genericErrorHandler(e.message);
@@ -310,6 +311,12 @@ class EnvIRC extends Environment {
     
     channelIdToDisplayName(channelid) {
         return channelid;
+    }
+    
+    channelIdToType(channelid) {
+        if (channelid.match(/^([^!]+)![^@]+@.+$/)) return "private";
+        if (channelid.match(/^#.+$/)) return "regular";
+        return "unknown";
     }
     
     

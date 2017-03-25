@@ -74,8 +74,8 @@ var loadMasterConfig = exports.loadMasterConfig = function() {
         return false;
     }
     
-    if (config.logger && config.logger.outputFile) {
-        logger.setPathTemplate(config.logger.outputFile);
+    if (config.paths && config.paths.logger) {
+        logger.setPathTemplate(config.paths.logger);
     }
 
     if (Object.keys(config.environments).length < 1) {
