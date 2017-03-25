@@ -197,9 +197,12 @@ var loadModules = exports.loadModules = function() {
             passmodules.root = self;
         }
 
-        mod.globalConfig = passconfig;
-        
-        if (!mod.initialize(passenvs, passmodules, moduleRequest)) {
+        if (!mod.initialize({
+            envs: passenvs,
+            mods: passmodules,
+            config: passconfig,
+            moduleRequest: moduleRequest
+        })) {
             logger.error("Could not initialize the module: " + mod.name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
             return false;
         }

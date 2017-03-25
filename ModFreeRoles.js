@@ -36,18 +36,19 @@ class ModFreeRoles extends Module {
     }
 
 
-    initialize(envs, mods, moduleRequest) {
-        if (!super.initialize(envs, mods, moduleRequest)) return false;
+    initialize(opt) {
+        if (!super.initialize(opt)) return false;
         
         //Load data
         
+        this._params['datafile'] = this.dataPath() + this._params['datafile'];
         if (!this.loadData()) return false;
         
         
         //Register callbacks
         
-        for (var envname in envs) {
-            let env = envs[envname];
+        for (var envname in opt.envs) {
+            let env = opt.envs[envname];
             if (env.envName != 'Discord') continue;
             
             env.on('connected', (env) => {

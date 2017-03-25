@@ -25,17 +25,18 @@ class ModUsers extends Module {
     }
 
 
-    initialize(envs, mods, moduleRequest) {
-        if (!super.initialize(envs, mods, moduleRequest)) return false;
+    initialize(opt) {
+        if (!super.initialize(opt)) return false;
        
         //Load data
         
+        this._params['datafile'] = this.dataPath() + this._params['datafile'];
         if (!this.loadUsers()) return false;
 
         
         //Register callbacks
         
-        moduleRequest('Commands', (commands) => {
+        opt.moduleRequest('Commands', (commands) => {
         
         
             commands.registerCommand(this, 'useradd', {

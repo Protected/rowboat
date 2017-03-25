@@ -45,8 +45,8 @@ class ModRajio extends Module {
     }
     
     
-    initialize(envs, mods, moduleRequest) {
-        if (!super.initialize(envs, mods, moduleRequest)) return false;
+    initialize(opt) {
+        if (!super.initialize(opt)) return false;
 
         if (!this.grabber || this.grabber.modName != 'Grabber') {
             this.log('error', "Grabber not found.");

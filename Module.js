@@ -19,9 +19,6 @@ class Module {
     get requiredEnvironments() { return []; }
     get requiredModules() { return []; }
 
-    get globalConfig() { this._globalConfig; }
-    set globalConfig(conf) { this._globalConfig = conf; }
-    
     constructor(modName, name) {
     
         this._modName = modName;
@@ -31,8 +28,9 @@ class Module {
         
         this._environments = null;
         this._modules = null;
+        this._globalConfig = {};
     
-    }
+    }    
     
     
     param(key) { return this._params[key]; }
@@ -41,11 +39,26 @@ class Module {
     env(name) { return this._environments[name]; }
     mod(name) { return this._modules[name]; }
     
+    config(key) {
+        var path = key.split(".");
+        var config = this._globalConfig;
+        while (path.length && typeof config == "object") {
+            config = config[path.shift()];
+        }
+        if (path.length) config = null;
+        return config;
+    }
     
-    initialize(envs, mods, moduleRequest) {
+    dataPath() {
+        return this.config("paths.data");
+    }
+    
+    
+    initialize(opt) {
         var params = {};
         
         //Load and check parameters
+        
         try {
             var configname = this._modName.toLowerCase();
             if (this.isMultiInstanceable) configname = this._name.toLowerCase() + "." + configname;
@@ -64,18 +77,18 @@ class Module {
         
         //Check reference to environments/modules
         
-        if (!envs || !mods) return false;
+        if (!opt.envs || !opt.mods) return false;
         
         var envtypes = {};
         var modtypes = {};
         
-        for (let label in envs) {
-            envtypes[envs[label].envName] = true;
+        for (let label in opt.envs) {
+            envtypes[opt.envs[label].envName] = true;
         }
         
-        for (let label in mods) {
-            if (mods[label].isMultiInstanceable) continue;
-            modtypes[mods[label].modName] = true;
+        for (let label in opt.mods) {
+            if (opt.mods[label].isMultiInstanceable) continue;
+            modtypes[opt.mods[label].modName] = true;
         }
         
         for (let reqenv of this.requiredEnvironments) {
@@ -90,8 +103,10 @@ class Module {
             }
         }
         
-        this._environments = envs;
-        this._modules = mods;
+        this._environments = opt.envs;
+        this._modules = opt.mods;
+        
+        this._globalConfig = opt.config;
 
         return true;
     }

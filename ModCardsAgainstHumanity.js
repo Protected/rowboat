@@ -6,26 +6,24 @@ var jf = require('jsonfile');
 
 class ModCardsAgainstHumanity extends Module {
 
-    get RequiredModules() {
-        return [
-            'Commands'
-        ];
-    }
+
+    get requiredModules() { return [
+        'Commands'
+    ]; }
 
     constructor(name) {
         super('CardsAgainstHumanity', name);
+        
         this.gameRunning = false;
         this.gameData = {};
 
         this.whiteCards = jf.readFileSync("cah_whiteCards.json");
-
         this.blackCards = jf.readFileSync("cah_blackCards.json");
-
     }
     
 
-    initialize(envs, mods, moduleRequest) {
-        if (!super.initialize(envs, mods, moduleRequest)) return false;
+    initialize(opt) {
+        if (!super.initialize(opt)) return false;
 
         let self = this;
         

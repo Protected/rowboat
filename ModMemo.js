@@ -46,19 +46,20 @@ class ModMemo extends Module {
     }
 
 
-    initialize(envs, mods, moduleRequest) {
-        if (!super.initialize(envs, mods, moduleRequest)) return false;
+    initialize(opt) {
+        if (!super.initialize(opt)) return false;
        
         //Load data
         
+        this._params['datafile'] = this.dataPath() + this._params['datafile'];
         if (!this.loadMemos()) return false;
         
 
         //Register callbacks
         
-        for (var envname in envs) {
-            envs[envname].on('join', this.onJoin, this);
-            envs[envname].on('message', this.onMessage, this);
+        for (var envname in opt.envs) {
+            opt.envs[envname].on('join', this.onJoin, this);
+            opt.envs[envname].on('message', this.onMessage, this);
         }
 
         

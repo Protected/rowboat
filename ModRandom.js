@@ -13,8 +13,8 @@ class ModRandom extends Module {
         super('Random', name);
     }
     
-    initialize(envs, mods, moduleRequest) {
-        if (!super.initialize(envs, mods, moduleRequest)) return false;
+    initialize(opt) {
+        if (!super.initialize(opt)) return false;
 
       
         //Register callbacks

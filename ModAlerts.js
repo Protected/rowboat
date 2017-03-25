@@ -7,36 +7,41 @@ var fs = require('fs');
 
 class ModAlerts extends Module {
 
-    get RequiredModules() {
-        return [
-            'Commands'
-        ];
-    }
 
+    get optionalParams() { return [
+        'datafile'
+    ]; }
+
+    get requiredModules() { return [
+        'Commands'
+    ]; }
 
     constructor(name) {
         super('Alerts', name);
-        this.dataFileName = 'alerts.data.json';
-        this.data = {};
+        
+        this._params['datafile'] = 'alerts.data.json';
+        
+        this._data = {};
     }
 
-    initialize(envs, mods, moduleRequest) {
-        if (!super.initialize(envs, mods, moduleRequest)) return false;
 
-        this.dataPath = this._globalConfig["paths"] ? this._globalConfig["paths"].data : ".";
+    initialize(opt) {
+        if (!super.initialize(opt)) return false;
 
+        this._params['datafile'] = this.dataPath() + this._params['datafile'];
         this.loadData();
 
         let self = this;
 
-        for (var envname in envs) {
-            envs[envname].on('messageSent', this.onMessageSent, this);
+        for (var envname in opt.envs) {
+            opt.envs[envname].on('messageSent', this.onMessageSent, this);
         }
 
         //Register callbacks
+        
         this.mod('Commands').registerCommand(this, 'alert', {
             description: "Configures alerts.",
-            args: ["action","pattern","message", "ttl",true],
+            args: ["action", "pattern", "message", "ttl", true],
             minArgs: 1
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
@@ -55,11 +60,11 @@ class ModAlerts extends Module {
 
         function doList(env, type, userid, channelid, command, args, handle, ep) {
             let players, rules;
-            if ( !self.data[env.name] ) {
+            if ( !self._data[env.name] ) {
                 replyEmptyList(ep.reply);
                 return;
             }
-            players = self.data[env.name];
+            players = self._data[env.name];
 
             if ( !players[userid] ) {
                 replyEmptyList(ep.reply);
@@ -82,10 +87,10 @@ class ModAlerts extends Module {
 
         function doAdd(env, type, userid, channelid, command, args, handle, ep) {
             let players, rules, ttl;
-            if ( !self.data[env.name] ) {
-                self.data[env.name] = {};
+            if ( !self._data[env.name] ) {
+                self._data[env.name] = {};
             }
-            players = self.data[env.name];
+            players = self._data[env.name];
 
             if ( !players[userid] ) {
                 players[userid] = {};
@@ -127,11 +132,11 @@ class ModAlerts extends Module {
 
         function doDel(env, type, userid, channelid, command, args, handle, ep) {
             let players, rules;
-            if ( !self.data[env.name] ) {
+            if ( !self._data[env.name] ) {
                 replyPatternNotFound(ep.reply);
                 return;
             }
-            players = self.data[env.name];
+            players = self._data[env.name];
 
             if ( !players[userid] ) {
                 replyPatternNotFound(ep.reply);
@@ -162,14 +167,19 @@ class ModAlerts extends Module {
 
         return true;
     };
+    
+    
+    // # Module code below this line #
+    
 
     saveData() {
-        let fullPath = this.dataPath + this.dataFileName;
-        jf.writeFileSync(fullPath, this.data);
+        var fullPath = this.param('datafile');
+        jf.writeFileSync(fullPath, this._data);
     }
 
     loadData() {
-        let fullPath = this.dataPath + this.dataFileName;
+        var fullPath = this.param('datafile');
+        
         try {
             fs.accessSync(fullPath, fs.F_OK);
         } catch (e) {
@@ -177,16 +187,21 @@ class ModAlerts extends Module {
         }
 
         try {
-            this.data = jf.readFileSync(fullPath);
+            this._data = jf.readFileSync(fullPath);
         } catch(e) {
+            return false;
         }
+        
+        if (!this._data) this._data = {};
+        
+        return true;
     }
 
     onMessageSent(env, type, targetId, message) {
         if (type != "regular") return;
 
         let self = this;
-        let envData = this.data[env.name];
+        let envData = this._data[env.name];
         let dirty = false;
 
         _.each(envData, function(userData, userID) {
@@ -201,7 +216,7 @@ class ModAlerts extends Module {
                             alertData.ttl -= 1;
                         }
                         if (alertData.ttl == 0) {
-                            delete self.data[env.name][userID][pattern];
+                            delete self._data[env.name][userID][pattern];
                         }
                     }
                 } catch (e) {

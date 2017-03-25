@@ -36,15 +36,15 @@ class ModCommands extends Module {
     }
 
 
-    initialize(envs, mods, moduleRequest) {
-        if (!super.initialize(envs, mods, moduleRequest)) return false;
+    initialize(opt) {
+        if (!super.initialize(opt)) return false;
 
         if (!this.param('allowedenvs')) {
             this._params['allowedenvs'] = Object.keys(envs);
         }
         
         
-        moduleRequest('Logger', (logger) => {
+        opt.moduleRequest('Logger', (logger) => {
             this._modLogger = logger;
         });
 

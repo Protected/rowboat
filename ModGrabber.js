@@ -73,8 +73,8 @@ class ModGrabber extends Module {
     }
     
     
-    initialize(envs, mods, moduleRequest) {
-        if (!super.initialize(envs, mods, moduleRequest)) return false;
+    initialize(opt) {
+        if (!super.initialize(opt)) return false;
 
 
         //Load index
@@ -94,12 +94,12 @@ class ModGrabber extends Module {
       
         //Register callbacks
         
-        if (!envs[this.param('env')]) {
+        if (!opt.envs[this.param('env')]) {
             this.log('error', "Environment not found.");
             return false;
         }
         
-        envs[this.param('env')].on('message', this.onMessage, this);
+        opt.envs[this.param('env')].on('message', this.onMessage, this);
         
         
         this.mod('Commands').registerCommand(this, 'grabscan', {
