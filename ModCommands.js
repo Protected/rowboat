@@ -40,7 +40,7 @@ class ModCommands extends Module {
         if (!super.initialize(opt)) return false;
 
         if (!this.param('allowedenvs')) {
-            this._params['allowedenvs'] = Object.keys(envs);
+            this._params['allowedenvs'] = Object.keys(opt.envs);
         }
         
         
