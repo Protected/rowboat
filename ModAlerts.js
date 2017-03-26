@@ -211,7 +211,7 @@ class ModAlerts extends Module {
             for (let pattern in userData) {
                 let alertData = userData[pattern];
                 
-                if (message.indexOf('`' + pattern '`') > -1) continue;
+                if (message.indexOf('`' + pattern + '`') > -1) continue;
                 
                 if (message.match(pattern)) {
 
