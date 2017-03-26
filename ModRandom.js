@@ -73,8 +73,8 @@ class ModRandom extends Module {
                 let ranks = matchdeck[2];
                 if (ranks) ranks = ranks.toUpperCase();
                 let deck = this.standardDeck(ranks);
-                deck.unshift(i, 1);
-                items.splice.apply(this, deck);
+                deck.unshift(items, i, 1);
+                Array.splice.apply(this, deck);
                 i += deck.length - 1;
             }
             
