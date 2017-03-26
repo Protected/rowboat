@@ -68,7 +68,7 @@ class ModRandom extends Module {
             
             let items = args.items;
             for (let i = 0; i < items.length; i++) {
-                let matchdeck = items[i].match(/#deck#(([A234567890JQK]+)#)?/i);
+                let matchdeck = items[i].match(/\#deck\#(([A234567890JQK]+)#)?/i);
                 if (!matchdeck) continue;
                 let ranks = matchdeck[2];
                 if (ranks) ranks = ranks.toUpperCase();
