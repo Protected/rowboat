@@ -71,7 +71,7 @@ class ModBridgeDiscordIRC extends Module {
                 let changes = diff.diffChars(oldMessage.content, newMessage.content);
                 this.onDiscordEdit(env, changes, oldMessage.author.id, oldMessage.channel.id, oldMessage, newMessage);
             });
-        });
+        }, this);
         
         return true;
     }
