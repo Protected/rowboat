@@ -202,12 +202,11 @@ class ModAlerts extends Module {
     }
     
 
-    onMessageSent(env, type, targetId, message) {
-        if (type != "regular") return;
-
+    onMessageSent(env, type, targetid, message) {
         let dirty = false;
 
         for (let userid in this._data[env.name]) {
+            if (type != "regular" && userid != targetid) continue;
             for (let pattern in this._data[env.name][userid]) {
                 let alertData = this._data[env.name][userid][pattern];
                 
@@ -215,14 +214,14 @@ class ModAlerts extends Module {
                 
                 if (message.match(pattern)) {
 
-                    env.msg(userID, alertData.message);
+                    env.msg(userid, alertData.message);
 
                     if (alertData.ttl > 0) {
                         alertData.ttl -= 1;
                         dirty = true;
                     }
                     if (alertData.ttl == 0) {
-                        delete this._data[env.name][userID][pattern];
+                        delete this._data[env.name][userid][pattern];
                         dirty = true;
                     }
                 }
