@@ -85,7 +85,7 @@ class ModRandom extends Module {
             //Perform shuffles and output
             
             items = this.shuffle(items);
-            ep.reply(items);
+            ep.reply(items.join(" "));
             
             return true;
         });
