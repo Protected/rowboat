@@ -207,9 +207,9 @@ class ModAlerts extends Module {
 
         let dirty = false;
 
-        for (let userData of this._data[env.name]) {
-            for (let pattern in userData) {
-                let alertData = userData[pattern];
+        for (let userid in this._data[env.name]) {
+            for (let pattern in this._data[env.name][userid]) {
+                let alertData = this._data[env.name][userid][pattern];
                 
                 if (message.indexOf('`' + pattern + '`') > -1) continue;
                 
