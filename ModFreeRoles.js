@@ -85,7 +85,7 @@ class ModFreeRoles extends Module {
             if (!roles) return true;
             
             if (Object.keys(roles).length) {
-                for (let role in roles) {
+                for (let role of Object.keys(roles).sort()) {
                     ep.reply('**' + roles[role].name + '** - ' + roles[role].desc);
                 }
             } else {

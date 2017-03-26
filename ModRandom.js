@@ -53,6 +53,44 @@ class ModRandom extends Module {
         });
         
         
+        this.mod('Commands').registerCommand(this, 'shuffle', {
+            description: "Knuth shuffles a list or a deck of cards using a cryptographically secure source of randomness.",
+            args: ["items", true],
+            details: [
+                "ITEMS is a list of items to shuffle separated by spaces. Special syntaxes: ",
+                "  #deck# - Expand to 52-card deck.",
+                "  #deck#RANKS# - Expand to restricted 52-card deck, where RANKS can be: A234567890JQK ."
+            ],
+            minArgs: 1
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            
+            //Expand decks
+            
+            let items = args.items;
+            for (let i = 0; i < items.length; i++) {
+                let matchdeck = items[i].match(/#deck#(([A234567890JQK]+)#)?/i);
+                if (!matchdeck) continue;
+                let ranks = matchdeck[2];
+                if (ranks) ranks = ranks.toUpperCase();
+                let deck = this.standardDeck(ranks);
+                deck.unshift(i, 1);
+                items.splice.apply(this, deck);
+                i += deck.length - 1;
+            }
+            
+            //Validate syntax and add generic syntax if needed
+            
+            items = items.map((item) => item.trim()).filter((item) => !!item || item === 0);
+            
+            //Perform shuffles and output
+            
+            items = this.shuffle(items);
+            ep.reply(items);
+            
+            return true;
+        });
+        
+        
         this.mod('Commands').registerCommand(this, 'roll', {
             description: "Generates a dice roll using a cryptographically secure source of randomness.",
             args: ["expr", true],
@@ -153,6 +191,32 @@ class ModRandom extends Module {
       
         return true;
     };
+    
+    
+    // # Module code below this line #
+    
+    
+    standardDeck(ranks) {
+        if (!ranks) ranks = "A234567890JQK";
+        if (typeof ranks == "string") ranks = ranks.split("");
+        var suits = ['♠', '♥', '♦', '♣'];
+        var deck = [];
+        for (let suit of suits) {
+            for (let rank of ranks) {
+                deck.push(rank + suit);
+            }
+        }
+        return deck;
+    }
+    
+    
+    shuffle(list) {
+        for (let i = list.length; i; i--) {
+            let j = Math.floor(random.fraction() * i);
+            [list[i - 1], list[j]] = [list[j], list[i - 1]];
+        }
+        return list;
+    }
 
 }
 

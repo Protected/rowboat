@@ -98,7 +98,7 @@ class ModCommands extends Module {
                         permstring = 'LOCKED';
                     } else {
                         if (descriptor.permissions.length > 1) {
-                            if (descriptor.requireAllPermissions) permstring = 'All of: ';
+                            if (descriptor.requireAllPermissions) permstring = 'All of: *';
                             else permstring = 'One of: *';
                         }
                         permstring = permstring + descriptor.permissions.join('*, *') + '*';
@@ -110,7 +110,7 @@ class ModCommands extends Module {
             
                 ep.priv('Available commands (use help COMMAND for more information):');
                 
-                for (let descriptor of this._commands) {
+                for (let descriptor of this._commands.sort((a, b) => a.command.localeCompare(b))) {
 
                     if (descriptor.environments && descriptor.environments.indexOf(env.envName) < 0) {
                         continue;
