@@ -110,7 +110,10 @@ class ModCommands extends Module {
             
                 ep.priv('Available commands (use help COMMAND for more information):');
                 
-                for (let descriptor of this._commands.sort((a, b) => a.command.localeCompare(b))) {
+                let commands = this._commands.slice();
+                commands.sort((a, b) => a.command.localeCompare(b.command));
+                
+                for (let descriptor of commands) {
 
                     if (descriptor.environments && descriptor.environments.indexOf(env.envName) < 0) {
                         continue;
