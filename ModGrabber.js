@@ -542,7 +542,7 @@ class ModGrabber extends Module {
                             return;
                         }
                         
-                        if (info.length_seconds < this.param('minDuration') || interval && interval[1] - interval[0] < this.param('minDuration')
+                        if (!interval && info.length_seconds < this.param('minDuration') || interval && interval[1] - interval[0] < this.param('minDuration')
                                 || info.length_seconds > this.param('maxDuration') && (!interval || interval[1] - interval[0] > this.param('maxDuration'))) {
                             if (callbacks.errorDuration) callbacks.errorDuration(messageObj, messageAuthor, reply, info.title);
                             return;
