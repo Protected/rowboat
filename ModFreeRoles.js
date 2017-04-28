@@ -53,6 +53,7 @@ class ModFreeRoles extends Module {
             
             env.on('connected', (env) => {
                 env.client.on('roleUpdate', (oldRole, newRole) => {
+                    if (oldRole.guild.id != env.server.id) return;
                     let lcrole = oldRole.name.toLowerCase();
                     let lcrolenew = newRole.name.toLowerCase();
                     if (lcrole == lcrolenew) return;
@@ -66,6 +67,7 @@ class ModFreeRoles extends Module {
                 });
                 
                 env.client.on('roleDelete', (role) => {
+                    if (role.guild.id != env.server.id) return;
                     let lcrole = role.name.toLowerCase();
                     if (this._freeRoles[env.name] && this._freeRoles[env.name][lcrole]) {
                         delete this._freeRoles[env.name][lcrole];

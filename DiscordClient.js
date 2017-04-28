@@ -2,10 +2,14 @@
 
 var discord = require('discord.js');
 var moment = require('moment');
+var ModernEventEmitter = require('./ModernEventEmitter.js');
 
-class DiscordClient {
+
+class DiscordClient extends ModernEventEmitter {
 
     constructor() {
+        super();
+    
         this._environments = {};
 
         this._realClient = null;
@@ -34,10 +38,52 @@ class DiscordClient {
         });
         
         this._realClient.on('error', (error) => {
-            for (let env of notifyEnvironments) {
-                env.emit('error', 'Serious connection error: ' + error.message);
+            for (let name in this._environments) {
+                this._environments[name].emit('error', 'Serious connection error: ' + error.message);
             }
         });
+        
+
+        this._realClient.on("message", (message) => {
+            this.emit("message", message);
+        });
+        
+        this._realClient.on("messageUpdate", (oldMessage, newMessage) => {
+            this.emit("messageUpdate", oldMessage, newMessage);
+        });
+        
+        this._realClient.on("guildMemberAdd", (member) => {
+            this.emit("guildMemberAdd", member);
+        });
+        
+        this._realClient.on("guildMemberRemove", (member) => {
+            this.emit("guildMemberRemove", member);
+        });
+        
+        this._realClient.on("guildMemberUpdate", (oldMember, newMember) => {
+            this.emit("guildMemberUpdate", oldMember, newMember);
+        });
+        
+        this._realClient.on("presenceUpdate", (oldUser, newUser) => {
+            this.emit("presenceUpdate", oldUser, newUser);
+        });
+        
+        this._realClient.on("roleUpdate", (oldRole, newRole) => {
+            this.emit("presenceUpdate", oldRole, newRole);
+        });
+        
+        this._realClient.on("roleDelete", (role) => {
+            this.emit("roleDelete", role);
+        });
+        
+        this._realClient.on("voiceStateUpdate", (oldMember, newMember) => {
+            this.emit("voiceStateUpdate", oldMember, newMember);
+        });
+        
+        this._realClient.on("messageReactionAdd", (messageReaction, user) => {
+            this.emit("messageReactionAdd", messageReaction, user);
+        });
+        
         
         let self = this;
         return this._realClient.login(this._token)

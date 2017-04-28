@@ -9,7 +9,8 @@ class EnvDiscord extends Environment {
     get requiredParams() { return [
         'token',                //Discord application token
         'servername',           //Server name to operate on (application must have been previously added to server)
-        'defaultchannel'        //Default channel to operate on (must be a channel in the above server)
+        'defaultchannel',       //Default channel to operate on (must be a channel in the above server)
+        'privatemessages'       //Environment will receive private messages to the bot
     ]; }
         
     get optionalParams() { return [
@@ -57,22 +58,26 @@ class EnvDiscord extends Environment {
                 }
                 
                 
-                client.on("message", (message) => {
-
+                this._localClient.on("message", (message) => {
                     if (message.author.username == client.user.username) return;
-
+                    
                     var type = "regular";
                     var channelid = message.channel.id;
+                    
                     if (message.channel.type == "dm") {
+                        if (!this.param('privatemessages')) return;
                         type = "private";
                         channelid = message.author.id;
+                    } else {
+                        if (message.channel.guild.id != this._server.id) return;
                     }
 
                     this.emit('message', this, type, message.content, message.author.id, channelid, message);
                 });
                 
                 
-                client.on("guildMemberAdd", (member) => {
+                this._localClient.on("guildMemberAdd", (member) => {
+                    if (member.guild.id != this._server.id) return;
                     var chans = this.findAccessChannels(member);
                     if (chans.length) {
                         this.triggerJoin(member.id, chans, {reason: "add"});
@@ -84,8 +89,9 @@ class EnvDiscord extends Environment {
                 });
                 
                 
-                client.on("guildMemberRemove", (member) => {
+                this._localClient.on("guildMemberRemove", (member) => {
                     if (member.user.presence.status == "offline") return;
+                    if (member.guild.id != this._server.id) return;
                     
                     var chans = this.findAccessChannels(member);
                     if (chans.length) {
@@ -98,8 +104,9 @@ class EnvDiscord extends Environment {
                 });
                 
                 
-                client.on("guildMemberUpdate", (oldMember, newMember) => {
+                this._localClient.on("guildMemberUpdate", (oldMember, newMember) => {
                     if (newMember.user.presence.status == "offline") return;
+                    if (member.guild.id != this._server.id) return;
                 
                     //Channels
                 
@@ -155,7 +162,7 @@ class EnvDiscord extends Environment {
                 });
                 
                 
-                client.on("presenceUpdate", (oldUser, newUser) => {
+                this._localClient.on("presenceUpdate", (oldUser, newUser) => {
                     var reason = null;
 
                     if (!oldUser.presence || !newUser.presence) return;
@@ -357,7 +364,7 @@ class EnvDiscord extends Environment {
     
     //Auxiliary methods
     
-    get client() { return this._client; }
+    get client() { return this._localClient; }
     get server() { return this._server; }
     
     

@@ -76,6 +76,7 @@ class ModRajio extends Module {
         var self = this;
         
         denv.client.on("voiceStateUpdate", (oldMember, member) => {
+            if (member.guild.id != env.server.id) return;
             
         });
 

@@ -132,6 +132,8 @@ class ModSongRanking extends Module {
         this.denv.on('connected', (env) => {
         
             env.client.on('messageReactionAdd', (messageReaction, user) => {
+                if (!messageReaction.message.channel || messageReaction.message.channel.guild.id != env.server.id) return;
+                
                 let emojiname = '';
                 let extr = emoji.toShort(messageReaction.emoji.name).match(/\:([^:]+)\:/);
                 if (!extr) return;

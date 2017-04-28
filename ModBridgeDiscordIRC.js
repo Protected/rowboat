@@ -63,8 +63,8 @@ class ModBridgeDiscordIRC extends Module {
         
         this.discord.on('connected', (env) => {
             env.client.on('messageUpdate', (oldMessage, newMessage) => {
-                if (oldMessage.author.username == env.client.user.username) return;
                 if (oldMessage.channel.type == "dm") return;
+                if (oldMessage.channel.guild.id != env.server.id) return;
                 if (this.param('discordBlacklist').indexOf(oldMessage.channel.id) > -1) return;
                 if (oldMessage.content == newMessage.content) return;
                 
