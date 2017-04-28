@@ -59,15 +59,22 @@ class Module {
         
         //Load and check parameters
         
+        var configname = this._modName.toLowerCase();
+        if (this.isMultiInstanceable) configname = this._name.toLowerCase() + "." + configname;
+        configname = "config/" + configname + ".mod.json";
         try {
-            var configname = this._modName.toLowerCase();
-            if (this.isMultiInstanceable) configname = this._name.toLowerCase() + "." + configname;
-            params = jsonfile.readFileSync("config/" + configname + ".mod.json");
-        } catch(e) {}
+            params = jsonfile.readFileSync(configname);
+            this.log(`Initializing module of type ${this._envName}.`);
+        } catch(e) {
+            this.log('error', `Error trying to load the config file ${configname} because of: ${e}`);
+        }
 
         for (let reqParam of this.requiredParams) {
             if (params[reqParam] !== undefined && params[reqParam] !== null) this._params[reqParam] = params[reqParam];
-            if (this._params[reqParam] === undefined) return false;
+            if (this._params[reqParam] === undefined) {
+                this.log('error', `Failed loading required parameter: ${reqParam}`);
+                return false;
+            }
         };
         
         for (let optParam of this.optionalParams) {

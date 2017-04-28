@@ -35,25 +35,30 @@ class Environment extends ModernEventEmitter {
         var params = {};
         
         //Load and check parameters
+        
         var fileName = "config/" + this._name.toLowerCase() + "." + this._envName.toLowerCase() + ".env.json";
         try {
             params = jsonfile.readFileSync(fileName);
-            logger.info(`Initializing environment ${this._envName} with name ${this._name}.`);
+            this.log(`Initializing environment of type ${this._envName}.`);
         } catch(e) {
-            logger.error(`Error trying to load the config file ${fileName} because of: ${e}`);
+            this.log('error', `Error trying to load the config file ${fileName} because of: ${e}`);
         }
 
         for (let reqParam of this.requiredParams) {
-            if (params[reqParam]) this._params[reqParam] = params[reqParam];
+            if (params[reqParam] !== undefined && params[reqParam] !== null) this._params[reqParam] = params[reqParam];
             if (this._params[reqParam] === undefined) {
-                logger.error(`Failed loading required parameter: ${reqParam}`);
+                this.log('error', `Failed loading required parameter: ${reqParam}`);
                 return false;
             }
         }
         
         for (let optParam of this.optionalParams) {
-            if (params[optParam]) this._params[optParam] = params[optParam];
+            if (params[optParam] !== undefined) this._params[optParam] = params[optParam];
             if (this._params[optParam] === undefined) this._params[optParam] = null;
+        }
+        
+        for (let key in params) {
+            if (this._params[key] === undefined) this._params[key] = params[key];
         }
         
         this.on('newListener', (type, handler) => {
