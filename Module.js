@@ -66,12 +66,12 @@ class Module {
         } catch(e) {}
 
         for (let reqParam of this.requiredParams) {
-            if (params[reqParam]) this._params[reqParam] = params[reqParam];
+            if (params[reqParam] !== undefined && params[reqParam] !== null) this._params[reqParam] = params[reqParam];
             if (this._params[reqParam] === undefined) return false;
         };
         
         for (let optParam of this.optionalParams) {
-            if (params[optParam]) this._params[optParam] = params[optParam];
+            if (params[optParam] !== undefined) this._params[optParam] = params[optParam];
             if (this._params[optParam] === undefined) this._params[optParam] = null;
         }
         
