@@ -50,7 +50,7 @@ function ready() {
             logger.add(winston.transports.Console, {});
         }
 
-        logger.info('Session start');
+        logger.info('============================== Session start ==============================');
     }
     
     return !!logger;

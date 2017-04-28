@@ -13,6 +13,8 @@ class DiscordClient extends ModernEventEmitter {
         this._environments = {};
 
         this._realClient = null;
+        this._resolveOnLogin = [];
+        
         this._outbox = [];
         this._carrier = null;
         
@@ -26,8 +28,10 @@ class DiscordClient extends ModernEventEmitter {
         
         this._environments[envDiscord.name] = envDiscord;
         
-        if (this._realClient) {
-            return Promise.resolve(this._realClient);
+        if (this._realClient) {   
+            return new Promise((resolve) => {
+                this._resolveOnLogin.push(resolve);
+            });
         }
         
         this._token = token;
@@ -91,8 +95,13 @@ class DiscordClient extends ModernEventEmitter {
                 this._carrier = setInterval(() => {
                     self.deliverMsgs.apply(self, null);
                 }, this._sendDelay);
-            })
-            .then(() => this._realClient);
+                
+                for (let resolve of this._resolveOnLogin) {
+                    resolve(this._realClient);
+                }
+                
+                return this._realClient;
+            });
     }
     
     
