@@ -83,7 +83,7 @@ class DiscordClient {
         for (let rawchannelid in packages) {
             
             //Deliver a package to Discord
-            packages[rawchannelid].targetchan.sendMessage(
+            packages[rawchannelid].targetchan.send(
                 packages[rawchannelid].messages.join("\n"),
                 {
                     disable_everyone: true,

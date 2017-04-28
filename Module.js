@@ -75,6 +75,10 @@ class Module {
             if (this._params[optParam] === undefined) this._params[optParam] = null;
         }
         
+        for (let key in params) {
+            if (this._params[key] === undefined) this._params[key] = params[key];
+        }
+        
         //Check reference to environments/modules
         
         if (!opt.envs || !opt.mods) return false;
