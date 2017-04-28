@@ -47,143 +47,146 @@ class EnvIRC extends Environment {
 
 
     connect() {
+        return new Promise(function (resolve, reject) {
+        
+            var self = this;
+            var params = this.params;
 
-        var self = this;
-        var params = this.params;
+            this._client = new irc.Client(params.serverhost, params.nickname, {
+                port: params.port,
+                secure: params.ssl,
+                channels: params.channels,
+                userName: params.ident,
+                realName: params.realname,
+                floodProtection: true,
+                floodProtectionDelay: params.senddelay,
+                stripColors: false,
+                password: null
+            });
 
-        this._client = new irc.Client(params.serverhost, params.nickname, {
-            port: params.port,
-            secure: params.ssl,
-            channels: params.channels,
-            userName: params.ident,
-            realName: params.realname,
-            floodProtection: true,
-            floodProtectionDelay: params.senddelay,
-            stripColors: false,
-            password: null
-        });
-
-        this.log(`Connecting to ${params.serverhost}.`);
-        
-        this._client.addListener('error', (message) => {
-            this.genericErrorHandler(JSON.stringify(message, null, 4));
-        });
-        
-        
-        this._client.addListener('registered', (messageObj) => {
-            this.emit('connected', this);
-            if (this._client.nick != params.nickname) {
-                this.log('warning', "I am " + this._client.nick + " but should be " + params.nickname + "; Will try to retake.");
-                this._retake = setInterval(() => {
-                    self.retakeNickname.apply(self, null);
-                }, 15000);
-            }
-        });
-        
-    
-        this._client.addListener('message', (from, to, message, messageObj) => {
-            var type = "regular";
-            var authorid = from + '!' + messageObj.user + '@' + messageObj.host;
-            var channelid = to;
-            if (to[0] != "#") {
-                type = "private";
-                channelid = authorid;
-            }
-            this.emit('message', this, type, message, authorid, channelid, messageObj);
-        });
-    
-        this._client.addListener('action', (from, to, message, messageObj) => {
-            var type = "action";
-            var authorid = from + '!' + messageObj.user + '@' + messageObj.host;
-            var channelid = to;
-            if (to[0] != "#") {
-                type = "privateaction";
-                channelid = authorid;
-            }
-            this.emit('message', this, type, message, authorid, channelid, messageObj);
-        });
-        
-        this._client.addListener('notice', (from, to, message, messageObj) => {
-            if (params.nickpass && from && params.nickservnick && from.toLowerCase() == params.nickservnick.toLowerCase()) {
-                if (/This.*nickname.*registered/i.exec(message)) {
-                    this._client.say(params.nickservnick, "IDENTIFY " + params.nickpass);
+            this.log(`Connecting to ${params.serverhost}.`);
+            
+            this._client.addListener('error', (message) => {
+                this.genericErrorHandler(JSON.stringify(message, null, 4));
+            });
+            
+            
+            this._client.addListener('registered', (messageObj) => {
+                this.emit('connected', this);
+                if (this._client.nick != params.nickname) {
+                    this.log('warning', "I am " + this._client.nick + " but should be " + params.nickname + "; Will try to retake.");
+                    this._retake = setInterval(() => {
+                        self.retakeNickname.apply(self, null);
+                    }, 15000);
                 }
-            }
-        });
-    
+                resolve(this._client);
+            });
+            
         
-        this._client.addListener('join', (channel, nick, messageObj) => {
-            this.addPeople(nick, [channel], messageObj);
-            if (nick.toLowerCase() == params.nickname.toLowerCase()) {
-                this._client.send('WHO', channel);
-            } 
-            this.triggerJoin(nick, [channel], messageObj);
-        });
+            this._client.addListener('message', (from, to, message, messageObj) => {
+                var type = "regular";
+                var authorid = from + '!' + messageObj.user + '@' + messageObj.host;
+                var channelid = to;
+                if (to[0] != "#") {
+                    type = "private";
+                    channelid = authorid;
+                }
+                this.emit('message', this, type, message, authorid, channelid, messageObj);
+            });
         
-        this._client.addListener('part', (channel, nick, reason, messageObj) => {
-            this.remPeople(nick, [channel]);
-            this.triggerPart(nick, ['part', reason], [channel], messageObj);
-        });
-        
-        this._client.addListener('quit', (nick, reason, channels, messageObj) => {
-            this.remPeople(nick, channels);
-            this.triggerPart(nick, ['quit', reason], channels, messageObj);
-        });
-        
-        this._client.addListener('kick', (channel, nick, by, reason, messageObj) => {
-            this.remPeople(nick, [channel]);
-            this.triggerPart(nick, ['kick', reason, by], [channel], messageObj);
-        });
-        
-        this._client.addListener('nick', (oldnick, newnick, channels, messageObj) => {
-            let modes = this._people[oldnick].modes;
-            this.remPeople(oldnick, channels);
-            this.triggerPart(oldnick, ['nick', 'Nickname change', newnick], channels, messageObj);
-            this.addPeople(newnick, channels, messageObj, modes);
-            this.triggerJoin(newnick, channels, messageObj);
-        });
-        
-        
-        this._client.addListener('+mode', (channel, by, mode, arg, messageObj) => {
-            if (!channel || !arg || !this._people[arg]) return;
-            if (!this._people[arg].modes[channel]) this._people[arg].modes[channel] = [];
-            this._people[arg].modes[channel].push(mode);
-            this.emit('gotRole', this, this._people[arg].id, mode, channel);
-        });
-        
-        this._client.addListener('-mode', (channel, by, mode, arg, messageObj) => {
-            if (!channel || !arg || !this._people[arg]) return;
-            if (this._people[arg].modes[channel]) {
-                this._people[arg].modes[channel] = this._people[arg].modes[channel].filter((eachmode) => eachmode != mode);
-            }
-            this.emit('lostRole', this, this._people[arg].id, mode, channel);
-        });
-        
-        
-        this._client.addListener('raw', (messageObj) => {
-            if (messageObj.rawCommand == '005') { //VERSION reply
-                for (let arg of messageObj.args) {
-                    var getprefs;
-                    if (getprefs = arg.match(/PREFIX=\([^\)]+\)(.+)/)) {
-                        this._prefixes = getprefs[1].split('');
+            this._client.addListener('action', (from, to, message, messageObj) => {
+                var type = "action";
+                var authorid = from + '!' + messageObj.user + '@' + messageObj.host;
+                var channelid = to;
+                if (to[0] != "#") {
+                    type = "privateaction";
+                    channelid = authorid;
+                }
+                this.emit('message', this, type, message, authorid, channelid, messageObj);
+            });
+            
+            this._client.addListener('notice', (from, to, message, messageObj) => {
+                if (params.nickpass && from && params.nickservnick && from.toLowerCase() == params.nickservnick.toLowerCase()) {
+                    if (/This.*nickname.*registered/i.exec(message)) {
+                        this._client.say(params.nickservnick, "IDENTIFY " + params.nickpass);
                     }
                 }
-            }
-            if (messageObj.rawCommand == '352') { //WHO reply
-                this.addPeople(messageObj.args[5], [messageObj.args[1]], {user: messageObj.args[2], host: messageObj.args[3]});
-            }
-            if (messageObj.rawCommand == '307') { //WHOIS reply - identified
-                if (this._people[messageObj.args[1]]) {
-                    this._people[messageObj.args[1]].identified = true;
-                }
-            }
-            if (messageObj.rawCommand == '671') { //WHOIS reply - secured
-                if (this._people[messageObj.args[1]]) {
-                    this._people[messageObj.args[1]].secured = true;
-                }
-            }
-        });
+            });
         
+            
+            this._client.addListener('join', (channel, nick, messageObj) => {
+                this.addPeople(nick, [channel], messageObj);
+                if (nick.toLowerCase() == params.nickname.toLowerCase()) {
+                    this._client.send('WHO', channel);
+                } 
+                this.triggerJoin(nick, [channel], messageObj);
+            });
+            
+            this._client.addListener('part', (channel, nick, reason, messageObj) => {
+                this.remPeople(nick, [channel]);
+                this.triggerPart(nick, ['part', reason], [channel], messageObj);
+            });
+            
+            this._client.addListener('quit', (nick, reason, channels, messageObj) => {
+                this.remPeople(nick, channels);
+                this.triggerPart(nick, ['quit', reason], channels, messageObj);
+            });
+            
+            this._client.addListener('kick', (channel, nick, by, reason, messageObj) => {
+                this.remPeople(nick, [channel]);
+                this.triggerPart(nick, ['kick', reason, by], [channel], messageObj);
+            });
+            
+            this._client.addListener('nick', (oldnick, newnick, channels, messageObj) => {
+                let modes = this._people[oldnick].modes;
+                this.remPeople(oldnick, channels);
+                this.triggerPart(oldnick, ['nick', 'Nickname change', newnick], channels, messageObj);
+                this.addPeople(newnick, channels, messageObj, modes);
+                this.triggerJoin(newnick, channels, messageObj);
+            });
+            
+            
+            this._client.addListener('+mode', (channel, by, mode, arg, messageObj) => {
+                if (!channel || !arg || !this._people[arg]) return;
+                if (!this._people[arg].modes[channel]) this._people[arg].modes[channel] = [];
+                this._people[arg].modes[channel].push(mode);
+                this.emit('gotRole', this, this._people[arg].id, mode, channel);
+            });
+            
+            this._client.addListener('-mode', (channel, by, mode, arg, messageObj) => {
+                if (!channel || !arg || !this._people[arg]) return;
+                if (this._people[arg].modes[channel]) {
+                    this._people[arg].modes[channel] = this._people[arg].modes[channel].filter((eachmode) => eachmode != mode);
+                }
+                this.emit('lostRole', this, this._people[arg].id, mode, channel);
+            });
+            
+            
+            this._client.addListener('raw', (messageObj) => {
+                if (messageObj.rawCommand == '005') { //VERSION reply
+                    for (let arg of messageObj.args) {
+                        var getprefs;
+                        if (getprefs = arg.match(/PREFIX=\([^\)]+\)(.+)/)) {
+                            this._prefixes = getprefs[1].split('');
+                        }
+                    }
+                }
+                if (messageObj.rawCommand == '352') { //WHO reply
+                    this.addPeople(messageObj.args[5], [messageObj.args[1]], {user: messageObj.args[2], host: messageObj.args[3]});
+                }
+                if (messageObj.rawCommand == '307') { //WHOIS reply - identified
+                    if (this._people[messageObj.args[1]]) {
+                        this._people[messageObj.args[1]].identified = true;
+                    }
+                }
+                if (messageObj.rawCommand == '671') { //WHOIS reply - secured
+                    if (this._people[messageObj.args[1]]) {
+                        this._people[messageObj.args[1]].secured = true;
+                    }
+                }
+            });
+            
+        });
     }
 
 
@@ -191,6 +194,7 @@ class EnvIRC extends Environment {
         if (this._client) this._client.disconnect();
         this._client = null;
         this.emit('disconnected', this);
+        return Promise.resolve();
     }
 
 

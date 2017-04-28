@@ -31,81 +31,85 @@ class EnvTwitch extends Environment {
     
     
     connect() {
+        return new Promise(function (resolve, reject) {
 
-        var self = this;
-        var params = this.params;
+            var self = this;
+            var params = this.params;
 
-        this.log(`Connecting to ${params.servername}`);
+            this.log(`Connecting to ${params.servername}`);
 
-        this._client = new tmi.client({
-            connection: {
-                reconnect: true,
-                reconnectDecay: 1.1,
-                reconnectInterval: 5000,
-                secure: true
-            },
-            identity: {
-                username: this.param('username'),
-                password: this.param('token')
-            },
-            channels: this.param('channels'),
-            logger: this.makeCustomLogger()
+            this._client = new tmi.client({
+                connection: {
+                    reconnect: true,
+                    reconnectDecay: 1.1,
+                    reconnectInterval: 5000,
+                    secure: true
+                },
+                identity: {
+                    username: this.param('username'),
+                    password: this.param('token')
+                },
+                channels: this.param('channels'),
+                logger: this.makeCustomLogger()
+            });
+            
+            
+            this._client.on("connected", () => {
+                this._carrier = setInterval(() => {
+                        self.deliverMsgs.apply(self, null)
+                    }, this.param('senddelay'));
+
+                this.log("Environment is now ready!");
+                this.emit('connected', this);
+                resolve(this._client);
+            });
+            
+
+            this._client.on("message", (channel, userstate, message, self) => {
+                if (self) return;
+
+                var type = "regular";
+                if (userstate.message-type == "action") {
+                    type = "action";
+                } else if (userstate.message-type == "whisper") {
+                    type = "private";
+                }
+
+                this.emit('message', this, type, message, userstate.username, channel, userstate);
+            });
+
+            
+            this._client.on("join", (channel, username, self) => {
+                this.addPeople(username, [channel]);
+                if (self) return;
+                this.triggerJoin(username, [channel], {});
+            });
+
+            this._client.on("part", (channel, username, self) => {
+                this.remPeople(username, [channel]);
+                if (self) return;
+                this.triggerPart(username, [channel], {});
+            });
+            
+            
+            this._client.on("mod", (channel, username) => {
+                if (this._people[username]) {
+                    this._people[username].mod[channel] = true;
+                    this.emit('gotRole', this, username, 'mod', channel);
+                }
+            });
+            
+            this._client.on("unmod", (channel, username) => {
+                if (this._people[username]) {
+                    this._people[username].mod[channel] = false;
+                    this.emit('lostRole', this, username, 'mod', channel);
+                }
+            });
+            
+            
+            this._client.connect();
+            
         });
-        
-        
-        this._client.on("connected", () => {
-            this._carrier = setInterval(() => {
-                    self.deliverMsgs.apply(self, null)
-                }, this.param('senddelay'));
-
-            this.log("Environment is now ready!");
-            this.emit('connected', this);
-        });
-        
-
-        this._client.on("message", (channel, userstate, message, self) => {
-            if (self) return;
-
-            var type = "regular";
-            if (userstate.message-type == "action") {
-                type = "action";
-            } else if (userstate.message-type == "whisper") {
-                type = "private";
-            }
-
-            this.emit('message', this, type, message, userstate.username, channel, userstate);
-        });
-
-        
-        this._client.on("join", (channel, username, self) => {
-            this.addPeople(username, [channel]);
-            if (self) return;
-            this.triggerJoin(username, [channel], {});
-        });
-
-        this._client.on("part", (channel, username, self) => {
-            this.remPeople(username, [channel]);
-            if (self) return;
-            this.triggerPart(username, [channel], {});
-        });
-        
-        
-        this._client.on("mod", (channel, username) => {
-            if (this._people[username]) {
-                this._people[username].mod[channel] = true;
-                this.emit('gotRole', this, username, 'mod', channel);
-            }
-        });
-        
-        this._client.on("unmod", (channel, username) => {
-            if (this._people[username]) {
-                this._people[username].mod[channel] = false;
-                this.emit('lostRole', this, username, 'mod', channel);
-            }
-        });
-        
-        
-        this._client.connect();
     }
     
     
@@ -116,6 +120,7 @@ class EnvTwitch extends Environment {
         this.client = null;
         this.log(`Disconnected from ${this._name}`);
         this.emit('disconnected', this);
+        return Promise.resolve();
     }
     
     

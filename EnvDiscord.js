@@ -1,7 +1,6 @@
 /* Environment: Discord -- This environment connects to a Discord server/guild. */
 
 var Environment = require('./Environment.js');
-var discord = require('discord.js');
 
 
 class EnvDiscord extends Environment {
@@ -26,19 +25,16 @@ class EnvDiscord extends Environment {
 
         this._params['senddelay'] = 500;
         
-        this._client = null;
-        this._server = null;
+        this._localClient = null;  //DiscordClient (manages shared discord.js Client object)
+        this._client = null;  //Actual discord.js Client object
+        this._server = null;  //discord.js Guild object (formerly Server) for the server identified by this environment's 'servername'.
         this._channels = {};
-        this._outbox = [];
-        this._carrier = null;
     }
     
     
     initialize(sharedInstances) {
         if (!super.initialize(sharedInstances)) return false;
-        
-        //TODO
-        
+        this._localClient = sharedInstances.DiscordClient;
         return true;
     }
     
@@ -50,167 +46,156 @@ class EnvDiscord extends Environment {
 
         this.log(`Connecting to ${params.servername}`);
 
-        this._client = new discord.Client({
-            apiRequestMethod: 'sequential',
-            fetchAllMembers: true
-        });
-        
-        
-        this._client.on("ready", () => {
-            this._server = this._client.guilds.find("name", params.servername);
-            
-            this._channels[this._server.defaultChannel.name] = this._server.defaultChannel;
-            if (params.defaultchannel != this._server.defaultChannel.name) {
-                this._channels[params.defaultchannel] = this._server.channels.filter((channel) => (channel.type == "text")).find("name", params.defaultchannel);
-            }
+        this._localClient.prepareClient(this, this.param('token'), this.param('sendDelay'))
+            .then((client) => {
+                this._client = client;
+                this._server = client.guilds.find("name", params.servername);
+                
+                this._channels[this._server.defaultChannel.name] = this._server.defaultChannel;
+                if (params.defaultchannel != this._server.defaultChannel.name) {
+                    this._channels[params.defaultchannel] = this._server.channels.filter((channel) => (channel.type == "text")).find("name", params.defaultchannel);
+                }
+                
+                
+                client.on("message", (message) => {
 
-            this._carrier = setInterval(() => {
-                    self.deliverMsgs.apply(self, null)
-                }, params.senddelay);
+                    if (message.author.username == client.user.username) return;
 
-            this.log("Environment is now ready!");
-        });
-        
+                    var type = "regular";
+                    var channelid = message.channel.id;
+                    if (message.channel.type == "dm") {
+                        type = "private";
+                        channelid = message.author.id;
+                    }
 
-        this._client.on("message", (message) => {
+                    this.emit('message', this, type, message.content, message.author.id, channelid, message);
+                });
+                
+                
+                client.on("guildMemberAdd", (member) => {
+                    var chans = this.findAccessChannels(member);
+                    if (chans.length) {
+                        this.triggerJoin(member.id, chans, {reason: "add"});
+                    }
+                    var roles = member.roles.array();
+                    for (let role of roles) {
+                        this.emit('gotRole', this, member.id, role.id);
+                    }
+                });
+                
+                
+                client.on("guildMemberRemove", (member) => {
+                    if (member.user.presence.status == "offline") return;
+                    
+                    var chans = this.findAccessChannels(member);
+                    if (chans.length) {
+                        this.triggerPart(member.id, chans, {reason: "remove"});
+                    }
+                    var roles = member.roles.array();
+                    for (let role of roles) {
+                        this.emit('lostRole', this, member.id, role.id);
+                    }
+                });
+                
+                
+                client.on("guildMemberUpdate", (oldMember, newMember) => {
+                    if (newMember.user.presence.status == "offline") return;
+                
+                    //Channels
+                
+                    var had = {};
+                    for (let chan of this.findAccessChannels(oldMember)) {
+                        had[chan.id] = chan;
+                    }
+                    
+                    var tojoin = [];
+                    var topart = [];
+                    
+                    for (let chan of this.findAccessChannels(newMember)) {
+                        if (!had[chan.id]) tojoin.push(chan);
+                        else delete had[chan.id];
+                    }
+                    for (let chanid in had) {
+                        topart.push(had[chanid]);
+                    }            
+                
+                    if (tojoin.length) {
+                        this.triggerJoin(newMember.id, tojoin, {reason: "permissions"});
+                    }
+                    if (topart.length) {
+                        this.triggerPart(oldMember.id, topart, {reason: "permissions"});
+                    }
+                    
+                    //Roles
+                    
+                    had = {};
+                    for (let role of oldMember.roles) {
+                        had[role.id] = role;
+                    }
+                    
+                    var toget = [];
+                    var tolose = [];
+                    
+                    for (let role of newMember.roles) {
+                        if (!had[role.id]) toget.push(role);
+                        else delete had[role.id];
+                    }
+                    for (let roleid in had) {
+                        tolose.push(had[roleid]);
+                    }
+                    
+                    for (let role of toget) {
+                        this.emit('gotRole', this, newMember.id, role.id, null, true);
+                    }
+                    
+                    for (let role of tolose) {
+                        this.emit('lostRole', this, newMember.id, role.id, null, true);
+                    }
+                    
+                });
+                
+                
+                client.on("presenceUpdate", (oldUser, newUser) => {
+                    var reason = null;
 
-            if (message.author.username == this._client.user.username) return;
+                    if (!oldUser.presence || !newUser.presence) return;
 
-            var type = "regular";
-            var channelid = message.channel.id;
-            if (message.channel.type == "dm") {
-                type = "private";
-                channelid = message.author.id;
-            }
-
-            this.emit('message', this, type, message.content, message.author.id, channelid, message);
-        });
-        
-        
-        this._client.on("guildMemberAdd", (member) => {
-            var chans = this.findAccessChannels(member);
-            if (chans.length) {
-                this.triggerJoin(member.id, chans, {reason: "add"});
-            }
-            var roles = member.roles.array();
-            for (let role of roles) {
-                this.emit('gotRole', this, member.id, role.id);
-            }
-        });
-        
-        
-        this._client.on("guildMemberRemove", (member) => {
-            if (member.user.presence.status == "offline") return;
-            
-            var chans = this.findAccessChannels(member);
-            if (chans.length) {
-                this.triggerPart(member.id, chans, {reason: "remove"});
-            }
-            var roles = member.roles.array();
-            for (let role of roles) {
-                this.emit('lostRole', this, member.id, role.id);
-            }
-        });
-        
-        
-        this._client.on("guildMemberUpdate", (oldMember, newMember) => {
-            if (newMember.user.presence.status == "offline") return;
-        
-            //Channels
-        
-            var had = {};
-            for (let chan of this.findAccessChannels(oldMember)) {
-                had[chan.id] = chan;
-            }
-            
-            var tojoin = [];
-            var topart = [];
-            
-            for (let chan of this.findAccessChannels(newMember)) {
-                if (!had[chan.id]) tojoin.push(chan);
-                else delete had[chan.id];
-            }
-            for (let chanid in had) {
-                topart.push(had[chanid]);
-            }            
-        
-            if (tojoin.length) {
-                this.triggerJoin(newMember.id, tojoin, {reason: "permissions"});
-            }
-            if (topart.length) {
-                this.triggerPart(oldMember.id, topart, {reason: "permissions"});
-            }
-            
-            //Roles
-            
-            had = {};
-            for (let role of oldMember.roles) {
-                had[role.id] = role;
-            }
-            
-            var toget = [];
-            var tolose = [];
-            
-            for (let role of newMember.roles) {
-                if (!had[role.id]) toget.push(role);
-                else delete had[role.id];
-            }
-            for (let roleid in had) {
-                tolose.push(had[roleid]);
-            }
-            
-            for (let role of toget) {
-                this.emit('gotRole', this, newMember.id, role.id, null, true);
-            }
-            
-            for (let role of tolose) {
-                this.emit('lostRole', this, newMember.id, role.id, null, true);
-            }
-            
-        });
-        
-        
-        this._client.on("presenceUpdate", (oldUser, newUser) => {
-            var reason = null;
-
-            if (!oldUser.presence || !newUser.presence) return;
-
-            if (oldUser.presence.status == "offline" && newUser.presence.status != "offline") {
-                reason = "join";
-            }
-            if (oldUser.presence.status != "offline" && newUser.presence.status == "offline") {
-                reason = "part";
-            }
-            if (!reason) return;
-            
-            var member = this._server.members.get(newUser.id);
-            if (!member) return;
-            var chans = this.findAccessChannels(member);
-            
-            if (reason == "join") {
-                this.triggerJoin(member.id, chans, {reason: reason, status: newUser.presence.status});
-            }
-            if (reason == "part") {
-                if (member) this.triggerPart(member.id, chans, {reason: reason, status: oldUser.presence.status});
-            }
-        });
-        
-
-        this._client.login(params.token).then(() => {
-            this.emit('connected', this);
-        }).catch(this.genericErrorHandler);
-        
+                    if (oldUser.presence.status == "offline" && newUser.presence.status != "offline") {
+                        reason = "join";
+                    }
+                    if (oldUser.presence.status != "offline" && newUser.presence.status == "offline") {
+                        reason = "part";
+                    }
+                    if (!reason) return;
+                    
+                    var member = this._server.members.get(newUser.id);
+                    if (!member) return;
+                    var chans = this.findAccessChannels(member);
+                    
+                    if (reason == "join") {
+                        this.triggerJoin(member.id, chans, {reason: reason, status: newUser.presence.status});
+                    }
+                    if (reason == "part") {
+                        if (member) this.triggerPart(member.id, chans, {reason: reason, status: oldUser.presence.status});
+                    }
+                });
+                
+                
+                this.log("Environment is now ready!");
+                
+                this.emit('connected', this);
+            });
     }
     
     
     disconnect() {
-        if (this._carrier) clearInterval(this._carrier);
-        if (this._client) this._client.destroy().then(() => {
-            this._carrier = null;
-            this._client = null;
-            this.log(`Disconnected from ${this._name}`);
-            this.emit('disconnected', this);
-        }).catch(this.genericErrorHandler);
+        this._localClient.detachFromClient(this)
+            .then(() => {
+                this._client = null;
+                this._server = null;
+                this.log(`Disconnected from ${this._name}`);
+                this.emit('disconnected', this);
+            });
     }
     
     
@@ -221,7 +206,7 @@ class EnvDiscord extends Environment {
             targetchan = this._channels[this.param('defaultchannel')];
         }
 
-        this._outbox.push([targetchan, msg]);
+        this._localClient.outbox(targetchan, msg);
     }
     
     
@@ -371,35 +356,6 @@ class EnvDiscord extends Environment {
     
     
     //Auxiliary methods
-    
-    deliverMsgs() {
-        var packages = {};
-        for (var i = 0; this._outbox && i < this._outbox.length; i++) {
-            var rawchannelid = this._outbox[i][0].id;
-            if (!packages[rawchannelid]) {
-                packages[rawchannelid] = {
-                    targetchan: this._outbox[i][0],
-                    messages: []
-                }
-            }
-            packages[rawchannelid].messages.push(this._outbox[i][1]);
-        }
-        for (var rawchannelid in packages) {
-            packages[rawchannelid].targetchan.sendMessage(
-                packages[rawchannelid].messages.join("\n"),
-                {
-                    disable_everyone: true,
-                    split: {char: "\n"}
-                }
-            ).catch(this.genericErrorHandler);
-            for (let message of packages[rawchannelid].messages) {
-                let self = this;
-                setTimeout(() => { self.emit('messageSent', self, self.channelIdToType(packages[rawchannelid].targetchan), rawchannelid, message); }, 1);
-            }
-        }
-        this._outbox = [];
-    }
-    
     
     get client() { return this._client; }
     get server() { return this._server; }
