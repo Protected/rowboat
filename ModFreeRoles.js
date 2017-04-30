@@ -8,6 +8,12 @@ var PERM_ADMIN = 'administrator';
 
 class ModFreeRoles extends Module {
 
+    get isMultiInstanceable() { return true; }
+    
+    get requiredParams() { return [
+        'env'                   //Name of the Discord environment to be used
+    ]; }
+
     get optionalParams() { return [
         'datafile',
         'allowBecome',          //Enable/permission for !become
@@ -47,35 +53,36 @@ class ModFreeRoles extends Module {
         
         //Register callbacks
         
-        for (var envname in opt.envs) {
-            let env = opt.envs[envname];
-            if (env.envName != 'Discord') continue;
-            
-            env.on('connected', (env) => {
-                env.client.on('roleUpdate', (oldRole, newRole) => {
-                    if (oldRole.guild.id != env.server.id) return;
-                    let lcrole = oldRole.name.toLowerCase();
-                    let lcrolenew = newRole.name.toLowerCase();
-                    if (lcrole == lcrolenew) return;
-                    
-                    if (this._freeRoles[env.name] && this._freeRoles[env.name][lcrole]) {
-                        this._freeRoles[env.name][lcrolenew] = this._freeRoles[env.name][lcrole];
-                        delete this._freeRoles[env.name][lcrole];
-                        this._freeRoles[env.name][lcrolenew].name = newRole.name;
-                        this.saveData();
-                    }
-                });
-                
-                env.client.on('roleDelete', (role) => {
-                    if (role.guild.id != env.server.id) return;
-                    let lcrole = role.name.toLowerCase();
-                    if (this._freeRoles[env.name] && this._freeRoles[env.name][lcrole]) {
-                        delete this._freeRoles[env.name][lcrole];
-                        this.saveData();
-                    }
-                });
-            });
+        if (!opt.envs[this.param('env')] || opt.envs[this.param('env')].envName != 'Discord') {
+            this.log('error', "Environment not found.");
+            return false;
         }
+        
+        let env = opt.envs[this.param('env')];
+        env.on('connected', (env) => {
+            env.client.on('roleUpdate', (oldRole, newRole) => {
+                if (oldRole.guild.id != env.server.id) return;
+                let lcrole = oldRole.name.toLowerCase();
+                let lcrolenew = newRole.name.toLowerCase();
+                if (lcrole == lcrolenew) return;
+                
+                if (this._freeRoles[env.name] && this._freeRoles[env.name][lcrole]) {
+                    this._freeRoles[env.name][lcrolenew] = this._freeRoles[env.name][lcrole];
+                    delete this._freeRoles[env.name][lcrole];
+                    this._freeRoles[env.name][lcrolenew].name = newRole.name;
+                    this.saveData();
+                }
+            });
+            
+            env.client.on('roleDelete', (role) => {
+                if (role.guild.id != env.server.id) return;
+                let lcrole = role.name.toLowerCase();
+                if (this._freeRoles[env.name] && this._freeRoles[env.name][lcrole]) {
+                    delete this._freeRoles[env.name][lcrole];
+                    this.saveData();
+                }
+            });
+        });
         
         
         this.mod("Commands").registerCommand(this, 'role', {
