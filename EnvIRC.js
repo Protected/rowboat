@@ -47,7 +47,7 @@ class EnvIRC extends Environment {
 
 
     connect() {
-        return new Promise(function (resolve, reject) {
+        return new Promise((resolve, reject) => {
         
             var self = this;
             var params = this.params;
