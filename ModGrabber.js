@@ -102,7 +102,11 @@ class ModGrabber extends Module {
         opt.envs[this.param('env')].on('message', this.onMessage, this);
         
         
-        this.mod('Commands').registerCommand(this, 'grabscan', {
+        this.mod('Commands').registerRootDetails(this, 'grab', {description: "Manipulate the collection of songs from a Discord channel."});
+        this.mod('Commands').registerRootDetails(this, 'song', {description: "Interact with the song library and index."});
+        
+        
+        this.mod('Commands').registerCommand(this, 'grab scan', {
             description: 'Scans channel history until INTERVAL days ago and grabs any song files.',
             args: ['channelid', 'interval'],
             environments: ['Discord'],
@@ -147,7 +151,7 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'grabundo', {
+        this.mod('Commands').registerCommand(this, 'grab undo', {
             description: 'Undo a single recent grab from this session.',
             args: ['offset'],
             minArgs: 0,
@@ -184,7 +188,7 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'grabdelete', {
+        this.mod('Commands').registerCommand(this, 'grab delete', {
             description: 'Delete an indexed song by hash.',
             args: ['hashoroffset'],
             permissions: [PERM_ADMIN, PERM_MODERATOR]
@@ -213,7 +217,7 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'grablatest', {
+        this.mod('Commands').registerCommand(this, 'grab latest', {
             description: 'Get the hash of a single recent song.',
             args: ['hashoroffset'],
             minArgs: 0
@@ -237,7 +241,7 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'songfind', {
+        this.mod('Commands').registerCommand(this, 'song find', {
             description: 'Find an indexed song.',
             details: [
                 'Use -p PAGE before the search string to access result pages beyond the first one (if available).',
@@ -280,7 +284,7 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'songset', {
+        this.mod('Commands').registerCommand(this, 'song set', {
             description: 'Change metadata of an indexed song.',
             details: [
                 "Allowed fields: " + SET_FIELDS.join(', ')
@@ -321,7 +325,7 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'songget', {
+        this.mod('Commands').registerCommand(this, 'song get', {
             description: 'Retrieve metadata of an indexed song.',
             details: [
                 "Allowed fields: " + GET_FIELDS.join(', ')
@@ -357,13 +361,38 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'songkw', {
-            description: 'Manipulate keywords associated with a song.',
-            details: [
-                "The actions can be 'list', 'add' or 'remove'."
-            ],
-            args: ['hashoroffset', 'action', 'keyword'],
-            minArgs: 1,
+        this.mod('Commands').registerCommand(this, 'song kw', {
+            description: 'List keywords associated with an indexed song.',
+            args: ['hashoroffset'],
+            permissions: [PERM_ADMIN, PERM_MODERATOR, PERM_TRUSTED]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            var hash = this.parseHashArg(args.hashoroffset);
+            if (hash === false) {
+                ep.reply('Offset not found in recent history.');
+                return true;
+            } else if (hash === true) {
+                ep.reply('Reference matches more than one song; Please be more specific.');
+                return true;
+            } else if (!hash) {
+                ep.reply('Hash not found.');
+                return true;
+            }
+        
+            if (!this._index[hash]) {
+                ep.reply("Song not found in index.");
+                return true;
+            }
+            
+            ep.reply("Keywords: " + this._index[hash].keywords.join(', '));
+            
+            return true;
+        });
+        
+        
+        this.mod('Commands').registerCommand(this, 'song kw add', {
+            description: 'Associate a new keyword with an indexed song.',
+            args: ['hashoroffset', 'keyword'],
             permissions: [PERM_ADMIN, PERM_MODERATOR, PERM_TRUSTED]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
@@ -387,34 +416,55 @@ class ModGrabber extends Module {
             if (!this._index[hash].keywords || typeof this._index[hash].keywords != "object") {
                 this._index[hash].keywords = [];
             }
-            
-            if (args.action == "add" && args.keyword) {
-                
-                if (this._index[hash].keywords.indexOf(args.keyword) < 0) {
-                    this._index[hash].keywords.push(args.keyword);
-                    this.saveIndex();
-                    ep.reply("Ok.");
-                } else {
-                    ep.reply("Already existed.");
-                }
-            
-            } else if (args.action == "remove" && args.keyword) {
-                
-                let ind = this._index[hash].keywords.indexOf(args.keyword);
-                if (ind > -1) {
-                    this._index[hash].keywords.splice(ind, 1);
-                    this.saveIndex();
-                    ep.reply("Ok.");
-                } else {
-                    ep.reply("Doesn't exist.");
-                }
-                
+        
+            if (this._index[hash].keywords.indexOf(args.keyword) < 0) {
+                this._index[hash].keywords.push(args.keyword);
+                this.saveIndex();
+                ep.reply("Ok.");
             } else {
-            
-                ep.reply("Keywords: " + this._index[hash].keywords.join(', '));
-            
+                ep.reply("Already existed.");
+            }
+        
+            return true;
+        });
+        
+        
+        this.mod('Commands').registerCommand(this, 'song kw remove', {
+            description: 'Remove a keyword from an indexed song.',
+            args: ['hashoroffset', 'keyword'],
+            permissions: [PERM_ADMIN, PERM_MODERATOR, PERM_TRUSTED]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            var hash = this.parseHashArg(args.hashoroffset);
+            if (hash === false) {
+                ep.reply('Offset not found in recent history.');
+                return true;
+            } else if (hash === true) {
+                ep.reply('Reference matches more than one song; Please be more specific.');
+                return true;
+            } else if (!hash) {
+                ep.reply('Hash not found.');
+                return true;
+            }
+        
+            if (!this._index[hash]) {
+                ep.reply("Song not found in index.");
+                return true;
             }
             
+            if (!this._index[hash].keywords || typeof this._index[hash].keywords != "object") {
+                this._index[hash].keywords = [];
+            }
+        
+            let ind = this._index[hash].keywords.indexOf(args.keyword);
+            if (ind > -1) {
+                this._index[hash].keywords.splice(ind, 1);
+                this.saveIndex();
+                ep.reply("Ok.");
+            } else {
+                ep.reply("Doesn't exist.");
+            }
+        
             return true;
         });
         

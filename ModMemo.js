@@ -61,238 +61,260 @@ class ModMemo extends Module {
             opt.envs[envname].on('join', this.onJoin, this);
             opt.envs[envname].on('message', this.onMessage, this);
         }
+        
+        
+        this.mod("Commands").registerRootDetails(this, 'memo', {description: 'Commands for writing, reading and canceling messages for other users.'});
 
         
-        this.mod("Commands").registerCommand(this, 'memo', {
-            description: "Send or cancel a message. Actions: save, strongsave, cancel, outbox, inbox",
-            args: ["action", "descriptor", true],
+        let ssoptions = {
+            description: "Leaves a message for another user.",
+            args: ["args", true],
             details: [
                 "**save|strongsave** [<delay>] [{env}] (=handle|[+]displayname|[+]userid) [& [{env}] ...] message ...",
                 "  Send a message to one or more recipients. Multiple recipients are separated by &. After the list of recipients, write the desired message.",
                 "  Each recipient by default is a nickname or ID of the user in the current environment. Prefix the recipient with {env} to target another environment.",
                 "  To force the recipient to be authenticated before delivering, prefix it with a '+' symbol. By default, the receipient doesn't have to be authenticated.",
                 "  Use =HANDLE as the recipient to target a Rowboat user account.",
-                "  If you prefix the parameters with <delay> the message can only be delivered after a delay. Specify the delay as [[hh:]mm:]ss or using #[dhms] where # is a number.",
-                "**cancel** ID",
-                "  Deletes a pending message. Use the ID you received when you sent the message.",
-                "  If at least one recipient already received the message, this command will only remove all pending recipients. The message will not be deleted.",
-                "**outbox** [ID]",
-                "  Shows a summarized list of messages you have sent whose delivery is not completed. Alternatively, pass an ID to see the details of a message you have sent.",
-                "**inbox** [ID]",
-                "  Shows a summarized list of messages you have recently received. Alternatively, pass an ID to see the details of a message you have received."
+                "  If you prefix the parameters with <delay> the message can only be delivered after a delay. Specify the delay as [[hh:]mm:]ss or using #[dhms] where # is a number."
             ],
-            minArgs: 1,
             permissions: (this.param('permission') ? [this.param('permission')] : null),
             unobtrusive: true
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
-            
+        };
+        
+        let sscallback = (strong) => (env, type, userid, channelid, command, args, handle, ep) => {
             if (!env.idIsAuthenticated(userid)) {
                 ep.reply("Your environment (" + env.name + ") ID is not authenticated. Only authenticated users can use this command.");
                 return true;
             }
             
-            if (args.action == "save" || args.action == "strongsave") {
-                //Send a memo to one or more recipients
+            //Send a memo to one or more recipients
+        
+            let elements = this.parseDescriptor(env.name, args.args);
             
-                let elements = this.parseDescriptor(env.name, args.descriptor);
+            if (elements.error) {
+                if (elements.error == 1) {
+                    ep.priv("Malformed recipient: Environment doesn't exist or missing target user.");
+                } else if (elements.error == 2) {
+                    ep.priv("User account not found: " + elements.subject);
+                } else {
+                    ep.priv("Parse error " + elements.error);
+                }
+                return true;
+            }
+            
+            if (!elements.message || !elements.to.length) {
+                ep.priv("Please include a message to be delivered and at least one recipient.");
+                return true;
+            }
+            
+            if (this.createOutbox(env.name, userid, handle).length >= this.param("outboxSize")) {
+                ep.priv("Your outbox is full. Please cancel one or more pending messages or wait for them to be delived.");
+                return true;
+            }
+            
+            let register = {
+                id: this._nextId++,
+                ts: moment().unix(),
+                delay: elements.delay,
+                from: {
+                    env: env.name,
+                    handle: handle,
+                    display: env.idToDisplayName(userid),
+                    userid: userid
+                },
+                to: elements.to,
+                strong: strong,
+                msg: elements.message
+            };
+            
+            this._memo[register.id] = register;
+            this.indexFromHandle(register);
+            this.indexFromUserid(register);
+            this.indexToHandle(register);
+            this.indexToDisplay(register);
+            this.indexToUserid(register);
+            
+            ep.priv("Your message has successfully been scheduled for delivery with the ID **" + register.id + "**.");
+            this.log('Registered new message ' + register.id + ' for delivery: ' + userid + ' on ' + env.name + '. Recipients: ' + elements.to.length);
+            
+            this.saveMemos();
+        };
+        
+        this.mod("Commands").registerCommand(this, 'memo save', ssoptions, sscallback(false));
+        this.mod("Commands").registerCommand(this, 'memo strongsave', ssoptions, sscallback(true));
+
                 
-                if (elements.error) {
-                    if (elements.error == 1) {
-                        ep.priv("Malformed recipient: Environment doesn't exist or missing target user.");
-                    } else if (elements.error == 2) {
-                        ep.priv("User account not found: " + elements.subject);
-                    } else {
-                        ep.priv("Parse error " + elements.error);
+        this.mod("Commands").registerCommand(this, 'memo cancel', {
+            description: "Cancels an undelivered message pending delivery to a user.",
+            args: ["id"],
+            details: [
+                "Deletes a pending message. Use the ID you received when you sent the message.",
+                "If at least one recipient already received the message, this command will only remove all pending recipients and the message will not be deleted."
+            ]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            //Cancel a memo or remove all undelivered recipients
+        
+            let id = parseInt(args.id);
+            if (isNaN(id)) {
+                ep.priv("Please provide the numeric ID of the message you wish to cancel.");
+                return true;
+            }
+            
+            let register = this._memo[id];
+            if (!register
+                    || (register.from.env != env.name || register.from.userid != userid)
+                        && (!register.from.handle || register.from.handle != handle)
+                        && !this.mod("Users").testPermissions(env.name, userid, [PERM_ADMIN], false, handle)) {
+                ep.priv("You do not have a message with the ID " + id);
+                return true;
+            }
+            
+            let delivered = register.to.filter((recipient) => recipient.done);
+            
+            if (delivered.length == register.to.length) {
+                ep.priv("The message with the ID **" + id + "** has already been delivered!");
+            } else if (delivered.length) {
+                register.to = delivered;
+                ep.priv("The message with the ID **" + id + "** had already been delivered to " + delivered.length + " recipient" + (delivered.length != 1 ? "s" : "") + ". All undelivered recipients were removed.");
+                this.log('Removed undelivered recipients from message ' + id + ' by request from ' + userid + ' on ' + env.name);
+            } else {
+                this.removeFromIndices(register);
+                delete this._memo[register.id];
+                ep.priv("The message with the ID **" + id + "** was successfully canceled.");
+                this.log('Canceled message ' + id + ' by request from ' + userid + ' on ' + env.name);
+            }
+            
+            this.saveMemos();
+        });
+        
+        
+        this.mod("Commands").registerCommand(this, 'memo outbox', {
+            description: "Shows information about messages you have left for other users.",
+            args: ["id", true],
+            details: [
+                "Without arguments, shows a summarized list of messages you have sent whose delivery is not completed.",
+                "Alternatively, pass an ID to see the details of a specific message you have sent."
+            ],
+            minArgs: 0
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            //Obtain information on memos I sent
+        
+            let id = parseInt(args.id[0]);
+            if (isNaN(id)) {
+            
+                let target_envname = env.name;
+                let target_userid = userid;
+                let target_handle = handle;
+                
+                if (this.mod("Users").testPermissions(env.name, userid, [PERM_ADMIN], false, handle) && args.id.length > 1) {
+                    target_userid = args.id[1];
+                    target_envname = args.id[2] || env.name;
+                    target_handle = args.id[3];
+                }
+        
+                let outbox = this.createOutbox(target_envname, target_userid, target_handle).slice(0, this.param("outboxSize"));
+                
+                if (outbox.length) {
+                    for (let register of outbox) {
+                        let delivered = register.to.filter((recipient) => recipient.done).length;
+                        ep.priv("(**" + register.id + "**) " + moment(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + " [Delivery: " + delivered + "/" + register.to.length + "]");
                     }
-                    return true;
-                }
+                } else ep.priv("Your outbox is empty.");
                 
-                if (!elements.message || !elements.to.length) {
-                    ep.priv("Please include a message to be delivered and at least one recipient.");
-                    return true;
-                }
-                
-                if (this.createOutbox(env.name, userid, handle).length >= this.param("outboxSize")) {
-                    ep.priv("Your outbox is full. Please cancel one or more pending messages or wait for them to be delived.");
-                    return true;
-                }
-                
-                let register = {
-                    id: this._nextId++,
-                    ts: moment().unix(),
-                    delay: elements.delay,
-                    from: {
-                        env: env.name,
-                        handle: handle,
-                        display: env.idToDisplayName(userid),
-                        userid: userid
-                    },
-                    to: elements.to,
-                    strong: (args.action == "strongsave"),
-                    msg: elements.message
-                };
-                
-                this._memo[register.id] = register;
-                this.indexFromHandle(register);
-                this.indexFromUserid(register);
-                this.indexToHandle(register);
-                this.indexToDisplay(register);
-                this.indexToUserid(register);
-                
-                ep.priv("Your message has successfully been scheduled for delivery with the ID **" + register.id + "**.");
-                this.log('Registered new message ' + register.id + ' for delivery: ' + userid + ' on ' + env.name + '. Recipients: ' + elements.to.length);
-                
-                this.saveMemos();
-                
-            } else if (args.action == "cancel") {
-                //Cancel a memo or remove all undelivered recipients
+            } else {
             
-                let id = parseInt(args.descriptor[0]);
-                if (isNaN(id)) {
-                    ep.priv("Please provide the numeric ID of the message you wish to cancel.");
-                    return true;
-                }
-                
                 let register = this._memo[id];
                 if (!register
                         || (register.from.env != env.name || register.from.userid != userid)
                             && (!register.from.handle || register.from.handle != handle)
                             && !this.mod("Users").testPermissions(env.name, userid, [PERM_ADMIN], false, handle)) {
-                    ep.priv("You do not have a message with the ID " + id);
+                    ep.priv("You have not sent a message with the ID " + id);
                     return true;
                 }
                 
-                let delivered = register.to.filter((recipient) => recipient.done);
-                
-                if (delivered.length == register.to.length) {
-                    ep.priv("The message with the ID **" + id + "** has already been delivered!");
-                } else if (delivered.length) {
-                    register.to = delivered;
-                    ep.priv("The message with the ID **" + id + "** had already been delivered to " + delivered.length + " recipient" + (delivered.length != 1 ? "s" : "") + ". All undelivered recipients were removed.");
-                    this.log('Removed undelivered recipients from message ' + id + ' by request from ' + userid + ' on ' + env.name);
-                } else {
-                    this.removeFromIndices(register);
-                    delete this._memo[register.id];
-                    ep.priv("The message with the ID **" + id + "** was successfully canceled.");
-                    this.log('Canceled message ' + id + ' by request from ' + userid + ' on ' + env.name);
+                let delaypart = '';
+                if (register.delay) {
+                    delaypart = ' (w/ ' + this.userFriendlyDelay(register.delay) + ' delay)';
                 }
                 
-                this.saveMemos();
-            
-            } else if (args.action == "outbox") {
-                //Obtain information on memos I sent
-            
-                let id = parseInt(args.descriptor[0]);
-                if (isNaN(id)) {
+                ep.priv("(**" + register.id + "**) " + (register.strong ? "[S] " : "") + register.msg);
+                ep.priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment(register.ts).format(this.param('tsFormat')) + delaypart);
                 
-                    let target_envname = env.name;
-                    let target_userid = userid;
-                    let target_handle = handle;
-                    
-                    if (this.mod("Users").testPermissions(env.name, userid, [PERM_ADMIN], false, handle) && args.descriptor.length > 1) {
-                        target_userid = args.descriptor[1];
-                        target_envname = args.descriptor[2] || env.name;
-                        target_handle = args.descriptor[3];
-                    }
-            
-                    let outbox = this.createOutbox(target_envname, target_userid, target_handle).slice(0, this.param("outboxSize"));
-                    
-                    if (outbox.length) {
-                        for (let register of outbox) {
-                            let delivered = register.to.filter((recipient) => recipient.done).length;
-                            ep.priv("(**" + register.id + "**) " + moment(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + " [Delivery: " + delivered + "/" + register.to.length + "]");
-                        }
-                    } else ep.priv("Your outbox is empty.");
-                    
-                } else {
-                
-                    let register = this._memo[id];
-                    if (!register
-                            || (register.from.env != env.name || register.from.userid != userid)
-                                && (!register.from.handle || register.from.handle != handle)
-                                && !this.mod("Users").testPermissions(env.name, userid, [PERM_ADMIN], false, handle)) {
-                        ep.priv("You have not sent a message with the ID " + id);
-                        return true;
-                    }
-                    
-                    let delaypart = '';
-                    if (register.delay) {
-                        delaypart = ' (w/ ' + this.userFriendlyDelay(register.delay) + ' delay)';
-                    }
-                    
-                    ep.priv("(**" + register.id + "**) " + (register.strong ? "[S] " : "") + register.msg);
-                    ep.priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment(register.ts).format(this.param('tsFormat')) + delaypart);
-                    
-                    for (let recipient of register.to) {
-                        ep.priv("  " + (recipient.done ? "**DELIVERED**" : "Pending") + " To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "") + " on " + recipient.env));
-                    }
-                
+                for (let recipient of register.to) {
+                    ep.priv("  " + (recipient.done ? "**DELIVERED**" : "Pending") + " To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "") + " on " + recipient.env));
                 }
-
-            } else if (args.action == "inbox") {
-                //Obtain information on memos I received
             
-                let changes = 0;
-                let display = env.idToDisplayName(userid);
-                let isauth = env.idIsAuthenticated(userid);
+            }
+        });
+        
+        
+        this.mod("Commands").registerCommand(this, 'memo inbox', {
+            description: "Shows information about messages you have received from other users.",
+            args: ["id"],
+            details: [
+                "Without arguments, shows a summarized list of messages you have recently received. ",
+                "Alternatively, pass an ID to see the details of a message you have received."
+            ],
+            minArgs: 0
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            //Obtain information on memos I received
+        
+            let changes = 0;
+            let display = env.idToDisplayName(userid);
+            let isauth = env.idIsAuthenticated(userid);
 
+        
+            let id = parseInt(args.id);
+            if (isNaN(id)) {
             
-                let id = parseInt(args.descriptor[0]);
-                if (isNaN(id)) {
+                let inbox = this.createInbox(env.name, userid, display, handle, isauth, this.param("inboxTsCutoff")).slice(0, this.param("inboxDisplaySize"));
                 
-                    let inbox = this.createInbox(env.name, userid, display, handle, isauth, this.param("inboxTsCutoff")).slice(0, this.param("inboxDisplaySize"));
-                    
-                    if (inbox.length) {
-                        for (let register of inbox) {
-                            let isnew = this.markMemoAsDelivered(register, env.name, userid, display, handle, isauth);
-                            if (isnew) {
-                                changes += 1;
-                                this.log('Delivered message ' + register.id + ' to ' + userid + ' on environment ' + env.name + ' while listing inbox.');
-                            }
-                            ep.priv("(**" + register.id + "**) " + moment(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + (isnew ? " [NEW]" : ""));
-                        }
-                    } else ep.priv("Your inbox is empty.");
-                    
-                } else {
-                
-                    let register = this._memo[id];
-                    if (!register) {
-                        ep.priv("You have not received a message with the ID " + id);
-                        return true;
-                    }
-
-                    let recipients = this.getMatchingRecipients(register, env.name, userid, display, handle, isauth);
-                    if (!recipients.length) {
-                        ep.priv("You have not received a message with the ID " + id);
-                        return true;
-                    }
-                
-                    let isnew = false;
-                    for (let recipient of recipients) {
-                        if (!recipient.done) {
-                            isnew = true;
+                if (inbox.length) {
+                    for (let register of inbox) {
+                        let isnew = this.markMemoAsDelivered(register, env.name, userid, display, handle, isauth);
+                        if (isnew) {
                             changes += 1;
-                            recipient.done = moment().unix();
+                            this.log('Delivered message ' + register.id + ' to ' + userid + ' on environment ' + env.name + ' while listing inbox.');
                         }
+                        ep.priv("(**" + register.id + "**) " + moment(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + (isnew ? " [NEW]" : ""));
                     }
-                    
-                    ep.priv("(**" + register.id + "**) " + (register.strong ? "[S] " : "") + register.msg);
-                    ep.priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment(register.ts).format(this.param('tsFormat')));
-                    
-                    for (let recipient of recipients) {
-                        ep.priv("  (Delivered " + moment(recipient.done).format(this.param('tsFormat')) + ") To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "") + " on " + recipient.env));
-                    }
+                } else ep.priv("Your inbox is empty.");
                 
+            } else {
+            
+                let register = this._memo[id];
+                if (!register) {
+                    ep.priv("You have not received a message with the ID " + id);
+                    return true;
+                }
+
+                let recipients = this.getMatchingRecipients(register, env.name, userid, display, handle, isauth);
+                if (!recipients.length) {
+                    ep.priv("You have not received a message with the ID " + id);
+                    return true;
+                }
+            
+                let isnew = false;
+                for (let recipient of recipients) {
+                    if (!recipient.done) {
+                        isnew = true;
+                        changes += 1;
+                        recipient.done = moment().unix();
+                    }
                 }
                 
-                if (changes) this.saveMemos();
-                        
-            } else {
-                ep.reply("I don't recognize that action.");
+                ep.priv("(**" + register.id + "**) " + (register.strong ? "[S] " : "") + register.msg);
+                ep.priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment(register.ts).format(this.param('tsFormat')));
+                
+                for (let recipient of recipients) {
+                    ep.priv("  (Delivered " + moment(recipient.done).format(this.param('tsFormat')) + ") To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "") + " on " + recipient.env));
+                }
+            
             }
             
-            return true;
+            if (changes) this.saveMemos();
         });
+        
         
         return true;
     }

@@ -31,6 +31,7 @@ class ModCommands extends Module {
     
         this._commands = [];
         this._index = {};
+        this._rootDetails = {};
         
         this._modLogger = null;
     }
@@ -58,63 +59,95 @@ class ModCommands extends Module {
         
         this.registerCommand(this, 'help', {
             description: "Obtain a list of commands or information about a specific command.",
-            args: ["command"],
+            args: ["command", true],
             minArgs: 0,
             unobtrusive: true
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            if (args.command) {
-                var descriptor = this._index[args.command.toLowerCase()];
-                if (!descriptor) {
+            if (args.command.length > 0) {
+                let command = args.command.join(" ");
+                let descriptor = this._index[command.toLowerCase()];
+                let subcommands = this.findSubcommands(command);
+                
+                if (!descriptor && !subcommands.length) {
                     ep.reply('No such command!');
                     return true;
                 }
-            
-                ep.reply('  ' + this.buildCommandSyntax(descriptor.command));
-                ep.reply('    ' + descriptor.description);
                 
-                if (descriptor.details && descriptor.details.length) {
-                    ep.reply('');
-                    for (let line of descriptor.details) {
-                        ep.reply('    ' + line);
-                    }
-                }
-                
-                if (descriptor.environments || descriptor.types || descriptor.permissions) {
-                    ep.reply('');  //Blank line
-                }
-                
-                if (descriptor.environments) {
-                    ep.reply('    Environment(s): *' + descriptor.environments.join('*, *') + '*');
-                }
-                
-                if (descriptor.types) {
-                    ep.reply('    Message type(s): *' + descriptor.types.join('*, *') + '*');
-                }
-                
-                if (descriptor.permissions) {
-                    var permstring = '';
-                    if (descriptor.permissions.length == 0) {
-                        permstring = 'LOCKED';
-                    } else {
-                        if (descriptor.permissions.length > 1) {
-                            if (descriptor.requireAllPermissions) permstring = 'All of: *';
-                            else permstring = 'One of: *';
+                if (!descriptor) {
+                    ep.reply('  **' + command + '** *SUBCOMMAND* [...]');
+                    
+                    let parts = command.toLowerCase().match(/^([^ ]+)/);
+                    if (parts && this._rootDetails[parts[1]]) {
+                        let rootdetails = this._rootDetails[parts[1]];
+                        if (rootdetails.description) ep.reply('    ' + rootdetails.description);
+                        if (rootdetails.details && rootdetails.details.length) {
+                            ep.reply('');
+                            for (let line of rootdetails.details) {
+                                ep.reply('    ' + line);
+                            }
                         }
-                        permstring = permstring + descriptor.permissions.join('*, *') + '*';
                     }
-                    ep.reply('    Permissions required: ' + permstring);
+                    
+                } else {
+                    ep.reply('  ' + this.buildCommandSyntax(descriptor.command));
+                    ep.reply('    ' + descriptor.description);
+                    
+                    if (descriptor.details && descriptor.details.length) {
+                        ep.reply('');
+                        for (let line of descriptor.details) {
+                            ep.reply('    ' + line);
+                        }
+                    }
+                    
+                    if (descriptor.environments || descriptor.types || descriptor.permissions) {
+                        ep.reply('');  //Blank line
+                    }
+                    
+                    if (descriptor.environments) {
+                        ep.reply('    Environment(s): *' + descriptor.environments.join('*, *') + '*');
+                    }
+                    
+                    if (descriptor.types) {
+                        ep.reply('    Message type(s): *' + descriptor.types.join('*, *') + '*');
+                    }
+                    
+                    if (descriptor.permissions) {
+                        let permstring = '';
+                        if (descriptor.permissions.length == 0) {
+                            permstring = 'LOCKED';
+                        } else {
+                            if (descriptor.permissions.length > 1) {
+                                if (descriptor.requireAllPermissions) permstring = 'All of: ';
+                                else permstring = 'One of: ';
+                            }
+                            permstring = permstring + '*' + descriptor.permissions.join('*, *') + '*';
+                        }
+                        ep.reply('    Permissions required: ' + permstring);
+                    }
+                    
+                }
+                
+                if (subcommands.length) {
+                    ep.reply('');  //Blank line
+                    ep.reply('    __Subcommands:__');
+                    for (let subcommand of subcommands) {
+                        ep.reply('  ' + this.buildSubcommandLine(subcommand, args.command.length));
+                    }
                 }
             
             } else {
             
                 ep.priv('Available commands (use help COMMAND for more information):');
                 
+                let groups = {};  //Command has subcommands, display aggregate help line if it's virtual
+                let perfectmatch = {};  //Command is not virtual, so never display aggregate help line
+
                 let commands = this._commands.slice();
                 commands.sort((a, b) => a.command.localeCompare(b.command));
                 
                 for (let descriptor of commands) {
-
+                
                     if (descriptor.environments && descriptor.environments.indexOf(env.envName) < 0) {
                         continue;
                     }
@@ -129,7 +162,31 @@ class ModCommands extends Module {
                         }
                     }
                     
+                    if (descriptor.command.toLowerCase() != descriptor.commandroot) {
+                        if (perfectmatch[descriptor.commandroot]) continue;
+                        if (!groups[descriptor.commandroot]) {
+                            groups[descriptor.commandroot] = 1;
+                        } else {
+                            groups[descriptor.commandroot] += 1;
+                        }
+                        continue;
+                    } else {
+                        perfectmatch[descriptor.commandroot] = true;
+                        if (groups[descriptor.commandroot]) delete groups[descriptor.commandroot];
+                    }
+                    
                     ep.priv('    **' + descriptor.command + '** - ' + descriptor.description);
+                }
+                
+                for (let descriptor of commands) {
+                    if (descriptor.command.toLowerCase() == descriptor.commandroot) continue;
+                    if (!groups[descriptor.commandroot]) continue;
+                    let description = 'Contains ' + groups[descriptor.commandroot] + ' subcommand' + (groups[descriptor.commandroot] == 1 ? '' : 's') + '.';
+                    if (this._rootDetails[descriptor.commandroot] && this._rootDetails[descriptor.commandroot].description) {
+                        description = this._rootDetails[descriptor.commandroot].description;
+                    }
+                    ep.priv('    **' + descriptor.commandroot + '** - ' + description);
+                    delete groups[descriptor.commandroot];
                 }
             }
         
@@ -249,18 +306,32 @@ class ModCommands extends Module {
 
 
     registerCommand(mod, command, options, callback) {
-        if (arguments.length == 2) {
+        if (arguments.length == 3) {
             callback = options;
             options = {};
         }
         if (!options) options = {};
         if (!command || !callback) return false;
         
-        var commandid = command.toLowerCase();
+        let commandid = command.toLowerCase();
+        let commandroot = commandid;
+        let commandtail = null;
+        let parts = commandid.match(/^([^ ]+) (.+)/);
+        if (parts) {
+            commandroot = parts[1];
+            commandtail = parts[2];
+        }
         
-        var descriptor = {
+        if (commandid.split(" ").find((item) => item == "command")) {
+            this.log('error', 'Unable to register the command ID "' + commandid + '" because the token "command" is reserved and cannot be used here.');
+            return false;
+        }
+        
+        let descriptor = {
             modName: mod.modName,
             command: command,
+            commandroot: commandroot,
+            commandtail: commandtail,
             callback: {},                       //callback(env, type, userid, channelid, command, args, handle, ep)
                                                 //  -- userid is the environment-side id; args is a list; handle is from ModUsers; ep.reply/pub/priv are msg functions for context, public and private reply respectively.
             args: [],                           //List of argument names. If the last element of the list is the boolean 'true', all additional arguments will be listed in the previous argument.
@@ -288,14 +359,15 @@ class ModCommands extends Module {
             if (options.unobtrusive) descriptor.unobtrusive = options.unobtrusive;
         }
         
-        var exists = this.getCommand(commandid);
+        let existsroot = this.findFirstCommandByRoot(commandroot);
+        if (existsroot && existsroot.modName != mod.modName) {
+            this.log('warn', 'Unable to register the command ID "' + commandid + '" because the root "' + commandroot + '" was previously registered by |' + existsroot.modName + '|.');
+            return false;
+        }
+        
+        let exists = this.getCommand(commandid);
         if (exists) {
-            if (exists.modName != mod.modName) {
-                this.log('warn', 'Unable to register the command ID "' + commandid + '" because it was previously registered by |' + exists.modName + '|.');
-                return false;
-            } else {
-                exists.callback[mod.name] = callback;
-            }
+            exists.callback[mod.name] = callback;
         } else {
             this._commands.push(descriptor);
             this._index[commandid] = descriptor;
@@ -308,20 +380,64 @@ class ModCommands extends Module {
     }
     
     unregisterCommand(command) {
-        var commandid = command.toLowerCase();
-        if (!this.getCommand(commandid)) return false;
+        let descriptor = this.getCommand(command);
+        if (!descriptor) return false;
+    
+        let commandid = command.toLowerCase();
         
-        this._commands = this._commands.filter((descriptor) => (descriptor.command.toLowerCase() != commandid));
+        this._commands = this._commands.filter((item) => (item.command.toLowerCase() != commandid));
         if (this._index[commandid]) delete this._index[commandid];
         
         this.log('Unregistered command: ' + command);
         
         return true;
     }
+    
+    registerRootDetails(mod, commandroot, options) {
+        commandroot = commandroot.toLowerCase();
+        let rootdescriptor = {
+            modName: mod.modName,
+            commandroot: commandroot,
+            description: "",
+            details: []
+        };
+        
+        if (options) {
+            if (options.description) rootdescriptor.description = options.description;
+            if (options.details) rootdescriptor.details = options.details;
+        }
+        
+        this._rootDetails[commandroot] = rootdescriptor;
+        
+        this.log('Registered details for root: ' + commandroot);
+        return true;
+    }
+    
+    unregisterRootDetails(commandroot) {
+        commandroot = commandroot.toLowerCase();
+        if (!this._rootDetails[commandroot]) return false;
+        delete this._rootDetails[commandroot];
+        this.log('Unregistered details for root: ' + commandroot);
+        return true;
+    }
 
     getCommand(command) {
         if (!command) return null;
         return this._index[command.toLowerCase()];
+    }
+    
+    findFirstCommandByRoot(commandroot) {
+        if (!commandroot) return null;
+        return this._commands.find((item) => item.commandroot == commandroot);
+    }
+    
+    findSubcommands(commandpath) {
+        if (!commandpath) return null;
+        commandpath = commandpath.toLowerCase();
+        let cplength = commandpath.split(" ").length;
+        return this._commands.filter(
+            (item) => item.command.toLowerCase().split(" ").slice(0, cplength).join(" ") == commandpath && item.command.toLowerCase() != commandpath
+        );
     }
 
 
@@ -334,12 +450,33 @@ class ModCommands extends Module {
         if (prefixes[env.name]) prefix = prefixes[env.name];
         if (!message.startsWith(prefix)) return;
         
-        var parts = message.substr(prefix.length);
-        parts = parts.trim().split(/ +/);
-        var command = parts[0].toLowerCase();
-        var args = parts.slice(1);
+        //Identify command being used
+        
+        var command = null;
+        var cmdwords = 0;
+        
+        var cmdline = message.substr(prefix.length);
+        for (let commandid in this._index) {
+            if (cmdline.toLowerCase().indexOf(commandid) !== 0) continue;
+            if (cmdline.length !== commandid.length && cmdline.substr(commandid.length, 1) != ' ') continue;
+            let thesewords = commandid.split(' ').length;
+            if (thesewords > cmdwords) {
+                command = commandid;
+                cmdwords = thesewords;
+            }
+        }
+        
+        if (!command) {
+            //Not a known comand; Try to find subcommands
+            let subcommands = this.findSubcommands(cmdline);
+            for (let subcommand of subcommands) {
+                env.msg(channelid, env.applyFormatting(this.buildSubcommandLine(subcommand, 0)));
+            }
+            
+            return;
+        }
 
-        if (!this._index[command]) return;
+        var args = cmdline.trim().split(/ +/).slice(cmdwords);        
         var descriptor = this._index[command];
         
         //Validate context against command descriptor
@@ -362,7 +499,6 @@ class ModCommands extends Module {
             }
         }
         
-        
         var targetmod = null;
         if (args[0] && args[0].match(/^\|.+\|$/)) {
             targetmod = args[0].substr(1, args[0].length - 2);
@@ -379,7 +515,7 @@ class ModCommands extends Module {
             if (descriptor.unobtrusive) {
                 env.notice(authorid, env.applyFormatting(baseerror + '; Please choose one of: ' + knownmods.join(', ')));
             } else {
-                env.msg(authorid, env.applyFormatting(baseerror + '; Please choose one of: ' + knownmods.join(', ')));
+                env.msg(channelid, env.applyFormatting(baseerror + '; Please choose one of: ' + knownmods.join(', ')));
             }
             this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : '') + ': Unable to resolve target module.');
             return true;
@@ -397,6 +533,8 @@ class ModCommands extends Module {
             let m = args[i].match(/^"(.*)"$/);
             if (m) args[i] = m[1];
         }
+        
+        args = args.filter((arg) => !!arg);
 
         
         if (typeof descriptor.minArgs != "number") {
@@ -410,7 +548,7 @@ class ModCommands extends Module {
             if (descriptor.unobtrusive) {
                 env.notice(authorid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
             } else {
-                env.msg(authorid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
+                env.msg(channelid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
             }
             this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : '') + ': Incorrect syntax.');
             return true;
@@ -452,7 +590,7 @@ class ModCommands extends Module {
             if (descriptor.unobtrusive) {
                 env.notice(authorid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
             } else {
-                env.msg(authorid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
+                env.msg(channelid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
             }
         } else {
             this.eventLog(env, authorid, channelid, descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : ''));
@@ -498,8 +636,13 @@ class ModCommands extends Module {
         if (optionals) syntax += ']';
         return syntax;
     }
-
-
+    
+    
+    buildSubcommandLine(subcommand, prefixlength) {
+        let command = subcommand.command.split(" ").slice(prefixlength).join(" ");
+        return '    **' + command + '** - ' + subcommand.description;
+    }
+    
 }
 
 

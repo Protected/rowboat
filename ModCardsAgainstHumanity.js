@@ -73,8 +73,11 @@ class ModCardsAgainstHumanity extends Module {
 
         //Register callbacks
         
+        
+        
+        
         this.mod('Commands').registerCommand(this, 'cah', {
-            description: "Plays cards against humanity",
+            description: "Play Cards Against Humanity",
             args: [],
             minArgs: 0
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -102,7 +105,7 @@ class ModCardsAgainstHumanity extends Module {
         });
         
 
-        this.mod('Commands').registerCommand(this, 'cahjoin', {
+        this.mod('Commands').registerCommand(this, 'cah join', {
             description: "Join a match of cards against humanity",
             args: [],
             minArgs: 0
@@ -143,7 +146,7 @@ class ModCardsAgainstHumanity extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'cahvote', {
+        this.mod('Commands').registerCommand(this, 'cah vote', {
             description: "Vote during a match of cards against humanity",
             args: ['cardNumber'],
             minArgs: 0
@@ -190,7 +193,7 @@ class ModCardsAgainstHumanity extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'cahplay', {
+        this.mod('Commands').registerCommand(this, 'cah play', {
             description: "Play a card during a match of cards against humanity",
             args: ['cardNumber'],
             minArgs: 0

@@ -78,7 +78,7 @@ class ModFreeRoles extends Module {
         }
         
         
-        this.mod("Commands").registerCommand(this, 'roles', {
+        this.mod("Commands").registerCommand(this, 'role', {
             description: 'Show a list of free roles (that can be claimed by users).',
             environments: ['Discord']
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -99,7 +99,7 @@ class ModFreeRoles extends Module {
         
         
         if (this.param('allowBecome')) {
-            this.mod("Commands").registerCommand(this, 'become', {
+            this.mod("Commands").registerCommand(this, 'role become', {
                 description: 'Request assignment of an allowed role to myself.',
                 args: ['role'],
                 environments: ['Discord'],
@@ -138,7 +138,7 @@ class ModFreeRoles extends Module {
         
         
         if (this.param('allowReject')) {
-            this.mod("Commands").registerCommand(this, 'reject', {
+            this.mod("Commands").registerCommand(this, 'role reject', {
                 description: 'Request unassignment of an allowed role from myself.',
                 args: ['role'],
                 environments: ['Discord'],
@@ -215,7 +215,7 @@ class ModFreeRoles extends Module {
         });
         
         
-        this.mod("Commands").registerCommand(this, 'roleadd', {
+        this.mod("Commands").registerCommand(this, 'role add', {
             description: 'Adds an existing Discord role to the list of free roles.',
             args: ['role', 'description', true],
             environments: ['Discord'],
@@ -253,7 +253,7 @@ class ModFreeRoles extends Module {
         });
         
         
-        this.mod("Commands").registerCommand(this, 'roledel', {
+        this.mod("Commands").registerCommand(this, 'role del', {
             description: 'Removes an existing Discord role from the list of free roles.',
             args: ['role'],
             environments: ['Discord'],

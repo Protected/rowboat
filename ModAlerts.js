@@ -30,136 +30,7 @@ class ModAlerts extends Module {
         this._params['datafile'] = this.dataPath() + this._params['datafile'];
         this.loadData();
 
-        for (var envname in opt.envs) {
-            opt.envs[envname].on('messageSent', this.onMessageSent, this);
-        }
-
-        //Register callbacks
         
-        this.mod('Commands').registerCommand(this, 'alert', {
-            description: "Configures alerts.",
-            args: ["action", "pattern", "message", "ttl", true],
-            minArgs: 1
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
-
-            switch(args["action"]) {
-                case "list": doList(env, type, userid, channelid, command, args, handle, ep); break;
-                case "add": doAdd(env, type, userid, channelid, command, args, handle, ep); break;
-                case "del": doDel(env, type, userid, channelid, command, args, handle, ep); break;
-                default: {
-                    ep.reply("Invalid action.");
-                }
-            }
-
-
-            return true;
-        });
-
-        var doList = (env, type, userid, channelid, command, args, handle, ep) => {
-            let players, rules;
-            if (!this._data[env.name]) {
-                replyEmptyList(ep.reply);
-                return;
-            }
-            players = this._data[env.name];
-
-            if (!players[userid]) {
-                replyEmptyList(ep.reply);
-                return;
-            }
-            rules = players[userid];
-
-            if (Object.keys(rules).length == 0) {
-                replyEmptyList(ep.reply);
-                return;
-            }
-
-            if (rules.length) {
-                for (let pattern in rules) {
-                    if (rules.hasOwnProperty(pattern)) {
-                        ep.reply("`" + pattern + "` -> " + rules[pattern].message + (rules[pattern].ttl > 0 ? " (" + rules[pattern].ttl + ")" : ""));
-                    }
-                }
-            } else {
-                replyEmptyList(ep.reply);
-            }
-        }
-
-        var doAdd = (env, type, userid, channelid, command, args, handle, ep) => {
-            let players, rules, ttl;
-            if (!this._data[env.name]) {
-                this._data[env.name] = {};
-            }
-            players = this._data[env.name];
-
-            if (!players[userid]) {
-                players[userid] = {};
-            }
-
-            rules = players[userid];
-
-            if (Array.isArray(args["message"])) {
-                args["message"] = args["message"].join(" ");
-            }
-
-            if (!args["pattern"]) {
-                ep.reply("The pattern can't be empty.");
-                return;
-            }
-
-            if (!args["message"]) {
-                ep.reply("The message can't be empty.");
-                return;
-            }
-
-            try { new RegExp(args["pattern"]); } catch (e) {
-                ep.reply("That pattern is not valid regex.");
-                return;
-            }
-
-            if (!isNaN(parseInt(args["ttl"]))) {
-                ttl = parseInt(args["ttl"]);
-            } else {
-                ttl = -1;
-            }
-
-            rules[args["pattern"]] = {
-                message: args["message"],
-                ttl: ttl
-            };
-
-            this.saveData();
-
-            ep.reply('Saved pattern `' + args["pattern"] + '` with message "' + args["message"] + '"');
-        }
-
-        var doDel = (env, type, userid, channelid, command, args, handle, ep) => {
-            let players, rules;
-            if (!this._data[env.name]) {
-                replyPatternNotFound(ep.reply);
-                return;
-            }
-            players = this._data[env.name];
-
-            if (!players[userid]) {
-                replyPatternNotFound(ep.reply);
-                return;
-            }
-            rules = players[userid];
-
-            if (!rules[args["pattern"]]) {
-                replyPatternNotFound(ep.reply);
-                return;
-            }
-
-            delete rules[args["pattern"]];
-
-            this.saveData();
-
-            ep.reply('Deleted pattern `' + args["pattern"] + '`');
-        }
-
-
         var replyEmptyList = (reply) => {
             reply("You have no alerts.");
         }
@@ -167,6 +38,119 @@ class ModAlerts extends Module {
         var replyPatternNotFound = (reply) => {
             reply("You don't have that pattern.");
         }
+
+
+        //Register callbacks
+        
+        for (var envname in opt.envs) {
+            opt.envs[envname].on('messageSent', this.onMessageSent, this);
+        }
+        
+        
+        this.mod('Commands').registerRootDetails(this, 'alert', {description: "View and manipulate bot activity alerts."});
+        
+        
+        this.mod('Commands').registerCommand(this, 'alert list', {
+            description: "Lists existing bot activity alerts."
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!this._data[env.name]) {
+                replyEmptyList(ep.reply);
+                return true;
+            }
+            
+            let userblocks = this._data[env.name];
+            if (!userblocks[userid]) {
+                replyEmptyList(ep.reply);
+                return true;
+            }
+            
+            let rules = userblocks[userid];
+            if (Object.keys(rules).length == 0) {
+                replyEmptyList(ep.reply);
+                return true;
+            }
+
+            for (let pattern in rules) {
+                if (!rules.hasOwnProperty(pattern)) continue;
+                ep.reply("`" + pattern + "` -> " + rules[pattern].message + (rules[pattern].ttl > 0 ? " (" + rules[pattern].ttl + ")" : ""));
+            }
+
+            return true;
+        });
+        
+        
+        this.mod('Commands').registerCommand(this, 'alert add', {
+            description: "Create a new bot activity alert.",
+            args: ["pattern", "message", "ttl"],
+            minArgs: 2
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!this._data[env.name]) {
+                this._data[env.name] = {};
+            }
+            
+            let userblocks = this._data[env.name];
+            if (!userblocks[userid]) {
+                userblocks[userid] = {};
+            }
+
+            let rules = userblocks[userid];
+
+            try { new RegExp(args.pattern); } catch (e) {
+                ep.reply("This pattern is not valid regex.");
+                return true;
+            }
+
+            let ttl = null;
+            if (!isNaN(parseInt(args.ttl))) {
+                ttl = parseInt(args.ttl);
+            } else {
+                ttl = -1;
+            }
+
+            rules[args.pattern] = {
+                message: args.message,
+                ttl: ttl
+            };
+
+            this.saveData();
+            ep.reply('Saved pattern `' + args.pattern + '` with message "' + args.message + '"');
+
+            return true;
+        });
+        
+        
+        this.mod('Commands').registerCommand(this, 'alert del', {
+            description: "Remove an existing bot activity alert.",
+            args: ["pattern"]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!this._data[env.name]) {
+                replyPatternNotFound(ep.reply);
+                return true;
+            }
+            
+            let userblocks = this._data[env.name];
+            if (!userblocks[userid]) {
+                replyPatternNotFound(ep.reply);
+                return true;
+            }
+            
+            let rules = userblocks[userid];
+            if (!rules[args.pattern]) {
+                replyPatternNotFound(ep.reply);
+                return true;
+            }
+
+            delete rules[args.pattern];
+
+            this.saveData();
+            ep.reply('Deleted pattern `' + args.pattern + '`');
+
+            return true;
+        });
+        
 
         return true;
     };

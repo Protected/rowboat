@@ -39,7 +39,12 @@ class ModUsers extends Module {
         opt.moduleRequest('Commands', (commands) => {
         
         
-            commands.registerCommand(this, 'useradd', {
+            commands.registerRootDetails(this, 'user', {description: "View and manipulate user accounts."});
+            commands.registerRootDetails(this, 'id', {description: "Manipulate identification patterns associated with user accounts."});
+            commands.registerRootDetails(this, 'perm', {description: "View and manipulate permissions associated with user accounts."});
+        
+        
+            commands.registerCommand(this, 'user add', {
                 args: ["handle"],
                 description: "Create a new empty user account with the given handle.",
                 permissions: [PERM_ADMIN]
@@ -55,7 +60,7 @@ class ModUsers extends Module {
             });
             
             
-            commands.registerCommand(this, 'userdel', {
+            commands.registerCommand(this, 'user del', {
                 args: ["handle"],
                 description: "Delete an existing user account identified by the given handle.",
                 permissions: [PERM_ADMIN]
@@ -71,7 +76,7 @@ class ModUsers extends Module {
             });
             
             
-            commands.registerCommand(this, 'userrename', {
+            commands.registerCommand(this, 'user rename', {
                 args: ["fromhandle", "tohandle"],
                 description: "Rename an existing account.",
                 permissions: [PERM_ADMIN]
@@ -87,7 +92,7 @@ class ModUsers extends Module {
             });
 
 
-            commands.registerCommand(this, 'idadd', {
+            commands.registerCommand(this, 'id add', {
                 args: ["handle", "environment", "idpattern"],
                 description: "Add an ID pattern (regex) to authenticate the user account identified by the handle in the specified environment.",
                 permissions: [PERM_ADMIN]
@@ -109,7 +114,7 @@ class ModUsers extends Module {
             });
             
             
-            commands.registerCommand(this, 'iddel', {
+            commands.registerCommand(this, 'id del', {
                 args: ["handle", "environment", "idpattern"],
                 description: "Remove an existing ID pattern from a user such that it will no longer authenticate the user account identified by the handle.",
                 permissions: [PERM_ADMIN]
@@ -127,7 +132,7 @@ class ModUsers extends Module {
             });
             
             
-            commands.registerCommand(this, 'permadd', {
+            commands.registerCommand(this, 'perm add', {
                 args: ["handle", "permissions", true],
                 minArgs: 2,
                 description: "Add one or more permissions to the user account identified by the handle.",
@@ -144,7 +149,7 @@ class ModUsers extends Module {
             });
             
             
-            commands.registerCommand(this, 'permdel', {
+            commands.registerCommand(this, 'perm del', {
                 args: ["handle", "permissions", true],
                 minArgs: 2,
                 description: "Remove one or more permissions from the user account identified by the handle.",
@@ -161,7 +166,7 @@ class ModUsers extends Module {
             });
             
             
-            commands.registerCommand(this, 'userfind', {
+            commands.registerCommand(this, 'user find', {
                 args: ["environment", "id"],
                 description: "List the handles of the user accounts that match the given id and environment.",
                 permissions: [PERM_ADMIN, PERM_MOD]
@@ -184,7 +189,7 @@ class ModUsers extends Module {
             });
             
             
-            commands.registerCommand(this, 'userlist', {
+            commands.registerCommand(this, 'user list', {
                 args: ["perms", true],
                 minArgs: 0,
                 description: "Lists the handles of the user accounts that have the given permissions.",

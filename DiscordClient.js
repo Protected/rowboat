@@ -4,6 +4,18 @@ var discord = require('discord.js');
 var moment = require('moment');
 var ModernEventEmitter = require('./ModernEventEmitter.js');
 
+const BRIDGE_EVENTS = [
+    "message",
+    "messageUpdate",
+    "guildMemberAdd",
+    "guildMemberRemove",
+    "guildMemberUpdate",
+    "presenceUpdate",
+    "presenceUpdate",
+    "roleDelete",
+    "voiceStateUpdate", 
+    "messageReactionAdd"
+];
 
 class DiscordClient extends ModernEventEmitter {
 
@@ -47,47 +59,12 @@ class DiscordClient extends ModernEventEmitter {
             }
         });
         
-
-        this._realClient.on("message", (message) => {
-            this.emit("message", message);
-        });
-        
-        this._realClient.on("messageUpdate", (oldMessage, newMessage) => {
-            this.emit("messageUpdate", oldMessage, newMessage);
-        });
-        
-        this._realClient.on("guildMemberAdd", (member) => {
-            this.emit("guildMemberAdd", member);
-        });
-        
-        this._realClient.on("guildMemberRemove", (member) => {
-            this.emit("guildMemberRemove", member);
-        });
-        
-        this._realClient.on("guildMemberUpdate", (oldMember, newMember) => {
-            this.emit("guildMemberUpdate", oldMember, newMember);
-        });
-        
-        this._realClient.on("presenceUpdate", (oldUser, newUser) => {
-            this.emit("presenceUpdate", oldUser, newUser);
-        });
-        
-        this._realClient.on("roleUpdate", (oldRole, newRole) => {
-            this.emit("presenceUpdate", oldRole, newRole);
-        });
-        
-        this._realClient.on("roleDelete", (role) => {
-            this.emit("roleDelete", role);
-        });
-        
-        this._realClient.on("voiceStateUpdate", (oldMember, newMember) => {
-            this.emit("voiceStateUpdate", oldMember, newMember);
-        });
-        
-        this._realClient.on("messageReactionAdd", (messageReaction, user) => {
-            this.emit("messageReactionAdd", messageReaction, user);
-        });
-        
+        for (let event of BRIDGE_EVENTS) {
+            this._realClient.on(event, (...args) => {
+                args.unshift(event);
+                this.emit.apply(this, args);
+            });
+        }
         
         let self = this;
         return this._realClient.login(this._token)
