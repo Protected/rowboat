@@ -1,4 +1,4 @@
-/* Module: Random -- Adds a command, "random", which outputs a random number. */
+/* Module: Random -- Adds randomizer, shuffle and dice roll commands. */
 
 var Module = require('./Module.js');
 var random = require('meteor-random');
