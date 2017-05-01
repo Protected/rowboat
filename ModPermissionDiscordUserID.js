@@ -1,8 +1,8 @@
-/* Module: RolePermission -- This module is a permissions provider that turns Discord roles into ModUsers permissions. */
+/* Module: PermissionDiscordUserID -- This module is a permissions provider that turns Discord user IDs into ModUsers permissions. */
 
 var Module = require('./Module.js');
 
-class ModRolePermission extends Module {
+class ModPermissionDiscordUserID extends Module {
 
     get requiredEnvironments() { return [
         'Discord'
@@ -13,7 +13,7 @@ class ModRolePermission extends Module {
     ]; }
 
     constructor(name) {
-        super('RolePermission', name);
+        super('PermissionDiscordUserID', name);
     }
     
     
@@ -23,18 +23,14 @@ class ModRolePermission extends Module {
         
         //Register callbacks
         
-        this.mod('Users').registerPermissionProvider((passedname, userid, permissions) => {
+        this.mod('Users').registerPermissionProvider((passedname, userid, channelid, permissions) => {
             var env = opt.envs[passedname];
             if (env.envName != 'Discord') return [];
         
-            var member = env.server.members.get(userid);
-            if (!member) return [];
-            
             var result = [];
         
             for (let permission of permissions) {
-                let role = member.roles.find('name', permission);
-                if (role) result.push(permission);
+                if (permission == userid) result.push(permission);
             }
         
             return result;
@@ -48,4 +44,4 @@ class ModRolePermission extends Module {
 }
 
 
-module.exports = ModRolePermission;
+module.exports = ModPermissionDiscordUserID;

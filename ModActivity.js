@@ -10,8 +10,6 @@ class ModActivity extends Module {
 
     get optionalParams() { return [
         'datafile',
-        'permissionSeen',       //Permission required for !seen
-        'permissionLast',       //Permission required for !last
         'linesPerUser'          //Amount of lines per user to keep (for !last)
     ]; }
     
@@ -65,8 +63,7 @@ class ModActivity extends Module {
             description: "Reports when a user was last seen (or if the user was never seen).",
             args: ["nickname", "environment"],
             details: ["Prefix NICKNAME with = to reference a Rowboat user account instead."],
-            minArgs: 1,
-            permissions: (this.param('permissionSeen') ? [this.param('permissionSeen')] : null)
+            minArgs: 1
         }, (env, type, userid, channelid, command, args, handle, ep) => {
             
             var envobj = null;
@@ -124,8 +121,7 @@ class ModActivity extends Module {
             description: "Repeats a user's latest chat lines in record.",
             args: ["nickname", "environment"],
             details: ["Prefix NICKNAME with = to reference a Rowboat user account instead."],
-            minArgs: 1,
-            permissions: (this.param('permissionLast') ? [this.param('permissionLast')] : null)
+            minArgs: 1
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var envobj = null;
@@ -178,7 +174,6 @@ class ModActivity extends Module {
         this.mod("Commands").registerCommand(this, 'roleseen', {
             description: "Short activity report for a role.",
             args: ["role"],
-            permissions: (this.param('permissionSeen') ? [this.param('permissionSeen')] : null),
             environments: ["Discord"]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
             

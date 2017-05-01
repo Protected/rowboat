@@ -15,9 +15,7 @@ class ModFreeRoles extends Module {
     ]; }
 
     get optionalParams() { return [
-        'datafile',
-        'allowBecome',          //Enable/permission for !become
-        'allowReject'           //Enable/permission for !reject
+        'datafile'
     ]; }
     
     get requiredEnvironments() { return [
@@ -32,10 +30,6 @@ class ModFreeRoles extends Module {
         super('FreeRoles', name);
         
         this._params['datafile'] = 'freeroles.data.json';
-        
-        //Use a string to require a permission
-        this._params['allowBecome'] = false;
-        this._params['allowReject'] = true;
         
         //{ENVNAME: {LCROLE: {name: ROLE, desc: DESCRIPTION}, ...}, ...}
         this._freeRoles = {};
@@ -105,82 +99,76 @@ class ModFreeRoles extends Module {
         });
         
         
-        if (this.param('allowBecome')) {
-            this.mod("Commands").registerCommand(this, 'role become', {
-                description: 'Request assignment of an allowed role to myself.',
-                args: ['role'],
-                environments: ['Discord'],
-                permissions: (typeof this.param('allowBecome') == "string" ? [this.param('allowBecome')] : null)
-            }, (env, type, userid, channelid, command, args, handle, ep) => {
-            
-                var lcrole = args.role.toLowerCase();
-            
-                var roles = this._freeRoles[env.name];
-                if (!roles || !roles[lcrole]) {
-                    ep.reply('Role not allowed. Please use the "roles" command for a list of allowed roles.');
-                    return true;
-                }
-                
-                var roleobj = env.server.roles.find('name', roles[lcrole].name);
-                if (!roleobj) {
-                    ep.reply("The role \"" + roles[lcrole].name + "\" doesn't currently exist in this environment.");
-                    return true;
-                }
-                
-                var member = env.server.member(userid);
-                if (member.roles.find('name', roles[lcrole].name)) {
-                    ep.reply('You already have the role "' + roles[lcrole].name + '".');
-                    return true;
-                }
-                
-                member.addRole(roleobj).then(() => {
-                    ep.reply("Role \"" + roleobj.name + "\" successfully assigned!");
-                }).catch((err) => {
-                    ep.reply(err);
-                });
-            
+        this.mod("Commands").registerCommand(this, 'role become', {
+            description: 'Request assignment of an allowed role to myself.',
+            args: ['role'],
+            environments: ['Discord']
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            var lcrole = args.role.toLowerCase();
+        
+            var roles = this._freeRoles[env.name];
+            if (!roles || !roles[lcrole]) {
+                ep.reply('Role not allowed. Please use the "roles" command for a list of allowed roles.');
                 return true;
+            }
+            
+            var roleobj = env.server.roles.find('name', roles[lcrole].name);
+            if (!roleobj) {
+                ep.reply("The role \"" + roles[lcrole].name + "\" doesn't currently exist in this environment.");
+                return true;
+            }
+            
+            var member = env.server.member(userid);
+            if (member.roles.find('name', roles[lcrole].name)) {
+                ep.reply('You already have the role "' + roles[lcrole].name + '".');
+                return true;
+            }
+            
+            member.addRole(roleobj).then(() => {
+                ep.reply("Role \"" + roleobj.name + "\" successfully assigned!");
+            }).catch((err) => {
+                ep.reply(err);
             });
-        }
+        
+            return true;
+        });
         
         
-        if (this.param('allowReject')) {
-            this.mod("Commands").registerCommand(this, 'role reject', {
-                description: 'Request unassignment of an allowed role from myself.',
-                args: ['role'],
-                environments: ['Discord'],
-                permissions: (typeof this.param('allowReject') == "string" ? [this.param('allowReject')] : null)
-            }, (env, type, userid, channelid, command, args, handle, ep) => {
-            
-                var lcrole = args.role.toLowerCase();
-            
-                var roles = this._freeRoles[env.name];
-                if (!roles || !roles[lcrole]) {
-                    ep.reply('Role not allowed. Please use the "roles" command for a list of allowed roles.');
-                    return true;
-                }
-                
-                var roleobj = env.server.roles.find('name', roles[lcrole].name);
-                if (!roleobj) {
-                    ep.reply("The role \"" + roles[lcrole].name + "\" doesn't currently exist in this environment.");
-                    return true;
-                }
-                
-                var member = env.server.member(userid);
-                if (!member.roles.find('name', roles[lcrole].name)) {
-                    ep.reply("You don't have the role \"" + roles[lcrole].name + "\".");
-                    return true;
-                }
-                
-                member.removeRole(roleobj).then(() => {
-                    ep.reply("Role \"" + roleobj.name + "\" successfully unassigned!");
-                }).catch((err) => {
-                    ep.reply(err);
-                });
-            
+        this.mod("Commands").registerCommand(this, 'role reject', {
+            description: 'Request unassignment of an allowed role from myself.',
+            args: ['role'],
+            environments: ['Discord']
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            var lcrole = args.role.toLowerCase();
+        
+            var roles = this._freeRoles[env.name];
+            if (!roles || !roles[lcrole]) {
+                ep.reply('Role not allowed. Please use the "roles" command for a list of allowed roles.');
                 return true;
+            }
+            
+            var roleobj = env.server.roles.find('name', roles[lcrole].name);
+            if (!roleobj) {
+                ep.reply("The role \"" + roles[lcrole].name + "\" doesn't currently exist in this environment.");
+                return true;
+            }
+            
+            var member = env.server.member(userid);
+            if (!member.roles.find('name', roles[lcrole].name)) {
+                ep.reply("You don't have the role \"" + roles[lcrole].name + "\".");
+                return true;
+            }
+            
+            member.removeRole(roleobj).then(() => {
+                ep.reply("Role \"" + roleobj.name + "\" successfully unassigned!");
+            }).catch((err) => {
+                ep.reply(err);
             });
-        }
+        
+            return true;
+        });
         
         
         this.mod("Commands").registerCommand(this, 'members', {

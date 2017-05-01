@@ -12,11 +12,11 @@ class ModMemo extends Module {
 
     get optionalParams() { return [
         'datafile',
-        'permission',           //Permission required for !memo
         'outboxSize',           //Maximum undelivered memos
         'inboxDisplaySize',     //Maximum recent memos to display
         'inboxTsCutoff',        //How recent memos must be to be in the inbox (seconds)
-        'tsFormat'              //How to format timestamps (moment.js)
+        'tsFormat',             //How to format timestamps (moment.js)
+        'permissionAdmin'       //Override admin permission
     ]; }
     
     get requiredModules() { return [
@@ -32,6 +32,7 @@ class ModMemo extends Module {
         this._params['inboxDisplaySize'] = 10;
         this._params['inboxTsCutoff'] = 2592000;  //30 days
         this._params['tsFormat'] = "ddd MMM D HH:mm:ss";
+        this._params['permissionAdmin'] = PERM_ADMIN;
         
         //Main: Map of #: {id: #, ts, from: {env, handle, display, userid}, to: [{env, handle, display, userid, auth}, ...], strong: true/false, msg: "text"}
         this._memo = {};
@@ -77,7 +78,6 @@ class ModMemo extends Module {
                 "  Use =HANDLE as the recipient to target a Rowboat user account.",
                 "  If you prefix the parameters with <delay> the message can only be delivered after a delay. Specify the delay as [[hh:]mm:]ss or using #[dhms] where # is a number."
             ],
-            permissions: (this.param('permission') ? [this.param('permission')] : null),
             unobtrusive: true
         };
         
@@ -164,7 +164,7 @@ class ModMemo extends Module {
             if (!register
                     || (register.from.env != env.name || register.from.userid != userid)
                         && (!register.from.handle || register.from.handle != handle)
-                        && !this.mod("Users").testPermissions(env.name, userid, [PERM_ADMIN], false, handle)) {
+                        && !this.mod("Users").testPermissions(env.name, userid, channelid, [this.param('permissionAdmin')], false, handle)) {
                 ep.priv("You do not have a message with the ID " + id);
                 return true;
             }
@@ -206,7 +206,7 @@ class ModMemo extends Module {
                 let target_userid = userid;
                 let target_handle = handle;
                 
-                if (this.mod("Users").testPermissions(env.name, userid, [PERM_ADMIN], false, handle) && args.id.length > 1) {
+                if (this.mod("Users").testPermissions(env.name, userid, channelid, [this.param('permissionAdmin')], false, handle) && args.id.length > 1) {
                     target_userid = args.id[1];
                     target_envname = args.id[2] || env.name;
                     target_handle = args.id[3];
@@ -227,7 +227,7 @@ class ModMemo extends Module {
                 if (!register
                         || (register.from.env != env.name || register.from.userid != userid)
                             && (!register.from.handle || register.from.handle != handle)
-                            && !this.mod("Users").testPermissions(env.name, userid, [PERM_ADMIN], false, handle)) {
+                            && !this.mod("Users").testPermissions(env.name, userid, channelid, [this.param('permissionAdmin')], false, handle)) {
                     ep.priv("You have not sent a message with the ID " + id);
                     return true;
                 }

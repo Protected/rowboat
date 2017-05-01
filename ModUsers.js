@@ -529,7 +529,8 @@ class ModUsers extends Module {
 
 
     //Programmatic permission providers (not persisted)
-    //callback(env, userid, permissions) -- Return a subset of permissions that the user has (empty for none).
+    //callback(env, userid, channelid, permissions) -- Return a subset of permissions that the user has (empty for none).
+    //  channelid is optional.
 
     registerPermissionProvider(func, self) {
         this.log('Registering permissions provider. Context: ' + self.constructor.name);
@@ -541,7 +542,7 @@ class ModUsers extends Module {
     }
 
 
-    testPermissions(env, userid, permissions, requireall, handle) {
+    testPermissions(env, userid, channelid, permissions, requireall, handle) {  //channelid is optional
 
         var removeduplicates = {};
         for (let perm of permissions) {
@@ -555,9 +556,9 @@ class ModUsers extends Module {
         for (let provider of this._permissionProviders) {
             let subset = [];
             if (typeof provider == "function") {
-                subset = provider.apply(this, [env, userid, permissions]);
+                subset = provider.apply(this, [env, userid, channelid, permissions]);
             } else {
-                subset = provider[0].apply(provider[1], [env, userid, permissions]);
+                subset = provider[0].apply(provider[1], [env, userid, channelid, permissions]);
             }
             for (let perm of subset) {
                 ascertained[perm] = true;

@@ -5,7 +5,7 @@
 var Module = require('./Module.js');
 var moment = require('moment');
 
-var PERM_ADMIN = 'administrator';
+const PERM_ADMIN = 'administrator';
 
 class ModCommands extends Module {
 
@@ -13,7 +13,8 @@ class ModCommands extends Module {
     get optionalParams() { return [
         'defaultprefix',        //Default prefix for commands
         'allowedenvs',          //List of environments to activate this module on
-        'prefixes'              //Per-environment, per-source command prefixes
+        'prefixes',             //Per-environment command prefixes
+        'permissions'           //Map of permissions to override hardcoded Module defaults for each command
     ]; }
     
     get isRootAccess() { return true; }
@@ -28,6 +29,9 @@ class ModCommands extends Module {
         this._params['defaultprefix'] = '!';
         this._params['allowedenvs'] = null;  //All of them
         this._params['prefixes'] = {};
+        
+        //{command => [permission, ...], ...} Also supports: true (always allow) and false (disable command)
+        this._params['permissions'] = {};
     
         this._commands = [];
         this._index = {};
@@ -132,6 +136,21 @@ class ModCommands extends Module {
                     ep.reply('');  //Blank line
                     ep.reply('    __Subcommands:__');
                     for (let subcommand of subcommands) {
+                        
+                        if (subcommand.environments && subcommand.environments.indexOf(env.envName) < 0) {
+                            continue;
+                        }
+                        
+                        if (subcommand.types && subcommand.types.indexOf(type) < 0) {
+                            continue;
+                        }
+                        
+                        if (subcommand.permissions) {
+                            if (!this.mod('Users').testPermissions(env.name, userid, channelid, subcommand.permissions, subcommand.requireAllPermissions)) {
+                                continue;
+                            }
+                        }
+                    
                         ep.reply('  ' + this.buildSubcommandLine(subcommand, args.command.length));
                     }
                 }
@@ -157,7 +176,7 @@ class ModCommands extends Module {
                     }
                     
                     if (descriptor.permissions) {
-                        if (!this.mod('Users').testPermissions(env.name, userid, descriptor.permissions, descriptor.requireAllPermissions)) {
+                        if (!this.mod('Users').testPermissions(env.name, userid, channelid, descriptor.permissions, descriptor.requireAllPermissions)) {
                             continue;
                         }
                     }
@@ -359,6 +378,21 @@ class ModCommands extends Module {
             if (options.unobtrusive) descriptor.unobtrusive = options.unobtrusive;
         }
         
+        let po = this.param('permissions')[commandid];
+        if (po === true) {
+            this.log('Permission override for the command ID "' + commandid + '": Always allow');
+            descriptor.permissions = null;
+        }
+        if (po === false) {
+            this.log('Permission override for the command ID "' + commandid + '": Disable command');
+            return true;
+        }
+        if (Array.isArray(po)) {
+            this.log('Permission override for the command ID "' + commandid + '": ' + po.join(", "));
+            descriptor.permissions = po;
+            descriptor.requireAllPermissions = false;
+        }
+        
         let existsroot = this.findFirstCommandByRoot(commandroot);
         if (existsroot && existsroot.modName != mod.modName) {
             this.log('warn', 'Unable to register the command ID "' + commandid + '" because the root "' + commandroot + '" was previously registered by |' + existsroot.modName + '|.');
@@ -470,6 +504,21 @@ class ModCommands extends Module {
             //Not a known comand; Try to find subcommands
             let subcommands = this.findSubcommands(cmdline);
             for (let subcommand of subcommands) {
+            
+                if (subcommand.environments && subcommand.environments.indexOf(env.envName) < 0) {
+                    continue;
+                }
+                
+                if (subcommand.types && subcommand.types.indexOf(type) < 0) {
+                    continue;
+                }
+                
+                if (subcommand.permissions) {
+                    if (!this.mod('Users').testPermissions(env.name, authorid, channelid, subcommand.permissions, subcommand.requireAllPermissions)) {
+                        continue;
+                    }
+                }
+            
                 env.msg(channelid, env.applyFormatting(this.buildSubcommandLine(subcommand, 0)));
             }
             
@@ -493,7 +542,7 @@ class ModCommands extends Module {
         var handle = (handles.length ? handles[0] : null);
         
         if (descriptor.permissions) {
-            if (!this.mod('Users').testPermissions(env.name, authorid, descriptor.permissions, descriptor.requireAllPermissions, handle)) {
+            if (!this.mod('Users').testPermissions(env.name, authorid, channelid, descriptor.permissions, descriptor.requireAllPermissions, handle)) {
                 this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + ': Failed permission check.');
                 return true;
             }

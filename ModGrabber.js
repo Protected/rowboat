@@ -10,13 +10,12 @@ var moment = require('moment');
 var random = require('meteor-random');
 var request = require('request');
 
-var PERM_ADMIN = 'administrator';
-var PERM_MODERATOR = 'moderator';
-var PERM_TRUSTED = 'trusted';
-var INDEXFILE = 'index.json';
+const PERM_ADMIN = 'administrator';
+const PERM_MODERATOR = 'moderator';
+const INDEXFILE = 'index.json';
 
-var GET_FIELDS = ['name', 'author', 'length', 'source', 'sourceSpecificId', 'sharedBy'];
-var SET_FIELDS = ['name', 'author'];
+const GET_FIELDS = ['name', 'author', 'length', 'source', 'sourceSpecificId', 'sharedBy'];
+const SET_FIELDS = ['name', 'author'];
 
 
 class ModGrabber extends Module {
@@ -290,7 +289,7 @@ class ModGrabber extends Module {
                 "Allowed fields: " + SET_FIELDS.join(', ')
             ],
             args: ['hashoroffset', 'field', 'value', true],
-            permissions: [PERM_ADMIN, PERM_MODERATOR, PERM_TRUSTED]
+            permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var hash = this.parseHashArg(args.hashoroffset);
@@ -364,7 +363,7 @@ class ModGrabber extends Module {
         this.mod('Commands').registerCommand(this, 'song kw', {
             description: 'List keywords associated with an indexed song.',
             args: ['hashoroffset'],
-            permissions: [PERM_ADMIN, PERM_MODERATOR, PERM_TRUSTED]
+            permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var hash = this.parseHashArg(args.hashoroffset);
@@ -393,7 +392,7 @@ class ModGrabber extends Module {
         this.mod('Commands').registerCommand(this, 'song kw add', {
             description: 'Associate a new keyword with an indexed song.',
             args: ['hashoroffset', 'keyword'],
-            permissions: [PERM_ADMIN, PERM_MODERATOR, PERM_TRUSTED]
+            permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var hash = this.parseHashArg(args.hashoroffset);
@@ -432,7 +431,7 @@ class ModGrabber extends Module {
         this.mod('Commands').registerCommand(this, 'song kw remove', {
             description: 'Remove a keyword from an indexed song.',
             args: ['hashoroffset', 'keyword'],
-            permissions: [PERM_ADMIN, PERM_MODERATOR, PERM_TRUSTED]
+            permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var hash = this.parseHashArg(args.hashoroffset);

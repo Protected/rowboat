@@ -6,6 +6,9 @@ var moment = require('moment');
 var fs = require('fs');
 var cp = require('child_process');
 
+const PERM_ADMIN = 'administrator';
+const PERM_MODERATOR = 'moderator';
+
 class ModLogger extends Module {
 
     
@@ -74,7 +77,7 @@ class ModLogger extends Module {
             description: "Search the event logs.",
             args: ["pattern", "results", "filepattern"],
             minArgs: 1,
-            permissions: ["administrator", "moderator", "trusted"]
+            permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var filepattern = null;
