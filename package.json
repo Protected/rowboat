@@ -35,6 +35,7 @@
     "request": "^2.79.0",
     "tmi.js": "^1.1.2",
     "winston": "^2.3.0",
+    "wolfram-alpha": "^0.6.0",
     "ytdl-core": "^0.7.20"
   }
 }
