@@ -402,7 +402,7 @@ class EnvDiscord extends Environment {
         var allchannels = member.guild.channels.array();
         for (let channel of allchannels) {
             let pfm = channel.permissionsFor(member);
-            if (!pfm) continue;
+            if (!pfm || !pfm.hasPermission) continue;
             if (pfm.hasPermission("READ_MESSAGES")) {
                 channels.push(channel);
             }
