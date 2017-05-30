@@ -72,8 +72,8 @@ I recommend running inside a screen when not debugging:
 
 Since this is a work in progress, if you encounter a bug you may want to try updating using
 
-   git pull
+    git pull
    
-   npm update
+    npm update
    
 Do not do this with the bot running. Also, we'll be thankful for all legitimate bug reports.
