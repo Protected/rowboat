@@ -324,6 +324,7 @@ class ModCommands extends Module {
     // # Module code below this line #
 
 
+    //Register a command that can be invoked by users.
     registerCommand(mod, command, options, callback) {
         if (arguments.length == 3) {
             callback = options;
@@ -393,10 +394,18 @@ class ModCommands extends Module {
             descriptor.requireAllPermissions = false;
         }
         
-        let existsroot = this.findFirstCommandByRoot(commandroot);
-        if (existsroot && existsroot.modName != mod.modName) {
-            this.log('warn', 'Unable to register the command ID "' + commandid + '" because the root "' + commandroot + '" was previously registered by |' + existsroot.modName + '|.');
-            return false;
+        let deets = this._rootDetails[commandroot];
+        if (deets) {
+            if (deets.modName != mod.modName && !deets.extensions[mod.modName]) {
+                this.log('warn', 'Unable to register the command ID "' + commandid + '" because the root "' + commandroot + '" was previously claimed by |' + deets.modName + '|.');
+                return false;
+            }
+        } else {
+            let existsroot = this.findFirstCommandByRoot(commandroot);
+            if (existsroot && existsroot.modName != mod.modName) {
+                this.log('warn', 'Unable to register the command ID "' + commandid + '" because the root "' + commandroot + '" was previously registered by |' + existsroot.modName + '|.');
+                return false;
+            }
         }
         
         let exists = this.getCommand(commandid);
@@ -427,13 +436,16 @@ class ModCommands extends Module {
         return true;
     }
     
+    
+    //Register metadata for a group of commands shared by multiple subcommands.
     registerRootDetails(mod, commandroot, options) {
         commandroot = commandroot.toLowerCase();
         let rootdescriptor = {
             modName: mod.modName,
             commandroot: commandroot,
             description: "",
-            details: []
+            details: [],
+            extensions: {}
         };
         
         if (options) {
@@ -454,6 +466,7 @@ class ModCommands extends Module {
         this.log('Unregistered details for root: ' + commandroot);
         return true;
     }
+    
 
     getCommand(command) {
         if (!command) return null;
@@ -473,6 +486,27 @@ class ModCommands extends Module {
             (item) => item.command.toLowerCase().split(" ").slice(0, cplength).join(" ") == commandpath && item.command.toLowerCase() != commandpath
         );
     }
+    
+    
+    //Register a submodule with a group of commands so it can add subcommands to that group (registerRootDetails must have been called by a requiredModule).
+    registerRootExtension(mod, rootModName, commandroot) {
+        commandroot = commandroot.toLowerCase();
+                
+        if (!this._rootDetails[commandroot]) {
+            this.log('warn', 'Details not found for the root "' + commandroot + '" when registering an extension module.');
+            return false;
+        }
+        
+        if (this._rootDetails[commandroot].modName != rootModName) {
+            this.log('warn', 'Could not register an extension module on root "' + commandroot + '" because it was not claimed by |' + rootModName + '| but by |' + this._rootDetails[commandroot].modName + '|.');
+            return false;
+        }
+        
+        this._rootDetails[commandroot].extensions[mod.modName] = true;
+        
+        return true;
+    }
+    
 
 
     //Event handler

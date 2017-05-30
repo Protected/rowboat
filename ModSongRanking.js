@@ -79,7 +79,8 @@ class ModSongRanking extends Module {
     ]; }
 
     get requiredModules() { return [
-        'Commands'
+        'Commands',
+        'Grabber'
     ]; }
 
     constructor(name) {
@@ -150,7 +151,10 @@ class ModSongRanking extends Module {
         }, self);
         
         
-        this.mod('Commands').registerCommand(this, 'songlike', {
+        this.mod('Commands').registerRootExtension(this, 'Grabber', 'song');
+        
+        
+        this.mod('Commands').registerCommand(this, 'song like', {
             description: 'Assigns a personal like level to a song in the index.',
             args: ['hashoroffset', 'likeability'],
             details: [
@@ -196,7 +200,7 @@ class ModSongRanking extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'songrank', {
+        this.mod('Commands').registerCommand(this, 'song rank', {
             description: 'Displays the global (balanced) rank of a song.',
             args: ['hashoroffset']
         }, (env, type, userid, channelid, command, args, handle, ep) => {
