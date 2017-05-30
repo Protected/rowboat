@@ -1,6 +1,6 @@
 # Pity instructions for our non-dev users
 
-Some instructions, ask if you need assistance.
+Some instructions, ask if you need assistance. We WILL help.
 
 ## Installation
 
@@ -32,7 +32,7 @@ You can also try interactive mode instead:
     
 When you're done, go to the `config` directory and edit the config files (or not).
 
-To learn what each environment or module does, and what are their config file parameters, and what THOSE do, just open it and check the top of the file. Environments are in the files named `EnvNAME.js` and modules are in `ModNAME.js`.
+To learn what each environment or module does, and what their config file parameters do, just open it and check the top of the file. Environments are in the files named `EnvNAME.js` and modules are in `ModNAME.js`.
 
 ## Config manually
 
@@ -40,7 +40,7 @@ Copy the example config file
 
     cp config.example.json config.json
     
-and edit it. Add your desired environments and modules. The modules have to be ordered in such a way that all modules are listed after all of their dependencies. You probably want "Users" and "Commands" at the top.
+and edit it. Add your desired environments and modules. The modules have to be ordered in such a way that all modules are listed after all of their requirements. You probably want "Users" followed by "Commands" at the top.
 
 Environments and modules have their own config files. Each config file should contain a JSON map:
 
@@ -53,7 +53,7 @@ Each environment instance represents a connection from the bot to a remote chat 
 
 Each module adds behavior to the bot. By default, the bot has absolutely no behavior. There are two types of modules: Single and multi instanceable.
 
-* Single instanceable modules (which are most of them) can only have one instance and their config files are names (all lower case) `MODULENAME.mod.json` .
+* Single-instanceable modules (which are most of them) can only have one instance and their config files are named (all lower case) `MODULENAME.mod.json` .
 * Multi-instanceable modules are modules which you may want to load more than once. To use a multi instanceable module, in the list of modules in config.json instead of `"MODULENAME"` use `["INSTANCENAME", "MODULENAME"]`. The config file is then named (all lower case) `INSTANCENAME.MODULENAME.mod.json`.
 
 To learn what each environment or module does, and what are their config file parameters, and what THOSE do, just open it and check the top of the file. Environments are in the files named `EnvNAME.js` and modules are in `ModNAME.js`.
@@ -65,3 +65,11 @@ To learn what each environment or module does, and what are their config file pa
 I recommend running inside a screen when not debugging:
 
     screen -mS myrowboat node Rowboat.js
+
+Since this is a work in progress, if you encounter a bug you may want to try updating using
+
+   git pull
+   
+   npm update
+   
+Do not do this with the bot running. Also, we'll be thankful for all legitimate bug reports.
