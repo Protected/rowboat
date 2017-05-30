@@ -10,6 +10,8 @@ Go to the directory inside which you want to clone the repository (note that thi
     
     git clone https://github.com/Protected/rowboat.git
     
+    cd rowboat
+    
     npm install
     
 Ignore unmet optional dependencies.
@@ -37,6 +39,8 @@ To learn what each environment or module does, and what their config file parame
 ## Config manually
 
 Copy the example config file
+
+    cd config
 
     cp config.example.json config.json
     
