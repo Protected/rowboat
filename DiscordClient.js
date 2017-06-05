@@ -98,8 +98,9 @@ class DiscordClient extends ModernEventEmitter {
     
     
     deliverMsgs() {
+        if (!this._outbox.length) return;
     
-        //Merge multiple messages together into packages in order to minimize amount of API calls
+        //Merge multiple messages together into packages in order to minimize amount of API calls (one package per channel)
         let packages = {};
         for (let i = 0; this._outbox && i < this._outbox.length; i++) {
             let rawchannelid = this._outbox[i][0].id;
@@ -112,14 +113,31 @@ class DiscordClient extends ModernEventEmitter {
             packages[rawchannelid].messages.push(this._outbox[i][1]);
         }
         
+        let newOutbox = [];
+        
         for (let rawchannelid in packages) {
+            let pack = packages[rawchannelid];
             
-            //Deliver a package to Discord
-            packages[rawchannelid].targetchan.send(
-                packages[rawchannelid].messages.join("\n"),
+            //The message (as delivered to Discord) must end at the first RichEmbed (API only supports one per message)
+            let msgparts = [];
+            let embed = null;
+            for (let message of pack.messages) {
+                if (embed) {
+                    newOutbox.push([pack.targetchan, message]);
+                } else if (typeof message == "string" || typeof message == "number") {
+                    msgparts.push(message);
+                } else if (typeof message == "object") {
+                    embed = message;
+                }
+            }
+            
+            //Deliver message to Discord
+            pack.targetchan.send(
+                msgparts.join("\n"),
                 {
                     disable_everyone: true,
-                    split: {char: "\n"}
+                    split: {char: "\n"},
+                    embed: embed
                 }
             ).catch();
             
@@ -127,25 +145,27 @@ class DiscordClient extends ModernEventEmitter {
             let notifyEnvironments = [];
             for (let name in this._environments) {
                 let env = this._environments[name];
-                if (env.param('servername') == packages[rawchannelid].targetchan.guild.name) {
+                if (env.param('servername') == pack.targetchan.guild.name) {
                     notifyEnvironments.push(env);
                 }
             }
             
             //Trigger messageSent event on listed environments
-            for (let message of packages[rawchannelid].messages) {
+            for (let message of msgparts) {
                 setTimeout(() => {
                     for (let env of notifyEnvironments) {
-                        env.emit('messageSent', env, env.channelIdToType(packages[rawchannelid].targetchan), rawchannelid, message);
+                        env.emit('messageSent', env, env.channelIdToType(pack.targetchan), rawchannelid, message);
                     }
                 }, 1);
             }
+            
         }
         
-        this._outbox = [];
+        this._outbox = newOutbox;
     }
     
     
+    //Outbox a string or RichEmbed
     outbox(discordchan, msg) {
         this._outbox.push([discordchan, msg]);
     }

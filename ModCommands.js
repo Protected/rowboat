@@ -655,16 +655,16 @@ class ModCommands extends Module {
         
         if (!descriptor.callback[targetmod](env, type, authorid, channelid, command, passargs, handle, {
                 reply: function(msg) {
-                    env.msg(channelid, env.applyFormatting(msg));
+                    env.msg(channelid, (typeof msg == "object" ? msg : env.applyFormatting(msg)));
                 },
                 pub: function(msg) {
-                    env.msg((channelid == authorid ? null : channelid), env.applyFormatting(msg));
+                    env.msg((channelid == authorid ? null : channelid), (typeof msg == "object" ? msg : env.applyFormatting(msg)));
                 },
                 priv: function(msg) {
                     if (descriptor.unobtrusive) {
-                        env.notice(authorid, env.applyFormatting(msg));
+                        env.notice(authorid, (typeof msg == "object" ? msg : env.applyFormatting(msg)));
                     } else {
-                        env.msg(authorid, env.applyFormatting(msg));
+                        env.msg(authorid, (typeof msg == "object" ? msg : env.applyFormatting(msg)));
                     }
                 }
             }

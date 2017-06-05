@@ -2,6 +2,8 @@
 
 var Module = require('./Module.js');
 var wolfram = require('wolfram-alpha');
+var discord = require('discord.js');
+
 
 class ModAlpha extends Module {
 
@@ -38,6 +40,10 @@ class ModAlpha extends Module {
         
         this.mod('Commands').registerCommand(this, 'alpha', {
             description: "Computational knowledge engine.",
+            details: [
+                "Full syntax: alpha (#) SEARCH STRING ...",
+                "The leading number between parenthesis is optional and represents the maximum amount of desired results (capped to " + this.param("maxresults") + ").",
+            ],
             args: ["string", true],
             minArgs: 1,
             types: ["regular"]
@@ -79,18 +85,42 @@ class ModAlpha extends Module {
                     trueresults.push(results[maxresults]);
                 }
                 
-                ep.reply("Your query: '" + question + "'");
+                ep.reply(env.idToDisplayName(userid) + ', your query was: "' + question + '"');
                 
                 let shownpics = {};
 
                 for (let result of trueresults) {
-                    ep.reply("**__" + result.title + "__**" + (maxresults > 1 && result.primary ? ' (P)' : ''));
-                    for (let subpod of result.subpods) {
-                        if (subpod.text.trim()) {
-                            ep.reply("```\n" + subpod.text + "\n```");
-                        } else if (subpod.image && !shownpics[subpod.image]) {
-                            ep.reply(subpod.image);
-                            shownpics[subpod.image] = true;
+                    if (env.envName == 'Discord') {
+                        let showntitle = false;
+                        for (let subpod of result.subpods) {
+                            let re = new discord.RichEmbed()
+                                    .setColor([255,194,48])
+                                    ;
+                            if (!showntitle) {
+                                re.setTitle(result.title);
+                            }
+                            if (subpod.text.trim() && (!subpod.image || subpod.text.trim().split("\n").length <= 3)) {
+                                re.setDescription(subpod.text.trim());
+                            }
+                            if (subpod.image && !shownpics[subpod.image]) {
+                                re.setImage(subpod.image);
+                                shownpics[subpod.image] = true;
+                            }
+                            if (result.primary) {
+                                re.setFooter('Primary result');
+                            }
+                            ep.reply(re);
+                        }
+                    } else {
+                        ep.reply("**__" + result.title + "__**" + (maxresults > 1 && result.primary ? ' (P)' : ''));
+                        for (let subpod of result.subpods) {
+                            if (subpod.text.trim()) {
+                                ep.reply("`" + subpod.text + "`");
+                            }
+                            if (subpod.image && !shownpics[subpod.image]) {
+                                ep.reply(subpod.image);
+                                shownpics[subpod.image] = true;
+                            }
                         }
                     }
                 }
@@ -98,7 +128,7 @@ class ModAlpha extends Module {
             
             
             if (!this._cache[question] || this._cache[question].length <= maxresults) {
-                ep.reply(env.idToDisplayName(userid) + ': Please wait...');
+                ep.reply(env.idToDisplayName(userid) + ', please wait...');
                 this._client.query(question)
                     .then((results) => {
                         this._cache[question] = results;
