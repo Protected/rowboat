@@ -106,7 +106,7 @@ class EnvDiscord extends Environment {
                 
                 this._localClient.on("guildMemberUpdate", (oldMember, newMember) => {
                     if (newMember.user.presence.status == "offline") return;
-                    if (member.guild.id != this._server.id) return;
+                    if (newMember.guild.id != this._server.id) return;
                 
                     //Channels
                 
