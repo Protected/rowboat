@@ -138,6 +138,8 @@ class ModMemo extends Module {
             this.log('Registered new message ' + register.id + ' for delivery: ' + userid + ' on ' + env.name + '. Recipients: ' + elements.to.length);
             
             this.saveMemos();
+            
+            return true;
         };
         
         this.mod("Commands").registerCommand(this, 'memo save', ssoptions, sscallback(false));
@@ -185,6 +187,8 @@ class ModMemo extends Module {
             }
             
             this.saveMemos();
+            
+            return true;
         });
         
         
@@ -217,7 +221,7 @@ class ModMemo extends Module {
                 if (outbox.length) {
                     for (let register of outbox) {
                         let delivered = register.to.filter((recipient) => recipient.done).length;
-                        ep.priv("(**" + register.id + "**) " + moment(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + " [Delivery: " + delivered + "/" + register.to.length + "]");
+                        ep.priv("(**" + register.id + "**) " + moment.unix(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + " [Delivery: " + delivered + "/" + register.to.length + "]");
                     }
                 } else ep.priv("Your outbox is empty.");
                 
@@ -238,13 +242,15 @@ class ModMemo extends Module {
                 }
                 
                 ep.priv("(**" + register.id + "**) " + (register.strong ? "[S] " : "") + register.msg);
-                ep.priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment(register.ts).format(this.param('tsFormat')) + delaypart);
+                ep.priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment.unix(register.ts).format(this.param('tsFormat')) + delaypart);
                 
                 for (let recipient of register.to) {
                     ep.priv("  " + (recipient.done ? "**DELIVERED**" : "Pending") + " To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "") + " on " + recipient.env));
                 }
             
             }
+            
+            return true;
         });
         
         
@@ -276,7 +282,7 @@ class ModMemo extends Module {
                             changes += 1;
                             this.log('Delivered message ' + register.id + ' to ' + userid + ' on environment ' + env.name + ' while listing inbox.');
                         }
-                        ep.priv("(**" + register.id + "**) " + moment(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + (isnew ? " [NEW]" : ""));
+                        ep.priv("(**" + register.id + "**) " + moment.unix(register.ts).format(this.param('tsFormat')) + " " + (register.msg.length <= 100 ? register.msg : register.msg.substr(0, 97) + "...") + (isnew ? " [NEW]" : ""));
                     }
                 } else ep.priv("Your inbox is empty.");
                 
@@ -304,15 +310,17 @@ class ModMemo extends Module {
                 }
                 
                 ep.priv("(**" + register.id + "**) " + (register.strong ? "[S] " : "") + register.msg);
-                ep.priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment(register.ts).format(this.param('tsFormat')));
+                ep.priv("Sent by " + (register.from.handle ? "=__" + register.from.handle + "__" : "__" + register.from.display + "___ (" + register.from.userid + ")") + " at " + moment.unix(register.ts).format(this.param('tsFormat')));
                 
                 for (let recipient of recipients) {
-                    ep.priv("  (Delivered " + moment(recipient.done).format(this.param('tsFormat')) + ") To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "") + " on " + recipient.env));
+                    ep.priv("  (Delivered " + moment.unix(recipient.done).format(this.param('tsFormat')) + ") To: " + (recipient.handle ? "=__" + recipient.handle + "__" : (recipient.auth ? "+" : "") + "__" + recipient.display + "__" + (recipient.display != recipient.userid ? " (" + recipient.userid + ")" : "") + " on " + recipient.env));
                 }
             
             }
             
             if (changes) this.saveMemos();
+            
+            return true;
         });
         
         
@@ -761,7 +769,7 @@ class ModMemo extends Module {
         if (register.delay) {
             delaypart = ' (w/ ' + this.userFriendlyDelay(register.delay) + ' delay)';
         }
-        envobj.msg(channelid, envobj.applyFormatting('Message from **' + (register.from.display || register.from.userid) + '** to **' + (targetdisplay || targetid) + '** sent on ' + moment(register.ts).format(this.param('tsFormat')) + delaypart + ':'));
+        envobj.msg(channelid, envobj.applyFormatting('Message from **' + (register.from.display || register.from.userid) + '** to **' + (targetdisplay || targetid) + '** sent on ' + moment.unix(register.ts).format(this.param('tsFormat')) + delaypart + ':'));
         envobj.msg(channelid, '    ' + register.msg);
     }
     
