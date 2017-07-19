@@ -863,6 +863,7 @@ class ModGrabber extends Module {
         null - Parameter matches nothing (song not found)
     */
     parseHashArg(hashoroffset) {
+        if (!hashoroffset) hashoroffset = "";
         let searchResult = this.parseSearchInMixedParam(hashoroffset);
         if (searchResult === true) return true;
         if (searchResult !== null) return searchResult.hash;
