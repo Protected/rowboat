@@ -7,5 +7,5 @@ test.js
 ModCustom*.js
 *.log
 *.swp
-songs/index.json
+songs/*
 package-lock.json
