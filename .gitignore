@@ -8,3 +8,4 @@ ModCustom*.js
 *.log
 *.swp
 songs/index.json
+package-lock.json
