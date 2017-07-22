@@ -52,6 +52,10 @@ class EnvDiscord extends Environment {
                 this._client = client;
                 this._server = client.guilds.find("name", params.servername);
                 
+                if (!this._server) {
+                    this.log('error', "Could not obtain server object.");
+                }
+                
                 this._channels[this._server.defaultChannel.name] = this._server.defaultChannel;
                 if (params.defaultchannel != this._server.defaultChannel.name) {
                     this._channels[params.defaultchannel] = this._server.channels.filter((channel) => (channel.type == "text")).find("name", params.defaultchannel);

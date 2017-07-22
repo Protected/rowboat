@@ -64,13 +64,13 @@ class Module {
         configname = "config/" + configname + ".mod.json";
         try {
             params = jsonfile.readFileSync(configname);
-            this.log(`Initializing module of type ${this._envName}.`);
+            this.log('Initializing module of type ' + this._modName + '.');
         } catch(e) {}
 
         for (let reqParam of this.requiredParams) {
             if (params[reqParam] !== undefined && params[reqParam] !== null) this._params[reqParam] = params[reqParam];
             if (this._params[reqParam] === undefined) {
-                this.log('error', `Failed loading required parameter: ${reqParam}`);
+                this.log('error', 'Failed loading required parameter: ' + reqParam);
                 return false;
             }
         };

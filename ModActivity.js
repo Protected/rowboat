@@ -10,7 +10,8 @@ class ModActivity extends Module {
 
     get optionalParams() { return [
         'datafile',
-        'linesPerUser'          //Amount of lines per user to keep (for !last)
+        'linesPerUser',         //Amount of lines per user to keep (for !last)
+        'channelblacklist'      //List of [[environment, channelid], ...] of the channels to be ignored
     ]; }
     
     get requiredModules() { return [
@@ -23,6 +24,7 @@ class ModActivity extends Module {
         
         this._params['datafile'] = 'activity.data.json';
         this._params['linesPerUser'] = 5;
+        this._params['channelblacklist'] = [];
         
         //Main map: {ENV => {NICKNAME => {REGISTER}, ...}, ...}
         this._activitydata = {};
@@ -304,6 +306,8 @@ class ModActivity extends Module {
     //Event handlers
     
     onJoin(env, authorid, channelid, rawobj) {
+        if (this.param('channelblacklist').find((item) => item[0] == env.name && item[1] == channelid)) return;
+        
         var nickname = env.idToDisplayName(authorid);
         var register = this.getNickRegister(env.name, nickname);
         
@@ -315,6 +319,8 @@ class ModActivity extends Module {
     
     
     onPart(env, authorid, channelid, rawobj) {
+        if (this.param('channelblacklist').find((item) => item[0] == env.name && item[1] == channelid)) return;
+        
         var nickname = env.idToDisplayName(authorid);
         var register = this.getNickRegister(env.name, nickname);
         
@@ -326,6 +332,8 @@ class ModActivity extends Module {
     
     
     onMessage(env, type, message, authorid, channelid, rawobj) {
+        if (this.param('channelblacklist').find((item) => item[0] == env.name && item[1] == channelid)) return;
+        
         var nickname = env.idToDisplayName(authorid);
         var register = this.getNickRegister(env.name, nickname);
         var ts = moment().unix();

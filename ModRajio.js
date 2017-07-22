@@ -2,8 +2,9 @@
 
 var Module = require('./Module.js');
 
-const TYPE_AUTO = "auto";
-const TYPE_MANUAL = "manual";
+const PERM_ADMIN = 'administrator';
+const PERM_MOD = 'moderator';
+
 
 class ModRajio extends Module {
 
@@ -14,6 +15,12 @@ class ModRajio extends Module {
         'env',                  //Name of the Discord environment to be used
         'channel',              //ID of a Discord audio channel
         'grabber'               //Name of the grabber to piggyback on (required because the grabber is multi-instanceable)
+    ]; }
+    
+    get optionalParams() { return [
+        'leadin',               //Length of silence, in seconds, before each new song is played
+        'pause',                //Maximum amount of time in seconds to keep the current song paused when the module loses all listeners
+        'queuesize'             //Maximum amount of songs in the queue
     ]; }
     
     get requiredEnvironments() { return [
@@ -27,8 +34,17 @@ class ModRajio extends Module {
     constructor(name) {
         super('Rajio', name);
         
-        this._dj = null;
-        this._queue = [];
+        this._params['leadin'] = 2;
+        this._params['pause'] = 900;
+        this._params['queuesize'] = 5;
+        
+        this._queue = [];  //[{song, userid}, ...] - plays from the left
+        this._disabled = false;
+        
+        this._play = null;  //Song being played
+        this._pending = null;  //Timer that will start the next song
+        this._pause = null;  //[song, seek] for resuming paused song
+        this._expirepause = null;  //Timer that will expire (stop) a paused song
     }
     
     
@@ -41,7 +57,17 @@ class ModRajio extends Module {
     }
     
     get dchan() {
-        return this.denv.server.channels[this.param('channel')];
+        return this.denv.server.channels.get(this.param('channel'));
+    }
+    
+    get listeners() {
+        let me = this.denv.server.me;
+        if (me.mute) return [];
+        return this.dchan.members.filter((member) => member.id != me.id && !member.deaf).array();
+    }
+    
+    get playing() {
+        return this.denv.server.voiceConnection && this.denv.server.voiceConnection.speaking || this._pending;
     }
     
     
@@ -58,44 +84,250 @@ class ModRajio extends Module {
             return false;
         }
         
-        if (!this.dchan || this.chan.type != "voice") {
-            this.log('error', "Channel not found or not a voice channel.");
-            return false;
-        }
-        
         
         //Prepare player
         
-        chan.join().then((connection) => {
-            playSong();
+        this.denv.on("connected", () => {
+            if (!this.dchan || this.dchan.type != "voice") {
+                this.log('error', "Channel not found or not a voice channel.");
+                return;
+            }
+        
+            this.dchan.join().then((connection) => {
+                if (this.listeners.length) {
+                    this.playSong();
+                }
+            });
         });
+            
         
         
         //Register callbacks
 
         var self = this;
         
-        denv.client.on("voiceStateUpdate", (oldMember, member) => {
-            if (member.guild.id != env.server.id) return;
+        this.denv.client.on("voiceStateUpdate", (oldMember, member) => {
+            if (member.guild.id != this.denv.server.id) return;
+            
+            let myid = this.denv.server.me.id;
+            
+            if (oldMember.voiceChannelID != this.dchan.id && member.voiceChannelID == this.dchan.id) {
+                if (member.id == myid && this.listeners.length) {
+                    //I joined the channel
+                    this.playSong();
+                } else if (!member.deaf && !this.playing) {                    
+                    //First listener joined the channel
+                    this.resumeSong() || this.playSong();
+                }
+            }
+            
+            if (oldMember.voiceChannelID == this.dchan.id && member.voiceChannelID != this.dchan.id) {
+                if (member.id == myid) {
+                    //I left the channel
+                    this.stopSong();
+                } else if (!this.listeners.length) {
+                    //Last listener left the channel
+                    this.pauseSong();
+                }
+            }
+            
+            if (member.id == myid) {
+                if (!oldMember.mute && member.mute) {
+                    //I was muted
+                    this.pauseSong();
+                }
+                if (oldMember.mute && !member.mute) {
+                    //I was unmuted
+                    this.resumeSong() || this.playSong();
+                }
+            } else {
+                if (!oldMember.deaf && member.deaf && !this.listeners.length) {
+                    //Last listener was deafened
+                    this.pauseSong();
+                } else if (oldMember.deaf && !member.deaf) {
+                    //First listener was undeafened
+                    this.resumeSong() || this.playSong();
+                }
+            }
             
         });
+        
+        
+        this.denv.client.on('presenceUpdate', (oldMember, member) => {
+            if (member.guild.id != this.denv.server.id) return;
+            
+            if (oldMember.user.presence.status != "offline" && member.user.presence.status == "offline") {
+                this.widthdraw(member.user.id);
+            }
+        });
+        
+        this.denv.client.on("guildMemberRemove", (member) => {
+            if (member.user.presence.status == "offline") return;
+            if (member.guild.id != this.denv.server.id) return;
+            this.widthdraw(member.user.id);
+        });
+        
 
-        /*
-        this.mod('Commands').registerCommand(this, 'songrank', {
-            description: 'Displays the global (balanced) rank of a song.',
-            args: ['hash']
+
+        this.mod('Commands').registerCommand(this, 'rajio now', {
+            description: 'Displays the name and hash of the song currently being played.'
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var rank = this.computeSongRank(args.hash);
-            if (rank !== null) {
-                ep.reply("Rank: " + rank);
+            if (!this._play) {
+                if (this._pause) {
+                    ep.reply('**[Paused]** ' + '`' + this._pause[0].hash + ' ' + this._pause[0].name + (this._pause[0].author ? ' (' + this._pause[0].author + ')' : '') + '`');
+                } else {
+                    ep.reply('Nothing is being played right now.');
+                }
             } else {
-                ep.reply("Song is unranked.");
+                ep.reply('**[Now Playing]** ' + '`' + this._play.hash + ' ' + this._play.name + (this._play.author ? ' (' + this._play.author + ')' : '') + '`');
             }
         
             return true;
         });
-        */
+        
+
+        this.mod('Commands').registerCommand(this, 'rajio off', {
+            description: 'Disable the radio. This will stop it from playing music until it\'s re-enabled.',
+            permissions: [PERM_ADMIN, PERM_MOD]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            if (this._disabled) {
+                ep.reply('The radio is already disabled.');
+            } else {
+                this._disabled = true;
+                this.stopSong();
+                ep.reply('The radio has now been disabled.');
+            }
+        
+            return true;
+        });
+
+        
+        this.mod('Commands').registerCommand(this, 'rajio on', {
+            description: 'Re-enable the radio if it was previously disabled.',
+            permissions: [PERM_ADMIN, PERM_MOD]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            if (!this._disabled) {
+                ep.reply('The radio is not disabled!');
+            } else {
+                this._disabled = false;
+                if (this.listeners.length) {
+                    this.playSong();
+                }
+                ep.reply('The radio has now been re-enabled.');
+            }
+        
+            return true;
+        });
+        
+        
+        this.mod('Commands').registerCommand(this, 'rajio another', {
+            description: 'End playback of the current song and play the next one in the queue.',
+            permissions: [PERM_ADMIN, PERM_MOD]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            this.stopSong();
+            this.playSong();
+        
+            return true;
+        });
+        
+        
+        this.mod('Commands').registerCommand(this, 'rajio request', {
+            description: 'Requests playback of a song in the library, which will be added to the queue if possible.',
+            args: ['hashoroffset', true]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            if (!this.islistener(userid)) {
+                ep.reply('This command is only available to listeners.');
+                return true;
+            }
+        
+            let arg = args.hashoroffset.join(" ");
+            if (args.hashoroffset.length > 1 && !arg.match(/^\(.*\)$/)) {
+                arg = '(' + arg + ')';
+            }
+        
+            let hash = this.grabber.bestSongForHashArg(arg);
+            if (hash === false) {
+                ep.reply('Offset not found in recent history.');
+                return true;
+            } else if (hash === true) {
+                ep.reply('Reference matches more than one song; Please be more specific.');
+                return true;
+            } else if (!hash) {
+                ep.reply('Hash not found.');
+                return true;
+            }
+            
+            let song = this.grabber.hashSong(hash);
+            if (!this.enqueue(song, userid)) {
+                ep.reply('The queue is full or the song is already in the queue.');
+                return true;
+            }
+            
+            ep.reply('OK.');
+        
+            return true;
+        });
+        
+        
+        this.mod('Commands').registerCommand(this, 'rajio withdraw', {
+            description: 'Withdraws all your requests from the queue.'
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            let result = this.withdraw(userid);
+            if (result) {
+                ep.reply('Removed your ' + (result > 1 ? result + ' requests' : 'request') + ' from the queue.');
+            } else {
+                ep.reply('You made no requests!');
+            }
+        
+            return true;
+        });
+        
+        
+        this.mod('Commands').registerCommand(this, 'rajio next', {
+            description: 'Show the next song in the queue.'
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            if (this._queue.length) {
+                let song = this._queue[0].song;
+                let reqby = '';
+                if (this._queue[0].userid) {
+                    reqby = ' ** Requested by __' + this.denv.idToDisplayName(this._queue[0].userid) + '__';
+                }
+                ep.reply('**[Up next]** ' + '`' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`' + reqby);
+            } else {
+                ep.reply('The queue is empty; The next song will be selected automatically.');
+            }
+        
+            return true;
+        });
+        
+        
+        this.mod('Commands').registerCommand(this, 'rajio queue', {
+            description: 'Show a summary of the contents of the queue.'
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            if (!this.islistener(userid)) {
+                ep.reply('This command is only available to listeners.');
+                return true;
+            }
+        
+            if (this._queue.length) {
+                for (let i = 0; i < this._queue.length; i++) {
+                    let song = this._queue[i].song;
+                    let width = String(this.param('queuesize')).length;      //
+                    let pos = ('0'.repeat(width) + String(i+1)).slice(-width); //0-padded i
+                    ep.reply('`[' + pos + '] ' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`');
+                }
+            }
+        
+            return true;
+        });
 
 
         return true;
@@ -105,15 +337,127 @@ class ModRajio extends Module {
     // # Module code below this line #
     
     
-    playSong() {
-        var vc = this.denv.server.voiceConnection;
-        if (!vc || vc.speaking) return false;
-        var song = this.grabber.randomSong();
-        if (!song) return false;
-        vc.playFile(this.grabber.songPathByHash(song.hash)).once("end", playSong());
+    playSong(song, seek) {
+        let vc = this.denv.server.voiceConnection;
+        if (!vc || vc.speaking || this._pending
+                || this.denv.server.me.mute || !this.listeners.length || this._disabled) {
+            return false;
+        }
+        
+        if (!song) song = this.dequeue();
+        if (!song || !song.hash) return false;
+        
+        this.log('Playing song: ' + song.hash);
+        
+        let options = {};
+        if (seek) options.seek = Math.round(seek / 1000.0);
+        
+        this._play = song;
+        this._pending = setTimeout(() => {
+            vc.playFile(this.grabber.songPathByHash(song.hash), options).once("end", () => {
+                if (!this._pause) {
+                    this.playSong();
+                }
+            });
+            this._pending = null;
+        }, this.param('leadin') > 0 ? this.param('leadin') * 1000 : 1);
+        
         return true;
     }
     
+    stopSong() {
+        let vc = this.denv.server.voiceConnection;
+        
+        this.log('Stopping song' + (this._play ? ': ' + this._play.hash : '.'));
+        
+        if (this._pending) {
+            clearTimeout(this._pending);
+            this._pending = null;
+        }
+        
+        if (this._expirepause) {
+            clearTimeout(this._expirepause);
+            this._expirepause = null;
+        }
+        
+        if (vc.dispatcher) {
+            this._play = null;
+            this._pause = true;  //Hack to stop the end event from playing next song
+            vc.dispatcher.end();
+        }
+        
+        this._pause = null;
+    }
+    
+    pauseSong() {
+        let vc = this.denv.server.voiceConnection;
+        if (!vc || !vc.speaking || !vc.dispatcher) {
+            return this.stopSong();
+        }
+        
+        this.log('Pausing song: ' + this._play.hash + ' at ' + vc.dispatcher.time);
+        
+        this._pause = [this._play, vc.dispatcher.time];
+        this._play = null;
+        vc.dispatcher.end();
+        
+        this._expirepause = setTimeout(() => {
+            this.log('Expiring paused song: ' + this._pause[0].hash);
+            this.stopSong();
+            this._expirepause = null;
+        }, this.param('pause') > 0 ? this.param('pause') * 1000 : 1);
+    }
+    
+    resumeSong() {
+        if (!this._pause) return false;
+        
+        this.log('Preparing to resume song: ' + this._pause[0].hash + ' at ' + this._pause[1]);
+        
+        this.playSong(this._pause[0], this._pause[1]);
+        
+        this._pause = null;
+        if (this._expirepause) {
+            clearTimeout(this._expirepause);
+            this._expirepause = null;
+        }
+        
+        return true;
+    }
+    
+    
+    enqueue(song, userid) {
+        if (!song) return false;
+        if (this._queue.length >= this.param('queuesize')) return false;
+        if (this._queue.find((item) => item.song.hash == song.hash)) return false;
+        this._queue.push({
+            song: song,
+            userid: userid
+        });
+        return true;
+    }
+    
+    dequeue() {
+        if (!this._queue.length) return this.grabber.randomSong();
+        let item = this._queue.shift();
+        return item.song;
+    }
+    
+    withdraw(userid) {
+        let newqueue = this._queue.filter((item) => item.userid != userid);
+        let result = 0;
+        if (newqueue.length != this._queue.length) {
+            result = this._queue.length - newqueue.length;
+            this.log('User ' + userid + ' withdrew from the queue. Removed ' + result + ' song(s).');
+            this._queue = newqueue;
+        }
+        return result;
+    }
+    
+    
+    islistener(userid) {
+        let member = this.dchan.members.get(userid);
+        return member && !member.deaf;
+    }
     
 }
 
