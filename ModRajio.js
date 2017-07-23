@@ -24,7 +24,7 @@ class ModRajio extends Module {
         'queuesize',            //Maximum amount of songs in the queue
         'referenceloudness',    //Negative decibels; Play youtube songs with higher loudness at a lower volume to compensate
         'volume',               //Global volume multipler; Defaults to 1.0 and can be changed via command
-        'announcechannel'       //ID of a Discord text channel to announce song changes to
+        'announcechannel',      //ID of a Discord text channel to announce song changes to
         'announcedelay'         //Minimum seconds between announces
     ]; }
     
