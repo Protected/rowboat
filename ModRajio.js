@@ -200,7 +200,7 @@ class ModRajio extends Module {
             } else {
                 let vc = this.denv.server.voiceConnection;
                 ep.reply('**[Playing]** ' + '`' + this._play.hash + ' ' + this._play.name + (this._play.author ? ' (' + this._play.author + ')' : '')
-                    + ' <' + (vc && vc.dispatcher ? this.secondsToHms(vc.dispatcher.time) + ' / ' : '') + this.secondsToHms(this._play.length) + '>`');
+                    + ' <' + (vc && vc.dispatcher ? this.secondsToHms(Math.round(vc.dispatcher.time / 1000.0)) + ' / ' : '') + this.secondsToHms(this._play.length) + '>`');
             }
         
             return true;
