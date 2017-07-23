@@ -1,6 +1,7 @@
 /* Module: Rajio -- Grabber add-on for playing songs on discord audio channels. */
 
 var Module = require('./Module.js');
+var moment = require('moment');
 
 const PERM_ADMIN = 'administrator';
 const PERM_MOD = 'moderator';
@@ -20,7 +21,11 @@ class ModRajio extends Module {
     get optionalParams() { return [
         'leadin',               //Length of silence, in seconds, before each new song is played
         'pause',                //Maximum amount of time in seconds to keep the current song paused when the module loses all listeners
-        'queuesize'             //Maximum amount of songs in the queue
+        'queuesize',            //Maximum amount of songs in the queue
+        'referenceloudness',    //Negative decibels; Play youtube songs with higher loudness at a lower volume to compensate
+        'volume',               //Global volume multipler; Defaults to 1.0 and can be changed via command
+        'announcechannel'       //ID of a Discord text channel to announce song changes to
+        'announcedelay'         //Minimum seconds between announces
     ]; }
     
     get requiredEnvironments() { return [
@@ -37,9 +42,16 @@ class ModRajio extends Module {
         this._params['leadin'] = 2;
         this._params['pause'] = 900;
         this._params['queuesize'] = 5;
+        this._params['referenceloudness'] = -20;
+        this._params['volume'] = 1.0;
+        this._params['announcechannel'] = null;
+        this._params['announcedelay'] = 0;
+        
+        this._announced = null;
         
         this._queue = [];  //[{song, userid}, ...] - plays from the left
         this._disabled = false;
+        this._volume = 1.0;
         
         this._play = null;  //Song being played
         this._pending = null;  //Timer that will start the next song
@@ -83,6 +95,9 @@ class ModRajio extends Module {
             this.log('error', "Environment not found or not Discord.");
             return false;
         }
+        
+        
+        this._volume = parseFloat(this.param('volume'));
         
         
         //Prepare player
@@ -169,18 +184,23 @@ class ModRajio extends Module {
         
 
 
+        this.mod("Commands").registerRootDetails(this, 'rajio', {description: 'Commands for controlling the radio queue and playback.'});
+
         this.mod('Commands').registerCommand(this, 'rajio now', {
             description: 'Displays the name and hash of the song currently being played.'
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (!this._play) {
                 if (this._pause) {
-                    ep.reply('**[Paused]** ' + '`' + this._pause[0].hash + ' ' + this._pause[0].name + (this._pause[0].author ? ' (' + this._pause[0].author + ')' : '') + '`');
+                    ep.reply('**[Paused]** ' + '`' + this._pause[0].hash + ' ' + this._pause[0].name + (this._pause[0].author ? ' (' + this._pause[0].author + ')' : '')
+                        + ' <' + this.secondsToHms(this._pause[1]) + ' / ' + this.secondsToHms(this._pause[0].length) + '>`');
                 } else {
                     ep.reply('Nothing is being played right now.');
                 }
             } else {
-                ep.reply('**[Now Playing]** ' + '`' + this._play.hash + ' ' + this._play.name + (this._play.author ? ' (' + this._play.author + ')' : '') + '`');
+                let vc = this.denv.server.voiceConnection;
+                ep.reply('**[Playing]** ' + '`' + this._play.hash + ' ' + this._play.name + (this._play.author ? ' (' + this._play.author + ')' : '')
+                    + ' <' + (vc && vc.dispatcher ? this.secondsToHms(vc.dispatcher.time) + ' / ' : '') + this.secondsToHms(this._play.length) + '>`');
             }
         
             return true;
@@ -223,6 +243,28 @@ class ModRajio extends Module {
         });
         
         
+        this.mod('Commands').registerCommand(this, 'rajio volume', {
+            description: 'Adjust the master volume attenuation.',
+            args: ['volume'],
+            details: [
+                "Use a value between 0.0 (no sound) and 1.0 (maximum)."
+            ],
+            permissions: [PERM_ADMIN, PERM_MOD]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            let volume = parseFloat(args.volume);
+            if (isNaN(volume) || volume < 0 || volume > 1) {
+                ep.reply('Please specify a number between 0.0 and 1.0 .');
+                return true;
+            }
+            
+            this._volume = volume;
+            ep.reply('OK.');
+        
+            return true;
+        });
+        
+        
         this.mod('Commands').registerCommand(this, 'rajio another', {
             description: 'End playback of the current song and play the next one in the queue.',
             permissions: [PERM_ADMIN, PERM_MOD]
@@ -235,10 +277,7 @@ class ModRajio extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'rajio request', {
-            description: 'Requests playback of a song in the library, which will be added to the queue if possible.',
-            args: ['hashoroffset', true]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        let requestcommand = (demand) => (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (!this.islistener(userid)) {
                 ep.reply('This command is only available to listeners.');
@@ -263,7 +302,7 @@ class ModRajio extends Module {
             }
             
             let song = this.grabber.hashSong(hash);
-            if (!this.enqueue(song, userid)) {
+            if (!this.enqueue(song, userid, demand)) {
                 ep.reply('The queue is full or the song is already in the queue.');
                 return true;
             }
@@ -271,7 +310,18 @@ class ModRajio extends Module {
             ep.reply('OK.');
         
             return true;
-        });
+        }
+        
+        this.mod('Commands').registerCommand(this, 'rajio request', {
+            description: 'Requests playback of a song in the library, which will be added to the queue if possible.',
+            args: ['hashoroffset', true]
+        }, requestcommand(false));
+        
+        this.mod('Commands').registerCommand(this, 'rajio demand', {
+            description: 'Puts a song from the library at the top of the queue.',
+            args: ['hashoroffset', true],
+            permissions: [PERM_ADMIN, PERM_MOD]
+        }, requestcommand(true));
         
         
         this.mod('Commands').registerCommand(this, 'rajio withdraw', {
@@ -320,7 +370,7 @@ class ModRajio extends Module {
             if (this._queue.length) {
                 for (let i = 0; i < this._queue.length; i++) {
                     let song = this._queue[i].song;
-                    let width = String(this.param('queuesize')).length;      //
+                    let width = String(this.param('queuesize')).length;        //
                     let pos = ('0'.repeat(width) + String(i+1)).slice(-width); //0-padded i
                     ep.reply('`[' + pos + '] ' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`');
                 }
@@ -349,8 +399,26 @@ class ModRajio extends Module {
         
         this.log('Playing song: ' + song.hash);
         
-        let options = {};
-        if (seek) options.seek = Math.round(seek / 1000.0);
+        if (this.param('announcechannel') && (!this._announced || moment().unix() > this._announced + this.param('announcedelay'))) {
+            let anchan = this.denv.server.channels.get(this.param('announcechannel'));
+            if (anchan) {
+                anchan.send('**[Now Playing]** ' + '`' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + ' <' + this.secondsToHms(song.length) + '>`');
+                this._announced = moment().unix();
+            }
+        }
+        
+        let att = 1.0;
+        let ref = this.param('referenceloudness');
+        if (!isNaN(ref) && ref < 0) {
+            if (song.sourceLoudness && song.sourceLoudness > ref) {  //Both negative numbers
+                att = ref / song.sourceLoudness;
+            }
+        }
+        
+        let options = {
+            volume: this._volume * att,
+            seek: (seek ? Math.round(seek / 1000.0) : 0)
+        };
         
         this._play = song;
         this._pending = setTimeout(() => {
@@ -425,14 +493,22 @@ class ModRajio extends Module {
     }
     
     
-    enqueue(song, userid) {
+    enqueue(song, userid, demand) {
         if (!song) return false;
-        if (this._queue.length >= this.param('queuesize')) return false;
+        if (!demand && this._queue.length >= this.param('queuesize')) return false;
         if (this._queue.find((item) => item.song.hash == song.hash)) return false;
-        this._queue.push({
-            song: song,
-            userid: userid
-        });
+        if (demand) {
+            this._queue.unshift({
+                song: song,
+                userid: userid
+            });
+            this._queue = this._queue.slice(0, this.param('queuesize'));
+        } else {
+            this._queue.push({
+                song: song,
+                userid: userid
+            });
+        }
         return true;
     }
     
@@ -457,6 +533,18 @@ class ModRajio extends Module {
     islistener(userid) {
         let member = this.dchan.members.get(userid);
         return member && !member.deaf;
+    }
+    
+    
+    secondsToHms(seconds) {
+        let h = Math.floor(s / 3600.0);
+        seconds = seconds % 3600;
+        let m = Math.floor(seconds / 60.0);
+        seconds = seconds % 60;
+        let result = ('0' + seconds).slice(-2);
+        if (m) result = ('0' + m).slice(-2) + ':' + result;
+        if (h) result = ('0' + h).slice(-2) + ':' + result;
+        return result;
     }
     
 }
