@@ -537,7 +537,7 @@ class ModRajio extends Module {
     
     
     secondsToHms(seconds) {
-        let h = Math.floor(s / 3600.0);
+        let h = Math.floor(seconds / 3600.0);
         seconds = seconds % 3600;
         let m = Math.floor(seconds / 60.0);
         seconds = seconds % 60;
