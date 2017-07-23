@@ -411,7 +411,7 @@ class ModRajio extends Module {
         let ref = this.param('referenceloudness');
         if (!isNaN(ref) && ref < 0) {
             if (song.sourceLoudness && song.sourceLoudness > ref) {  //Both negative numbers
-                att = ref / song.sourceLoudness;
+                att = Math.pow(10, (ref - song.sourceLoudness) / 20);
             }
         }
         
@@ -542,7 +542,7 @@ class ModRajio extends Module {
         let m = Math.floor(seconds / 60.0);
         seconds = seconds % 60;
         let result = ('0' + seconds).slice(-2);
-        if (m) result = ('0' + m).slice(-2) + ':' + result;
+        result = ('0' + m).slice(-2) + ':' + result;
         if (h) result = ('0' + h).slice(-2) + ':' + result;
         return result;
     }
