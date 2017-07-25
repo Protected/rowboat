@@ -62,6 +62,7 @@ class ModGrabber extends Module {
         
         this._usage = 0;  //Cache disk usage (by mp3s only)
         this._sessionGrabs = [];  //History of hashes grabbed in this session
+        this._parserFilters = [];  //[[regex, callback(string)], ...] to apply to hashoroffset arguments (see API)
         
         this._scanQueue = [];  //Rate-limit song downloads. Each item is: [authorid, messageToScan]
         this._scanTimer = null;
@@ -884,6 +885,13 @@ class ModGrabber extends Module {
         } else if (hashoroffset.length == 32) {
             return hashoroffset;
         }
+        
+        for (let item of this._parserFilters) {
+            let mr = hashoroffset.match(item[0]);
+            if (!mr) continue;
+            return item[1](hashoroffset, mr);
+        }
+        
         return null;
     }
     
@@ -1085,6 +1093,13 @@ class ModGrabber extends Module {
         } else {
             this._apiCbGrabscanExists.push([func, self]);
         }
+    }
+    
+    
+    //Filter callback signature: hashoroffset, matchresult
+    registerParserFilter(regex, func, self) {
+        this.log('Registering parser filter. Context: ' + self.constructor.name);
+        this._parserFilters.push([regex, func]);
     }
     
     

@@ -35,6 +35,11 @@ class DiscordClient extends ModernEventEmitter {
     }
     
     
+    get realClient() {
+        return this._realClient;
+    }
+    
+    
     prepareClient(envDiscord, token, sendDelay) {
         this._sendDelay = sendDelay;
         

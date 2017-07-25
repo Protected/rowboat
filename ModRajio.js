@@ -1,4 +1,5 @@
 /* Module: Rajio -- Grabber add-on for playing songs on discord audio channels. */
+/* Module: Rajio -- Grabber add-on for playing songs on discord audio channels. */
 
 var Module = require('./Module.js');
 var moment = require('moment');
@@ -21,11 +22,13 @@ class ModRajio extends Module {
     get optionalParams() { return [
         'leadin',               //Length of silence, in seconds, before each new song is played
         'pause',                //Maximum amount of time in seconds to keep the current song paused when the module loses all listeners
+        'autowithdraw',         //How long in seconds before a user withdraws from the queue if they are online but not a listener
         'queuesize',            //Maximum amount of songs in the queue
         'referenceloudness',    //Negative decibels; Play youtube songs with higher loudness at a lower volume to compensate
         'volume',               //Global volume multipler; Defaults to 1.0 and can be changed via command
         'announcechannel',      //ID of a Discord text channel to announce song changes to
-        'announcedelay'         //Minimum seconds between announces
+        'announcedelay',        //Minimum seconds between announces
+        'announcestatus'        //Announce current song in bot's game (true/false)
     ]; }
     
     get requiredEnvironments() { return [
@@ -41,17 +44,21 @@ class ModRajio extends Module {
         
         this._params['leadin'] = 2;
         this._params['pause'] = 900;
+        this._params['autowithdraw'] = 120;
         this._params['queuesize'] = 5;
         this._params['referenceloudness'] = -20;
         this._params['volume'] = 1.0;
         this._params['announcechannel'] = null;
         this._params['announcedelay'] = 0;
+        this._params['announcestatus'] = true;
         
         this._announced = null;
         
         this._queue = [];  //[{song, userid}, ...] - plays from the left
         this._disabled = false;
         this._volume = 1.0;
+        
+        this._pendingwithdraw = {};  //{userid: timer}
         
         this._play = null;  //Song being played
         this._pending = null;  //Timer that will start the next song
@@ -117,7 +124,7 @@ class ModRajio extends Module {
             
         
         
-        //Register callbacks
+        //Register Discord callbacks
 
         var self = this;
         
@@ -127,12 +134,17 @@ class ModRajio extends Module {
             let myid = this.denv.server.me.id;
             
             if (oldMember.voiceChannelID != this.dchan.id && member.voiceChannelID == this.dchan.id) {
-                if (member.id == myid && this.listeners.length) {
-                    //I joined the channel
-                    this.playSong();
-                } else if (!member.deaf && !this.playing) {                    
-                    //First listener joined the channel
-                    this.resumeSong() || this.playSong();
+                if (member.id == myid) {
+                    if (this.listeners.length) {
+                        //I joined the channel
+                        this.playSong();
+                    }
+                } else {
+                    if (!member.deaf && !this.playing) {
+                        //First listener joined the channel
+                        this.resumeSong() || this.playSong();
+                    }
+                    this.stayafterall(member.id);
                 }
             }
             
@@ -140,9 +152,12 @@ class ModRajio extends Module {
                 if (member.id == myid) {
                     //I left the channel
                     this.stopSong();
-                } else if (!this.listeners.length) {
-                    //Last listener left the channel
-                    this.pauseSong();
+                } else {
+                    this.autowithdraw(member.id);
+                    if (!this.listeners.length) {
+                        //Last listener left the channel
+                        this.pauseSong();
+                    }
                 }
             }
             
@@ -172,17 +187,26 @@ class ModRajio extends Module {
             if (member.guild.id != this.denv.server.id) return;
             
             if (oldMember.user.presence.status != "offline" && member.user.presence.status == "offline") {
-                this.widthdraw(member.user.id);
+                this.withdraw(member.user.id);
             }
         });
         
         this.denv.client.on("guildMemberRemove", (member) => {
             if (member.user.presence.status == "offline") return;
             if (member.guild.id != this.denv.server.id) return;
-            this.widthdraw(member.user.id);
+            this.withdraw(member.user.id);
         });
         
+        
+        //Register module integrations
+        
+        this.grabber.registerParserFilter(/^#$/, (str, match) => {
+            if (this._play) return this._play.hash;
+            return null;
+        }, this);
+        
 
+        //Register commands
 
         this.mod("Commands").registerRootDetails(this, 'rajio', {description: 'Commands for controlling the radio queue and playback.'});
 
@@ -193,7 +217,7 @@ class ModRajio extends Module {
             if (!this._play) {
                 if (this._pause) {
                     ep.reply('**[Paused]** ' + '`' + this._pause[0].hash + ' ' + this._pause[0].name + (this._pause[0].author ? ' (' + this._pause[0].author + ')' : '')
-                        + ' <' + this.secondsToHms(this._pause[1]) + ' / ' + this.secondsToHms(this._pause[0].length) + '>`');
+                        + ' <' + this.secondsToHms(Math.round(this._pause[1] / 1000.0)) + ' / ' + this.secondsToHms(this._pause[0].length) + '>`');
                 } else {
                     ep.reply('Nothing is being played right now.');
                 }
@@ -279,11 +303,6 @@ class ModRajio extends Module {
         
         let requestcommand = (demand) => (env, type, userid, channelid, command, args, handle, ep) => {
         
-            if (!this.islistener(userid)) {
-                ep.reply('This command is only available to listeners.');
-                return true;
-            }
-        
             let arg = args.hashoroffset.join(" ");
             if (args.hashoroffset.length > 1 && !arg.match(/^\(.*\)$/)) {
                 arg = '(' + arg + ')';
@@ -305,6 +324,10 @@ class ModRajio extends Module {
             if (!this.enqueue(song, userid, demand)) {
                 ep.reply('The queue is full or the song is already in the queue.');
                 return true;
+            }
+            
+            if (!this.islistener(userid)) {
+                this.autowithdraw(userid);
             }
             
             ep.reply('OK.');
@@ -407,6 +430,10 @@ class ModRajio extends Module {
             }
         }
         
+        if (this.param('announcestatus')) {
+            this.denv.client.realClient.user.setGame(song.name);
+        }
+        
         let att = 1.0;
         let ref = this.param('referenceloudness');
         if (!isNaN(ref) && ref < 0) {
@@ -438,6 +465,10 @@ class ModRajio extends Module {
         
         this.log('Stopping song' + (this._play ? ': ' + this._play.hash : '.'));
         
+        if (this.param('announcestatus')) {
+            this.denv.client.realClient.user.setGame(null);
+        }
+        
         if (this._pending) {
             clearTimeout(this._pending);
             this._pending = null;
@@ -464,6 +495,10 @@ class ModRajio extends Module {
         }
         
         this.log('Pausing song: ' + this._play.hash + ' at ' + vc.dispatcher.time);
+        
+        if (this.param('announcestatus')) {
+            this.denv.client.realClient.user.setGame("*Paused*");
+        }
         
         this._pause = [this._play, vc.dispatcher.time];
         this._play = null;
@@ -518,7 +553,7 @@ class ModRajio extends Module {
         return item.song;
     }
     
-    withdraw(userid) {
+    withdraw(userid, fromauto) {
         let newqueue = this._queue.filter((item) => item.userid != userid);
         let result = 0;
         if (newqueue.length != this._queue.length) {
@@ -526,7 +561,25 @@ class ModRajio extends Module {
             this.log('User ' + userid + ' withdrew from the queue. Removed ' + result + ' song(s).');
             this._queue = newqueue;
         }
+        if (!fromauto && this._pendingwithdraw[userid]) {
+            clearTimeout(this._pendingwithdraw[userid]);
+            this._pendingwithdraw[userid] = null;
+        }
         return result;
+    }
+    
+    autowithdraw(userid) {
+        if (this._pendingwithdraw[userid]) return;
+        this._pendingwithdraw[userid] = setTimeout(() => {
+            this.withdraw(userid, true);
+            this._pendingwithdraw[userid] = null;
+        }, this.param('autowithdraw') * 1000);
+    }
+    
+    stayafterall(userid) {
+        if (!this._pendingwithdraw[userid]) return;
+        clearTimeout(this._pendingwithdraw[userid]);
+        this._pendingwithdraw[userid] = null;
     }
     
     
