@@ -188,6 +188,11 @@ class ModSongRanking extends Module {
             }
             if (lik < -2) lik = -2;
             if (lik > 2) lik = 2;
+            
+            if (lik == 0) {
+                ep.reply('?');
+                return true;
+            }
         
             if (this.setSongLikeability(hash, userid, parseInt(lik))) {
                 ep.reply("Ok.");
