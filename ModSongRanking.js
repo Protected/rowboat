@@ -4,19 +4,19 @@ var Module = require('./Module.js');
 var emoji = require('emojione');
 
 var LIKEABILITY_WORDS = {
-    love: 1,
-    adore: 1,
-    blissful: 1,
-    enraptured: 1,
-    epiphany: 1,
-    wow: 1,
-    incredible: 1,
-    ok: 0,
-    like: 0,
-    decent: 0,
-    happy: 0,
-    acceptable: 0,
-    yes: 0,
+    love: 2,
+    adore: 2,
+    blissful: 2,
+    enraptured: 2,
+    epiphany: 2,
+    wow: 2,
+    incredible: 2,
+    ok: 1,
+    like: 1,
+    decent: 1,
+    happy: 1,
+    acceptable: 1,
+    yes: 1,
     mediocre: -1,
     dislike: -1,
     unhappy: -1,
@@ -31,22 +31,22 @@ var LIKEABILITY_WORDS = {
 };
 
 var LIKEABILITY_REACTIONS = {
-    ok_hand: 1,
-    thumbsup: 1,
-    clap: 1,
-    laughing: 1,
-    satisfied: 1,
-    heart_eyes: 1,
-    heart: 1,
-    hearts: 1,
-    smile: 0,
-    smiley: 0,
-    slight_smile: 0,
-    grin: 0,
-    grinning: 0,
-    relieved: 0,
-    relaxed: 0,
-    metal: 0,
+    ok_hand: 2,
+    thumbsup: 2,
+    clap: 2,
+    laughing: 2,
+    satisfied: 2,
+    heart_eyes: 2,
+    heart: 2,
+    hearts: 2,
+    smile: 1,
+    smiley: 1,
+    slight_smile: 1,
+    grin: 1,
+    grinning: 1,
+    relieved: 1,
+    relaxed: 1,
+    metal: 1,
     slight_frown: -1,
     expressionless: -1,
     unamused: -1,
@@ -107,7 +107,7 @@ class ModSongRanking extends Module {
 
         this.grabber.registerOnNewSong((messageObj, messageAuthor, reply, hash) => {
             
-            this.setSongLikeability(hash, messageObj.author.id, 0);
+            this.setSongLikeability(hash, messageObj.author.id, 1);
             
         }, self);
 
@@ -158,8 +158,8 @@ class ModSongRanking extends Module {
             args: ['hashoroffset', 'likeability'],
             details: [
                 "Likeability can be one of:",
-                " 1 = :ok_hand: = I especially like the song",
-                " 0 = :slight_smile: = (default) The song is ok/good",
+                " 2 = :ok_hand: = I especially like the song",
+                " 1 = :slight_smile: = (default) The song is ok/good",
                 "-1 = :slight_frown: = The song is bad/don't like it much",
                 "-2 = :poop: = I hate this song"
             ],
@@ -180,14 +180,14 @@ class ModSongRanking extends Module {
                 return true;
             }
         
-            var lik = args.likeability || 0;
+            var lik = args.likeability || 1;
             lik = parseInt(lik);
             if (isNaN(lik)) {
                 if (LIKEABILITY_WORDS[args.likeability] !== undefined) lik = LIKEABILITY_WORDS[args.likeability];
-                else lik = 0;
+                else lik = 1;
             }
             if (lik < -2) lik = -2;
-            if (lik > 1) lik = 1;
+            if (lik > 2) lik = 2;
         
             if (this.setSongLikeability(hash, userid, parseInt(lik))) {
                 ep.reply("Ok.");

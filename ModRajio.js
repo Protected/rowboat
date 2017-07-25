@@ -1,5 +1,4 @@
 /* Module: Rajio -- Grabber add-on for playing songs on discord audio channels. */
-/* Module: Rajio -- Grabber add-on for playing songs on discord audio channels. */
 
 var Module = require('./Module.js');
 var moment = require('moment');
