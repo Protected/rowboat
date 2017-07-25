@@ -8,7 +8,7 @@ const DOWNLOADPATH = 'songs';
 
 var index = null;
 
-loadIndex() {
+function loadIndex() {
     var indexfile = DOWNLOADPATH + '/' + INDEXFILE;
  
     try {
@@ -27,7 +27,7 @@ loadIndex() {
     return true;
 }
 
-saveIndex() {
+function saveIndex() {
     var indexfile = DOWNLOADPATH + '/' + INDEXFILE;
     
     jsonfile.writeFileSync(indexfile, index, {spaces: 4});
