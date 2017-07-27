@@ -142,7 +142,7 @@ class ModSongRanking extends Module {
                 
                 this.grabber.scanMessage(messageReaction.message, {
                     exists: (messageObj, messageAuthor, reply, hash) => {
-                        this.setSongLikeability(hash, messageReaction.message.author.id, LIKEABILITY_REACTIONS[emojiname]);
+                        this.setSongLikeability(hash, user.id, LIKEABILITY_REACTIONS[emojiname]);
                     }
                 }, true);
             });
