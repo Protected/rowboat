@@ -621,6 +621,10 @@ class ModGrabber extends Module {
                         let video = ytdl(url, {filter: 'audioonly'});
                         let ffmpeg = new FFmpeg(video);
                         
+                        ffmpeg.on('error', (err) => {
+                            this.log('error', exception);
+                        });
+                        
                         if (interval) ffmpeg.seekInput(interval[0]).duration(interval[1] - interval[0]);
                         
                         //Prepare stream for writing to disk
@@ -721,6 +725,10 @@ class ModGrabber extends Module {
                     //Plug attachment download into ffmpeg
                     let attfiledl = request(ma.url);
                     let ffmpeg = new FFmpeg(attfiledl);
+                    
+                    ffmpeg.on('error', (err) => {
+                        this.log('error', exception);
+                    });
                     
                     if (interval) ffmpeg.seekInput(interval[0]).duration(interval[1] - interval[0]);
                     
