@@ -622,7 +622,7 @@ class ModGrabber extends Module {
                         let ffmpeg = new FFmpeg(video);
                         
                         ffmpeg.on('error', (err) => {
-                            this.log('error', exception);
+                            this.log('error', err);
                         });
                         
                         if (interval) ffmpeg.seekInput(interval[0]).duration(interval[1] - interval[0]);
@@ -727,7 +727,7 @@ class ModGrabber extends Module {
                     let ffmpeg = new FFmpeg(attfiledl);
                     
                     ffmpeg.on('error', (err) => {
-                        this.log('error', exception);
+                        this.log('error', err);
                     });
                     
                     if (interval) ffmpeg.seekInput(interval[0]).duration(interval[1] - interval[0]);
