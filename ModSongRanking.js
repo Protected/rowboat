@@ -23,11 +23,14 @@ var LIKEABILITY_WORDS = {
     unimpressed: -1,
     underwhelming: -1,
     no: -1,
+    nah: -1,
+    nope: -1,
     hate: -2,
     horrible: -2,
     terrible: -2,
     disgust: -2,
-    never: -2
+    never: -2,
+    poop: -2
 };
 
 var LIKEABILITY_REACTIONS = {

@@ -14,11 +14,11 @@ class ModRajio extends Module {
     
     get requiredParams() { return [
         'env',                  //Name of the Discord environment to be used
-        'channel',              //ID of a Discord audio channel
         'grabber'               //Name of the grabber to piggyback on (required because the grabber is multi-instanceable)
     ]; }
     
     get optionalParams() { return [
+        'channel',              //ID of a Discord audio channel
         'leadin',               //Length of silence, in seconds, before each new song is played
         'pause',                //Maximum amount of time in seconds to keep the current song paused when the module loses all listeners
         'autowithdraw',         //How long in seconds before a user withdraws from the queue if they are online but not a listener
@@ -27,7 +27,8 @@ class ModRajio extends Module {
         'volume',               //Global volume multipler; Defaults to 1.0 and can be changed via command
         'announcechannel',      //ID of a Discord text channel to announce song changes to
         'announcedelay',        //Minimum seconds between announces
-        'announcestatus'        //Announce current song in bot's game (true/false)
+        'announcestatus',       //Announce current song in bot's game (true/false)
+        'historylength'         //Maximum amount of recently played songs to remember
     ]; }
     
     get requiredEnvironments() { return [
@@ -41,6 +42,7 @@ class ModRajio extends Module {
     constructor(name) {
         super('Rajio', name);
         
+        this._params['channel'] = null;
         this._params['leadin'] = 2;
         this._params['pause'] = 900;
         this._params['autowithdraw'] = 120;
@@ -50,14 +52,18 @@ class ModRajio extends Module {
         this._params['announcechannel'] = null;
         this._params['announcedelay'] = 0;
         this._params['announcestatus'] = true;
+        this._params['historylength'] = 5;
         
         this._announced = null;
+        this._history = [];  //[song, song, ...]
         
         this._queue = [];  //[{song, userid}, ...] - plays from the left
         this._disabled = false;
         this._volume = 1.0;
         
-        this._pendingwithdraw = {};  //{userid: timer}
+        this._pendingwithdraw = {};  //{userid: timer, ...} Autowithdrawal for non-listeners with queued songs
+        this._skipper = {};  //{userid: true, ...} Requested skipping current song
+        this._undeafen = {};  //{userid: true, ...} Users to undeafen as soon as they rejoin a voice channel
         
         this._play = null;  //Song being played
         this._pending = null;  //Timer that will start the next song
@@ -75,7 +81,7 @@ class ModRajio extends Module {
     }
     
     get dchan() {
-        return this.denv.server.channels.get(this.param('channel'));
+        return this.denv.server.channels.get(this._channel);
     }
     
     get listeners() {
@@ -103,22 +109,22 @@ class ModRajio extends Module {
         }
         
         
+        this._channel = this.param('channel');
         this._volume = parseFloat(this.param('volume'));
         
         
         //Prepare player
         
         this.denv.on("connected", () => {
-            if (!this.dchan || this.dchan.type != "voice") {
-                this.log('error', "Channel not found or not a voice channel.");
-                return;
+            if (this.dchan && this.dchan.type == "voice") {
+                this.dchan.join().then((connection) => {
+                    if (this.listeners.length) {
+                        this.playSong();
+                    }
+                });
+            } else {
+                this._disabled = true;
             }
-        
-            this.dchan.join().then((connection) => {
-                if (this.listeners.length) {
-                    this.playSong();
-                }
-            });
         });
             
         
@@ -131,19 +137,31 @@ class ModRajio extends Module {
             if (member.guild.id != this.denv.server.id) return;
             
             let myid = this.denv.server.me.id;
+            let llisteners = this.listeners.length;
             
             if (oldMember.voiceChannelID != this.dchan.id && member.voiceChannelID == this.dchan.id) {
                 if (member.id == myid) {
-                    if (this.listeners.length) {
+                    if (llisteners) {
                         //I joined the channel
                         this.playSong();
                     }
                 } else {
-                    if (!member.deaf && !this.playing) {
-                        //First listener joined the channel
-                        this.resumeSong() || this.playSong();
+                    if (this._skipper[member.id] && !member.deaf) {
+                        //Skipper tried to undeafen themselves... Nah
+                        member.setDeaf(true);
+                    } else {
+                        if (this._undeafen[member.id]) {
+                            member.setDeaf(false);
+                            delete this._undeafen[member.id];
+                        }
+                        if (!member.deaf) {
+                            if (!this.playing) {
+                                //First listener joined the channel
+                                this.resumeSong() || this.playSong();
+                            }
+                            this.stayafterall(member.id);
+                        }
                     }
-                    this.stayafterall(member.id);
                 }
             }
             
@@ -153,7 +171,7 @@ class ModRajio extends Module {
                     this.stopSong();
                 } else {
                     this.autowithdraw(member.id);
-                    if (!this.listeners.length) {
+                    if (!llisteners) {
                         //Last listener left the channel
                         this.pauseSong();
                     }
@@ -170,12 +188,19 @@ class ModRajio extends Module {
                     this.resumeSong() || this.playSong();
                 }
             } else {
-                if (!oldMember.deaf && member.deaf && !this.listeners.length) {
-                    //Last listener was deafened
-                    this.pauseSong();
+                if (!oldMember.deaf && member.deaf) {
+                    if (!llisteners) {
+                        //Last listener was deafened
+                        this.pauseSong();
+                    }
                 } else if (oldMember.deaf && !member.deaf) {
-                    //First listener was undeafened
-                    this.resumeSong() || this.playSong();
+                    if (this._skipper[member.id] && member.voiceChannelID == this.dchan.id) {
+                        //Skipper tried to undeafen themselves... Nah
+                        member.setDeaf(true);
+                    } else if (llisteners == 1) {
+                        //First listener was undeafened
+                        this.resumeSong() || this.playSong();
+                    }
                 }
             }
             
@@ -213,6 +238,11 @@ class ModRajio extends Module {
             description: 'Displays the name and hash of the song currently being played.'
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
+            if (this._disabled) {
+                ep.reply('The radio is disabled.');
+                return true;
+            }
+        
             if (!this._play) {
                 if (this._pause) {
                     ep.reply('**[Paused]** ' + '`' + this._pause[0].hash + ' ' + this._pause[0].name + (this._pause[0].author ? ' (' + this._pause[0].author + ')' : '')
@@ -229,39 +259,105 @@ class ModRajio extends Module {
             return true;
         });
         
+        
+        this.mod('Commands').registerCommand(this, 'rajio skip', {
+            description: 'Vote to skip the current song.',
+            details: [
+                "When a listener calls this command, if there are no listeners who haven't called it, the current song is skipped.",
+                "Otherwise, the listener is deafened until the end of the song and a beep is played in the channel to alert other listeners.",
+                "If the listener leaves the channel or undeafens himself, his skip vote is revoked."
+            ]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            if (!this.playing || this._skipper[userid] || !this.islistener(userid)) return true;
+            
+            let listeners = this.listeners;
+            
+            let cskippers = Object.keys(this._skipper).length;
+            let clisteners = listeners.length;
+            
+            for (let skipperid in this._skipper) {
+                if (!listeners.find((item) => item.id == skipperid)) {
+                    clisteners += 1;
+                }
+            }
+            
+            ep.reply('OK (' + (cskippers+1) + '/' + clisteners + ').');
+            
+            this._skipper[userid] = true;
+            
+            if (cskippers >= clisteners - 1) {
+                this.stopSong();
+                this.playSong();
+                return true;
+            }
+                        
+            this.dchan.members.get(userid).setDeaf(true);
+            
+            let vc = this.denv.server.voiceConnection;
+            //vc.playFile('beep.ogg');
+        
+            return true;
+        });
+        
 
         this.mod('Commands').registerCommand(this, 'rajio off', {
-            description: 'Disable the radio. This will stop it from playing music until it\'s re-enabled.',
+            description: 'Disable the radio. This will stop it from playing music.',
             permissions: [PERM_ADMIN, PERM_MOD]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (this._disabled) {
                 ep.reply('The radio is already disabled.');
-            } else {
-                this._disabled = true;
-                this.stopSong();
-                ep.reply('The radio has now been disabled.');
+                return true;
             }
-        
+            
+            this._disabled = true;
+            this.stopSong();
+            
+            if (this.dchan) {
+                this.dchan.leave();
+            }
+            
+            ep.reply('The radio has now been disabled.');
+
             return true;
         });
 
         
         this.mod('Commands').registerCommand(this, 'rajio on', {
-            description: 'Re-enable the radio if it was previously disabled.',
+            description: 'Enable or re-enable the radio in an existing voice channel.',
+            args: ['channelid'],
+            minArgs: 0,
             permissions: [PERM_ADMIN, PERM_MOD]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (!this._disabled) {
-                ep.reply('The radio is not disabled!');
-            } else {
+                ep.reply('The radio is already running!');
+                return true;
+            }
+
+            if (args.channelid) {
+                let newchan = this.denv.server.channels.get(args.channelid);
+                if (!newchan || newchan.type != "voice") {
+                    ep.reply('There is no voice channel with the specified ID.');
+                    return true;
+                }
+                this._channel = args.channelid;
+            }
+            
+            if (!this.dchan || this.dchan.type != "voice") {
+                ep.reply("The voice channel could not be found. Please specify the ID of an existing voice channel.");
+                return true;
+            }
+            
+            this.dchan.join().then((connection) => {
                 this._disabled = false;
                 if (this.listeners.length) {
                     this.playSong();
                 }
                 ep.reply('The radio has now been re-enabled.');
-            }
-        
+            });
+            
             return true;
         });
         
@@ -292,6 +388,8 @@ class ModRajio extends Module {
             description: 'End playback of the current song and play the next one in the queue.',
             permissions: [PERM_ADMIN, PERM_MOD]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            if (this._disabled) return true;
         
             this.stopSong();
             this.playSong();
@@ -400,6 +498,23 @@ class ModRajio extends Module {
         
             return true;
         });
+        
+        
+        this.mod('Commands').registerCommand(this, 'rajio history', {
+            description: 'Show a list of recently played songs.'
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            if (!this._history.length) {
+                ep.reply('No songs were played.');
+                return true;
+            }
+            
+            for (let song of this._history) {
+                ep.reply('`' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`');
+            }
+        
+            return true;
+        });
 
 
         return true;
@@ -408,6 +523,8 @@ class ModRajio extends Module {
     
     // # Module code below this line #
     
+    
+    //Internal playback control
     
     playSong(song, seek) {
         let vc = this.denv.server.voiceConnection;
@@ -448,11 +565,16 @@ class ModRajio extends Module {
         
         this._play = song;
         this._pending = setTimeout(() => {
+        
+            this.abortskip();
+        
             vc.playFile(this.grabber.songPathByHash(song.hash), options).once("end", () => {
+                this.remember(this._play);
                 if (!this._pause) {
                     this.playSong();
                 }
             });
+            
             this._pending = null;
         }, this.param('leadin') > 0 ? this.param('leadin') * 1000 : 1);
         
@@ -478,13 +600,15 @@ class ModRajio extends Module {
             this._expirepause = null;
         }
         
-        if (vc.dispatcher) {
+        if (vc && vc.dispatcher) {
             this._play = null;
             this._pause = true;  //Hack to stop the end event from playing next song
             vc.dispatcher.end();
         }
         
         this._pause = null;
+        
+        this.abortskip();
     }
     
     pauseSong() {
@@ -526,6 +650,8 @@ class ModRajio extends Module {
         return true;
     }
     
+    
+    //Control the queue of pending/upcoming songs
     
     enqueue(song, userid, demand) {
         if (!song) return false;
@@ -581,6 +707,35 @@ class ModRajio extends Module {
         this._pendingwithdraw[userid] = null;
     }
     
+    
+    //Abort request to skip current song
+    
+    abortskip() {
+        let members = this.dchan.members;
+        for (let userid in this._skipper) {
+            if (members.get(userid) && members.get(userid).deaf) {
+                members.get(userid).setDeaf(false);
+                delete this._skipper[userid];
+            }
+        }
+        for (let userid in this._skipper) {
+            this._undeafen[userid] = true;
+        }
+        this._skipper = {};
+    }
+    
+    
+    //Remember played song
+    
+    remember(song) {
+        this._history.unshift(song);
+        if (this._history.length > this.param('historylength')) {
+            this._history = this._history.slice(0, this.param('historylength'));
+        }
+    }
+    
+    
+    //Auxiliary
     
     islistener(userid) {
         let member = this.dchan.members.get(userid);

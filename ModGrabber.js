@@ -392,9 +392,11 @@ class ModGrabber extends Module {
         
         this.mod('Commands').registerCommand(this, 'song kw add', {
             description: 'Associate a new keyword with an indexed song.',
-            args: ['hashoroffset', 'keyword'],
+            args: ['hashoroffset', 'keyword', true],
             permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            args.keyword = args.keyword.join(" ");
         
             var hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
@@ -431,9 +433,11 @@ class ModGrabber extends Module {
         
         this.mod('Commands').registerCommand(this, 'song kw remove', {
             description: 'Remove a keyword from an indexed song.',
-            args: ['hashoroffset', 'keyword'],
+            args: ['hashoroffset', 'keyword', true],
             permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            args.keyword = args.keyword.join(" ");
         
             var hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
