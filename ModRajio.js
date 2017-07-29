@@ -106,10 +106,10 @@ class ModRajio extends Module {
         this._params['pri.kw.high'] = 5.0;
         this._params['pri.kw.low'] = 5.0;
         this._params['pri.kw.max'] = 3;
-        this._params['pri.kw.global'] = [];
+        this._params['pri.kw.global'] = {};
         this._params['pri.rand.min'] = -25.0;
         this._params['pri.rand.max'] = 25.0;
-        this._params['pri.tolerance'] = 50.0;
+        this._params['pri.tolerance'] = 20.0;
         
         this._userdata = {};
         
@@ -1007,7 +1007,7 @@ class ModRajio extends Module {
             if (listeners) priority += songrank.computeSongRank(song.hash, listeners) * this.param('pri.mlistener');
         }
         
-        let queuepos = this._queue.find((item) => item.song.hash == song.hash);
+        let queuepos = this._queue.findIndex((item) => item.song.hash == song.hash);
         if (queuepos > -1) {
             priority += this.param('pri.request.bonus');
             priority += (this.param('queuesize') - queuepos - 1) * this.param('pri.request.mpos');
