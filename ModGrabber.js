@@ -1022,6 +1022,11 @@ class ModGrabber extends Module {
     }
     
     
+    everySong() {
+        return Object.keys(this._index);
+    }
+    
+    
     findSong(searchstr, extended) {
         var songs = this.filterSongsBySearchString(searchstr);
         if (songs.length) {

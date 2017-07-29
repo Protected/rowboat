@@ -2,6 +2,9 @@
 
 var Module = require('./Module.js');
 var moment = require('moment');
+var random = require('meteor-random');
+var fs = require('fs');
+var jsonfile = require('jsonfile');
 
 const PERM_ADMIN = 'administrator';
 const PERM_MOD = 'moderator';
@@ -14,21 +17,48 @@ class ModRajio extends Module {
     
     get requiredParams() { return [
         'env',                  //Name of the Discord environment to be used
-        'grabber'               //Name of the grabber to piggyback on (required because the grabber is multi-instanceable)
+        'grabber'               //Name of the ModGrabber to piggyback on (required because the grabber is multi-instanceable)
     ]; }
     
     get optionalParams() { return [
-        'channel',              //ID of a Discord audio channel
+        'datafile',
+        
+        'channel',              //ID of a Discord audio channel to join by default
+        'songrank',             //Name of the ModSongRank to obtain user preferences from
         'leadin',               //Length of silence, in seconds, before each new song is played
         'pause',                //Maximum amount of time in seconds to keep the current song paused when the module loses all listeners
         'autowithdraw',         //How long in seconds before a user withdraws from the queue if they are online but not a listener
-        'queuesize',            //Maximum amount of songs in the queue
+        'queuesize',            //Maximum amount of songs in the request queue
         'referenceloudness',    //Negative decibels; Play youtube songs with higher loudness at a lower volume to compensate
         'volume',               //Global volume multipler; Defaults to 1.0 and can be changed via command
+        
         'announcechannel',      //ID of a Discord text channel to announce song changes to
         'announcedelay',        //Minimum seconds between announces
         'announcestatus',       //Announce current song in bot's game (true/false)
-        'historylength'         //Maximum amount of recently played songs to remember
+        'historylength',        //Maximum amount of recently played songs to remember
+        
+        'pri.base',             //Base priority
+        'pri.rank.mtotal',      //Multiplier for global song rank
+        'pri.rank.mlistener',   //Multiplier for listener-specific song rank
+        'pri.request.bonus',    //Added priority for songs in request queue
+        'pri.request.mpos',     //Multiplier for position of songs in request queue
+        'pri.length.minlen',    //Minimum ideal song length (for maximum priority bonus)
+        'pri.length.maxlen',    //Maximum ideal song length (for maximum priority bonus)
+        'pri.length.maxexcs',   //Song length after which priority bonus is 0
+        'pri.length.bonus',     //Bonus priority for ideal song length
+        'pri.lastplay.cap',     //Seconds in the past after which recently played bonus no longer applies
+        'pri.lastplay.m',       //Bonus priority multiplier for recently played song
+        'pri.lastplay.b',       //Bonus base for recently played song
+        'pri.lastreq.cap',      //Seconds in the past after which recently requested bonus no longer applies
+        'pri.lastreq.m',        //Bonus priority multiplier for recently requested song
+        'pri.lastreq.b',        //Bonus base for recently requested song
+        'pri.kw.high',          //Bonus multiplier for user-defined high priority keywords
+        'pri.kw.low',           //Bonus multiplier for user-defined low priority keywords (bonus will be negative)
+        'pri.kw.max',           //Maximum amount of user-defined priority keywords
+        'pri.kw.global',        //{"keyword" => {bonus, multiplier, mindate, maxdate}, ...} Modify priority if each keyword is found in song (dates are month-day)
+        'pri.rand.min',         //Minimum random component        
+        'pri.rand.max',         //Maximum random component
+        'pri.tolerance'         //Tolerance when selecting a song (select randomly in interval)
     ]; }
     
     get requiredEnvironments() { return [
@@ -42,22 +72,52 @@ class ModRajio extends Module {
     constructor(name) {
         super('Rajio', name);
         
+        this._params['datafile'] = 'rajio.data.json';
+        
         this._params['channel'] = null;
+        this._params['songrank'] = null;
         this._params['leadin'] = 2;
         this._params['pause'] = 900;
         this._params['autowithdraw'] = 120;
-        this._params['queuesize'] = 5;
+        this._params['queuesize'] = 10;
         this._params['referenceloudness'] = -20;
         this._params['volume'] = 1.0;
+        
         this._params['announcechannel'] = null;
         this._params['announcedelay'] = 0;
         this._params['announcestatus'] = true;
         this._params['historylength'] = 5;
         
+        this._params['pri.base'] = 0.0;
+        this._params['pri.rank.mtotal'] = 10.0;
+        this._params['pri.rank.mlistener'] = 20.0;
+        this._params['pri.request.bonus'] = 100.0;
+        this._params['pri.request.mpos'] = 20.0;
+        this._params['pri.length.minlen'] = 200;
+        this._params['pri.length.maxlen'] = 600;
+        this._params['pri.length.maxexcs'] = 900;
+        this._params['pri.length.bonus'] = 20.0;
+        this._params['pri.lastplay.cap'] = 43200;
+        this._params['pri.lastplay.m'] = 0.4;
+        this._params['pri.lastplay.b'] = -30.0;
+        this._params['pri.lastreq.cap'] = 3600;
+        this._params['pri.lastreq.m'] = 0.8;
+        this._params['pri.lastreq.b'] = -25.0;
+        this._params['pri.kw.high'] = 5.0;
+        this._params['pri.kw.low'] = 5.0;
+        this._params['pri.kw.max'] = 3;
+        this._params['pri.kw.global'] = [];
+        this._params['pri.rand.min'] = -25.0;
+        this._params['pri.rand.max'] = 25.0;
+        this._params['pri.tolerance'] = 50.0;
+        
+        this._userdata = {};
+        
         this._announced = null;
         this._history = [];  //[song, song, ...]
         
         this._queue = [];  //[{song, userid}, ...] - plays from the left
+        this._lastreq = {};  //{hash: ts, ...} - When a requested song was last played (not persisted)
         this._disabled = false;
         this._volume = 1.0;
         
@@ -74,6 +134,11 @@ class ModRajio extends Module {
     
     get grabber() {
         return this.mod(this.param('grabber'));
+    }
+    
+    get songrank() {
+        if (!this.param('songrank')) return null;
+        return this.mod(this.param('songrank'));
     }
     
     get denv() {
@@ -107,6 +172,10 @@ class ModRajio extends Module {
             this.log('error', "Environment not found or not Discord.");
             return false;
         }
+        
+        
+        this._params['datafile'] = this.dataPath() + this._params['datafile'];
+        this.loadData();
         
         
         this._channel = this.param('channel');
@@ -510,8 +579,117 @@ class ModRajio extends Module {
             }
             
             for (let song of this._history) {
+                if (!song) continue;
                 ep.reply('`' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`');
             }
+        
+            return true;
+        });
+        
+        
+        if (this.param('pri.kw.max')) {
+        
+            this.mod('Commands').registerCommand(this, 'rajio kwpriority', {
+                description: 'List your personal priorities.'
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
+                
+                let userdata = this._userdata[userid];
+                if (!userdata) userdata = {};
+                
+                if (!userdata.kw || !Object.keys(userdata.kw).length) {
+                    ep.reply('You have set no priorities.');
+                    return true;
+                }
+                
+                for (let keyword in userdata.kw) {
+                    ep.reply('[' + (userdata.kw[keyword] > 0 ? 'High' : 'Low') + '] ' + keyword);
+                }
+                
+                return true;
+            });
+        
+            this.mod('Commands').registerCommand(this, 'rajio kwpriority set', {
+                description: 'Set a personal priority (high or low) for a keyword.',
+                args: ['level', 'keyword', true]
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
+                            
+                let level = 0;
+                if (args.level == "high") level = 1;
+                else if (args.level == "low") level = -1;
+                else {
+                    ep.reply('Please set the priority level to "high" or "low".');
+                    return true;
+                }
+            
+                let keyword = args.keyword.join(" ").toLowerCase().trim();
+            
+                let userdata = this._userdata[userid];
+                if (!userdata) userdata = {};
+                if (!userdata.kw) userdata.kw = {};
+                
+                if (Object.keys(userdata) >= this.param('pri.kw.max') && !userdata.kw[keyword]) {
+                    ep.reply('You can\'t have more than ' + this.param('pri.kw.max') + ' keyword preferences.');
+                    return true;
+                }
+                
+                userdata.kw[keyword] = level;
+                this._userdata[userid] = userdata;
+                this.saveData();
+                
+                ep.reply('OK.');
+            
+                return true;
+            });
+            
+            this.mod('Commands').registerCommand(this, 'rajio kwpriority unset', {
+                description: 'Unset a keyword\'s personal priority.',
+                args: ['keyword', true]
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
+            
+                let keyword = args.keyword.join(" ").toLowerCase().trim();
+            
+                let userdata = this._userdata[userid];
+                if (!userdata) userdata = {};
+                if (!userdata.kw) userdata.kw = {};
+                
+                if (!userdata.kw[keyword]) {
+                    ep.reply('You do not have a priority for this keyword.');
+                    return true;
+                }
+                
+                delete userdata.kw[keyword];
+                this._userdata[userid] = userdata;
+                this.saveData();
+                
+                ep.reply('OK.');
+            
+                return true;
+            });
+            
+        }
+        
+        
+        this.mod('Commands').registerCommand(this, 'rajio priority', {
+            description: 'Show a song\'s current priority value.',
+            args: ['hashoroffset', true],
+            permissions: [PERM_ADMIN]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            let arg = args.hashoroffset.join(" ");
+            
+            let hash = this.grabber.bestSongForHashArg(arg);
+            if (hash === false) {
+                ep.reply('Offset not found in recent history.');
+                return true;
+            } else if (hash === true) {
+                ep.reply('Reference matches more than one song; Please be more specific.');
+                return true;
+            } else if (!hash) {
+                ep.reply('Hash not found.');
+                return true;
+            }
+            
+            ep.reply(this.songPriority(this.grabber.hashSong(hash), this.listeners.map((listener) => listener.id)));
         
             return true;
         });
@@ -569,7 +747,7 @@ class ModRajio extends Module {
             this.abortskip();
         
             vc.playFile(this.grabber.songPathByHash(song.hash), options).once("end", () => {
-                this.remember(this._play);
+                if (this._play) this.remember(this._play);
                 if (!this._pause) {
                     this.playSong();
                 }
@@ -655,27 +833,72 @@ class ModRajio extends Module {
     
     enqueue(song, userid, demand) {
         if (!song) return false;
-        if (!demand && this._queue.length >= this.param('queuesize')) return false;
         if (this._queue.find((item) => item.song.hash == song.hash)) return false;
+        
         if (demand) {
             this._queue.unshift({
                 song: song,
                 userid: userid
             });
             this._queue = this._queue.slice(0, this.param('queuesize'));
-        } else {
-            this._queue.push({
-                song: song,
-                userid: userid
-            });
+            return true;
         }
+        
+        let countbyuser = {};
+        let max = 0;
+        for (let item of this._queue) {
+            if (!countbyuser[item.userid]) {
+                countbyuser[item.userid] = 1;
+                max = Math.max(max, 1);
+            } else {
+                countbyuser[item.userid] += 1;
+                max = Math.max(max, countbyuser[item.userid]);
+            }
+        }
+        
+        let newitem = {
+            song: song,
+            userid: userid
+        };
+        
+        if (!max || countbyuser[userid] >= max) {
+            if (this._queue.length >= this.param('queuesize')) return false;
+            this._queue.push(newitem);
+        } else {
+            this._queue.splice((countbyuser[userid] || 0) * Object.keys(countbyuser).length, 0, newitem);
+            this._queue = this._queue.slice(0, this.param('queuesize'));
+        }
+        
         return true;
     }
     
     dequeue() {
-        if (!this._queue.length) return this.grabber.randomSong();
-        let item = this._queue.shift();
-        return item.song;
+        let listeners = this.listeners.map((listener) => listener.id);
+    
+        let priorities = {};
+        let maxpri = Number.MIN_VALUE;
+        for (let hash of this.grabber.everySong()) {
+            let priority = this.songPriority(this.grabber.hashSong(hash), listeners);
+            maxpri = Math.max(maxpri, priority);
+            priorities[hash] = priority;
+        }
+        
+        let candidates = [];
+        for (let hash in priorities) {
+            if (priorities[hash] >= maxpri - this.param('pri.tolerance')) {
+                candidates.push(hash);
+            }
+        }
+        
+        let hash = candidates[Math.floor(random.fraction() * candidates.length)];
+        
+        let index = this._queue.findIndex((item) => item.song.hash == hash);
+        if (index > -1) {
+            this._lastreq[hash] = moment().unix();
+            this._queue.splice(index, 1);
+        }
+        
+        return this.grabber.hashSong(hash);
     }
     
     withdraw(userid, fromauto) {
@@ -732,6 +955,7 @@ class ModRajio extends Module {
         if (this._history.length > this.param('historylength')) {
             this._history = this._history.slice(0, this.param('historylength'));
         }
+        this.grabber.setSongMeta(song.hash, "rajio." + this.name.toLowerCase()  + ".lastplayed", moment().unix());
     }
     
     
@@ -752,6 +976,114 @@ class ModRajio extends Module {
         result = ('0' + m).slice(-2) + ':' + result;
         if (h) result = ('0' + h).slice(-2) + ':' + result;
         return result;
+    }
+    
+    
+    personalPriorityBonus(keywords, listeners) {
+        let result = 0;
+        if (!keywords || !listeners) return result;
+        
+        for (let keyword of keywords) {
+            keyword = keyword.toLowerCase().trim();
+            for (let listener of listeners) {
+                let userdata = this._userdata[listener];
+                if (!userdata || !userdata.kw || !userdata.kw[keyword]) continue;
+                result += userdata.kw[keyword] * this.param(userdata.kw[keyword] > 0 ? "pri.kw.high" : "pri.kw.low");
+            }
+        }
+        
+        return result;
+    }
+    
+    
+    songPriority(song, listeners) {
+        let priority = this.param('pri.base');
+        
+        priority += this.param('pri.rand.min') + random.fraction() * (this.param('pri.rand.max') - this.param('pri.rand.min'));
+        
+        let songrank = this.songrank;
+        if (songrank) {
+            priority += songrank.computeSongRank(song.hash, null) * this.param('pri.mtotal');
+            if (listeners) priority += songrank.computeSongRank(song.hash, listeners) * this.param('pri.mlistener');
+        }
+        
+        let queuepos = this._queue.find((item) => item.song.hash == song.hash);
+        if (queuepos > -1) {
+            priority += this.param('pri.request.bonus');
+            priority += (this.param('queuesize') - queuepos - 1) * this.param('pri.request.mpos');
+        }
+        
+        if (song.length >= this.param('pri.length.minlen') && song.length <= this.param('pri.length.maxlen')) {
+            priority += this.param('pri.length.bonus');
+        } else if (song.length < this.param('pri.length.minlen')) {
+            priority += this.param('pri.length.bonus') * (song.length / this.param('pri.length.minlen'));
+        } else if (song.length > this.param('pri.length.maxlen') && song.length < this.param('pri.length.maxexcs')) {
+            priority += this.param('pri.length.bonus') * ((this.param('pri.length.maxexcs') - song.length) / (this.param('pri.length.maxexcs') - this.param('pri.length.maxlen')));
+        }
+        
+        let now = moment().unix();
+        
+        let lastplayed = song["rajio." + this.name.toLowerCase()  + ".lastplayed"];
+        if (lastplayed && lastplayed > now - this.param('pri.lastplay.cap')) {
+            let coef = (lastplayed - now + this.param('pri.lastplay.cap')) / this.param('pri.lastplay.cap');
+            priority += coef * this.param('pri.lastplay.b');
+            let mul = (this.param('pri.lastplay.m') - 1) * coef + 1;
+            if (priority > 0) priority *= mul;
+            if (priority < 0) priority *= Math.abs(mul - 1);
+        }
+        
+        let lastreq = this._lastreq[song.hash];
+        if (lastreq && lastreq > now - this.param('pri.lastreq.cap')) {
+            let coef = (lastreq - now + this.param('pri.lastreq.cap')) / this.param('pri.lastreq.cap');
+            priority += coef * this.param('pri.lastreq.b');
+            let mul = (this.param('pri.lastreq.m') - 1) * coef + 1;
+            if (priority > 0) priority *= mul;
+            if (priority < 0) priority *= Math.abs(mul - 1);
+        }
+        
+        priority += this.personalPriorityBonus(song.keywords, listeners);
+        
+        for (let keyword in this.param('pri.kw.global')) {
+            let descriptor = this.param('pri.kw.global')[keyword];
+            if (descriptor.multiplier == 1 && !descriptor.bonus) continue;
+            if (!song.keywords.find((kw) => kw.toLowerCase().trim() == keyword.toLowerCase().trim())) continue;
+            if (descriptor.mindate && descriptor.maxdate) {
+                let now = moment();
+                if (!now.isAfter(now.year() + '-' + descriptor.mindate + ' 00:00:00')) continue;
+                if (!now.isBefore(now.year() + '-' + descriptor.maxdate + ' 23:59:59')) continue;
+            }
+            priority = priority * descriptor.multiplier + (descriptor.bonus || 0);
+        }
+        
+        return priority;
+    }
+    
+    
+    //Load and save data file
+    
+    loadData() {
+        var datafile = this.param('datafile');
+     
+        try {
+            fs.accessSync(datafile, fs.F_OK);
+        } catch (e) {
+            jsonfile.writeFileSync(datafile, {});
+        }
+
+        try {
+            this._userdata = jsonfile.readFileSync(datafile);
+        } catch (e) {
+            return false;
+        }
+        if (!this._userdata) this._userdata = {};
+        
+        return true;
+    }
+
+    saveData() {
+        var datafile = this.param('datafile');
+        
+        jsonfile.writeFileSync(datafile, this._userdata);
     }
     
 }
