@@ -546,9 +546,9 @@ class ModGrabber extends Module {
             return ikeyword[1];
         }).filter((item) => item);
         
-        var title = message.match(/\{(title|name|song)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' _-]+)\}/iu);
+        var title = message.match(/\{(title|name|song)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' !_-]+)\}/iu);
         if (title) title = title[3];
-        var artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' _-]+)\}/iu);
+        var artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' !_-]+)\}/iu);
         if (artist) artist = artist[3];
         
         var interval = null;
@@ -756,7 +756,7 @@ class ModGrabber extends Module {
                                 return;
                             }
                             
-                            let keywords = messageInfo.dkeywords;
+                            let keywords = (messageInfo.dkeywords || []);
                             
                             //Compute hash, rename file and add to index
                             fs.readFile(temppath, (err, data) => {
