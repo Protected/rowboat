@@ -91,8 +91,8 @@ class ModRajio extends Module {
         this._params['pri.base'] = 0.0;
         this._params['pri.rank.mtotal'] = 10.0;
         this._params['pri.rank.mlistener'] = 20.0;
-        this._params['pri.request.bonus'] = 100.0;
-        this._params['pri.request.mpos'] = 20.0;
+        this._params['pri.request.bonus'] = 50.0;
+        this._params['pri.request.mpos'] = 15.0;
         this._params['pri.length.minlen'] = 200;
         this._params['pri.length.maxlen'] = 600;
         this._params['pri.length.maxexcs'] = 900;
@@ -865,7 +865,7 @@ class ModRajio extends Module {
             if (this._queue.length >= this.param('queuesize')) return false;
             this._queue.push(newitem);
         } else {
-            this._queue.splice((countbyuser[userid] || 0) * Object.keys(countbyuser).length, 0, newitem);
+            this._queue.splice(((countbyuser[userid] || 0) + 1) * Object.keys(countbyuser).length, 0, newitem);
             this._queue = this._queue.slice(0, this.param('queuesize'));
         }
         
