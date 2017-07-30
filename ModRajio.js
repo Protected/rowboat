@@ -52,6 +52,9 @@ class ModRajio extends Module {
         'pri.lastreq.cap',      //Seconds in the past after which recently requested bonus no longer applies
         'pri.lastreq.m',        //Bonus priority multiplier for recently requested song
         'pri.lastreq.b',        //Bonus base for recently requested song
+        'pri.novelty.cap',      //Seconds in the past after which a song is no longer new
+        'pri.novelty.m',        //Bonus priority multiplier for new song
+        'pri.novelty.b',        //Bonus base for new song
         'pri.kw.high',          //Bonus multiplier for user-defined high priority keywords
         'pri.kw.low',           //Bonus multiplier for user-defined low priority keywords (bonus will be negative)
         'pri.kw.max',           //Maximum amount of user-defined priority keywords
@@ -98,17 +101,20 @@ class ModRajio extends Module {
         this._params['pri.length.maxexcs'] = 900;
         this._params['pri.length.bonus'] = 20.0;
         this._params['pri.lastplay.cap'] = 43200;
-        this._params['pri.lastplay.m'] = 0.4;
+        this._params['pri.lastplay.m'] = 0.5;
         this._params['pri.lastplay.b'] = -30.0;
         this._params['pri.lastreq.cap'] = 3600;
         this._params['pri.lastreq.m'] = 0.8;
         this._params['pri.lastreq.b'] = -25.0;
+        this._params['pri.novelty.cap'] = 259200;
+        this._params['pri.novelty.m'] = 1.0;
+        this._params['pri.novelty.b'] = 20.0;
         this._params['pri.kw.high'] = 5.0;
         this._params['pri.kw.low'] = 5.0;
         this._params['pri.kw.max'] = 3;
         this._params['pri.kw.global'] = {};
-        this._params['pri.rand.min'] = -25.0;
-        this._params['pri.rand.max'] = 25.0;
+        this._params['pri.rand.min'] = -5.0;
+        this._params['pri.rand.max'] = 10.0;
         this._params['pri.tolerance'] = 20.0;
         
         this._userdata = {};
@@ -817,9 +823,10 @@ class ModRajio extends Module {
         
         this.log('Preparing to resume song: ' + this._pause[0].hash + ' at ' + this._pause[1]);
         
+        this._pause = null;
+        
         this.playSong(this._pause[0], this._pause[1]);
         
-        this._pause = null;
         if (this._expirepause) {
             clearTimeout(this._expirepause);
             this._expirepause = null;
@@ -1037,6 +1044,15 @@ class ModRajio extends Module {
             let coef = (lastreq - now + this.param('pri.lastreq.cap')) / this.param('pri.lastreq.cap');
             priority += coef * this.param('pri.lastreq.b');
             let mul = (this.param('pri.lastreq.m') - 1) * coef + 1;
+            if (priority > 0) priority *= mul;
+            if (priority < 0) priority *= Math.abs(mul - 1);
+        }
+        
+        let earliestseen = song.seen.reduce((min, item) => Math.min(min, item), Number.MAX_SAFE_INTEGER);
+        if (earliestseen > now - this.param('pri.novelty.cap')) {
+            let coef = (earliestseen - now + this.param('pri.novelty.cap')) / this.param('pri.novelty.cap');
+            priority += coef * this.param('pri.novelty.b');
+            let mul = (this.param('pri.novelty.m') - 1) * coef + 1;
             if (priority > 0) priority *= mul;
             if (priority < 0) priority *= Math.abs(mul - 1);
         }
