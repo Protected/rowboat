@@ -852,9 +852,12 @@ class ModRajio extends Module {
         
         this.log('Preparing to resume song: ' + this._pause[0].hash + ' at ' + this._pause[1]);
         
+        let song = this._pause[0];
+        let seek = this._pause[1];
+        
         this._pause = null;
         
-        this.playSong(this._pause[0], this._pause[1]);
+        this.playSong(song, seek);
         
         if (this._expirepause) {
             clearTimeout(this._expirepause);
