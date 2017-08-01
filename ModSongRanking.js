@@ -266,11 +266,9 @@ class ModSongRanking extends Module {
         }
         var i = 0; 
         var acc = 0;
-        for (let userid in likmap) {
-            if (users.indexOf(userid) > -1) {
-                acc += likmap[userid];
-                i += 1;
-            }
+        for (let userid of users) {
+            acc += (likmap[userid] || 0);
+            i += 1;
         }
         if (!i) return null;
         acc /= i;

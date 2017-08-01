@@ -107,9 +107,9 @@ class ModRajio extends Module {
         this._params['pri.kw.low'] = 5.0;
         this._params['pri.kw.max'] = 5;
         this._params['pri.kw.global'] = {};
-        this._params['pri.rand.min'] = -5.0;
-        this._params['pri.rand.max'] = 10.0;
-        this._params['pri.tolerance'] = 15.0;
+        this._params['pri.rand.min'] = -15.0;
+        this._params['pri.rand.max'] = 20.0;
+        this._params['pri.tolerance'] = 25.0;
         
         this._userdata = {};
         
