@@ -1042,12 +1042,12 @@ class ModRajio extends Module {
         
         let songrank = this.songrank;
         if (songrank) {
-            let crank = (songrank.computeSongRank(song.hash, null) || 0) * this.param('pri.mtotal');
+            let crank = (songrank.computeSongRank(song.hash, null) || 0) * this.param('pri.rank.mtotal');
             priority += crank;
             if (trace) components.rank = crank;
             
             if (listeners) {
-                let clrank = (songrank.computeSongRank(song.hash, listeners) || 0) * this.param('pri.mlistener');
+                let clrank = (songrank.computeSongRank(song.hash, listeners) || 0) * this.param('pri.rank.mlistener');
                 priority += clrank;
                 if (trace) components.listenerrank = clrank;
             }
