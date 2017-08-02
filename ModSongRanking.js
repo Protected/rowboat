@@ -96,7 +96,7 @@ class ModSongRanking extends Module {
         
         this._params['scaleExtremists'] = 1.0;
         
-        this.index = {};  //{USERID: {LIKEABILITY: [HASH, ...], ...}, ...}
+        this._index = {};  //{USERID: {LIKEABILITY: [HASH, ...], ...}, ...}
     }
     
     
