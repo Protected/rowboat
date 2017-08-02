@@ -1134,7 +1134,7 @@ class ModRajio extends Module {
         for (let keyword in this.param('pri.kw.global')) {
             let descriptor = this.param('pri.kw.global')[keyword];
             if (!descriptor.bonus) continue;
-            if (!song.keywords.find((kw) => kw.toLowerCase().trim().match(new RegExp('^' + keywords.toLowerCase().trim().replace(/[-\/\\^$*+?.()|[\]{}]/gu, '\\$&').replace(' ', '.*') + '$')))) continue;
+            if (!song.keywords.find((kw) => kw.toLowerCase().trim().match(new RegExp('^' + keyword.toLowerCase().trim().replace(/[-\/\\^$*+?.()|[\]{}]/gu, '\\$&').replace(' ', '.*') + '$')))) continue;
             if (descriptor.mindate && descriptor.maxdate) {
                 let now = moment();
                 if (!now.isAfter(now.year() + '-' + descriptor.mindate + ' 00:00:00')) continue;
