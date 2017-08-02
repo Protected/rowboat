@@ -58,7 +58,8 @@ class ModRajio extends Module {
         'pri.kw.global',        //{"keyword" => {bonus, mindate, maxdate}, ...} Modify priority if each keyword is found in song (dates are month-day)
         'pri.rand.min',         //Minimum random component        
         'pri.rand.max',         //Maximum random component
-        'pri.tolerance'         //Tolerance when selecting a song (select randomly in interval)
+        'pri.tolerance',        //Tolerance when selecting a song (select randomly in interval)
+        'pri.mixitup'           //Probability to ignore preference parameters when selecting a song
     ]; }
     
     get requiredEnvironments() { return [
@@ -92,7 +93,7 @@ class ModRajio extends Module {
         this._params['pri.rank.mtotal'] = 10.0;
         this._params['pri.rank.mlistener'] = 20.0;
         this._params['pri.request.bonus'] = 50.0;
-        this._params['pri.request.mpos'] = 15.0;
+        this._params['pri.request.mpos'] = 5.0;
         this._params['pri.length.minlen'] = 200;
         this._params['pri.length.maxlen'] = 600;
         this._params['pri.length.maxexcs'] = 900;
@@ -110,6 +111,7 @@ class ModRajio extends Module {
         this._params['pri.rand.min'] = -15.0;
         this._params['pri.rand.max'] = 20.0;
         this._params['pri.tolerance'] = 25.0;
+        this._params['pri.mixitup'] = 0.1;
         
         this._userdata = {};
         
@@ -293,15 +295,23 @@ class ModRajio extends Module {
         
         //Register module integrations
         
-        this.grabber.registerParserFilter(/^#$/, (str, match) => {
-            if (this._play) return this._play.hash;
+        this.grabber.registerParserFilter(/^#([0-9]+)?$/, (str, match) => {
+            if (!match[1] && this._play) return this._play.hash;
+            if (match[1] && this._history[match[1] - 1]) {
+                return this._history[match[1] - 1].hash;
+            }
             return null;
         }, this);
         
 
         //Register commands
 
-        this.mod("Commands").registerRootDetails(this, 'rajio', {description: 'Commands for controlling the radio queue and playback.'});
+        this.mod("Commands").registerRootDetails(this, 'rajio', {
+            description: 'Commands for controlling the radio queue and playback.',
+            details: [
+                'This feature adds the #NUMBER expansion to song library hash arguments, representing the currently playing song or a recently played song.'
+            ]
+        });
 
         this.mod('Commands').registerCommand(this, 'rajio now', {
             description: 'Displays the name and hash of the song currently being played.'
@@ -622,6 +632,11 @@ class ModRajio extends Module {
                 }
             
                 let keyword = args.keyword.join(" ").toLowerCase().trim();
+                
+                if (!keyword.match(/^[a-zA-Z90-9_ !?.-]{3,}$/)) {
+                    ep.reply('Your keyword match must have at least 3 characters and contain only A-Z, 0-9 and the special characters _ - ! ? . and space.');
+                    return true;
+                }
             
                 let userdata = this._userdata[userid];
                 if (!userdata) userdata = {};
@@ -913,11 +928,12 @@ class ModRajio extends Module {
     
     dequeue() {
         let listeners = this.listeners.map((listener) => listener.id);
+        let nopreferences = random.fraction() < this.param('pri.mixitup');
     
         let priorities = {};
         let maxpri = Number.MIN_VALUE;
         for (let hash of this.grabber.everySong()) {
-            let priority = this.songPriority(this.grabber.hashSong(hash), listeners);
+            let priority = this.songPriority(this.grabber.hashSong(hash), listeners, false, nopreferences);
             maxpri = Math.max(maxpri, priority);
             priorities[hash] = priority;
         }
@@ -1026,8 +1042,12 @@ class ModRajio extends Module {
             keyword = keyword.toLowerCase().trim();
             for (let listener of listeners) {
                 let userdata = this._userdata[listener];
-                if (!userdata || !userdata.kw || !userdata.kw[keyword]) continue;
-                result += userdata.kw[keyword] * this.param(userdata.kw[keyword] > 0 ? "pri.kw.high" : "pri.kw.low");
+                if (!userdata || !userdata.kw) continue;
+                for (let keywordmatch in userdata.kw) {
+                    if (keyword.match(new RegExp('^' + keywordmatch.replace(/[-\/\\^$*+?.()|[\]{}]/gu, '\\$&').replace(' ', '.*') + '$'))) {
+                        result += userdata.kw[keywordmatch] * this.param(userdata.kw[keywordmatch] > 0 ? "pri.kw.high" : "pri.kw.low");
+                    }
+                }
             }
         }
         
@@ -1035,7 +1055,7 @@ class ModRajio extends Module {
     }
     
     
-    songPriority(song, listeners, trace) {
+    songPriority(song, listeners, trace, ignorepreferences) {
         let priority = this.param('pri.base');
         let components = {base: priority};
         
@@ -1044,7 +1064,7 @@ class ModRajio extends Module {
         if (trace) components.random = crandom;
         
         let songrank = this.songrank;
-        if (songrank) {
+        if (songrank && !ignorepreferences) {
             let crank = (songrank.computeSongRank(song.hash, null) || 0) * this.param('pri.rank.mtotal');
             priority += crank;
             if (trace) components.rank = crank;
@@ -1104,15 +1124,17 @@ class ModRajio extends Module {
             if (trace) components.novelty = cnovelty;
         }
         
-        let ckwpri = this.personalPriorityBonus(song.keywords, listeners);
-        priority += ckwpri;
-        if (trace) components.kwpriority = ckwpri;
+        if (!ignorepreferences) {
+            let ckwpri = this.personalPriorityBonus(song.keywords, listeners);
+            priority += ckwpri;
+            if (trace) components.kwpriority = ckwpri;
+        }
         
         let ckwglobal = [];
         for (let keyword in this.param('pri.kw.global')) {
             let descriptor = this.param('pri.kw.global')[keyword];
             if (!descriptor.bonus) continue;
-            if (!song.keywords.find((kw) => kw.toLowerCase().trim() == keyword.toLowerCase().trim())) continue;
+            if (!song.keywords.find((kw) => kw.toLowerCase().trim().match(new RegExp('^' + keywords.toLowerCase().trim().replace(/[-\/\\^$*+?.()|[\]{}]/gu, '\\$&').replace(' ', '.*') + '$')))) continue;
             if (descriptor.mindate && descriptor.maxdate) {
                 let now = moment();
                 if (!now.isAfter(now.year() + '-' + descriptor.mindate + ' 00:00:00')) continue;

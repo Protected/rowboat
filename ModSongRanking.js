@@ -17,6 +17,7 @@ var LIKEABILITY_WORDS = {
     happy: 1,
     acceptable: 1,
     yes: 1,
+    sure: 1,
     mediocre: -1,
     dislike: -1,
     unhappy: -1,
@@ -50,6 +51,7 @@ var LIKEABILITY_REACTIONS = {
     relieved: 1,
     relaxed: 1,
     metal: 1,
+    weary: -1,
     slight_frown: -1,
     expressionless: -1,
     unamused: -1,
@@ -77,6 +79,10 @@ class ModSongRanking extends Module {
         'grabber'               //Name of the grabber to piggyback on (required because the grabber is multi-instanceable)
     ]; }
     
+    get optionalParams() { return [
+        'scaleExtremists'       //Scale down -2/2 votes of people who have more than X times as many of those votes as -1/1 votes
+    ]; }
+    
     get requiredEnvironments() { return [
         'Discord'
     ]; }
@@ -86,7 +92,11 @@ class ModSongRanking extends Module {
     ]; }
 
     constructor(name) {
-        super('SongRanking', name);        
+        super('SongRanking', name);
+        
+        this._params['scaleExtremists'] = 1.0;
+        
+        this.index = {};  //{USERID: {LIKEABILITY: [HASH, ...], ...}, ...}
     }
     
     
@@ -103,6 +113,18 @@ class ModSongRanking extends Module {
 
         if (!this.grabber || this.grabber.modName != 'Grabber') return false;
         
+        
+        //Build index
+        
+        for (let hash of this.grabber.everySong()) {
+            let likmap = this.grabber.getSongMeta(hash, "like");
+            for (let userid in likmap) {
+                if (!this._index[userid]) this._index[userid] = {};
+                if (!this._index[userid][likmap[userid]]) this._index[userid][likmap[userid]] = [];
+                this._index[userid][likmap[userid]].push(hash);
+            }
+        }
+ 
         
         //Register callbacks
 
@@ -163,7 +185,7 @@ class ModSongRanking extends Module {
                 "Likeability can be one of:",
                 " 2 = :ok_hand: = I especially like the song",
                 " 1 = :slight_smile: = (default) The song is ok/good",
-                "-1 = :slight_frown: = The song is bad/don't like it much",
+                "-1 = :worried: = The song is bad/don't like it much",
                 "-2 = :poop: = I hate this song"
             ],
             minArgs: 1
@@ -243,10 +265,24 @@ class ModSongRanking extends Module {
     
     
     setSongLikeability(hash, userid, likeability) {
+        this.log('Setting ' + userid + ' likeability of ' + hash + ' to ' + likeability);
+        
+        //Add new likeability to songrank index
+        if (!this._index[userid]) this._index[userid] = {};
+        if (!this._index[userid][likeability]) this._index[userid][likeability] = [];
+        this._index[userid][likeability].push(hash);
+        
+        //Fetch likeabilities of song
         var likmap = this.grabber.getSongMeta(hash, "like");
         if (!likmap) likmap = {};
-        likmap[userid] = likeability;
-        this.log('Setting ' + userid + ' likeability of ' + hash + ' to ' + likeability);
+        
+        //Remove old likeability from songrank index if necessary
+        if (likmap[userid] && likmap[userid] != likeability) {
+            this._index[userid][likmap[userid]] = this._index[userid][likmap[userid]].filter((item) => item != hash);
+        }
+        
+        //Update likeabilities of song
+        likmap[userid] = likeability;        
         return this.grabber.setSongMeta(hash, "like", likmap);
     }
     
@@ -264,12 +300,33 @@ class ModSongRanking extends Module {
         if (!users || !users.length) {
             users = Object.keys(likmap);
         }
+        
         var i = 0; 
         var acc = 0;
         for (let userid of users) {
-            acc += (likmap[userid] || 0);
+            let scale = 1.0;
+            let likeability = (likmap[userid] || 0);
+            
+            let elength = 0, clength = 0;
+            if (likeability == -2) {
+                if (this._index[userid][-2]) elength = this._index[userid][-2].length;
+                if (this._index[userid][-1]) elength = this._index[userid][-1].length;
+            }
+            if (likeability == 2) {
+                if (this._index[userid][2]) elength = this._index[userid][2].length;
+                if (this._index[userid][1]) elength = this._index[userid][1].length;
+            }
+            if (elength && elength > clength * this.param('scaleExtremists')) {
+                scale = clength * this.param('scaleExtremists') / elength;
+            }
+            
+            if (likeability > 0) likeability = (likeability - 1) * scale + 1;
+            if (likeability < 0) likeability = (likeability + 1) * scale - 1;
+        
+            acc += likeability;
             i += 1;
         }
+        
         if (!i) return null;
         acc /= i;
         return acc;

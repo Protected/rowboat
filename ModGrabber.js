@@ -14,7 +14,7 @@ const PERM_ADMIN = 'administrator';
 const PERM_MODERATOR = 'moderator';
 const INDEXFILE = 'index.json';
 
-const GET_FIELDS = ['name', 'author', 'length', 'source', 'sourceSpecificId', 'sharedBy'];
+const GET_FIELDS = ['name', 'author', 'length', 'source', 'sourceSpecificId', 'sharedBy', 'hash'];
 const SET_FIELDS = ['name', 'author'];
 
 
@@ -103,7 +103,15 @@ class ModGrabber extends Module {
         
         
         this.mod('Commands').registerRootDetails(this, 'grab', {description: "Manipulate the collection of songs from a Discord channel."});
-        this.mod('Commands').registerRootDetails(this, 'song', {description: "Interact with the song library and index."});
+        
+        this.mod('Commands').registerRootDetails(this, 'song', {
+            description: "Interact with the song library and index.",
+            details: [
+                "The following expansions are natively provided for hash arguments:",
+                "  -NUMBER : References latest learned song or a recently learned song.",
+                "  (String) : Performs a search by string and returns the hash of the single result, or an error if there are 0 or more than 1 results."
+            ]
+        });
         
         
         this.mod('Commands').registerCommand(this, 'grab scan', {

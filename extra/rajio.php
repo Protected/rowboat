@@ -58,9 +58,9 @@ usort($sorted, function ($a, $b) {
             foreach ($sorted as $i => $info) {
                 $likestring = "";
                 foreach ($info["like"] as $userid => $lik) {
-                    if ($lik == 2) $likestring .= "👌 ";
+                    if ($lik == 2) $likestring .= "❤ ";
                     if ($lik == 1) $likestring .= "🙂 ";
-                    if ($lik == -1) $likestring .= "🙁 ";
+                    if ($lik == -1) $likestring .= "😟 ";
                     if ($lik == -2) $likestring .= "💩 ";
                 }
                 ?><tr class="<?=($i % 2 ? "odd" : "even")?>"><td><?=$info["hash"]?></td><td><?=$info["name"]?></td><td><?=$info["author"]?></td><td><?=$likestring?></td></tr><?
