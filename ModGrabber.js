@@ -231,7 +231,7 @@ class ModGrabber extends Module {
             minArgs: 0
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var hash = this.parseHashArg(args.hashoroffset);
+            var hash = this.parseHashArg(args.hashoroffset, userid);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -301,7 +301,7 @@ class ModGrabber extends Module {
             permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var hash = this.parseHashArg(args.hashoroffset);
+            var hash = this.parseHashArg(args.hashoroffset, userid);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -341,7 +341,7 @@ class ModGrabber extends Module {
             args: ['hashoroffset', 'field']
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var hash = this.parseHashArg(args.hashoroffset);
+            var hash = this.parseHashArg(args.hashoroffset, userid);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -363,7 +363,13 @@ class ModGrabber extends Module {
                 return true;
             }
             
-            ep.reply(this._index[hash][args.field]);
+            let result = this._index[hash][args.field];
+            if (typeof result == "object") {
+                if (result.join) result = result.join(", ");
+                else result = "";
+            }
+            
+            ep.reply(result);
             
             return true;
         });
@@ -375,7 +381,7 @@ class ModGrabber extends Module {
             permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var hash = this.parseHashArg(args.hashoroffset);
+            var hash = this.parseHashArg(args.hashoroffset, userid);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -406,7 +412,7 @@ class ModGrabber extends Module {
         
             args.keyword = args.keyword.join(" ");
         
-            var hash = this.parseHashArg(args.hashoroffset);
+            var hash = this.parseHashArg(args.hashoroffset, userid);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -683,7 +689,7 @@ class ModGrabber extends Module {
                                         hash: hash,
                                         seen: [now],
                                         sharedBy: [author],
-                                        length: parseInt(info.length_seconds),
+                                        length: (interval ? interval[1] - interval[0] : parseInt(info.length_seconds)),
                                         source: url,
                                         sourceType: 'youtube',
                                         sourceSpecificId: info.video_id,
@@ -812,7 +818,7 @@ class ModGrabber extends Module {
                                         hash: hash,
                                         seen: [now],
                                         sharedBy: [author],
-                                        length: Math.floor(duration),
+                                        length: (interval ? interval[1] - interval[0] : Math.floor(duration)),
                                         source: ma.url,
                                         sourceType: 'discord',
                                         sourceSpecificId: ma.id,
@@ -883,7 +889,7 @@ class ModGrabber extends Module {
         false - Requested offset goes beyond current session history
         null - Parameter matches nothing (song not found)
     */
-    parseHashArg(hashoroffset) {
+    parseHashArg(hashoroffset, userid) {
         if (!hashoroffset) hashoroffset = "";
         let searchResult = this.parseSearchInMixedParam(hashoroffset);
         if (searchResult === true) return true;
@@ -909,7 +915,7 @@ class ModGrabber extends Module {
         for (let item of this._parserFilters) {
             let mr = hashoroffset.match(item[0]);
             if (!mr) continue;
-            return item[1](hashoroffset, mr);
+            return item[1](hashoroffset, mr, userid);
         }
         
         return null;
@@ -1057,8 +1063,8 @@ class ModGrabber extends Module {
     }
     
     
-    bestSongForHashArg(mixed) {
-        return this.parseHashArg(mixed);
+    bestSongForHashArg(mixed, userid) {
+        return this.parseHashArg(mixed, userid);
     }
 
     

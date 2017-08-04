@@ -2,6 +2,7 @@
 
 var Module = require('./Module.js');
 var emoji = require('emojione');
+var random = require('meteor-random');
 
 var LIKEABILITY_WORDS = {
     love: 2,
@@ -60,6 +61,7 @@ var LIKEABILITY_REACTIONS = {
     frowning: -1,
     anguished: -1,
     sleepy: -1,
+    grimacing: -1,
     poop: -2,
     rage: -2,
     thumbsdown: -2,
@@ -174,6 +176,19 @@ class ModSongRanking extends Module {
             
         }, self);
         
+        
+        //Register module integrations
+        
+        this.grabber.registerParserFilter(/^£(-?[12])?$/, (str, match, userid) => {
+            if (!userid) return null;
+            let likeability = (match[1] || 0);
+            if (!likeability) return this.grabber.randomSong().hash;
+            if (!this._index[userid] || !this._index[userid][likeability] || !this._index[userid][likeability].length) return null;
+            return this._index[userid][likeability][Math.floor(random.fraction() * this._index[userid][likeability].length)];
+        }, this);
+        
+        
+        //Register commands
         
         this.mod('Commands').registerRootExtension(this, 'Grabber', 'song');
         

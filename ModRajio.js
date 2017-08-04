@@ -42,6 +42,8 @@ class ModRajio extends Module {
         'pri.rank.mlistener',   //Multiplier for listener-specific song rank
         'pri.request.bonus',    //Added priority for songs in request queue
         'pri.request.mpos',     //Multiplier for position of songs in request queue
+        'pri.history.bonus',    //Added priority for songs in history
+        'pri.history.mpos',     //Multiplier for position of songs in history
         'pri.length.minlen',    //Minimum ideal song length (for maximum priority bonus)
         'pri.length.maxlen',    //Maximum ideal song length (for maximum priority bonus)
         'pri.length.maxexcs',   //Song length after which priority bonus is 0
@@ -52,6 +54,8 @@ class ModRajio extends Module {
         'pri.lastreq.bonus',    //Bonus base for recently requested song
         'pri.novelty.cap',      //Seconds in the past after which a song is no longer new
         'pri.novelty.bonus',    //Bonus base for new song
+        'pri.plays.mplay',      //Multiplier of bonus per play
+        'pri.plays.exp',        //Exponent of bonus per play    m*plays^e
         'pri.kw.high',          //Bonus multiplier for user-defined high priority keywords
         'pri.kw.low',           //Bonus multiplier for user-defined low priority keywords (bonus will be negative)
         'pri.kw.max',           //Maximum amount of user-defined priority keywords
@@ -87,23 +91,27 @@ class ModRajio extends Module {
         this._params['announcechannel'] = null;
         this._params['announcedelay'] = 0;
         this._params['announcestatus'] = true;
-        this._params['historylength'] = 5;
+        this._params['historylength'] = 10;
         
         this._params['pri.base'] = 0.0;
         this._params['pri.rank.mtotal'] = 10.0;
         this._params['pri.rank.mlistener'] = 20.0;
         this._params['pri.request.bonus'] = 50.0;
         this._params['pri.request.mpos'] = 5.0;
+        this._params['pri.history.bonus'] = -10.0;
+        this._params['pri.history.mpos'] = -5.0;
         this._params['pri.length.minlen'] = 200;
         this._params['pri.length.maxlen'] = 600;
         this._params['pri.length.maxexcs'] = 900;
         this._params['pri.length.bonus'] = 15.0;
         this._params['pri.lastplay.cap'] = 43200;
-        this._params['pri.lastplay.bonus'] = -40.0;
+        this._params['pri.lastplay.bonus'] = -30.0;
         this._params['pri.lastreq.cap'] = 3600;
         this._params['pri.lastreq.bonus'] = -15.0;
         this._params['pri.novelty.cap'] = 259200;
         this._params['pri.novelty.bonus'] = 20.0;
+        this._params['pri.plays.mplay'] = -2.0;
+        this._params['pri.plays.exp'] = 0.5;
         this._params['pri.kw.high'] = 5.0;
         this._params['pri.kw.low'] = 5.0;
         this._params['pri.kw.max'] = 5;
@@ -295,7 +303,7 @@ class ModRajio extends Module {
         
         //Register module integrations
         
-        this.grabber.registerParserFilter(/^#([0-9]+)?$/, (str, match) => {
+        this.grabber.registerParserFilter(/^#([0-9]+)?$/, (str, match, userid) => {
             if (!match[1] && this._play) return this._play.hash;
             if (match[1] && this._history[match[1] - 1]) {
                 return this._history[match[1] - 1].hash;
@@ -484,7 +492,7 @@ class ModRajio extends Module {
                 arg = '(' + arg + ')';
             }
         
-            let hash = this.grabber.bestSongForHashArg(arg);
+            let hash = this.grabber.bestSongForHashArg(arg, userid);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -1010,7 +1018,10 @@ class ModRajio extends Module {
         if (this._history.length > this.param('historylength')) {
             this._history = this._history.slice(0, this.param('historylength'));
         }
-        this.grabber.setSongMeta(song.hash, "rajio." + this.name.toLowerCase()  + ".lastplayed", moment().unix());
+        
+        let prefix = "rajio." + this.name.toLowerCase();
+        this.grabber.setSongMeta(song.hash, prefix + ".lastplayed", moment().unix());
+        this.grabber.setSongMeta(song.hash, prefix + ".plays", (this.grabber.getSongMeta(song.hash, prefix + ".plays") || 0) + 1);
     }
     
     
@@ -1063,6 +1074,8 @@ class ModRajio extends Module {
         priority += crandom;
         if (trace) components.random = crandom;
         
+        //Rank-based components
+        
         let songrank = this.songrank;
         if (songrank && !ignorepreferences) {
             let crank = (songrank.computeSongRank(song.hash, null) || 0) * this.param('pri.rank.mtotal');
@@ -1076,6 +1089,8 @@ class ModRajio extends Module {
             }
         }
         
+        //Position in queue or history
+        
         let queuepos = this._queue.findIndex((item) => item.song.hash == song.hash);
         if (queuepos > -1) {
             let cqueue = this.param('pri.request.bonus');
@@ -1086,6 +1101,20 @@ class ModRajio extends Module {
             priority += cqpos;
             if (trace) components.queuepos = cqpos;
         }
+        
+        let historypos = this._history.findIndex((item) => item.hash == song.hash);
+        if (historypos > -1) {
+            let chistory = this.param('pri.history.bonus');
+            priority += chistory;
+            if (trace) components.history = chistory;
+            
+            let chpos = (this.param('historylength') - historypos - 1) * this.param('pri.history.mpos');
+            priority += chpos;
+            if (trace) components.historypos = chpos;
+        }
+        
+        
+        //Proximity to optimal length
         
         let clength = 0;
         if (song.length >= this.param('pri.length.minlen') && song.length <= this.param('pri.length.maxlen')) {
@@ -1098,12 +1127,15 @@ class ModRajio extends Module {
         priority += clength;
         if (trace) components.length = clength;
         
+        
+        //Time-based components (last played, last requested, novelty)
+        
         let now = moment().unix();
         
         let lastplayed = song["rajio." + this.name.toLowerCase()  + ".lastplayed"];
         if (lastplayed && lastplayed > now - this.param('pri.lastplay.cap')) {
             let coef = (lastplayed - now + this.param('pri.lastplay.cap')) / this.param('pri.lastplay.cap');
-            let clplayed = coef * this.param('pri.lastplay.bonus');
+            let clplayed = Math.pow(coef, 2) * this.param('pri.lastplay.bonus');
             priority += clplayed;
             if (trace) components.lastplayed = clplayed;
         }
@@ -1123,6 +1155,20 @@ class ModRajio extends Module {
             priority += cnovelty;
             if (trace) components.novelty = cnovelty;
         }
+        
+        
+        //Amount of times played
+        
+        let plays = song["rajio." + this.name.toLowerCase()  + ".plays"];
+        if (plays) {
+            let coef = Math.pow(plays, this.param('pri.plays.exp'));
+            let cplays = coef * this.param('pri.plays.mplay');
+            priority += cplays;
+            if (trace) components.plays = cplays;
+        }
+        
+        
+        //Keywords
         
         if (!ignorepreferences) {
             let ckwpri = this.personalPriorityBonus(song.keywords, listeners);
@@ -1144,6 +1190,7 @@ class ModRajio extends Module {
             if (trace) ckwglobal.push(descriptor.bonus);
         }
         if (trace) components.kwglobal = ckwglobal.reduce((comp, bonus) => comp + bonus, 0);
+        
         
         if (trace) {
             components.priority = priority;
