@@ -14,8 +14,8 @@ const PERM_ADMIN = 'administrator';
 const PERM_MODERATOR = 'moderator';
 const INDEXFILE = 'index.json';
 
-const GET_FIELDS = ['name', 'author', 'length', 'source', 'sourceSpecificId', 'sharedBy', 'hash'];
-const SET_FIELDS = ['name', 'author'];
+const GET_FIELDS = ['name', 'author', 'album', 'length', 'source', 'sourceSpecificId', 'sharedBy', 'hash'];
+const SET_FIELDS = ['name', 'author', 'album'];
 
 
 class ModGrabber extends Module {
@@ -564,6 +564,8 @@ class ModGrabber extends Module {
         if (title) title = title[3];
         var artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' !_-]+)\}/iu);
         if (artist) artist = artist[3];
+        var album = message.match(/\{(album)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' !_-]+)\}/iu);
+        if (album) album = album[3];
         
         var interval = null;
         if (title) {
@@ -576,6 +578,7 @@ class ModGrabber extends Module {
             keywords: dkeywords,
             title: title,
             artist: artist,
+            album: album,
             interval: interval
         };
     }
@@ -697,6 +700,7 @@ class ModGrabber extends Module {
                                         sourcePartial: interval,
                                         name: (messageInfo.title || info.title),
                                         author: (messageInfo.artist || ''),
+                                        album: (messageInfo.album || ''),
                                         keywords: keywords
                                     };
                                     this.saveIndex();
@@ -807,9 +811,11 @@ class ModGrabber extends Module {
                                 
                                     let title = ma.filename;
                                     let artist = '';
+                                    let album = '';
                                     if (info.format && info.format.tags) {
                                         if (info.format.tags.title) title = info.format.tags.title;
                                         if (info.format.tags.artist) artist = info.format.tags.artist;
+                                        if (info.format.tags.album) album = info.format.tags.album;
                                     }
                                     if (messageInfo.title) title = messageInfo.title;
                                     if (messageInfo.artist) artist = messageInfo.artist;
@@ -826,6 +832,7 @@ class ModGrabber extends Module {
                                         sourcePartial: interval,
                                         name: title,
                                         author: artist,
+                                        album: album,
                                         keywords: keywords
                                     };
                                     this.saveIndex();

@@ -134,6 +134,7 @@ class ModRajio extends Module {
         this._pendingwithdraw = {};  //{userid: timer, ...} Autowithdrawal for non-listeners with queued songs
         this._skipper = {};  //{userid: true, ...} Requested skipping current song
         this._undeafen = {};  //{userid: true, ...} Users to undeafen as soon as they rejoin a voice channel
+        this._nopreference = {};  //{userid: true, ...} Users have disabled impact of their preferences in priority calculations
         
         this._play = null;  //Song being played
         this._pending = null;  //Timer that will start the next song
@@ -250,6 +251,7 @@ class ModRajio extends Module {
                     this.stopSong();
                 } else {
                     this.autowithdraw(member.id);
+                    if (this._nopreference[member.id]) delete this._nopreference[member.id];
                     if (!llisteners) {
                         //Last listener left the channel
                         this.pauseSong();
@@ -604,6 +606,27 @@ class ModRajio extends Module {
             return true;
         });
         
+        
+        this.mod('Commands').registerCommand(this, 'rajio neutral', {
+            description: 'Toggle whether my likes and priorities will affect song selection while I\'m listening.'
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            if (!this.islistener(userid)) {
+                ep.reply('This command is only available to listeners.');
+                return true;
+            }
+        
+            if (this._nopreference[userid]) {
+                delete this._nopreference[userid];
+                ep.reply('Disabled neutral mode: Re-enabled the use of your preferences in song selection.');
+            } else {
+                this._nopreference[userid] = true;
+                ep.reply('Enabled neutral mode: Your preferences will no longer be used in song selection until the end this session. You can also repeat this command to return to normal.');
+            }
+        
+            return true;
+        });
+
         
         if (this.param('pri.kw.max')) {
         
@@ -1073,6 +1096,16 @@ class ModRajio extends Module {
         let crandom = this.param('pri.rand.min') + random.fraction() * (this.param('pri.rand.max') - this.param('pri.rand.min'));
         priority += crandom;
         if (trace) components.random = crandom;
+        
+        if (listeners) {
+            let prelisteners = listeners;
+            listeners = [];
+            for (let userid of prelisteners) {
+                if (this._nopreference[userid]) continue;
+                listeners.push(userid);
+            }
+        }
+        
         
         //Rank-based components
         
