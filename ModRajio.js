@@ -40,10 +40,8 @@ class ModRajio extends Module {
         'pri.base',             //Base priority
         'pri.rank.mtotal',      //Multiplier for global song rank
         'pri.rank.mlistener',   //Multiplier for listener-specific song rank
-        'pri.request.bonus',    //Added priority for songs in request queue
-        'pri.request.mpos',     //Multiplier for position of songs in request queue
-        'pri.history.bonus',    //Added priority for songs in history
-        'pri.history.mpos',     //Multiplier for position of songs in history
+        'pri.request.bonus',    //Maximum added priority for songs at top of request queue
+        'pri.history.bonus',    //Maximum added priority for songs recently played in history
         'pri.length.minlen',    //Minimum ideal song length (for maximum priority bonus)
         'pri.length.maxlen',    //Maximum ideal song length (for maximum priority bonus)
         'pri.length.maxexcs',   //Song length after which priority bonus is 0
@@ -96,18 +94,16 @@ class ModRajio extends Module {
         this._params['pri.base'] = 0.0;
         this._params['pri.rank.mtotal'] = 10.0;
         this._params['pri.rank.mlistener'] = 20.0;
-        this._params['pri.request.bonus'] = 50.0;
-        this._params['pri.request.mpos'] = 5.0;
-        this._params['pri.history.bonus'] = -10.0;
-        this._params['pri.history.mpos'] = -5.0;
+        this._params['pri.request.bonus'] = 80.0;
+        this._params['pri.history.bonus'] = -100.0;
         this._params['pri.length.minlen'] = 200;
         this._params['pri.length.maxlen'] = 600;
         this._params['pri.length.maxexcs'] = 900;
         this._params['pri.length.bonus'] = 15.0;
         this._params['pri.lastplay.cap'] = 43200;
         this._params['pri.lastplay.bonus'] = -30.0;
-        this._params['pri.lastreq.cap'] = 3600;
-        this._params['pri.lastreq.bonus'] = -15.0;
+        this._params['pri.lastreq.cap'] = 10800;
+        this._params['pri.lastreq.bonus'] = -30.0;
         this._params['pri.novelty.cap'] = 259200;
         this._params['pri.novelty.bonus'] = 20.0;
         this._params['pri.plays.mplay'] = -2.0;
@@ -1126,24 +1122,16 @@ class ModRajio extends Module {
         
         let queuepos = this._queue.findIndex((item) => item.song.hash == song.hash);
         if (queuepos > -1) {
-            let cqueue = this.param('pri.request.bonus');
+            let cqueue = (this.param('queuesize') - queuepos) / this.param('queuesize') * this.param('pri.request.bonus');
             priority += cqueue;
             if (trace) components.queue = cqueue;
-            
-            let cqpos = (this.param('queuesize') - queuepos - 1) * this.param('pri.request.mpos');
-            priority += cqpos;
-            if (trace) components.queuepos = cqpos;
         }
         
         let historypos = this._history.findIndex((item) => item.hash == song.hash);
         if (historypos > -1) {
-            let chistory = this.param('pri.history.bonus');
+            let chistory = (this.param('historylength') - historypos) / this.param('historylength') * this.param('pri.history.bonus');
             priority += chistory;
             if (trace) components.history = chistory;
-            
-            let chpos = (this.param('historylength') - historypos - 1) * this.param('pri.history.mpos');
-            priority += chpos;
-            if (trace) components.historypos = chpos;
         }
         
         

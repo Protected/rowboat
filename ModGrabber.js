@@ -34,7 +34,8 @@ class ModGrabber extends Module {
         'maxDuration',          //Maximum duration of the audio file (seconds)
         'maxDiskUsage',         //Amount of disk space grabber is allowed to use in the downloadPath excluding index (bytes)
         'maxSimDownloads',      //Maximum simultaneous downloads
-        'scanDelay'             //Delay between attempts to process messages (pending messages are queued) (ms)
+        'scanDelay',            //Delay between attempts to process messages (pending messages are queued) (ms)
+        'permissionsReplace'    //List of sufficient permissions to replace previously indexed songs
     ]; }
 
     get requiredEnvironments() { return [
@@ -42,6 +43,7 @@ class ModGrabber extends Module {
     ]; }
 
     get requiredModules() { return [
+        'Users',
         'Commands'
     ]; }
 
@@ -54,6 +56,7 @@ class ModGrabber extends Module {
         this._params['maxDiskUsage'] = null;
         this._params['maxSimDownloads'] = 2;
         this._params['scanDelay'] = 200;
+        this._params['permissionsReplace'] = [PERM_MODERATOR, PERM_ADMIN];
         
         this._preparing = 0;  //Used for generating temporary filenames
         
@@ -544,6 +547,12 @@ class ModGrabber extends Module {
             },
             errorDuration: (messageObj, messageAuthor, reply, label) => {
                 if (reply) reply(messageAuthor + ", I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds.");
+            },
+            errorPermission: (messageObj, messageAuthor, reply) => {
+                if (reply) reply(messageAuthor + ", you don't have permission to do that!");
+            },
+            errorNotFound: (messageObj, messageAuthor, reply) => {
+                if (reply) reply(messageAuthor + ", the song you tried to replace could not be found.");
             }
         }]);
     }
@@ -567,6 +576,9 @@ class ModGrabber extends Module {
         var album = message.match(/\{(album)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' !_-]+)\}/iu);
         if (album) album = album[3];
         
+        var replace = message.match(/\{replace(=|:) ?([0-9A-Fa-f]+)\}/iu);
+        if (replace) replace = replace[2];
+        
         var interval = null;
         if (title) {
             interval = message.match(/<(([0-9:]+)?(,[0-9:]+)?)>/);
@@ -579,295 +591,414 @@ class ModGrabber extends Module {
             title: title,
             artist: artist,
             album: album,
+            replace: replace,
             interval: interval
         };
     }
     
     
+    obtainMessageParams(messageObj) {
+        let messageInfo = this.extractMessageInfo(messageObj.content, messageObj.author.id);
+        let tenv = this.env(this.param('env'));
+
+        if (messageInfo.replace) {
+            if (!this.mod('Users').testPermissions(this.param('env'), messageObj.author.id, messageObj.channel.id, this.param('permissionsReplace'))) {
+                messageInfo.replace = false;
+            }
+        }
+        
+        return {
+            author: messageObj.author.id,
+            authorName: tenv.idToDisplayName(messageObj.author.id),
+            info: messageInfo,
+            interval: messageInfo.interval,
+            reply: (messageInfo.warnauthor ? (out) => tenv.msg(messageObj.channel.id, out) : null)
+        };
+    }
+    
     /* Callbacks:
         accepted(messageObj, messageAuthor, reply, hash) - The song has just been indexed as a result of this call (details can be retrieved from the index)
         exists(messageObj, messageAuthor, reply, hash) - A song already existed (details can be retrieved from the index)
         errorDuration(messageObj, messageAuthor, reply, label) - A song fails a duration check
+        errorPermission(messageObj, messageAuthor, reply) - The song could not be collected because its metadata violated a permission check
+        errorNotFound(messageObj, messageAuthor, reply) - The targeted song was not found in the index
         reply is either a function for replying to the environent (if the message is tagged for feedback) or null
     */
     grabInMessage(messageObj, callbacks, readOnly) {
         if (this.isDownloadPathFull() || !messageObj) return false;
         
-        var message = messageObj.content;
-        var author = messageObj.author.id;
-        var messageAuthor = this.env(this.param('env')).idToDisplayName(author);
-        
-        var messageInfo = this.extractMessageInfo(message);
-        var interval = messageInfo.interval;
-        var reply = (messageInfo.warnauthor ? (out) => this.env(this.param('env')).msg(messageObj.channel.id, out) : null);
-    
         //Youtube
-        var yturls = message.match(/(?:https?:\/\/|\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})(?![\w-])/g);
+        let yturls = messageObj.content.match(/(?:https?:\/\/|\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})(?![\w-])/g);
         if (yturls) {
             for (let url of yturls) {
-                try {
-                    //Obtain metadata from youtube
-                    ytdl.getInfo(url, (err, info) => {
-                        if (err) {
-                            this.log('warn', err);
-                            return;
-                        }
-                        
-                        if (!interval && info.length_seconds < this.param('minDuration') || interval && interval[1] - interval[0] < this.param('minDuration')
-                                || info.length_seconds > this.param('maxDuration') && (!interval || interval[1] - interval[0] > this.param('maxDuration'))) {
-                            if (callbacks.errorDuration) callbacks.errorDuration(messageObj, messageAuthor, reply, info.title);
-                            return;
-                        }
-                                
-                        if (this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]
-                                && !this._indexSourceTypeAndId['youtube'][info.video_id].sourcePartial && !interval) {
-                            if (callbacks.exists) callbacks.exists(messageObj, messageAuthor, reply, this._indexSourceTypeAndId['youtube'][info.video_id].hash);
-                            return;
-                        }
-                        
-                        let keywords = info.keywords;
-                        if (typeof keywords == "string") {
-                            if (keywords) keywords = keywords.split('');
-                            else keywords = [];
-                        }
-                        for (let dkeyword of messageInfo.keywords) {
-                            keywords.push(dkeyword);
-                        }
-                        
-                        this.log('Grabbing from youtube: ' + url);
-                        
-                        this._downloads += 1;
-                    
-                        //Plug video download into ffmpeg
-                        let video = ytdl(url, {filter: 'audioonly'});
-                        let ffmpeg = new FFmpeg(video);
-                        
-                        ffmpeg.on('error', (err) => {
-                            this.log('error', err);
-                        });
-                        
-                        if (interval) ffmpeg.seekInput(interval[0]).duration(interval[1] - interval[0]);
-                        
-                        //Prepare stream for writing to disk
-                        let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
-                        let stream = fs.createWriteStream(temppath);
-                        
-                        stream.on('finish', () => {
-                            this._downloads -= 1;
-                        
-                            //After the file is fully written, compute hash, rename file and add to index
-                            fs.readFile(temppath, (err, data) => {
-                                if (err) throw err;
-                                
-                                let hash = crypto.createHash('md5').update(data).digest('hex');
-                                let realpath = this.param('downloadPath') + '/' + hash + '.mp3';
-                                
-                                let now = moment().unix();
-                                
-                                if (fs.existsSync(realpath)) {
-                                    fs.unlink(temppath);
-                                    this.log('  Already existed: ' + url + '  (as ' + hash + ')');
-                                    if (!readOnly) {
-                                        this._index[hash].seen.push(now);
-                                        if (this._index[hash].sharedBy.indexOf(author) < 0) {
-                                            this._index[hash].sharedBy.push(author);
-                                        }
-                                        this.saveIndex();
-                                    }
-                                    if (callbacks.exists) callbacks.exists(messageObj, messageAuthor, reply, hash);
-                                    return;
-                                }
-                                
-                                if (readOnly) {
-                                    fs.unlink(temppath);
-                                    return;
-                                }
-                                
-                                this._usage += fs.statSync(temppath).size;
-                                
-                                fs.rename(temppath, realpath, (err) => {
-                                    if (err) throw err;
-                                
-                                    this._index[hash] = {
-                                        hash: hash,
-                                        seen: [now],
-                                        sharedBy: [author],
-                                        length: (interval ? interval[1] - interval[0] : parseInt(info.length_seconds)),
-                                        source: url,
-                                        sourceType: 'youtube',
-                                        sourceSpecificId: info.video_id,
-                                        sourceLoudness: parseFloat(info.loudness),
-                                        sourcePartial: interval,
-                                        name: (messageInfo.title || info.title),
-                                        author: (messageInfo.artist || ''),
-                                        album: (messageInfo.album || ''),
-                                        keywords: keywords
-                                    };
-                                    this.saveIndex();
-                                    
-                                    if (!this._indexSourceTypeAndId['youtube']) {
-                                        this._indexSourceTypeAndId['youtube'] = {};
-                                    }
-                                    this._indexSourceTypeAndId['youtube'][info.video_id] = this._index[hash];
-                                    
-                                    this._sessionGrabs.unshift([hash, now]);
-                                    
-                                    this.log('  Successfully grabbed from youtube: ' + url + '  (as ' + hash + ')');
-                                    if (callbacks.accepted) callbacks.accepted(messageObj, messageAuthor, reply, hash);
-                                    this.processOnNewSong(messageObj, messageAuthor, reply, hash);
-                                });
-                                
-                            });
-                            
-                        });
-                        
-                        //Plug ffmpeg into writing stream
-                        let output = ffmpeg.format('mp3').pipe(stream);
-                        output.on('error', video.end.bind(video));
-                        output.on('error', stream.emit.bind(stream, 'error'));
-                    });
-                } catch (exception) {
-                    this.log('error', exception);
-                }
+                this.grabFromYoutube(url, messageObj, callbacks, readOnly);
             }
         }
-        
         
         //Attachment
         if (messageObj.attachments && messageObj.attachments.array().length) {
             for (let ma of messageObj.attachments.array()) {
                 if (!ma.filename.match(/\.(mp3|ogg|flac|wav|wma|aac|m4a)$/) || ma.filesize < 20480) continue;
-                try {
-                
-                    //Download attachment
-                    this.log('Grabbing from attachment: ' + ma.filename + ' (' + ma.id + ')');
-                    
-                    this._downloads += 1;
-                
-                    //Plug attachment download into ffmpeg
-                    let attfiledl = request(ma.url);
-                    let ffmpeg = new FFmpeg(attfiledl);
-                    
-                    ffmpeg.on('error', (err) => {
-                        this.log('error', err);
-                    });
-                    
-                    if (interval) ffmpeg.seekInput(interval[0]).duration(interval[1] - interval[0]);
-                    
-                    //Prepare stream for writing to disk
-                    let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
-                    let stream = fs.createWriteStream(temppath);
-                    
-                    stream.on('finish', () => {
-                        this._downloads -= 1;
-                        
-                        //Get song info
-                        FFmpeg(temppath).ffprobe((err, info) => {
-                            if (err) {
-                                this.log('warn', err);
-                                return;
-                            }
-            
-                            let duration = parseFloat(info.format.duration || info.streams[0].duration);
-                            if (duration < this.param('minDuration') || duration > this.param('maxDuration')) {
-                                if (callbacks.errorDuration) callbacks.errorDuration(messageObj, messageAuthor, reply, info.title);
-                                return;
-                            }
-                            
-                            let keywords = (messageInfo.dkeywords || []);
-                            
-                            //Compute hash, rename file and add to index
-                            fs.readFile(temppath, (err, data) => {
-                                if (err) throw err;
-                                
-                                let hash = crypto.createHash('md5').update(data).digest('hex');
-                                let realpath = this.param('downloadPath') + '/' + hash + '.mp3';
-                                
-                                let now = moment().unix();
-                                
-                                if (fs.existsSync(realpath)) {
-                                    fs.unlink(temppath);
-                                    this.log('  Already existed: ' + ma.filename + '  (as ' + hash + ')');
-                                    if (!readOnly) {
-                                        this._index[hash].seen.push(now);
-                                        if (this._index[hash].sharedBy.indexOf(author) < 0) {
-                                            this._index[hash].sharedBy.push(author);
-                                        }
-                                        this.saveIndex();
-                                    }
-                                    if (callbacks.exists) callbacks.exists(messageObj, messageAuthor, reply, hash);
-                                    return;
-                                }
-                                
-                                if (readOnly) {
-                                    fs.unlink(temppath);
-                                    return;
-                                }
-                                
-                                this._usage += fs.statSync(temppath).size;
-                                
-                                fs.rename(temppath, realpath, (err) => {
-                                    if (err) throw err;
-                                
-                                    let title = ma.filename;
-                                    let artist = '';
-                                    let album = '';
-                                    if (info.format && info.format.tags) {
-                                        if (info.format.tags.title) title = info.format.tags.title;
-                                        if (info.format.tags.artist) artist = info.format.tags.artist;
-                                        if (info.format.tags.album) album = info.format.tags.album;
-                                    }
-                                    if (messageInfo.title) title = messageInfo.title;
-                                    if (messageInfo.artist) artist = messageInfo.artist;
-                                
-                                    this._index[hash] = {
-                                        hash: hash,
-                                        seen: [now],
-                                        sharedBy: [author],
-                                        length: (interval ? interval[1] - interval[0] : Math.floor(duration)),
-                                        source: ma.url,
-                                        sourceType: 'discord',
-                                        sourceSpecificId: ma.id,
-                                        sourceLoudness: null,
-                                        sourcePartial: interval,
-                                        name: title,
-                                        author: artist,
-                                        album: album,
-                                        keywords: keywords
-                                    };
-                                    this.saveIndex();
-                                    
-                                    if (!this._indexSourceTypeAndId['discord']) {
-                                        this._indexSourceTypeAndId['discord'] = {};
-                                    }
-                                    this._indexSourceTypeAndId['discord'][ma.id] = this._index[hash];
-                                    
-                                    this._sessionGrabs.unshift([hash, now]);
-                                    
-                                    this.log('  Successfully grabbed from discord: ' + ma.filename + '  (as ' + hash + ')');
-                                    if (callbacks.accepted) callbacks.accepted(messageObj, messageAuthor, reply, hash);
-                                    this.processOnNewSong(messageObj, messageAuthor, reply, hash);
-                                });
-                                
-                            });
-                            
-                        });
-                        
-                    });
-                    
-                    //Plug ffmpeg into writing stream
-                    let output = ffmpeg.format('mp3').pipe(stream);
-                    output.on('error', attfiledl.end.bind(attfiledl));
-                    output.on('error', stream.emit.bind(stream, 'error'));
-                    
-                } catch (exception) {
-                    this.log('error', exception);
-                }
+                this.grabFromAttachment(ma, messageObj, callbacks, readOnly);
             }
         }
         
+        //Google Drive
+        let gdurl = messageObj.content.match(/(?:https?:\/\/|\/\/)?(?:drive|docs)\.google\.com\/(?:(?:open|uc)\?id=|file\/d\/)([\w_]{28,})(?![\w_])/);
+        if (gdurl) {
+            gdurl = 'https://docs.google.com/uc?id=' + gdurl[1];
+            this.grabFromURL(gdurl, 'gdrive', gdurl[1], messageObj, callbacks, readOnly);
+        }
+        
+        //Dropbox
+        let dburl = messageObj.content.match(/(?:https?:\/\/|\/\/)?(?:www\.)?dropbox\.com\/s\/([\w_]{15,})(?![\w_])/);
+        if (dburl) {
+            dburl = 'https://www.dropbox.com/s/' + dburl[1] + '/?dl=1';
+            this.grabFromURL(dburl, 'dropbox', dburl[1], messageObj, callbacks, readOnly);
+        }
         
         return true;
+    }
+    
+    
+    grabFromYoutube(url, messageObj, callbacks, readOnly) {
+        let mp = this.obtainMessageParams(messageObj);        
+        try {
+            //Obtain metadata from youtube
+            ytdl.getInfo(url, (err, info) => {
+                if (err) {
+                    this.log('warn', err);
+                    return;
+                }
+                
+                if (!mp.interval && info.length_seconds < this.param('minDuration') || mp.interval && mp.interval[1] - mp.interval[0] < this.param('minDuration')
+                        || info.length_seconds > this.param('maxDuration') && (!mp.interval || mp.interval[1] - mp.interval[0] > this.param('maxDuration'))) {
+                    if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
+                    return;
+                }
+                        
+                if (this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]
+                        && !this._indexSourceTypeAndId['youtube'][info.video_id].sourcePartial && !mp.interval) {
+                    if (callbacks.exists) callbacks.exists(messageObj, mp.authorName, mp.reply, this._indexSourceTypeAndId['youtube'][info.video_id].hash);
+                    return;
+                }
+                
+                let keywords = info.keywords;
+                if (typeof keywords == "string") {
+                    if (keywords) keywords = keywords.split('');
+                    else keywords = [];
+                }
+                for (let dkeyword of mp.info.keywords) {
+                    keywords.push(dkeyword);
+                }
+                
+                this.log('Grabbing from youtube: ' + url);
+                this._downloads += 1;
+            
+                //Plug video download into ffmpeg
+                let video = ytdl(url, {filter: 'audioonly'});
+                let ffmpeg = new FFmpeg(video);
+                
+                ffmpeg.on('error', (err) => {
+                    this.log('error', err);
+                });
+                
+                if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
+                
+                //Prepare stream for writing to disk
+                let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
+                let stream = fs.createWriteStream(temppath);
+                
+                stream.on('finish', () => {
+                    this._downloads -= 1;
+                
+                    this.persistTempDownload(temppath, url, mp, {
+                        length: parseInt(info.length_seconds),
+                        source: url,
+                        sourceType: 'youtube',
+                        sourceSpecificId: info.video_id,
+                        sourceLoudness: parseFloat(info.loudness),
+                        name: info.title,
+                        author: '',
+                        album: '',
+                        keywords: keywords
+                    }, messageObj, callbacks, readOnly);
+                });
+                
+                //Plug ffmpeg into writing stream
+                let output = ffmpeg.format('mp3').pipe(stream);
+                output.on('error', video.end.bind(video));
+                output.on('error', stream.emit.bind(stream, 'error'));
+            });
+        } catch (exception) {
+            this.log('error', exception);
+        }
+    }
+    
+    
+    grabFromAttachment(ma, messageObj, callbacks, readOnly) {
+        let mp = this.obtainMessageParams(messageObj);
+        try {
+            //Download attachment
+            this.log('Grabbing from attachment: ' + ma.filename + ' (' + ma.id + ')');
+            this._downloads += 1;
+            let attfiledl = request(ma.url);
+        
+            //Plug attachment download into ffmpeg
+            let ffmpeg = new FFmpeg(attfiledl);
+            
+            ffmpeg.on('error', (err) => {
+                this.log('error', err);
+            });
+            
+            if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
+            
+            //Prepare stream for writing to disk
+            let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
+            let stream = fs.createWriteStream(temppath);
+            
+            stream.on('finish', () => {
+                this._downloads -= 1;
+                
+                //Get song info
+                FFmpeg(temppath).ffprobe((err, info) => {
+                    if (err) {
+                        this.log('warn', err);
+                        return;
+                    }
+    
+                    let duration = parseFloat(info.format.duration || info.streams[0].duration);
+                    if (duration < this.param('minDuration') || duration > this.param('maxDuration')) {
+                        if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
+                        return;
+                    }
+                    
+                    let title = ma.filename;
+                    let artist = '';
+                    let album = '';
+                    if (info.format && info.format.tags) {
+                        if (info.format.tags.title) title = info.format.tags.title;
+                        if (info.format.tags.artist) artist = info.format.tags.artist;
+                        if (info.format.tags.album) album = info.format.tags.album;
+                    }
+                    
+                    let keywords = (mp.info.dkeywords || []);
+                    
+                    this.persistTempDownload(temppath, ma.filename, mp, {
+                        length: Math.floor(duration),
+                        source: ma.url,
+                        sourceType: 'discord',
+                        sourceSpecificId: ma.id,
+                        sourceLoudness: null,
+                        name: title,
+                        author: artist,
+                        album: album,
+                        keywords: keywords
+                    }, messageObj, callbacks, readOnly);
+                });
+                
+            });
+            
+            //Plug ffmpeg into writing stream
+            let output = ffmpeg.format('mp3').pipe(stream);
+            output.on('error', attfiledl.end.bind(attfiledl));
+            output.on('error', stream.emit.bind(stream, 'error'));
+            
+        } catch (exception) {
+            this.log('error', exception);
+        }
+    }
+    
+    
+    grabFromURL(url, sourceType, sourceSpecificId, messageObj, callbacks, readOnly) {
+        let mp = this.obtainMessageParams(messageObj);
+        try {
+            let filename = sourceSpecificId;
+        
+            //Download
+            this.log('Grabbing from ' + sourceType + ' URL: ' + url + ' (' + sourceSpecificId + ')');
+            this._downloads += 1;
+            let filedl = request(url);
+            
+            filedl.on('response', (response) => {
+                
+                if (response.headers['content-disposition']) {
+                    let getfilename = response.headers['content-disposition'].match(/filename="([^"]+)"/);
+                    if (getfilename) filename = getfilename[1];
+                }
+                
+                //Plug attachment download into ffmpeg
+                let ffmpeg = new FFmpeg(filedl);
+                
+                ffmpeg.on('error', (err) => {
+                    this.log('error', err);
+                });
+                
+                if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
+                
+                //Prepare stream for writing to disk
+                let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
+                let stream = fs.createWriteStream(temppath);
+                
+                stream.on('finish', () => {
+                    this._downloads -= 1;
+                    
+                    //Get song info
+                    FFmpeg(temppath).ffprobe((err, info) => {
+                        if (err) {
+                            this.log('warn', err);
+                            return;
+                        }
+        
+                        let duration = parseFloat(info.format.duration || info.streams[0].duration);
+                        if (duration < this.param('minDuration') || duration > this.param('maxDuration')) {
+                            if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
+                            return;
+                        }
+                        
+                        let title = filename;
+                        let artist = '';
+                        let album = '';
+                        if (info.format && info.format.tags) {
+                            if (info.format.tags.title) title = info.format.tags.title;
+                            if (info.format.tags.artist) artist = info.format.tags.artist;
+                            if (info.format.tags.album) album = info.format.tags.album;
+                        }
+                        
+                        let keywords = (mp.info.dkeywords || []);
+                        
+                        this.persistTempDownload(temppath, url, mp, {
+                            length: Math.floor(duration),
+                            source: url,
+                            sourceType: sourceType,
+                            sourceSpecificId: sourceSpecificId,
+                            sourceLoudness: null,
+                            name: title,
+                            author: artist,
+                            album: album,
+                            keywords: keywords
+                        }, messageObj, callbacks, readOnly);
+                    });
+                    
+                });
+                
+                //Plug ffmpeg into writing stream
+                let output = ffmpeg.format('mp3').pipe(stream);
+                output.on('error', filedl.end.bind(filedl));
+                output.on('error', stream.emit.bind(stream, 'error'));
+                
+            });
+            
+        } catch (exception) {
+            this.log('error', exception);
+        }
+    }
+    
+    
+    /*
+        temppath: Temporary location of downloaded song, already in mp3 format.
+        originalname: Display name of the original for the downloaded song, for logging.
+        mp: Result of this.obtainMessageParams
+        info: Source-specific information for bootstrapping index fields. Must contain at least {source, sourceType, sourceSpecificId}
+        messageObj, callbacks, readOnly: As passed to grabInMessage.
+    */
+    persistTempDownload(temppath, originalname, mp, info, messageObj, callbacks, readOnly) {
+        //After the file is fully written, compute hash, rename file and add to index
+        fs.readFile(temppath, (err, data) => {
+            if (err) throw err;
+            
+            let hash = crypto.createHash('md5').update(data).digest('hex');
+            let realpath = this.param('downloadPath') + '/' + hash + '.mp3';
+            
+            let now = moment().unix();
+            
+            if (fs.existsSync(realpath)) {
+                fs.unlink(temppath);
+                this.log('  Already existed: ' + originalname + '  (as ' + hash + ')');
+                if (!readOnly) {
+                    this._index[hash].seen.push(now);
+                    if (this._index[hash].sharedBy.indexOf(mp.author) < 0) {
+                        this._index[hash].sharedBy.push(mp.author);
+                    }
+                    this.saveIndex();
+                }
+                if (callbacks.exists) callbacks.exists(messageObj, mp.authorName, mp.reply, hash);
+                return;
+            } else if (mp.info.replace === false) {
+                this.log('  No permission to commit replacement: ' + hash);
+                if (callbacks.errorPermission) callbacks.errorPermission(messageObj, mp.authorName, mp.reply);
+                fs.unlink(temppath);
+                return;
+            } else if (mp.info.replace && !this._index[mp.info.replace]) {
+                this.log('  Target of replacement (' + mp.info.replace + ') not found for: ' + hash);
+                if (callbacks.errorNotFound) callbacks.errorNotFound(messageObj, mp.authorName, mp.reply);
+                fs.unlink(temppath);
+                return;
+            }
+            
+            if (readOnly) {
+                fs.unlink(temppath);
+                return;
+            }
+            
+            this._usage += fs.statSync(temppath).size;
+            
+            fs.rename(temppath, realpath, (err) => {
+                if (err) throw err;
+            
+                let entry = {};
+                
+                if (mp.info.replace) {
+                    //Replacement
+                    entry = this._index[mp.info.replace];
+                    if (!entry.replaced) entry.replaced = [];
+                    entry.replaced.push([mp.info.replace, mp.author, now]);
+                    this.removeByHash(mp.info.replace);
+                }
+                
+                if (typeof info == "object") {
+                    let kw = entry.keywords;
+                    
+                    for (let key in info) {
+                        if (info[key] || entry[key] === undefined) {
+                            entry[key] = info[key];
+                        }
+                    }
+                    
+                    //Recover keywords if entry already contained them (from mp.info.replace)
+                    if (kw && info.keywords) {
+                        for (let keyword of kw) {
+                            entry.keywords.push(keyword);
+                        }
+                    }
+                }
+                
+                entry.hash = hash;
+                entry.seen = [now];
+                entry.sharedBy = [mp.author];
+                if (mp.interval) entry.length = mp.interval[1] - mp.interval[0];
+                entry.sourcePartial = mp.interval;
+                if (mp.info.title) entry.name = mp.info.title;
+                if (mp.info.artist) entry.author = mp.info.artist;
+                if (mp.info.album) entry.album = mp.info.album;
+                if (!entry.keywords) entry.keywords = [];
+
+                this._index[hash] = entry;
+                this.saveIndex();
+                
+                if (!this._indexSourceTypeAndId[entry.sourceType]) {
+                    this._indexSourceTypeAndId[entry.sourceType] = {};
+                }
+                this._indexSourceTypeAndId[entry.sourceType][entry.sourceSpecificId] = this._index[hash];
+                
+                this._sessionGrabs.unshift([hash, now]);
+                
+                this.log('  Successfully grabbed from ' + entry.sourceType + ': ' + originalname + '  (as ' + hash + ')');
+                if (callbacks.accepted) callbacks.accepted(messageObj, mp.authorName, mp.reply, hash);
+                this.processOnNewSong(messageObj, mp.authorName, mp.reply, hash);
+            });
+            
+        });
     }
     
     

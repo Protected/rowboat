@@ -542,7 +542,7 @@ class ModUsers extends Module {
     }
 
 
-    testPermissions(env, userid, channelid, permissions, requireall, handle) {  //channelid is optional
+    testPermissions(env, userid, channelid, permissions, requireall, handle) {  //env is an environment NAME; channelid is optional
 
         var removeduplicates = {};
         for (let perm of permissions) {
