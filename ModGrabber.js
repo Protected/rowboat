@@ -1063,6 +1063,7 @@ class ModGrabber extends Module {
         if (!this._index[hash]) return false;
         fs.unlink(this.param('downloadPath') + '/' + hash + '.mp3');
         delete this._index[hash];
+        this.saveIndex();
         return true;
     }
     
@@ -1206,6 +1207,7 @@ class ModGrabber extends Module {
     }
 
     
+    getSongMeta(hash, field) {
     getSongMeta(hash, field) {
         if (!this._index[hash]) return null;
         return this._index[hash][field];

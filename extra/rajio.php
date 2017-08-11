@@ -135,9 +135,9 @@ table#library .ra {
 
 $index = json_decode(file_get_contents($path), true);
 $sorted = array_values($index);
-usort($sorted, function ($a, $b) {
+/*usort($sorted, function ($a, $b) {
     return strcmp($a["name"], $b["name"]);
-});
+});*/
 
 
 function minutesAndSeconds($seconds) {
@@ -183,7 +183,7 @@ function ago($ts) {
             foreach ($sorted as $i => $info) {
             
                 $likestring = "";
-                foreach ($info["like"] as $userid => $lik) {
+                if (isset($info["like"])) foreach ($info["like"] as $userid => $lik) {
                     $likestring .= '<span title="' . $lik . '">' . $likesymbols[$lik] . '</span>';
                 }
                 
@@ -193,18 +193,23 @@ function ago($ts) {
                 
                 $info["name"] = htmlspecialchars($info["name"]);
                 $info["author"] = htmlspecialchars($info["author"]);
-                $info["album"] = htmlspecialchars($info["album"]);
+                $info["album"] = htmlspecialchars($info["album"] ?? "");
+                
+                $lastplayedmeta = PHP_INT_MAX;
+                if (isset($info[$instancename . ".rajio.lastplayed"])) {
+                    $lastplayedmeta = str_pad($info[$instancename . ".rajio.lastplayed"], strlen(PHP_INT_MAX), "0", STR_PAD_LEFT);
+                }
                 
                 ?><tr class="<?=($i % 2 ? "odd" : "even")?>">
                     <td class="hashcell"><input type="text" value="<?=$info["hash"]?>"></td>
                     <td><span class="meta"><?=$info["name"]?></span><a href="<?=$info["source"]?>" target="_blank"><?=$info["name"]?></a></td>
                     <td><span class="meta"><?=$info["author"]?></span><a href="https://duckduckgo.com/?q=<?=urlencode($info["author"])?>" target="_blank"><?=$info["author"]?></a></td>
-                    <td><span class="meta"><?=($info["album"] ?? "")?></span><a href="https://duckduckgo.com/?q=<?=urlencode($info["album"] ?? "")?>" target="_blank"><?=($info["album"] ?? "")?></a></td>
+                    <td><span class="meta"><?=$info["album"]?></span><a href="https://duckduckgo.com/?q=<?=urlencode($info["album"])?>" target="_blank"><?=$info["album"]?></a></td>
                     <td><span class="meta"><?=$plength?></span><?=minutesAndSeconds($info["length"])?></td>
                     <td><?=($info[$instancename . ".rajio.plays"] ?? 0)?></td>
-                    <td><span class="meta"><?=(str_pad($info[$instancename . ".rajio.lastplayed"], strlen(PHP_INT_MAX), "0", STR_PAD_LEFT) ?? PHP_INT_MAX)?></span>
-                        <?=ago($info[$instancename . ".rajio.lastplayed"])?></td>
-                    <td><span class="meta"><?=str_pad(count($info["keywords"]), 4, "0", STR_PAD_LEFT)?></span><a href="#" onclick='openKeywords("<?=$info["name"]?>", <?=json_encode($keywords)?>, this); return false;'><?=count($info["keywords"])?></a></td>
+                    <td><span class="meta"><?=$lastplayedmeta?></span>
+                        <?=ago($info[$instancename . ".rajio.lastplayed"] ?? 0)?></td>
+                    <td><span class="meta"><?=str_pad(count($info["keywords"] ?? []), 4, "0", STR_PAD_LEFT)?></span><a href="#" onclick='openKeywords("<?=$info["name"]?>", <?=json_encode($keywords)?>, this); return false;'><?=count($info["keywords"] ?? [])?></a></td>
                     <td class="emoji"><?=$likestring?></td>
                 </tr><?
                 
@@ -219,6 +224,7 @@ $('#library').dataTable({
     autoWidth: false,
     paging: false,
     dom: "t",
+    order: [[1, "asc"]],
     columnDefs: [
         { targets: [4, 5, 6, 7], className: "ra"},
         { targets: [0, 8], orderable: false}
