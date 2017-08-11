@@ -1208,7 +1208,6 @@ class ModGrabber extends Module {
 
     
     getSongMeta(hash, field) {
-    getSongMeta(hash, field) {
         if (!this._index[hash]) return null;
         return this._index[hash][field];
     }
