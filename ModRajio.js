@@ -159,7 +159,9 @@ class ModRajio extends Module {
     get listeners() {
         let me = this.denv.server.me;
         if (me.mute) return [];
-        return this.dchan.members.filter((member) => member.id != me.id && !member.deaf).array();
+        let dchan = this.dchan;
+        if (!dchan) return [];
+        return dchan.members.filter((member) => member.id != me.id && !member.deaf).array();
     }
     
     get playing() {
