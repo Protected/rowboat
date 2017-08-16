@@ -216,8 +216,10 @@ class ModRajio extends Module {
             
             let myid = this.denv.server.me.id;
             let llisteners = this.listeners.length;
+            let dchanid = null;
+            if (this.dchan) dchanid = this.dchan.id;
             
-            if (oldMember.voiceChannelID != this.dchan.id && member.voiceChannelID == this.dchan.id) {
+            if (oldMember.voiceChannelID != dchanid && member.voiceChannelID == dchanid) {
                 if (member.id == myid) {
                     if (llisteners) {
                         //I joined the channel
@@ -243,7 +245,7 @@ class ModRajio extends Module {
                 }
             }
             
-            if (oldMember.voiceChannelID == this.dchan.id && member.voiceChannelID != this.dchan.id) {
+            if (oldMember.voiceChannelID == dchanid && member.voiceChannelID != dchanid) {
                 if (member.id == myid) {
                     //I left the channel
                     this.stopSong();
@@ -273,7 +275,7 @@ class ModRajio extends Module {
                         this.pauseSong();
                     }
                 } else if (oldMember.deaf && !member.deaf) {
-                    if (this._skipper[member.id] && member.voiceChannelID == this.dchan.id) {
+                    if (this._skipper[member.id] && member.voiceChannelID == dchanid) {
                         //Skipper tried to undeafen themselves... Nah
                         member.setDeaf(true);
                     } else if (llisteners == 1) {
