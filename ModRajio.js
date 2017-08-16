@@ -430,6 +430,11 @@ class ModRajio extends Module {
                     return true;
                 }
                 this._channel = args.channelid;
+            } else {
+                let me = this.denv.server.members.get(userid);
+                if (me && me.voiceChannelID) {
+                    this._channel = me.voiceChannelID;
+                }
             }
             
             if (!this.dchan || this.dchan.type != "voice") {
