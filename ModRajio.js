@@ -1025,11 +1025,13 @@ class ModRajio extends Module {
     //Abort request to skip current song
     
     abortskip() {
-        let members = this.dchan.members;
-        for (let userid in this._skipper) {
-            if (members.get(userid) && members.get(userid).deaf) {
-                members.get(userid).setDeaf(false);
-                delete this._skipper[userid];
+        if (this.dchan) {
+            let members = this.dchan.members;
+            for (let userid in this._skipper) {
+                if (members.get(userid) && members.get(userid).deaf) {
+                    members.get(userid).setDeaf(false);
+                    delete this._skipper[userid];
+                }
             }
         }
         for (let userid in this._skipper) {
@@ -1056,6 +1058,7 @@ class ModRajio extends Module {
     //Auxiliary
     
     islistener(userid) {
+        if (!this.dchan) return false;
         let member = this.dchan.members.get(userid);
         return member && !member.deaf;
     }
