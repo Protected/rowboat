@@ -927,7 +927,7 @@ class ModGrabber extends Module {
                 }
                 if (callbacks.exists) callbacks.exists(messageObj, mp.authorName, mp.reply, hash);
                 return;
-            } else if (data.trim() == "") {
+            } else if (data.toString().trim() == "") {
                 this.log('  Temp file is empty: ' + hash);
                 if (callbacks.errorEncoding) callbacks.errorEncoding(messageObj, mp.authorName, mp.reply);
                 fs.unlink(temppath);
