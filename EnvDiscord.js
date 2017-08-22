@@ -403,7 +403,7 @@ class EnvDiscord extends Environment {
         for (let channel of allchannels) {
             let pfm = channel.permissionsFor(member);
             if (!pfm || !pfm.has) continue;
-            if (pfm.has("READ_MESSAGES")) {
+            if (pfm.has("VIEW_CHANNEL")) {
                 channels.push(channel);
             }
         }
