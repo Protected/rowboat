@@ -553,6 +553,9 @@ class ModGrabber extends Module {
             },
             errorNotFound: (messageObj, messageAuthor, reply) => {
                 if (reply) reply(messageAuthor + ", the song you tried to replace could not be found.");
+            },
+            errorEncoding: (messageObj, messageAuthor, reply) => {
+                if (reply) reply(messageAuthor + ", the song could not be obtained or converted.");
             }
         }]);
     }
@@ -923,6 +926,11 @@ class ModGrabber extends Module {
                     this.saveIndex();
                 }
                 if (callbacks.exists) callbacks.exists(messageObj, mp.authorName, mp.reply, hash);
+                return;
+            } else if (data.trim() == "") {
+                this.log('  Temp file is empty: ' + hash);
+                if (callbacks.errorEncoding) callbacks.errorEncoding(messageObj, mp.authorName, mp.reply);
+                fs.unlink(temppath);
                 return;
             } else if (mp.info.replace === false) {
                 this.log('  No permission to commit replacement: ' + hash);
