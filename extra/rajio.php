@@ -60,7 +60,7 @@ table#library th, table#library td {
 table#library .ra {
     text-align: right;
 }
-.meta {
+.meta, .emoji > span.meta {
     display: none;
 }
 .emoji > span {
@@ -183,8 +183,10 @@ function ago($ts) {
             foreach ($sorted as $i => $info) {
             
                 $likestring = "";
+                $likenum = 15000;
                 if (isset($info["like"])) foreach ($info["like"] as $userid => $lik) {
                     $likestring .= '<span title="' . $lik . '">' . $likesymbols[$lik] . '</span>';
+                    $likenum += $lik;
                 }
                 
                 $plength = str_pad($info["length"], 5, "0", STR_PAD_LEFT);
@@ -195,13 +197,13 @@ function ago($ts) {
                 $info["author"] = htmlspecialchars($info["author"]);
                 $info["album"] = htmlspecialchars($info["album"] ?? "");
                 
-                $lastplayedmeta = PHP_INT_MAX;
+                $lastplayedmeta = str_pad(0, strlen(PHP_INT_MAX), "0", STR_PAD_LEFT);
                 if (isset($info[$instancename . ".rajio.lastplayed"])) {
                     $lastplayedmeta = str_pad($info[$instancename . ".rajio.lastplayed"], strlen(PHP_INT_MAX), "0", STR_PAD_LEFT);
                 }
                 
                 ?><tr class="<?=($i % 2 ? "odd" : "even")?>">
-                    <td class="hashcell"><input type="text" value="<?=$info["hash"]?>"></td>
+                    <td class="hashcell"><input type="text" value="<?=$info["hash"]?>" readonly></td>
                     <td><span class="meta"><?=$info["name"]?></span><a href="<?=$info["source"]?>" target="_blank"><?=$info["name"]?></a></td>
                     <td><span class="meta"><?=$info["author"]?></span><a href="https://duckduckgo.com/?q=<?=urlencode($info["author"])?>" target="_blank"><?=$info["author"]?></a></td>
                     <td><span class="meta"><?=$info["album"]?></span><a href="https://duckduckgo.com/?q=<?=urlencode($info["album"])?>" target="_blank"><?=$info["album"]?></a></td>
@@ -210,7 +212,7 @@ function ago($ts) {
                     <td><span class="meta"><?=$lastplayedmeta?></span>
                         <?=ago($info[$instancename . ".rajio.lastplayed"] ?? 0)?></td>
                     <td><span class="meta"><?=str_pad(count($info["keywords"] ?? []), 4, "0", STR_PAD_LEFT)?></span><a href="#" onclick='openKeywords("<?=$info["name"]?>", <?=json_encode($keywords)?>, this); return false;'><?=count($info["keywords"] ?? [])?></a></td>
-                    <td class="emoji"><?=$likestring?></td>
+                    <td class="emoji"><span class="meta"><?=$likenum?></span><?=$likestring?></td>
                 </tr><?
                 
             }
@@ -227,7 +229,7 @@ $('#library').dataTable({
     order: [[1, "asc"]],
     columnDefs: [
         { targets: [4, 5, 6, 7], className: "ra"},
-        { targets: [0, 8], orderable: false}
+        { targets: [0], orderable: false}
     ]
 });
 

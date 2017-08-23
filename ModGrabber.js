@@ -563,6 +563,7 @@ class ModGrabber extends Module {
     
     extractMessageInfo(message) {
         var warnauthor = !!message.match(/^!!/);
+        var noextract = !!message.match(/^XX/);
     
         var dkeywords = message.match(/\[[A-Za-z0-9\u{3040}-\u{D7AF}\(\)' _-]+\]/gu);
         if (!dkeywords) dkeywords = [];
@@ -590,6 +591,7 @@ class ModGrabber extends Module {
         
         return {
             warnauthor: warnauthor,
+            noextract: noextract,
             keywords: dkeywords,
             title: title,
             artist: artist,
@@ -666,6 +668,7 @@ class ModGrabber extends Module {
     
     grabFromYoutube(url, messageObj, callbacks, readOnly) {
         let mp = this.obtainMessageParams(messageObj);        
+        if (mp.info.noextract) return;
         try {
             //Obtain metadata from youtube
             ytdl.getInfo(url, (err, info) => {
@@ -741,6 +744,7 @@ class ModGrabber extends Module {
     
     grabFromAttachment(ma, messageObj, callbacks, readOnly) {
         let mp = this.obtainMessageParams(messageObj);
+        if (mp.info.noextract) return;
         try {
             //Download attachment
             this.log('Grabbing from attachment: ' + ma.filename + ' (' + ma.id + ')');
@@ -815,6 +819,7 @@ class ModGrabber extends Module {
     
     grabFromURL(url, sourceType, sourceSpecificId, messageObj, callbacks, readOnly) {
         let mp = this.obtainMessageParams(messageObj);
+        if (mp.info.noextract) return;
         try {
             let filename = sourceSpecificId;
         

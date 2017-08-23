@@ -60,7 +60,6 @@ class ModRajio extends Module {
         'pri.kw.global',        //{"keyword" => {bonus, mindate, maxdate}, ...} Modify priority if each keyword is found in song (dates are month-day)
         'pri.rand.min',         //Minimum random component        
         'pri.rand.max',         //Maximum random component
-        'pri.tolerance',        //Tolerance when selecting a song (select randomly in interval)
         'pri.mixitup'           //Probability to ignore preference parameters when selecting a song
     ]; }
     
@@ -114,7 +113,6 @@ class ModRajio extends Module {
         this._params['pri.kw.global'] = {};
         this._params['pri.rand.min'] = -15.0;
         this._params['pri.rand.max'] = 20.0;
-        this._params['pri.tolerance'] = 25.0;
         this._params['pri.mixitup'] = 0.1;
         
         this._userdata = {};
@@ -553,25 +551,6 @@ class ModRajio extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'rajio next', {
-            description: 'Show the next song in the queue.'
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
-        
-            if (this._queue.length) {
-                let song = this._queue[0].song;
-                let reqby = '';
-                if (this._queue[0].userid) {
-                    reqby = ' ** Requested by __' + this.denv.idToDisplayName(this._queue[0].userid) + '__';
-                }
-                ep.reply('**[Up next]** ' + '`' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`' + reqby);
-            } else {
-                ep.reply('The queue is empty; The next song will be selected automatically.');
-            }
-        
-            return true;
-        });
-        
-        
         this.mod('Commands').registerCommand(this, 'rajio queue', {
             description: 'Show a summary of the contents of the queue.'
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -797,7 +776,10 @@ class ModRajio extends Module {
             return false;
         }
         
-        if (!song) song = this.dequeue();
+        if (!song) song = this.dequeue(true);
+        let userid = song[1];
+        song = song[0];
+        
         if (!song || !song.hash) return false;
         
         this.log('Playing song: ' + song.hash);
@@ -805,7 +787,11 @@ class ModRajio extends Module {
         if (this.param('announcechannel') && (!this._announced || moment().unix() > this._announced + this.param('announcedelay'))) {
             let anchan = this.denv.server.channels.get(this.param('announcechannel'));
             if (anchan) {
-                anchan.send('**[Now Playing]** ' + '`' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + ' <' + this.secondsToHms(song.length) + '>`');
+                let reqby = '';
+                if (userid) {
+                    reqby = ' ** Requested by __' + this.denv.idToDisplayName(userid) + '__';
+                }
+                anchan.send('**[Now Playing]** ' + '`' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + ' <' + this.secondsToHms(song.length) + '>`' + reqby);
                 this._announced = moment().unix();
             }
         }
@@ -962,31 +948,45 @@ class ModRajio extends Module {
         return true;
     }
     
-    dequeue() {
+    dequeue(getrequester) {
         let listeners = this.listeners.map((listener) => listener.id);
         let nopreferences = random.fraction() < this.param('pri.mixitup');
     
         let priorities = {};
-        let maxpri = Number.MIN_VALUE;
+        let minpri = Number.MAX_VALUE;
         for (let hash of this.grabber.everySong()) {
             let priority = this.songPriority(this.grabber.hashSong(hash), listeners, false, nopreferences);
-            maxpri = Math.max(maxpri, priority);
+            minpri = Math.min(minpri, priority);
             priorities[hash] = priority;
         }
         
+        let nextsum = 0;
         let candidates = [];
         for (let hash in priorities) {
-            if (priorities[hash] >= maxpri - this.param('pri.tolerance')) {
-                candidates.push(hash);
-            }
+            candidates.push([hash, nextsum]);
+            nextsum += (priorities[hash] - minpri);
         }
         
-        let hash = candidates[Math.floor(random.fraction() * candidates.length)];
+        let pick = random.fraction() * nextsum;
+        let selection = null;
+        for (let item of candidates) {
+            if (item[1] > pick) break;
+            selection = item;
+        }
+        if (!selection) selection = candidates[candidates.length - 1];
+        
+        let hash = selection[0];
         
         let index = this._queue.findIndex((item) => item.song.hash == hash);
+        let userid = null;
         if (index > -1) {
+            userid = this._queue[index].userid;
             this._lastreq[hash] = moment().unix();
             this._queue.splice(index, 1);
+        }
+        
+        if (getrequester) {
+            return [this.grabber.hashSong(hash), userid];
         }
         
         return this.grabber.hashSong(hash);
