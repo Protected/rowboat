@@ -343,7 +343,7 @@ class ModSongRanking extends Module {
         }
         
         if (!i) return null;
-        acc /= i;
+        //acc /= i;
         return acc;
     }
     

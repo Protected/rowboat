@@ -38,9 +38,11 @@ class ModRajio extends Module {
         'historylength',        //Maximum amount of recently played songs to remember
         
         'pri.base',             //Base priority
+        'pri.min',              //Minimum priority
+        'pri.max',              //Maximum priority not counting queue
         'pri.rank.mtotal',      //Multiplier for global song rank
         'pri.rank.mlistener',   //Multiplier for listener-specific song rank
-        'pri.request.bonus',    //Maximum added priority for songs at top of request queue
+        'pri.request.bonus',    //Maximum added priority per library item for songs at top of request queue
         'pri.history.bonus',    //Maximum added priority for songs recently played in history
         'pri.length.minlen',    //Minimum ideal song length (for maximum priority bonus)
         'pri.length.maxlen',    //Maximum ideal song length (for maximum priority bonus)
@@ -90,25 +92,27 @@ class ModRajio extends Module {
         this._params['announcestatus'] = true;
         this._params['historylength'] = 10;
         
-        this._params['pri.base'] = 0.0;
-        this._params['pri.rank.mtotal'] = 15.0;
-        this._params['pri.rank.mlistener'] = 20.0;
-        this._params['pri.request.bonus'] = 80.0;
+        this._params['pri.base'] = 100.0;
+        this._params['pri.min'] = 5.0;
+        this._params['pri.max'] = 200.0;
+        this._params['pri.rank.mtotal'] = 5.0;
+        this._params['pri.rank.mlistener'] = 15.0;
+        this._params['pri.request.bonus'] = 20.0;
         this._params['pri.history.bonus'] = -100.0;
         this._params['pri.length.minlen'] = 200;
         this._params['pri.length.maxlen'] = 600;
         this._params['pri.length.maxexcs'] = 900;
         this._params['pri.length.bonus'] = 15.0;
         this._params['pri.lastplay.cap'] = 43200;
-        this._params['pri.lastplay.bonus'] = -30.0;
+        this._params['pri.lastplay.bonus'] = -50.0;
         this._params['pri.lastreq.cap'] = 10800;
         this._params['pri.lastreq.bonus'] = -30.0;
         this._params['pri.novelty.cap'] = 259200;
         this._params['pri.novelty.bonus'] = 20.0;
         this._params['pri.plays.mplay'] = -3.0;
         this._params['pri.plays.exp'] = 0.5;
-        this._params['pri.kw.high'] = 5.0;
-        this._params['pri.kw.low'] = 5.0;
+        this._params['pri.kw.high'] = 7.5;
+        this._params['pri.kw.low'] = 7.5;
         this._params['pri.kw.max'] = 5;
         this._params['pri.kw.global'] = {};
         this._params['pri.rand.min'] = -5.0;
@@ -749,9 +753,6 @@ class ModRajio extends Module {
             
             let prioritycomponents = this.songPriority(this.grabber.hashSong(hash), this.listeners.map((listener) => listener.id), true);
             
-            prioritycomponents.priority_with_random = prioritycomponents.priority;
-            prioritycomponents.priority -= prioritycomponents.random;
-            
             for (let cname in prioritycomponents) {
                 ep.reply('`' + cname + ' = ' + prioritycomponents[cname] + '`');
             }
@@ -953,24 +954,22 @@ class ModRajio extends Module {
         let nopreferences = random.fraction() < this.param('pri.mixitup');
     
         let priorities = {};
-        let minpri = Number.MAX_VALUE;
         for (let hash of this.grabber.everySong()) {
             let priority = this.songPriority(this.grabber.hashSong(hash), listeners, false, nopreferences);
-            minpri = Math.min(minpri, priority);
             priorities[hash] = priority;
         }
         
-        let nextsum = 0;
+        let sum = 0;
         let candidates = [];
         for (let hash in priorities) {
-            candidates.push([hash, nextsum]);
-            nextsum += (priorities[hash] - minpri);
+            sum += priorities[hash];
+            candidates.push([hash, sum]);
         }
         
-        let pick = random.fraction() * nextsum;
+        let pick = random.fraction() * sum;
         let selection = null;
         for (let item of candidates) {
-            if (item[1] > pick) break;
+            if (pick < item[1]) break;
             selection = item;
         }
         if (!selection) selection = candidates[candidates.length - 1];
@@ -1101,10 +1100,6 @@ class ModRajio extends Module {
         let priority = this.param('pri.base');
         let components = {base: priority};
         
-        let crandom = this.param('pri.rand.min') + random.fraction() * (this.param('pri.rand.max') - this.param('pri.rand.min'));
-        priority += crandom;
-        if (trace) components.random = crandom;
-        
         if (listeners) {
             let prelisteners = listeners;
             listeners = [];
@@ -1130,14 +1125,7 @@ class ModRajio extends Module {
             }
         }
         
-        //Position in queue or history
-        
-        let queuepos = this._queue.findIndex((item) => item.song.hash == song.hash);
-        if (queuepos > -1) {
-            let cqueue = (this.param('queuesize') - queuepos) / this.param('queuesize') * this.param('pri.request.bonus');
-            priority += cqueue;
-            if (trace) components.queue = cqueue;
-        }
+        //Position in history
         
         let historypos = this._history.findIndex((item) => item.hash == song.hash);
         if (historypos > -1) {
@@ -1224,6 +1212,26 @@ class ModRajio extends Module {
         }
         if (trace) components.kwglobal = ckwglobal.reduce((comp, bonus) => comp + bonus, 0);
         
+        
+        //Wrap it up
+        
+        if (trace) components.base = priority;
+        
+        let crandom = this.param('pri.rand.min') + random.fraction() * (this.param('pri.rand.max') - this.param('pri.rand.min'));
+        priority += crandom;
+        if (trace) components.random = crandom;
+        
+        if (priority < this.param('pri.min')) priority = this.param('pri.min');
+        if (priority > this.param('pri.max')) priority = this.param('pri.max');
+        
+        let queuepos = this._queue.findIndex((item) => item.song.hash == song.hash);
+        if (queuepos > -1) {
+            let cqueue = (this.param('queuesize') - queuepos) / this.param('queuesize') * this.param('pri.request.bonus') * this.grabber.everySong().length;
+            priority += cqueue;
+            if (trace) components.queue = cqueue;
+        }
+        if (priority < 0) priority = 0;
+
         
         if (trace) {
             components.priority = priority;
