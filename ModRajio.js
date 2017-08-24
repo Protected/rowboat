@@ -91,7 +91,7 @@ class ModRajio extends Module {
         this._params['historylength'] = 10;
         
         this._params['pri.base'] = 0.0;
-        this._params['pri.rank.mtotal'] = 10.0;
+        this._params['pri.rank.mtotal'] = 15.0;
         this._params['pri.rank.mlistener'] = 20.0;
         this._params['pri.request.bonus'] = 80.0;
         this._params['pri.history.bonus'] = -100.0;
@@ -105,15 +105,15 @@ class ModRajio extends Module {
         this._params['pri.lastreq.bonus'] = -30.0;
         this._params['pri.novelty.cap'] = 259200;
         this._params['pri.novelty.bonus'] = 20.0;
-        this._params['pri.plays.mplay'] = -2.0;
+        this._params['pri.plays.mplay'] = -3.0;
         this._params['pri.plays.exp'] = 0.5;
         this._params['pri.kw.high'] = 5.0;
         this._params['pri.kw.low'] = 5.0;
         this._params['pri.kw.max'] = 5;
         this._params['pri.kw.global'] = {};
-        this._params['pri.rand.min'] = -15.0;
-        this._params['pri.rand.max'] = 20.0;
-        this._params['pri.mixitup'] = 0.1;
+        this._params['pri.rand.min'] = -5.0;
+        this._params['pri.rand.max'] = 5.0;
+        this._params['pri.mixitup'] = 0.05;
         
         this._userdata = {};
         
