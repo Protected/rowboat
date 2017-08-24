@@ -1215,7 +1215,7 @@ class ModRajio extends Module {
         
         //Wrap it up
         
-        if (trace) components.base = priority;
+        if (trace) components.subtotal = priority;
         
         let crandom = this.param('pri.rand.min') + random.fraction() * (this.param('pri.rand.max') - this.param('pri.rand.min'));
         priority += crandom;
