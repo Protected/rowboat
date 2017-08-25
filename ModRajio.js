@@ -97,7 +97,7 @@ class ModRajio extends Module {
         this._params['pri.max'] = 200.0;
         this._params['pri.rank.mtotal'] = 5.0;
         this._params['pri.rank.mlistener'] = 15.0;
-        this._params['pri.request.bonus'] = 20.0;
+        this._params['pri.request.bonus'] = 120.0;
         this._params['pri.history.bonus'] = -100.0;
         this._params['pri.length.minlen'] = 200;
         this._params['pri.length.maxlen'] = 600;
@@ -969,8 +969,8 @@ class ModRajio extends Module {
         let pick = random.fraction() * sum;
         let selection = null;
         for (let item of candidates) {
-            if (pick < item[1]) break;
             selection = item;
+            if (pick < item[1]) break;
         }
         if (!selection) selection = candidates[candidates.length - 1];
         
