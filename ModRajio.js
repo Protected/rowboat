@@ -42,7 +42,7 @@ class ModRajio extends Module {
         'pri.max',              //Maximum priority not counting queue
         'pri.rank.mtotal',      //Multiplier for global song rank
         'pri.rank.mlistener',   //Multiplier for listener-specific song rank
-        'pri.request.bonus',    //Maximum added priority per library item for songs at top of request queue
+        'pri.request.mbonus',   //Maximum added priority per library item for songs at top of request queue
         'pri.history.bonus',    //Maximum added priority for songs recently played in history
         'pri.length.minlen',    //Minimum ideal song length (for maximum priority bonus)
         'pri.length.maxlen',    //Maximum ideal song length (for maximum priority bonus)
@@ -59,10 +59,7 @@ class ModRajio extends Module {
         'pri.kw.high',          //Bonus multiplier for user-defined high priority keywords
         'pri.kw.low',           //Bonus multiplier for user-defined low priority keywords (bonus will be negative)
         'pri.kw.max',           //Maximum amount of user-defined priority keywords
-        'pri.kw.global',        //{"keyword" => {bonus, mindate, maxdate}, ...} Modify priority if each keyword is found in song (dates are month-day)
-        'pri.rand.min',         //Minimum random component        
-        'pri.rand.max',         //Maximum random component
-        'pri.mixitup'           //Probability to ignore preference parameters when selecting a song
+        'pri.kw.global'         //{"keyword" => {bonus, mindate, maxdate}, ...} Modify priority if each keyword is found in song (dates are month-day)
     ]; }
     
     get requiredEnvironments() { return [
@@ -92,32 +89,29 @@ class ModRajio extends Module {
         this._params['announcestatus'] = true;
         this._params['historylength'] = 10;
         
-        this._params['pri.base'] = 100.0;
+        this._params['pri.base'] = 80.0;
         this._params['pri.min'] = 5.0;
-        this._params['pri.max'] = 200.0;
-        this._params['pri.rank.mtotal'] = 5.0;
-        this._params['pri.rank.mlistener'] = 15.0;
-        this._params['pri.request.bonus'] = 120.0;
-        this._params['pri.history.bonus'] = -100.0;
+        this._params['pri.max'] = 250.0;
+        this._params['pri.rank.mtotal'] = 10.0;
+        this._params['pri.rank.mlistener'] = 25.0;
+        this._params['pri.request.mbonus'] = 120.0;
+        this._params['pri.history.bonus'] = -120.0;
         this._params['pri.length.minlen'] = 200;
         this._params['pri.length.maxlen'] = 600;
         this._params['pri.length.maxexcs'] = 900;
-        this._params['pri.length.bonus'] = 15.0;
+        this._params['pri.length.bonus'] = 30.0;
         this._params['pri.lastplay.cap'] = 43200;
-        this._params['pri.lastplay.bonus'] = -50.0;
+        this._params['pri.lastplay.bonus'] = -65.0;
         this._params['pri.lastreq.cap'] = 10800;
-        this._params['pri.lastreq.bonus'] = -30.0;
+        this._params['pri.lastreq.bonus'] = -40.0;
         this._params['pri.novelty.cap'] = 259200;
         this._params['pri.novelty.bonus'] = 20.0;
         this._params['pri.plays.mplay'] = -3.0;
-        this._params['pri.plays.exp'] = 0.5;
-        this._params['pri.kw.high'] = 7.5;
-        this._params['pri.kw.low'] = 7.5;
+        this._params['pri.plays.exp'] = 0.8;
+        this._params['pri.kw.high'] = 10.0;
+        this._params['pri.kw.low'] = 10.0;
         this._params['pri.kw.max'] = 5;
         this._params['pri.kw.global'] = {};
-        this._params['pri.rand.min'] = -5.0;
-        this._params['pri.rand.max'] = 5.0;
-        this._params['pri.mixitup'] = 0.05;
         
         this._userdata = {};
         
@@ -706,7 +700,7 @@ class ModRajio extends Module {
         this.mod('Commands').registerCommand(this, 'rajio priority', {
             description: 'Show a song\'s current priority value.',
             args: ['hashoroffset', true],
-            permissions: [PERM_ADMIN]
+            permissions: [PERM_ADMIN, PERM_MOD]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let arg = args.hashoroffset.join(" ");
@@ -734,7 +728,7 @@ class ModRajio extends Module {
         this.mod('Commands').registerCommand(this, 'rajio apriority', {
             description: 'Analyze a song\'s current priority value.',
             args: ['hashoroffset', true],
-            permissions: [PERM_ADMIN]
+            permissions: [PERM_ADMIN, PERM_MOD]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let arg = args.hashoroffset.join(" ");
@@ -951,11 +945,10 @@ class ModRajio extends Module {
     
     dequeue(getrequester) {
         let listeners = this.listeners.map((listener) => listener.id);
-        let nopreferences = random.fraction() < this.param('pri.mixitup');
     
         let priorities = {};
         for (let hash of this.grabber.everySong()) {
-            let priority = this.songPriority(this.grabber.hashSong(hash), listeners, false, nopreferences);
+            let priority = this.songPriority(this.grabber.hashSong(hash), listeners);
             priorities[hash] = priority;
         }
         
@@ -1096,7 +1089,7 @@ class ModRajio extends Module {
     }
     
     
-    songPriority(song, listeners, trace, ignorepreferences) {
+    songPriority(song, listeners, trace) {
         let priority = this.param('pri.base');
         let components = {base: priority};
         
@@ -1113,7 +1106,7 @@ class ModRajio extends Module {
         //Rank-based components
         
         let songrank = this.songrank;
-        if (songrank && !ignorepreferences) {
+        if (songrank) {
             let crank = (songrank.computeSongRank(song.hash, null) || 0) * this.param('pri.rank.mtotal');
             priority += crank;
             if (trace) components.rank = crank;
@@ -1191,11 +1184,9 @@ class ModRajio extends Module {
         
         //Keywords
         
-        if (!ignorepreferences) {
-            let ckwpri = this.personalPriorityBonus(song.keywords, listeners);
-            priority += ckwpri;
-            if (trace) components.kwpriority = ckwpri;
-        }
+        let ckwpri = this.personalPriorityBonus(song.keywords, listeners);
+        priority += ckwpri;
+        if (trace) components.kwpriority = ckwpri;
         
         let ckwglobal = [];
         for (let keyword in this.param('pri.kw.global')) {
@@ -1217,16 +1208,12 @@ class ModRajio extends Module {
         
         if (trace) components.subtotal = priority;
         
-        let crandom = this.param('pri.rand.min') + random.fraction() * (this.param('pri.rand.max') - this.param('pri.rand.min'));
-        priority += crandom;
-        if (trace) components.random = crandom;
-        
         if (priority < this.param('pri.min')) priority = this.param('pri.min');
         if (priority > this.param('pri.max')) priority = this.param('pri.max');
         
         let queuepos = this._queue.findIndex((item) => item.song.hash == song.hash);
         if (queuepos > -1) {
-            let cqueue = (this.param('queuesize') - queuepos) / this.param('queuesize') * this.param('pri.request.bonus') * this.grabber.everySong().length;
+            let cqueue = (this.param('queuesize') - queuepos) / this.param('queuesize') * this.param('pri.request.mbonus') * this.grabber.everySong().length;
             priority += cqueue;
             if (trace) components.queue = cqueue;
         }
