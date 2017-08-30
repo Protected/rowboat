@@ -379,12 +379,12 @@ class ModRajio extends Module {
             
             if (cskippers >= clisteners - 1) {
                 let prefix = "rajio." + this.name.toLowerCase();
-                let skipdata = this.grabber.getSongMeta(song.hash, prefix + ".skipped");
+                let skipdata = this.grabber.getSongMeta(this._play.hash, prefix + ".skipped");
                 if (!skipdata) skipdata = {};
                 
                 let now = moment().unix();
                 skipdata[now] = Object.keys(this._skipper);
-                this.grabber.setSongMeta(song.hash, prefix + ".skipped", skipdata);
+                this.grabber.setSongMeta(this._play.hash, prefix + ".skipped", skipdata);
 
                 this.stopSong();                
                 this.playSong();
