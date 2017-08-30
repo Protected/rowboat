@@ -1257,6 +1257,20 @@ class ModGrabber extends Module {
     }
     
     
+    allSongWords(hash) {
+        if (!this._index[hash]) return false;
+        let minimalize = (str) => str.toLowerCase().replace(/\([^)]*\)/g, "").trim().replace(/ +/g, " ");
+        let result = {};
+        if (this._index[hash].name) result[minimalize(this._index[hash].name)] = true;
+        if (this._index[hash].author) result[minimalize(this._index[hash].author)] = true;
+        if (this._index[hash].album) result[minimalize(this._index[hash].album)] = true;
+        for (let keyword of this._index[hash].keywords) {
+            result[minimalize(keyword)] = true;
+        }
+        return Object.keys(result);
+    }
+    
+    
     //Callback signature: messageObj, messageAuthor, reply, hash
     registerOnNewSong(func, self) {
         this.log('Registering new song callback. Context: ' + self.constructor.name);
