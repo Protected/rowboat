@@ -633,7 +633,7 @@ class ModGrabber extends Module {
         if (this.isDownloadPathFull() || !messageObj) return false;
         
         //Youtube
-        let yturls = messageObj.content.match(/(?:https?:\/\/|\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})(?![\w-])/g);
+        let yturls = messageObj.content.match(/(?:https?:\/\/|\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w_-]{11})(?![\w_-])/g);
         if (yturls) {
             for (let url of yturls) {
                 this.grabFromYoutube(url, messageObj, callbacks, readOnly);
