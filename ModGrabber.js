@@ -921,7 +921,7 @@ class ModGrabber extends Module {
             let now = moment().unix();
             
             if (fs.existsSync(realpath)) {
-                fs.unlink(temppath);
+                fs.unlink(temppath, (err) => {});
                 this.log('  Already existed: ' + originalname + '  (as ' + hash + ')');
                 if (!readOnly) {
                     this._index[hash].seen.push(now);
@@ -935,22 +935,22 @@ class ModGrabber extends Module {
             } else if (data.toString().trim() == "") {
                 this.log('  Temp file is empty: ' + hash);
                 if (callbacks.errorEncoding) callbacks.errorEncoding(messageObj, mp.authorName, mp.reply);
-                fs.unlink(temppath);
+                fs.unlink(temppath, (err) => {});
                 return;
             } else if (mp.info.replace === false) {
                 this.log('  No permission to commit replacement: ' + hash);
                 if (callbacks.errorPermission) callbacks.errorPermission(messageObj, mp.authorName, mp.reply);
-                fs.unlink(temppath);
+                fs.unlink(temppath, (err) => {});
                 return;
             } else if (mp.info.replace && !this._index[mp.info.replace]) {
                 this.log('  Target of replacement (' + mp.info.replace + ') not found for: ' + hash);
                 if (callbacks.errorNotFound) callbacks.errorNotFound(messageObj, mp.authorName, mp.reply);
-                fs.unlink(temppath);
+                fs.unlink(temppath, (err) => {});
                 return;
             }
             
             if (readOnly) {
-                fs.unlink(temppath);
+                fs.unlink(temppath, (err) => {});
                 return;
             }
             
@@ -1074,7 +1074,7 @@ class ModGrabber extends Module {
     
     removeByHash(hash) {
         if (!this._index[hash]) return false;
-        fs.unlink(this.param('downloadPath') + '/' + hash + '.mp3');
+        fs.unlink(this.param('downloadPath') + '/' + hash + '.mp3', (err) => {});
         delete this._index[hash];
         this.saveIndex();
         return true;

@@ -307,8 +307,8 @@ class ModRajio extends Module {
         
         //Register module integrations
         
-        this.grabber.registerParserFilter(/^#([0-9]+)?$/, (str, match, userid) => {
-            if (!match[1] && this._play) return this._play.hash;
+        this.grabber.registerParserFilter(/^[#$]([0-9]+)?$/, (str, match, userid) => {
+            if ((!match[1] || match[1] == "0") && this._play) return this._play.hash;
             if (match[1] && this._history[match[1] - 1]) {
                 return this._history[match[1] - 1].hash;
             }
