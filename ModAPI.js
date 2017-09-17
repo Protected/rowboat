@@ -127,7 +127,7 @@ class ModAPI extends Module {
             return false;
         }
         
-        this._methods.push({modulename: module.name, methodname: methodname, args: args]);
+        this._methods.push({modulename: module.name, methodname: methodname, args: args});
     }
 
 
