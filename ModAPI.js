@@ -77,7 +77,7 @@ class ModAPI extends Module {
                 
                 let res = null;
                 try {
-                    res = info.mod[info.methodname].apply(this, args);
+                    res = info.mod[info.methodname].apply(info.mod, args);
                 } catch (err) {
                     this.log('error', request.headers.host + ' <= Error in implementation: ' + err);
                     response.statusCode = 500;
