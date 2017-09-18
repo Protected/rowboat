@@ -89,7 +89,7 @@ class ModAPI extends Module {
                 this.log(request.headers.host + ' <= ' + res);
                 
                 response.statusCode = 200;
-                response.write(res);
+                response.write(String(res));
                 response.end();
             });
 
