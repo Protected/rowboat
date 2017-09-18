@@ -110,13 +110,13 @@ class ModAPI extends Module {
     
     //Use this method from dependent modules to expose one of their methods.
     
-    registerMethod(module, methodname, args) {
-        if (!module || !module.name || !module.modName) {
+    registerMethod(mod, methodname, args) {
+        if (!mod || !mod.name || !mod.modName) {
             this.log('warn', 'Failed to register method: The first argument must be the registering module.');
             return false;
         }
         
-        if (!methodname || !module[methodname] || typeof module[methodname] != "function") {
+        if (!methodname || !mod[methodname] || typeof mod[methodname] != "function") {
             this.log('warn', 'Failed to register method: The method does not exist in the module.');
             return false;
         }
@@ -127,7 +127,7 @@ class ModAPI extends Module {
             return false;
         }
         
-        this._methods.push({modulename: module.name, methodname: methodname, args: args});
+        this._methods.push({modulename: mod.name, methodname: methodname, args: args});
     }
 
 
