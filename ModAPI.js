@@ -19,7 +19,7 @@ class ModAPI extends Module {
         this._params['port'] = 8098;
         
         this._server = null;
-        this._methods = [];  //List of {modulename, methodname, args: [...]}
+        this._methods = [];  //List of {mod, methodname, args: [...]}
     }
     
     initialize(opt) {
@@ -53,7 +53,7 @@ class ModAPI extends Module {
                     return response.end();
                 }
                 
-                let info = this._methods.find((item) => item.modulename == json.module && item.methodname == json.method);
+                let info = this._methods.find((item) => item.mod.name == json.module && item.methodname == json.method);
                 if (!info) {
                     this.log('warn', '(NOT FOUND) ' + request.headers.host + ' => ' + json.module + '.' + json.method);
                     response.statusCode = 404;
@@ -69,7 +69,7 @@ class ModAPI extends Module {
                 
                 this.log(request.headers.host + ' => ' + json.module + '.' + json.method + '(' + args.join(', ') + ')');
                 
-                if (!this.mod(info.modulename) || !this.mod(info.modulename)[info.methodname] || typeof this.mod(info.modulename)[info.methodname] != "function") {
+                if (!info.mod[info.methodname] || typeof info.mod[info.methodname] != "function") {
                     this.log('error', request.headers.host + ' <= IMPLEMENTATION MISSING?');
                     response.statusCode = 503;
                     return response.end();
@@ -77,7 +77,7 @@ class ModAPI extends Module {
                 
                 let res = null;
                 try {
-                    res = this.mod(info.modulename)[info.methodname](args);
+                    res = info.mod[info.methodname](args);
                 } catch (err) {
                     this.log('error', request.headers.host + ' <= Error in implementation: ' + err);
                     response.statusCode = 500;
@@ -127,7 +127,7 @@ class ModAPI extends Module {
             return false;
         }
         
-        this._methods.push({modulename: mod.name, methodname: methodname, args: args});
+        this._methods.push({mod: mod, methodname: methodname, args: args});
     }
 
 
