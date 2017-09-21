@@ -806,7 +806,7 @@ class ModRajio extends Module {
         }
         
         if (this.param('announcestatus')) {
-            this.denv.client.realClient.user.setGame(song.name);
+            this.denv.client.realClient.user.setActivity(song.name, {type: ActivityType.STREAMING}).catch(() => {});
         }
         
         let att = 1.0;
@@ -848,7 +848,7 @@ class ModRajio extends Module {
         this.log('Stopping song' + (this._play ? ': ' + this._play.hash : '.'));
         
         if (this.param('announcestatus')) {
-            this.denv.client.realClient.user.setGame(null);
+            this.denv.client.realClient.user.setActivity(null).catch(() => {});
         }
         
         if (this._pending) {
@@ -881,7 +881,7 @@ class ModRajio extends Module {
         this.log('Pausing song: ' + this._play.hash + ' at ' + vc.dispatcher.time);
         
         if (this.param('announcestatus')) {
-            this.denv.client.realClient.user.setGame("*Paused*");
+            this.denv.client.realClient.user.setActivity("*Paused*", {type: ActivityType.STREAMING}).catch(() => {});
         }
         
         this._pause = [this._play, vc.dispatcher.time];
