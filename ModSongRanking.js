@@ -132,13 +132,15 @@ class ModSongRanking extends Module {
                 this._index[userid][likmap[userid]].push(hash);
             }
         }
-        
-        this.computeStatsIntoGrabberIndex(true);
  
         
         //Register callbacks
 
         var self = this;
+        
+        this.denv.on("connected", () => {
+            this.computeStatsIntoGrabberIndex(true);
+        }, self);
 
         this.grabber.registerOnNewSong((messageObj, messageAuthor, reply, hash) => {
             
