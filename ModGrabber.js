@@ -63,7 +63,7 @@ class ModGrabber extends Module {
         
         this._index = {};  //Main index (hash => info)
         this._indexSourceTypeAndId = {};  //{sourceType: {sourceId: ...}}
-        this._stats = {};  //{users: {userid: {displayname, shares, shareavglength, ...}, ...}}
+        this._stats = null;  //{users: {userid: {displayname, shares, shareavglength, ...}, ...}}
         
         this._usage = 0;  //Cache disk usage (by mp3s only)
         this._sessionGrabs = [];  //History of hashes grabbed in this session

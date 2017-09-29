@@ -121,6 +121,9 @@ class ModRajio extends Module {
         this._params['pri.meta.low'] = 20.0;
         this._params['pri.meta.max'] = 50;
         this._params['pri.kw.global'] = {};
+        this._params['pri.user.high'] = 20.0;
+        this._params['pri.user.low'] = 20.0;
+        this._params['pri.user.max'] = 10;
         
         this._userdata = {};
         
