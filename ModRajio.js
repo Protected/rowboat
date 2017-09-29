@@ -59,10 +59,13 @@ class ModRajio extends Module {
         'pri.skip.cutoff',      //Minimum (included) listener-specific song rank for listener's skip to count towards making skip applicable
         'pri.skip.cap',         //Seconds in the past after which a skip no longer yields the bonus
         'pri.skip.mbonus',      //Skip bonus: mbonus * applicable_skips; all skips are cleared after song plays successfully
-        'pri.kw.high',          //Bonus multiplier for user-defined high priority keywords
-        'pri.kw.low',           //Bonus multiplier for user-defined low priority keywords (bonus will be negative)
-        'pri.kw.max',           //Maximum amount of user-defined priority keywords
-        'pri.kw.global'         //{"keyword" => {bonus, mindate, maxdate}, ...} Modify priority if each keyword is found in song (dates are month-day)
+        'pri.meta.high',        //Bonus multiplier for user-defined high priority keywords, divided by #listeners
+        'pri.meta.low',         //Bonus multiplier for user-defined low priority keywords (bonus will be negative), divided by #listeners
+        'pri.meta.max',         //Maximum amount of user-defined priority keywords
+        'pri.kw.global',        //{"keyword" => {bonus, mindate, maxdate}, ...} Modify priority if each keyword is found in song (dates are month-day)
+        'pri.user.high',        //Bonus multiplier for user-defined other-user-specific ranks, applicable if the other user is not listening, divided by #listeners
+        'pri.user.low',         //Bonus negated multiplier for user-defined other-user-specific ranks, applicable if the other user is not listening, divided by #listeners
+        'pri.user.max',         //Maximum amount of user-defined other users for bonus application
     ]; }
     
     get requiredEnvironments() { return [
@@ -98,25 +101,25 @@ class ModRajio extends Module {
         this._params['pri.rank.mtotal'] = 8.0;
         this._params['pri.rank.mlistener'] = 35.0;
         this._params['pri.request.mbonus'] = 120.0;
-        this._params['pri.history.bonus'] = -120.0;
+        this._params['pri.history.bonus'] = -100.0;
         this._params['pri.length.minlen'] = 200;
         this._params['pri.length.maxlen'] = 600;
         this._params['pri.length.maxexcs'] = 900;
         this._params['pri.length.penalty'] = -30.0;
-        this._params['pri.lastplay.cap'] = 259200;
+        this._params['pri.lastplay.cap'] = 604800;
         this._params['pri.lastplay.bonus'] = -100.0;
         this._params['pri.lastreq.cap'] = 10800;
         this._params['pri.lastreq.bonus'] = -40.0;
         this._params['pri.novelty.cap'] = 259200;
-        this._params['pri.novelty.bonus'] = 20.0;
+        this._params['pri.novelty.bonus'] = 50.0;
         this._params['pri.plays.mplay'] = -2.8;
         this._params['pri.plays.exp'] = 0.8;
         this._params['pri.skip.cutoff'] = 0;
         this._params['pri.skip.cap'] = 169200;
         this._params['pri.skip.mbonus'] = -20.0;
-        this._params['pri.kw.high'] = 10.0;
-        this._params['pri.kw.low'] = 10.0;
-        this._params['pri.kw.max'] = 5;
+        this._params['pri.meta.high'] = 20.0;
+        this._params['pri.meta.low'] = 20.0;
+        this._params['pri.meta.max'] = 50;
         this._params['pri.kw.global'] = {};
         
         this._userdata = {};
@@ -624,9 +627,9 @@ class ModRajio extends Module {
         });
 
         
-        if (this.param('pri.kw.max')) {
+        if (this.param('pri.meta.max')) {
         
-            this.mod('Commands').registerCommand(this, 'rajio kwpriority', {
+            this.mod('Commands').registerCommand(this, 'rajio metapriority', {
                 description: 'List your personal priorities.'
             }, (env, type, userid, channelid, command, args, handle, ep) => {
                 
@@ -645,7 +648,7 @@ class ModRajio extends Module {
                 return true;
             });
         
-            this.mod('Commands').registerCommand(this, 'rajio kwpriority set', {
+            this.mod('Commands').registerCommand(this, 'rajio metapriority set', {
                 description: 'Set a personal priority (high or low) for a keyword.',
                 args: ['level', 'keyword', true]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -669,8 +672,8 @@ class ModRajio extends Module {
                 if (!userdata) userdata = {};
                 if (!userdata.kw) userdata.kw = {};
                 
-                if (Object.keys(userdata) >= this.param('pri.kw.max') && !userdata.kw[keyword]) {
-                    ep.reply('You can\'t have more than ' + this.param('pri.kw.max') + ' keyword preferences.');
+                if (Object.keys(userdata.kw).length >= this.param('pri.meta.max') && !userdata.kw[keyword]) {
+                    ep.reply('You can\'t have more than ' + this.param('pri.meta.max') + ' keyword preferences.');
                     return true;
                 }
                 
@@ -683,7 +686,7 @@ class ModRajio extends Module {
                 return true;
             });
             
-            this.mod('Commands').registerCommand(this, 'rajio kwpriority unset', {
+            this.mod('Commands').registerCommand(this, 'rajio metapriority unset', {
                 description: 'Unset a keyword\'s personal priority.',
                 args: ['keyword', true]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -700,6 +703,109 @@ class ModRajio extends Module {
                 }
                 
                 delete userdata.kw[keyword];
+                this._userdata[userid] = userdata;
+                this.saveData();
+                
+                ep.reply('OK.');
+            
+                return true;
+            });
+            
+        }
+        
+        
+        if (this.param('pri.user.max')) {
+        
+            this.mod('Commands').registerCommand(this, 'rajio userpriority', {
+                description: 'List your personal likes and dislikes of other users\' preferences.'
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
+                
+                let userdata = this._userdata[userid];
+                if (!userdata) userdata = {};
+                
+                if (!userdata.users || !Object.keys(userdata.users).length) {
+                    ep.reply('You have set no priorities.');
+                    return true;
+                }
+                
+                for (let otheruserid in userdata.users) {
+                    ep.reply('[' + (userdata.users[otheruserid] > 0 ? 'High' : 'Low') + '] ' + this.denv.idToDisplayName(otheruserid));
+                }
+                
+                return true;
+            });
+        
+            this.mod('Commands').registerCommand(this, 'rajio userpriority set', {
+                description: 'Set a personal appreciation (high or low) for another user\'s preferences.',
+                args: ['level', 'user', true]
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
+                            
+                let level = 0;
+                if (args.level == "high") level = 1;
+                else if (args.level == "low") level = -1;
+                else {
+                    ep.reply('Please set the priority level to "high" or "low".');
+                    return true;
+                }
+            
+                let user = args.user.join(" ").toLowerCase().trim();
+                
+                let otheruserid = null;
+                if (this.denv.idToDisplayName(user) != user) otheruserid = user;
+                else otheruserid = this.denv.displayNameToId(user);
+                if (!otheruserid) {
+                    ep.reply('User not found. Please specify a valid user.');
+                    return true;
+                }
+                
+                if (userid == otheruserid) {
+                    ep.reply('That\'s you! Denied!');
+                    return true;
+                }
+            
+                let userdata = this._userdata[userid];
+                if (!userdata) userdata = {};
+                if (!userdata.users) userdata.users = {};
+                
+                if (Object.keys(userdata.users).length >= this.param('pri.user.max') && !userdata.users[otheruserid]) {
+                    ep.reply('You can\'t have more than ' + this.param('pri.user.max') + ' other user preferences.');
+                    return true;
+                }
+                
+                userdata.users[otheruserid] = level;
+                this._userdata[userid] = userdata;
+                this.saveData();
+                
+                ep.reply('OK.');
+            
+                return true;
+            });
+            
+            this.mod('Commands').registerCommand(this, 'rajio userpriority unset', {
+                description: 'Unset a personal appreciation for another user\'s preferences.',
+                args: ['user', true]
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
+            
+                let user = args.user.join(" ").toLowerCase().trim();
+                
+                let otheruserid = null;
+                if (this.denv.idToDisplayName(user) != user) otheruserid = user;
+                else otheruserid = this.denv.displayNameToId(user);
+                if (!otheruserid) {
+                    ep.reply('User not found. Please specify a valid user.');
+                    return true;
+                }
+            
+                let userdata = this._userdata[userid];
+                if (!userdata) userdata = {};
+                if (!userdata.users) userdata.users = {};
+                
+                if (!userdata.users[otheruserid]) {
+                    ep.reply('You do not have a priority for this user.');
+                    return true;
+                }
+                
+                delete userdata.users[otheruserid];
                 this._userdata[userid] = userdata;
                 this.saveData();
                 
@@ -785,9 +891,12 @@ class ModRajio extends Module {
             return false;
         }
         
-        if (!song) song = this.dequeue(true);
-        let userid = song[1];
-        song = song[0];
+        let userid = null;
+        if (!song) {
+            song = this.dequeue(true);
+            userid = song[1];
+            song = song[0];
+        }
         
         if (!song || !song.hash) return false;
         
@@ -1093,9 +1202,10 @@ class ModRajio extends Module {
            for (let listener of listeners) {
                 let userdata = this._userdata[listener];
                 if (!userdata || !userdata.kw) continue;
+                if (this._nopreference[listener]) continue;
                 for (let keywordmatch in userdata.kw) {
                     if (keyword.match(new RegExp('^' + keywordmatch.replace(/[-\/\\^$*+?.()|[\]{}]/gu, '\\$&').replace(' ', '.*') + '$'))) {
-                        result += userdata.kw[keywordmatch] * this.param(userdata.kw[keywordmatch] > 0 ? "pri.kw.high" : "pri.kw.low");
+                        result += userdata.kw[keywordmatch] * this.param(userdata.kw[keywordmatch] > 0 ? "pri.meta.high" : "pri.meta.low") / listeners.length;
                     }
                 }
             }
@@ -1104,19 +1214,35 @@ class ModRajio extends Module {
         return result;
     }
     
+    otherUserPriorityBonus(hash, listeners) {
+        let result = 0;
+        if (!listeners) return result;
+        
+        for (let listener of listeners) {
+            let userdata = this._userdata[listener];
+            if (!userdata || !userdata.users) continue;
+            if (this._nopreference[listener]) continue;
+            for (let otherlistener in userdata.users) {
+                if (listeners.find((checklistener) => checklistener == otherlistener)) continue;
+                result += userdata.users[otherlistener] * this.songrank.getSongLikeability(hash, otherlistener) * this.param(userdata.users[otherlistener] > 0 ? "pri.user.high" : "pri.user.low") / listeners.length;
+            }
+        }
+        
+        return result;
+    }
+    
+    
     
     songPriority(song, listeners, trace) {
         let prefix = "rajio." + this.name.toLowerCase();
         let priority = this.param('pri.base');
         let components = {base: priority};
         
-        if (listeners) {
-            let prelisteners = listeners;
-            listeners = [];
-            for (let userid of prelisteners) {
-                if (this._nopreference[userid]) continue;
-                listeners.push(userid);
-            }
+        let prelisteners = (listeners || []);
+        listeners = [];
+        for (let userid of prelisteners) {
+            if (this._nopreference[userid]) continue;
+            listeners.push(userid);
         }
         
         
@@ -1129,7 +1255,7 @@ class ModRajio extends Module {
             priority += crank;
             if (trace) components.rank = crank;
             
-            if (listeners) {
+            if (listeners.length) {
                 let clrank = (songrank.computeSongRank(song.hash, listeners) || 0) * this.param('pri.rank.mlistener');
                 priority += clrank;
                 if (trace) components.listenerrank = clrank;
@@ -1220,13 +1346,17 @@ class ModRajio extends Module {
         }
 
         
-        //Keywords
+        //Keywords and other users' ranks
         
         let allwords = this.grabber.allSongWords(song.hash);
         
-        let ckwpri = this.personalPriorityBonus(allwords, listeners);
-        priority += ckwpri;
-        if (trace) components.kwpriority = ckwpri;
+        let cmetapri = this.personalPriorityBonus(allwords, listeners);
+        priority += cmetapri;
+        if (trace) components.metapriority = cmetapri;
+        
+        let cotheruserpri = this.otherUserPriorityBonus(song.hash, listeners);
+        priority += cotheruserpri;
+        if (trace) components.otheruserpriority = cotheruserpri;
         
         let ckwglobal = [];
         for (let keyword in this.param('pri.kw.global')) {

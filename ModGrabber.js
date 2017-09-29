@@ -13,6 +13,7 @@ var request = require('request');
 const PERM_ADMIN = 'administrator';
 const PERM_MODERATOR = 'moderator';
 const INDEXFILE = 'index.json';
+const STATSFILE = 'stats.json';
 
 const GET_FIELDS = ['name', 'author', 'album', 'length', 'source', 'sourceSpecificId', 'sharedBy', 'hash'];
 const SET_FIELDS = ['name', 'author', 'album'];
@@ -62,6 +63,7 @@ class ModGrabber extends Module {
         
         this._index = {};  //Main index (hash => info)
         this._indexSourceTypeAndId = {};  //{sourceType: {sourceId: ...}}
+        this._stats = {};  //{users: {userid: {displayname, shares, shareavglength, ...}, ...}}
         
         this._usage = 0;  //Cache disk usage (by mp3s only)
         this._sessionGrabs = [];  //History of hashes grabbed in this session
@@ -73,6 +75,7 @@ class ModGrabber extends Module {
         
         this._apiCbNewSong = [];  //List of callbacks called when new songs are added. Return true to stop processing.
         this._apiCbGrabscanExists = [];  //List of callbacks called when existing songs are detected by a grabscan call. Return true to stop processing.
+        this._apiCbRemoveSong = [];  //List of callbacks called when songs are removed.
     }
     
     
@@ -83,6 +86,7 @@ class ModGrabber extends Module {
         //Load index
         
         if (!this.loadIndex()) return false;
+        if (!this.loadStats()) return false;
         this.calculateDownloadPathUsage();
         
         
@@ -533,6 +537,40 @@ class ModGrabber extends Module {
     }
     
     
+    loadStats() {
+        if (this._stats) return true;
+        
+        //This file is rebuilt every time we start the module.
+        
+        this._stats = {users: {}};
+        
+        let shareavglength = {};
+        
+        for (let hash in this._index) {
+            let info = this._index[hash];
+            for (let sharer of info.sharedBy) {
+                this.incrUserStat(sharer, "shares", 1, true);
+                if (!shareavglength[sharer]) shareavglength[sharer] = 0;
+                shareavglength[sharer] += info.length;
+            }
+        }
+        
+        for (let sharer in shareavglength) {
+            this.setUserStat(sharer, "shareavglength", shareavglength[sharer] / this.getUserStat(sharer, "shares"), true);
+        }
+        
+        this.saveStats();
+        
+        return true;
+    }
+    
+    saveStats() {
+        let statsfile = this.param('downloadPath') + '/' + STATSFILE;
+        
+        jsonfile.writeFileSync(statsfile, this._stats, {spaces: 4});
+    }
+    
+    
     //Message processing
     
     onMessage(env, type, message, authorid, channelid, rawobj) {
@@ -927,6 +965,10 @@ class ModGrabber extends Module {
                     this._index[hash].seen.push(now);
                     if (this._index[hash].sharedBy.indexOf(mp.author) < 0) {
                         this._index[hash].sharedBy.push(mp.author);
+                        
+                        let shares = this.getUserStat(mp.author, "shares");
+                        this.setUserStat(mp.author, "shareavglength", (this.getUserStat(mp.author, "shareavglength") * shares + info.length) / (shares + 1));
+                        this.incrUserStat(mp.author, "shares");
                     }
                     this.saveIndex();
                 }
@@ -1004,6 +1046,10 @@ class ModGrabber extends Module {
                 }
                 this._indexSourceTypeAndId[entry.sourceType][entry.sourceSpecificId] = this._index[hash];
                 
+                let shares = this.getUserStat(mp.author, "shares");
+                this.setUserStat(mp.author, "shareavglength", (this.getUserStat(mp.author, "shareavglength") * shares + entry.length) / (shares + 1));
+                this.incrUserStat(mp.author, "shares");
+                
                 this._sessionGrabs.unshift([hash, now]);
                 
                 this.log('  Successfully grabbed from ' + entry.sourceType + ': ' + originalname + '  (as ' + hash + ')');
@@ -1075,6 +1121,28 @@ class ModGrabber extends Module {
     removeByHash(hash) {
         if (!this._index[hash]) return false;
         fs.unlink(this.param('downloadPath') + '/' + hash + '.mp3', (err) => {});
+        
+        let info = this._index[hash];
+        for (let sharer of info.sharedBy) {            
+            let shares = this.getUserStat(sharer, "shares");
+            this.setUserStat(sharer, "shareavglength", (this.getUserStat(sharer, "shareavglength") * shares - info.length) / (shares - 1));
+            this.incrUserStat(sharer, "shares", -1);
+        }
+        
+        for (let cb of this._apiCbRemoveSong) {
+            try {
+                let r;
+                if (typeof cb == "function") {
+                    r = cb.apply(this, [hash]);
+                } else {
+                    r = cb[0].apply(cb[1], [hash]);
+                }
+                if (r) break;
+            } catch (exception) {
+                this.log('error', 'Error in callback while removing ' + hash);
+            }
+        }
+        
         delete this._index[hash];
         this.saveIndex();
         return true;
@@ -1169,6 +1237,7 @@ class ModGrabber extends Module {
             }
         }
     }
+    
     
     
     // # API #
@@ -1271,6 +1340,40 @@ class ModGrabber extends Module {
     }
     
     
+    getUserStat(userid, field) {
+        if (!this._stats.users[userid]) return null;
+        return this._stats.users[userid][field];
+    }
+    
+    setUserStat(userid, field, value, nosave) {
+        if (!this._stats.users[userid]) {
+            this._stats.users[userid] = {
+                displayname: this.env(this.param('env')).idToDisplayName(userid)
+            };
+        }
+        this._stats.users[userid][field] = value;
+        if (!nosave) this.saveStats();
+        return true;
+    }
+    
+    incrUserStat(userid, field, amount, nosave) {
+        let value = this.getUserStat(userid, field) || 0;
+        amount = amount || 1;
+        value += amount;
+        this.setUserStat(userid, field, value, nosave);
+    }
+    
+    cleanUserStats(field) {
+        if (!this._stats.users) return;
+        for (let userid in this._stats.users) {
+            if (this._stats.users[userid][field] !== undefined) {
+                delete this._stats.users[userid][field];
+            }
+        }
+        this.saveStats();
+    }
+    
+    
     //Callback signature: messageObj, messageAuthor, reply, hash
     registerOnNewSong(func, self) {
         this.log('Registering new song callback. Context: ' + self.constructor.name);
@@ -1289,6 +1392,17 @@ class ModGrabber extends Module {
             this._apiCbGrabscanExists.push(func);
         } else {
             this._apiCbGrabscanExists.push([func, self]);
+        }
+    }
+    
+    
+    //Callback signature: hash
+    registerOnRemoveSong(func, self) {
+        this.log('Registering remove song callback. Context: ' + self.constructor.name);
+        if (!self) {
+            this._apiCbRemoveSong.push(func);
+        } else {
+            this._apiCbRemoveSong.push([func, self]);
         }
     }
     

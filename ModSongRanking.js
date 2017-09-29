@@ -70,6 +70,12 @@ var LIKEABILITY_REACTIONS = {
 }
 
 
+/*
+    SongRanking additions to Grabber stats (for each userid):
+    {..., likes: {LEVEL: COUNT, ...}, likesonshares: {LEVEL: COUNT, ...}}
+*/
+
+
 class ModSongRanking extends Module {
 
     
@@ -126,6 +132,8 @@ class ModSongRanking extends Module {
                 this._index[userid][likmap[userid]].push(hash);
             }
         }
+        
+        this.computeStatsIntoGrabberIndex(true);
  
         
         //Register callbacks
@@ -153,6 +161,31 @@ class ModSongRanking extends Module {
                 this.setSongLikeability(hash, messageObj.author.id, likeability);
             }
             
+        }, self);
+        
+        this.grabber.registerOnRemoveSong((hash) => {
+        
+            let like = this.grabber.getSongMeta(hash, 'like');
+            for (let userid in like) {
+                
+                let likestats = this.grabber.getUserStat(userid, 'likes');
+                if (likestats && likestats[like[userid]]) {
+                    likestats[like[userid]] -= 1;
+                }
+                this.grabber.setUserStat(userid, 'likes', likestats);
+                
+                for (let sharer of this.grabber.getSongMeta(hash, 'sharedBy')) {
+                    
+                    let losstats = this.grabber.getUserStat(sharer, 'likesonshares');
+                    if (losstats && losstats[like[userid]]) {
+                        losstats[like[userid]] -= 1;
+                    }
+                    this.grabber.setUserStat(sharer, 'likesonshares', losstats);   
+                    
+                }
+                
+            }        
+        
         }, self);
         
         
@@ -279,6 +312,39 @@ class ModSongRanking extends Module {
     // # Module code below this line #
     
     
+    computeStatsIntoGrabberIndex(firstrun) {
+        if (!firstrun) {
+            this.grabber.cleanUserStats('likes');
+            this.grabber.cleanUserStats('likesonshares');
+        }
+        
+        for (let hash in this.grabber.everySong()) {
+            let like = this.grabber.getSongMeta(hash, 'like');
+            for (let userid in like) {
+                
+                let likestats = this.grabber.getUserStat(userid, 'likes');
+                if (!likestats) likestats = {};
+                if (!likestats[like[userid]]) likestats[like[userid]] = 0;
+                likestats[like[userid]] += 1;
+                this.grabber.setUserStat(userid, 'likes', likestats, true);
+                
+                for (let sharer of this.grabber.getSongMeta(hash, 'sharedBy')) {
+                    
+                    let losstats = this.grabber.getUserStat(sharer, 'likesonshares');
+                    if (!losstats) losstats = {};
+                    if (!losstats[like[userid]]) losstats[like[userid]] = 0;
+                    losstats[like[userid]] += 1;
+                    this.grabber.setUserStat(sharer, 'likesonshares', losstats, true);   
+                    
+                }
+                
+            }
+        }
+        
+        this.grabber.saveStats();  //!! Not in API.
+    }
+    
+    
     setSongLikeability(hash, userid, likeability) {
         this.log('Setting ' + userid + ' likeability of ' + hash + ' to ' + likeability);
         
@@ -296,7 +362,25 @@ class ModSongRanking extends Module {
             this._index[userid][likmap[userid]] = this._index[userid][likmap[userid]].filter((item) => item != hash);
         }
         
-        //Update likeabilities of song
+        //Statistics
+        
+        let likestats = this.grabber.getUserStat(userid, 'likes');
+        if (!likestats) likestats = {};
+        if (!likestats[likeability]) likestats[likeability] = 0;
+        likestats[likeability] += 1;
+        this.grabber.setUserStat(userid, 'likes', likestats);
+        
+        for (let sharer of this.grabber.getSongMeta(hash, 'sharedBy')) {
+            
+            let losstats = this.grabber.getUserStat(sharer, 'likesonshares');
+            if (!losstats) losstats = {};
+            if (!losstats[likeability]) losstats[likeability] = 0;
+            losstats[likeability] += 1;
+            this.grabber.setUserStat(sharer, 'likesonshares', losstats);
+            
+        }
+        
+        //Actually update likeabilities of song
         likmap[userid] = likeability;        
         return this.grabber.setSongMeta(hash, "like", likmap);
     }
@@ -312,7 +396,7 @@ class ModSongRanking extends Module {
     computeSongRank(hash, users) {  //users is a list of Discord userids
         var likmap = this.grabber.getSongMeta(hash, "like");
         if (!likmap) return null;
-        if (!users || !users.length) {
+        if (!users) {
             users = Object.keys(likmap);
         }
         
@@ -325,11 +409,11 @@ class ModSongRanking extends Module {
             let elength = 0, clength = 0;
             if (likeability == -2) {
                 if (this._index[userid][-2]) elength = this._index[userid][-2].length;
-                if (this._index[userid][-1]) elength = this._index[userid][-1].length;
+                if (this._index[userid][-1]) clength = this._index[userid][-1].length;
             }
             if (likeability == 2) {
                 if (this._index[userid][2]) elength = this._index[userid][2].length;
-                if (this._index[userid][1]) elength = this._index[userid][1].length;
+                if (this._index[userid][1]) clength = this._index[userid][1].length;
             }
             if (elength && elength > clength * this.param('scaleExtremists')) {
                 scale = clength * this.param('scaleExtremists') / elength;
@@ -343,7 +427,6 @@ class ModSongRanking extends Module {
         }
         
         if (!i) return null;
-        //acc /= i;
         return acc;
     }
     
