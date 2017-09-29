@@ -318,7 +318,7 @@ class ModSongRanking extends Module {
             this.grabber.cleanUserStats('likesonshares');
         }
         
-        for (let hash in this.grabber.everySong()) {
+        for (let hash of this.grabber.everySong()) {
             let like = this.grabber.getSongMeta(hash, 'like');
             for (let userid in like) {
                 
