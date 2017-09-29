@@ -138,10 +138,6 @@ class ModSongRanking extends Module {
 
         var self = this;
         
-        this.denv.on("connected", () => {
-            this.computeStatsIntoGrabberIndex(true);
-        }, self);
-
         this.grabber.registerOnNewSong((messageObj, messageAuthor, reply, hash) => {
             
             this.setSongLikeability(hash, messageObj.author.id, 1);
@@ -192,6 +188,8 @@ class ModSongRanking extends Module {
         
         
         this.denv.on('connected', (env) => {
+        
+            this.computeStatsIntoGrabberIndex(true);
         
             env.client.on('messageReactionAdd', (messageReaction, user) => {
                 if (!messageReaction.message.channel || messageReaction.message.channel.guild.id != env.server.id) return;
