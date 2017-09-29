@@ -106,7 +106,7 @@ class ModGrabber extends Module {
         }
         
         opt.envs[this.param('env')].on('message', this.onMessage, this);
-        opt.envs[this.param('env')].on('connected', this.loadStats, this);
+        opt.envs[this.param('env')].on('connected', () => { this.loadStats; }, this);
         
         
         this.mod('Commands').registerRootDetails(this, 'grab', {description: "Manipulate the collection of songs from a Discord channel."});
