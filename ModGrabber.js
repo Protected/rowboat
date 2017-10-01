@@ -611,11 +611,11 @@ class ModGrabber extends Module {
             return ikeyword[1];
         }).filter((item) => item);
         
-        var title = message.match(/\{(title|name|song)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' !_-]+)\}/iu);
+        var title = message.match(/\{(title|name|song)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?_-]+)\}/iu);
         if (title) title = title[3];
-        var artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' !_-]+)\}/iu);
+        var artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?_-]+)\}/iu);
         if (artist) artist = artist[3];
-        var album = message.match(/\{(album)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' !_-]+)\}/iu);
+        var album = message.match(/\{(album)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?_-]+)\}/iu);
         if (album) album = album[3];
         
         var replace = message.match(/\{replace(=|:) ?([0-9A-Fa-f]+)\}/iu);
@@ -681,7 +681,7 @@ class ModGrabber extends Module {
         //Attachment
         if (messageObj.attachments && messageObj.attachments.array().length) {
             for (let ma of messageObj.attachments.array()) {
-                if (!ma.filename.match(/\.(mp3|ogg|flac|wav|wma|aac|m4a)$/) || ma.filesize < 20480) continue;
+                if (!ma.filename || !ma.filename.match(/\.(mp3|ogg|flac|wav|wma|aac|m4a)$/) || ma.filesize < 20480) continue;
                 this.grabFromAttachment(ma, messageObj, callbacks, readOnly);
             }
         }
