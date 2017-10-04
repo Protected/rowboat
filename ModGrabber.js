@@ -1360,7 +1360,7 @@ class ModGrabber extends Module {
             let guildmember = this.env(this.param('env')).server.members.get(userid);
             this._stats.users[userid] = {
                 displayname: this.env(this.param('env')).idToDisplayName(userid),
-                avatar: (guildmember ? guildmember.user.avatarURL : null)
+                avatar: (guildmember ? guildmember.user.avatarURL({format: "png", size: 512}) : null)
             };
         }
         this._stats.users[userid][field] = value;
