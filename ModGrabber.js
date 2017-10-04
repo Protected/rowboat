@@ -545,6 +545,8 @@ class ModGrabber extends Module {
         this._stats = {users: {}};
         
         let shareavglength = {};
+        let sharemaxlength = {};
+        let shareminlength = {};
         
         for (let hash in this._index) {
             let info = this._index[hash];
@@ -552,11 +554,15 @@ class ModGrabber extends Module {
                 this.incrUserStat(sharer, "shares", 1, true);
                 if (!shareavglength[sharer]) shareavglength[sharer] = 0;
                 shareavglength[sharer] += info.length;
+                if (!sharemaxlength[sharer]) sharemaxlength[sharer] = info.length; else sharemaxlength[sharer] = Math.max(sharemaxlength[sharer], info.length);
+                if (!shareminlength[sharer]) shareminlength[sharer] = info.length; else shareminlength[sharer] = Math.min(shareminlength[sharer], info.length);
             }
         }
         
         for (let sharer in shareavglength) {
             this.setUserStat(sharer, "shareavglength", shareavglength[sharer] / this.getUserStat(sharer, "shares"), true);
+            this.setUserStat(sharer, "shareminlength", shareminlength[sharer], true);
+            this.setUserStat(sharer, "sharemaxlength", sharemaxlength[sharer], true);
         }
         
         this.saveStats();
@@ -968,6 +974,8 @@ class ModGrabber extends Module {
                         
                         let shares = this.getUserStat(mp.author, "shares");
                         this.setUserStat(mp.author, "shareavglength", (this.getUserStat(mp.author, "shareavglength") * shares + info.length) / (shares + 1));
+                        this.setUserStat(mp.author, "shareminlength", Math.min(this.getUserStat(mp.author, "shareminlength") || 0, info.length));
+                        this.setUserStat(mp.author, "sharemaxlength", Math.max(this.getUserStat(mp.author, "sharemaxlength") || Number.MAX_VALUE, info.length));
                         this.incrUserStat(mp.author, "shares");
                     }
                     this.saveIndex();
@@ -1048,6 +1056,8 @@ class ModGrabber extends Module {
                 
                 let shares = this.getUserStat(mp.author, "shares");
                 this.setUserStat(mp.author, "shareavglength", (this.getUserStat(mp.author, "shareavglength") * shares + entry.length) / (shares + 1));
+                this.setUserStat(mp.author, "shareminlength", Math.min(this.getUserStat(mp.author, "shareminlength") || 0, entry.length));
+                this.setUserStat(mp.author, "sharemaxlength", Math.max(this.getUserStat(mp.author, "sharemaxlength") || Number.MAX_VALUE, entry.length));
                 this.incrUserStat(mp.author, "shares");
                 
                 this._sessionGrabs.unshift([hash, now]);
@@ -1347,8 +1357,10 @@ class ModGrabber extends Module {
     
     setUserStat(userid, field, value, nosave) {
         if (!this._stats.users[userid]) {
+            let guildmember = this.env(this.param('env')).server.members.get(userid);
             this._stats.users[userid] = {
-                displayname: this.env(this.param('env')).idToDisplayName(userid)
+                displayname: this.env(this.param('env')).idToDisplayName(userid),
+                avatar: (guildmember ? guildmember.user.avatarURL : null)
             };
         }
         this._stats.users[userid][field] = value;
