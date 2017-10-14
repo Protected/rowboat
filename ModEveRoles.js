@@ -15,6 +15,7 @@ class ModEveRoles extends Module {
     get requiredParams() { return [
         'callbackAddress',    //Callback url. (Without the /callback)
         'eveSSOClientId',     //Client ID
+        'eveSSOEncodedClientIDAndSecretKey', //ClientID and SecretKey encoded with Base64 in this format: clientid:secretkey
     ]; }
 
     get requiredEnvironments() { return [
@@ -50,11 +51,20 @@ class ModEveRoles extends Module {
                 return;
             }
 
-            let formData = "";
+            let formData = {
+                "grant_type":"authorization_code",
+                "code": code
+            };
 
             request.post(
-                {url:"https://login.eveonline.com/oauth/token",
-                    formData: formData
+                {
+                    url:"https://login.eveonline.com/oauth/token",
+                    formData: formData,
+                    headers: {
+                        "Authorization": "Basic "+this._params['eveSSOEncodedClientIDAndSecretKey'],
+                        "Content-Type": "application/json",
+                        "Host": "login.eveonline.com"
+                    }
                 }, (err, httpResponse, body) => {
                 if ( err ) {
                     res.send("Error validating");
@@ -82,13 +92,11 @@ class ModEveRoles extends Module {
                     let characterID = parsedBody.CharacterID;
                     let characterName = parsedBody.CharacterName;
 
-                    res.send(characterID+" - "+characterName);
+                    res.send(body);
 
                 });
 
             });
-
-            res.send("Successfuly received "+ req.query.state);
         });
 
         app.listen(8098, function() {
