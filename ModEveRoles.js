@@ -141,6 +141,7 @@ class ModEveRoles extends Module {
             ep.priv("Login using the following link: ");
             ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri="+this._params['callbackAddress']+"/callback&client_id="+this._params['eveSSOClientId']+"&state="+uuid);
 
+            return true;
         });
 
         return true;
