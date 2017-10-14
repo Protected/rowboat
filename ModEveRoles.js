@@ -60,7 +60,7 @@ class ModEveRoles extends Module {
                     url:"https://login.eveonline.com/oauth/token",
                     formData: formData,
                     headers: {
-                        "Authorization": "Basic "+this._params['eveSSOEncodedClientIDAndSecretKey'],
+                        "Authorization": "Basic "+self._params['eveSSOEncodedClientIDAndSecretKey'],
                         "Content-Type": "application/json",
                         "Host": "login.eveonline.com"
                     }
