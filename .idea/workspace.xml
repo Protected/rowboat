@@ -29,7 +29,7 @@
         <entry file="file://$PROJECT_DIR$/ModEveRoles.js">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="412">
-              <caret line="63" column="97" lean-forward="false" selection-start-line="63" selection-start-column="97" selection-end-line="63" selection-end-column="97" />
+              <caret line="116" column="132" lean-forward="false" selection-start-line="116" selection-start-column="132" selection-end-line="116" selection-end-column="132" />
               <folding>
                 <element signature="n#!!doc" expanded="true" />
               </folding>
@@ -40,31 +40,19 @@
       <file leaf-file-name="everoles.mod.json" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/config/everoles.mod.json">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="64">
-              <caret line="4" column="36" lean-forward="false" selection-start-line="4" selection-start-column="3" selection-end-line="4" selection-end-column="36" />
+            <state relative-caret-position="0">
+              <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="5" selection-end-column="1" />
               <folding />
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="ModAPI.js" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/ModAPI.js">
+      <file leaf-file-name="ModCardsAgainstHumanity.js" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/ModCardsAgainstHumanity.js">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="272">
-              <caret line="17" column="8" lean-forward="false" selection-start-line="17" selection-start-column="8" selection-end-line="17" selection-end-column="8" />
+            <state relative-caret-position="250">
+              <caret line="97" column="37" lean-forward="false" selection-start-line="97" selection-start-column="30" selection-end-line="97" selection-end-column="37" />
               <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="ModGrabber.js" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/ModGrabber.js">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="224">
-              <caret line="26" column="4" lean-forward="true" selection-start-line="26" selection-start-column="4" selection-end-line="29" selection-end-column="8" />
-              <folding>
-                <element signature="n#!!doc" expanded="true" />
-              </folding>
             </state>
           </provider>
         </entry>
@@ -96,6 +84,7 @@
       <find>on</find>
       <find>initialize</find>
       <find>.on</find>
+      <find>envName</find>
     </findStrings>
   </component>
   <component name="Git.Settings">
@@ -756,7 +745,7 @@
       <workItem from="1490304337259" duration="8977000" />
       <workItem from="1497993382154" duration="647000" />
       <workItem from="1497994126785" duration="6916000" />
-      <workItem from="1507852295444" duration="24941000" />
+      <workItem from="1507852295444" duration="26690000" />
     </task>
     <task id="LOCAL-00001" summary="Fixed a couple issues with the conversion.">
       <created>1473804549645</created>
@@ -811,7 +800,7 @@
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="115254000" />
+    <option name="totallyTimeSpent" value="117003000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="54" y="-8" width="2514" height="1096" extended-state="6" />
@@ -1246,6 +1235,14 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/ModAPI.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="272">
+          <caret line="17" column="8" lean-forward="false" selection-start-line="17" selection-start-column="8" selection-end-line="17" selection-end-column="8" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/ModGrabber.js">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="224">
@@ -1256,26 +1253,18 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/ModCardsAgainstHumanity.js">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="2144">
-          <caret line="137" column="74" lean-forward="true" selection-start-line="137" selection-start-column="24" selection-end-line="137" selection-end-column="74" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/ModAPI.js">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="272">
-          <caret line="17" column="8" lean-forward="false" selection-start-line="17" selection-start-column="8" selection-end-line="17" selection-end-column="8" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/config/everoles.mod.json">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="64">
-          <caret line="4" column="36" lean-forward="false" selection-start-line="4" selection-start-column="3" selection-end-line="4" selection-end-column="36" />
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="5" selection-end-column="1" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/ModCardsAgainstHumanity.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="250">
+          <caret line="97" column="37" lean-forward="false" selection-start-line="97" selection-start-column="30" selection-end-line="97" selection-end-column="37" />
           <folding />
         </state>
       </provider>
@@ -1283,7 +1272,7 @@
     <entry file="file://$PROJECT_DIR$/ModEveRoles.js">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="412">
-          <caret line="63" column="97" lean-forward="false" selection-start-line="63" selection-start-column="97" selection-end-line="63" selection-end-column="97" />
+          <caret line="116" column="132" lean-forward="false" selection-start-line="116" selection-start-column="132" selection-end-line="116" selection-end-column="132" />
           <folding>
             <element signature="n#!!doc" expanded="true" />
           </folding>

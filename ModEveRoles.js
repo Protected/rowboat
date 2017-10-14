@@ -40,7 +40,6 @@ class ModEveRoles extends Module {
         var app = express();
 
         app.get('/callback', function(req, res) {
-
             let state = req.query.state;
             let code  = req.query.code;
 
@@ -85,17 +84,39 @@ class ModEveRoles extends Module {
                     }
                 }, (err, httpResponse, body) => {
                     let parsedBody = JSON.parse(body);
-                    if ( !parsedBody ){
+                    if ( err || !parsedBody ){
                         res.send("Error validating");
                         return;
                     }
                     let characterID = parsedBody.CharacterID;
                     let characterName = parsedBody.CharacterName;
 
-                    res.send(body);
+                    request.get({
+                        url: "https://esi.tech.ccp.is/latest/characters/"+characterID+"/",
+                        headers: {
+                        }
+                    }, (err, httpResponse, body) => {
+                        let parsedBody = JSON.parse(body);
+                        if ( err || !parsedBody ){
+                            res.send("Error retrieving info");
+                            return;
+                        }
 
+                        let corporationID = parsedBody.corporation_id;
+                        let allianceID = parsedBody.alliance_id;
+
+                        let userInformation = {
+                            discordID: authInfo.discordID,
+                            characterID: characterID,
+                            characterName: characterName,
+                            corporationID: corporationID,
+                            allianceID: allianceID
+                        };
+
+                        res.send(userInformation);
+                        self.env(authInfo.envName).msg(authInfo.discordID, "You have associated with the character "+characterName);
+                    });
                 });
-
             });
         });
 
@@ -114,6 +135,7 @@ class ModEveRoles extends Module {
                 uuid: uuid,
                 discordID: userid,
                 time: new Date(),
+                envName: env.name
             };
 
             ep.priv("Login using the following link: ");
