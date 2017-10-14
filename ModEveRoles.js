@@ -2,6 +2,7 @@
 var Module = require('./Module.js');
 var express = require('express');
 const uuidv4 = require('uuid/v4');
+var  request = require('request');
 
 //Example URL: https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=http://wyvernia.net:8098&client_id=1370433d1bd74635839322c867a43bc4&state=uniquestate123
 
@@ -33,10 +34,60 @@ class ModEveRoles extends Module {
 
         this.authCodes = {};
 
+        let self = this;
         //Initialize the webservice
         var app = express();
 
         app.get('/callback', function(req, res) {
+
+            let state = req.query.state;
+            let code  = req.query.code;
+
+            let authInfo = self.authCodes[state];
+
+            if ( !authInfo ) {
+                res.send("Invalid link");
+                return;
+            }
+
+            let formData = "";
+
+            request.post(
+                {url:"https://login.eveonline.com/oauth/token",
+                    formData: formData
+                }, (err, httpResponse, body) => {
+                if ( err ) {
+                    res.send("Error validating");
+                    return;
+                }
+
+                let parsedBody = JSON.parse(body);
+                if ( !parsedBody ){
+                    res.send("Error validating");
+                    return;
+                }
+
+                request.get({
+                    url: "https://login.eveonline.com/oauth/verify",
+                    headers: {
+                        "Host": "login.eveonline.com",
+                        "Authorization": "Bearer "+parsedBody.access_token,
+                    }
+                }, (err, httpResponse, body) => {
+                    let parsedBody = JSON.parse(body);
+                    if ( !parsedBody ){
+                        res.send("Error validating");
+                        return;
+                    }
+                    let characterID = parsedBody.CharacterID;
+                    let characterName = parsedBody.CharacterName;
+
+                    res.send(characterID+" - "+characterName);
+
+                });
+
+            });
+
             res.send("Successfuly received "+ req.query.state);
         });
 
