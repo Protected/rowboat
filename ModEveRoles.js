@@ -132,7 +132,7 @@ class ModEveRoles extends Module {
                             allianceID: allianceID
                         };
 
-                        this.userAssoc[userInformation.discordID] = userInformation;
+                        self.userAssoc[userInformation.discordID] = userInformation;
 
                         res.send("Successfully linked to this account. You may close this window now.");
                         self.env(authInfo.envName).msg(authInfo.discordID, "Your discord account associated with the character "+characterName);

@@ -28,8 +28,8 @@
       <file leaf-file-name="ModEveRoles.js" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/ModEveRoles.js">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="288">
-              <caret line="189" column="44" lean-forward="false" selection-start-line="189" selection-start-column="44" selection-end-line="189" selection-end-column="44" />
+            <state relative-caret-position="331">
+              <caret line="134" column="28" lean-forward="false" selection-start-line="134" selection-start-column="28" selection-end-line="134" selection-end-column="28" />
               <folding>
                 <element signature="n#!!doc" expanded="true" />
               </folding>
@@ -761,7 +761,7 @@
       <workItem from="1490304337259" duration="8977000" />
       <workItem from="1497993382154" duration="647000" />
       <workItem from="1497994126785" duration="6916000" />
-      <workItem from="1507852295444" duration="32102000" />
+      <workItem from="1507852295444" duration="32257000" />
     </task>
     <task id="LOCAL-00001" summary="Fixed a couple issues with the conversion.">
       <created>1473804549645</created>
@@ -816,7 +816,7 @@
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="122415000" />
+    <option name="totallyTimeSpent" value="122570000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="54" y="-8" width="2514" height="1096" extended-state="6" />
@@ -1273,8 +1273,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/ModEveRoles.js">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="288">
-          <caret line="189" column="44" lean-forward="false" selection-start-line="189" selection-start-column="44" selection-end-line="189" selection-end-column="44" />
+        <state relative-caret-position="331">
+          <caret line="134" column="28" lean-forward="false" selection-start-line="134" selection-start-column="28" selection-end-line="134" selection-end-column="28" />
           <folding>
             <element signature="n#!!doc" expanded="true" />
           </folding>
