@@ -4,6 +4,7 @@ var express = require('express');
 const uuidv4 = require('uuid/v4');
 var  request = require('request');
 var jf = require('jsonfile');
+var fs = require('fs');
 
 //Example URL: https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=http://wyvernia.net:8098&client_id=1370433d1bd74635839322c867a43bc4&state=uniquestate123
 
@@ -184,8 +185,10 @@ class ModEveRoles extends Module {
     }
     loadUserInfo() {
         let filePath = this.dataPath + userDataFilename;
-        let ret = jf.readFileSync(filePath);
-        if ( ret ) this.userAssoc = ret;
+        if (fs.existsSync(filePath)) {
+            let ret = jf.readFileSync(filePath);
+            if ( ret ) this.userAssoc = ret;
+        }
     }
 
     // # Module code below this line #
