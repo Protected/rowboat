@@ -3,8 +3,11 @@ var Module = require('./Module.js');
 var express = require('express');
 const uuidv4 = require('uuid/v4');
 var  request = require('request');
+var jf = require('jsonfile');
 
 //Example URL: https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=http://wyvernia.net:8098&client_id=1370433d1bd74635839322c867a43bc4&state=uniquestate123
+
+const userDataFilename = "userData.json";
 
 class ModEveRoles extends Module {
 
@@ -33,11 +36,26 @@ class ModEveRoles extends Module {
     initialize(opt) {
         if (!super.initialize(opt)) return false;
 
+        let config;
+        try {
+            config = jf.readFileSync("config/config.json");
+        } catch (e) {
+            return false;
+        }
+
+        this.dataPath = "data/";
+        if (config.paths && config.paths.data) {
+            this.dataPath = config.paths.data;
+        }
+
         this.authCodes = {};
+        this.userAssoc = {};
+
+        this.loadUserInfo();
 
         let self = this;
         //Initialize the webservice
-        var app = express();
+        let app = express();
 
         app.get('/callback', function(req, res) {
             let state = req.query.state;
@@ -113,8 +131,11 @@ class ModEveRoles extends Module {
                             allianceID: allianceID
                         };
 
-                        res.send(userInformation);
-                        self.env(authInfo.envName).msg(authInfo.discordID, "You have associated with the character "+characterName);
+                        this.userAssoc[userInformation.discordID] = userInformation;
+
+                        res.send("Successfully linked to this account. You may close this window now.");
+                        self.env(authInfo.envName).msg(authInfo.discordID, "Your discord account associated with the character "+characterName);
+                        self.saveUserInfo();
                     });
                 });
             });
@@ -137,17 +158,36 @@ class ModEveRoles extends Module {
                 time: new Date(),
                 envName: env.name
             };
-
+            if ( this.userAssoc[userid] ){
+                ep.priv("You are already associated with the character " + this.userAssoc[userid].characterName);
+                return true;
+            }
             ep.priv("Login using the following link: ");
             ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri="+this._params['callbackAddress']+"/callback&client_id="+this._params['eveSSOClientId']+"&state="+uuid);
 
             return true;
         });
 
+
+
         return true;
     }
-    
-    
+
+    runTick() {
+        this.saveUserInfo();
+
+    }
+
+    saveUserInfo() {
+        let filePath = this.dataPath + userDataFilename;
+        jf.writeFileSync(filePath,this.userAssoc);
+    }
+    loadUserInfo() {
+        let filePath = this.dataPath + userDataFilename;
+        let ret = jf.readFileSync(filePath);
+        if ( ret ) this.userAssoc = ret;
+    }
+
     // # Module code below this line #
 
 }
