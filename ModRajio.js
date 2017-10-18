@@ -1399,14 +1399,14 @@ class ModRajio extends Module {
         //Unanimous dislike penalties (after cropping)
         
         let upenalty = null;
-        if (this.unanimousOpinion(song.hash, listeners, -1)) {
-            upenalty = priority / -2;
-            priority /= 2;
-            if (trace) components.unanimousdislike = upenalty;
-        } else if (this.unanimousOpinion(song.hash, listeners, -2)) {
+        if (this.unanimousOpinion(song.hash, listeners, -2)) {
             upenalty = -priority;
             priority = 0;
             if (trace) components.unanimoushate = upenalty;
+        } else if (this.unanimousOpinion(song.hash, listeners, -1)) {
+            upenalty = priority / -2;
+            priority /= 2;
+            if (trace) components.unanimousdislike = upenalty;
         }
         
         
