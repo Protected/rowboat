@@ -1235,6 +1235,17 @@ class ModRajio extends Module {
     }
     
     
+    unanimousOpinion(hash, listeners, likeability) {
+        for (let listener of listeners) {
+            if (likeability > 0 && this.songrank.getSongLikeability(hash, listener) < likeability
+                    || likeability < 0 && this.songrank.getSongLikeability(hash, listener) > likeability) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    
     
     songPriority(song, listeners, trace) {
         let prefix = "rajio." + this.name.toLowerCase();
@@ -1377,12 +1388,29 @@ class ModRajio extends Module {
         if (trace) components.kwglobal = ckwglobal.reduce((comp, bonus) => comp + bonus, 0);
         
         
-        //Wrap it up
+        //Subtotal and crop
         
         if (trace) components.subtotal = priority;
         
         if (priority < this.param('pri.min')) priority = this.param('pri.min');
         if (priority > this.param('pri.max')) priority = this.param('pri.max');
+        
+        
+        //Unanimous dislike penalties (after cropping)
+        
+        let upenalty = null;
+        if (unanimousOpinion(song.hash, listeners, -1)) {
+            upenalty = priority / -2;
+            priority /= 2;
+            if (trace) components.unanimousdislike = upenalty;
+        } else if (unanimousOpinion(song.hash, listeners, -2)) {
+            upenalty = -priority;
+            priority = 0;
+            if (trace) components.unanimoushate = upenalty;
+        }
+        
+        
+        //Queue bonus (after cropping)
         
         let queuepos = this._queue.findIndex((item) => item.song.hash == song.hash);
         if (queuepos > -1) {
