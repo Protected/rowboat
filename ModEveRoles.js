@@ -81,7 +81,7 @@ class ModEveRoles extends Module {
         //Initialize the webservice
         let app = express();
 
-        runTick() {
+        function runTick() {
             for( let discordId in self.userAssoc ){
                 self.processUser(discordId);
             }
