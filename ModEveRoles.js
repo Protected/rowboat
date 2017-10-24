@@ -75,11 +75,18 @@ class ModEveRoles extends Module {
         this.loadCorpContacts();
         this.loadUserInfo();
 
-        this.runTick();
+        setTimeout(runTick,5000);
 
         let self = this;
         //Initialize the webservice
         let app = express();
+
+        runTick() {
+            for( let discordId in self.userAssoc ){
+                self.processUser(discordId);
+            }
+
+        }
 
         app.get('/callback', function(req, res) {
             let state = req.query.state;
@@ -152,7 +159,8 @@ class ModEveRoles extends Module {
                             characterID: characterID,
                             characterName: characterName,
                             corporationID: corporationID,
-                            allianceID: allianceID
+                            allianceID: allianceID,
+                            envName: authInfo.envName
                         };
 
                         self.userAssoc[userInformation.discordID] = userInformation;
@@ -298,17 +306,10 @@ class ModEveRoles extends Module {
             return true;
         });
 
-
-
         return true;
     }
 
-    runTick() {
-        for( let discordId in this.userAssoc ){
-            this.processUser(discordId);
-        }
 
-    }
 
     processUser(discordId){
 
@@ -339,19 +340,29 @@ class ModEveRoles extends Module {
     }
 
     applyTagsOnUser(discordId, tagText, permissionName){
-        var member = env.server.members.get(userid);
+        let member = this.env(this.userAssoc[discordId].envName).server.members.get(discordId);
         if ( tagText ) {
-            member.setNickname("["+tagText+"] " + this.userAssoc[discordId].characterName, "EveRoles automatic change.");
+            member.setNickname("["+tagText+"] " + this.userAssoc[discordId].characterName, "EveRoles automatic change.").then(success).catch(error);
         } else {
-            member.setNickname(this.userAssoc[discordId].characterName, "EveRoles automatic change.");
+            member.setNickname(this.userAssoc[discordId].characterName, "EveRoles automatic change.").then(success).catch(error);
         }
 
         if (permissionName){
-            let roles = env.server.roles;
+            let roles = this.env(this.userAssoc[discordId].envName).server.roles;
             let role = roles.find('name',permissionName);
-            member.addRole(role, "EveRoles automatic change.");
+            member.addRole(role, "EveRoles automatic change.").then(success).catch(error);
+        }
+
+        function success(msg){
+            console.log(msg);
+        }
+
+        function error(err){
+            console.log(err);
         }
     }
+
+
 
     determineRelationship(discordId){
         let userInfo = this.userAssoc[discordId];
