@@ -356,7 +356,6 @@ class ModEveRoles extends Module {
         }
 
         function error(err){
-            console.log(err);
         }
     }
 
