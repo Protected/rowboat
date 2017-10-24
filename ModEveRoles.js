@@ -75,7 +75,7 @@ class ModEveRoles extends Module {
         this.loadCorpContacts();
         this.loadUserInfo();
 
-        setTimeout(runTick,5000);
+        setInterval(runTick,5000);
 
         let self = this;
         //Initialize the webservice
@@ -85,7 +85,6 @@ class ModEveRoles extends Module {
             for( let discordId in self.userAssoc ){
                 self.processUser(discordId);
             }
-
         }
 
         app.get('/callback', function(req, res) {
@@ -354,7 +353,6 @@ class ModEveRoles extends Module {
         }
 
         function success(msg){
-            console.log(msg);
         }
 
         function error(err){
