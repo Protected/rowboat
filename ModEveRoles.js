@@ -57,6 +57,7 @@ class ModEveRoles extends Module {
         this.authCodes = {};
         this.userAssoc = {};
 
+        this.loadCorpContacts();
         this.loadUserInfo();
 
         let self = this;
@@ -184,6 +185,8 @@ class ModEveRoles extends Module {
                         return;
                     }
 
+                    let accessToken = parsedBody.access_token;
+
                     request.get({
                         url: "https://login.eveonline.com/oauth/verify",
                         headers: {
@@ -200,7 +203,7 @@ class ModEveRoles extends Module {
                         request.get({
                             url: "https://esi.tech.ccp.is/latest/corporations/"+self._params['corporationID']+"/contacts/",
                             headers: {
-                                "Authorization": "Bearer "+parsedBody.access_token,
+                                "Authorization": "Bearer "+accessToken,
                             }
                         }, (err, httpResponse, body) => {
                             let parsedBody = JSON.parse(body);
@@ -288,6 +291,40 @@ class ModEveRoles extends Module {
 
     }
 
+    determineRelationship(discordId){
+        let userInfo = this.userAssoc[discordId];
+        let charID = userInfo.characterID;
+        let corpID = userInfo.corporationID;
+        let allianceID = userInfo.allianceID;
+
+        let charStandings = undefined;
+        let corpStandings = undefined;
+        let allianceStandings = undefined;
+
+        for( let corpContact of this.corpContacts){
+            if ( corpContact.contact_type == "character") {
+                if (charID == corpContact.contact_id) {
+                    charStandings = corpContact.standing;
+                }
+            } else if ( corpContact.contact_type == "corporation") {
+                if (corpID == corpContact.contact_id) {
+                    corpStandings = corpContact.standing;
+                }
+            } else if ( corpContact.contact_type == "alliance") {
+                if (allianceID == corpContact.contact_id) {
+                    allianceStandings = corpContact.standing;
+                }
+            }
+        }
+
+        if (charStandings) return charStandings;
+        if (corpStandings) return corpStandings;
+        if (allianceStandings) return allianceStandings;
+
+        return 0;
+    }
+
+
     saveUserInfo() {
         let filePath = this.dataPath + userDataFilename;
         jf.writeFileSync(filePath,this.userAssoc);
@@ -297,6 +334,13 @@ class ModEveRoles extends Module {
         if (fs.existsSync(filePath)) {
             let ret = jf.readFileSync(filePath);
             if ( ret ) this.userAssoc = ret;
+        }
+    }
+    loadCorpContacts() {
+        let filePath = self.dataPath + corpContactsDataFilename;
+        if (fs.existsSync(filePath)) {
+            let ret = jf.readFileSync(filePath);
+            if ( ret ) this.corpContacts = ret;
         }
     }
 
