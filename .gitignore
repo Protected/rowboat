@@ -9,3 +9,4 @@ ModCustom*.js
 *.swp
 songs/*
 package-lock.json
+.idea
