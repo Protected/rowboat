@@ -27,11 +27,21 @@
       <file leaf-file-name="ModEveRoles.js" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/ModEveRoles.js">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="505">
-              <caret line="320" column="48" lean-forward="true" selection-start-line="319" selection-start-column="48" selection-end-line="320" selection-end-column="48" />
+            <state relative-caret-position="423">
+              <caret line="341" column="9" lean-forward="true" selection-start-line="341" selection-start-column="9" selection-end-line="341" selection-end-column="9" />
               <folding>
                 <element signature="n#!!doc" expanded="true" />
               </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="everoles.mod.json" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/config/everoles.mod.json">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="136">
+              <caret line="8" column="0" lean-forward="false" selection-start-line="8" selection-start-column="0" selection-end-line="21" selection-end-column="28" />
+              <folding />
             </state>
           </provider>
         </entry>
@@ -154,8 +164,8 @@
         <option value="$PROJECT_DIR$/config/config.json" />
         <option value="$PROJECT_DIR$/config/discord.discord.env.json" />
         <option value="$PROJECT_DIR$/ModPermissionDiscordRole.js" />
-        <option value="$PROJECT_DIR$/config/everoles.mod.json" />
         <option value="$APPLICATION_CONFIG_DIR$/scratches/scratch.json" />
+        <option value="$PROJECT_DIR$/config/everoles.mod.json" />
         <option value="$PROJECT_DIR$/ModEveRoles.js" />
       </list>
     </option>
@@ -735,7 +745,7 @@
       <workItem from="1497993382154" duration="647000" />
       <workItem from="1497994126785" duration="6916000" />
       <workItem from="1507852295444" duration="32257000" />
-      <workItem from="1508838926665" duration="7802000" />
+      <workItem from="1508838926665" duration="11940000" />
     </task>
     <task id="LOCAL-00001" summary="Fixed a couple issues with the conversion.">
       <created>1473804549645</created>
@@ -821,11 +831,18 @@
       <option name="project" value="LOCAL" />
       <updated>1508853362422</updated>
     </task>
-    <option name="localTasksCounter" value="13" />
+    <task id="LOCAL-00013" summary="load corp contacts&#10;standings determination logic">
+      <created>1508855084560</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1508855084560</updated>
+    </task>
+    <option name="localTasksCounter" value="14" />
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="130372000" />
+    <option name="totallyTimeSpent" value="134510000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="-1928" y="-8" width="1936" height="1056" extended-state="6" />
@@ -889,7 +906,8 @@
     <MESSAGE value="changed command name again" />
     <MESSAGE value="Created corp callback." />
     <MESSAGE value="added auth on last call" />
-    <option name="LAST_COMMIT_MESSAGE" value="added auth on last call" />
+    <MESSAGE value="load corp contacts&#10;standings determination logic" />
+    <option name="LAST_COMMIT_MESSAGE" value="load corp contacts&#10;standings determination logic" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -1021,6 +1039,7 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="416">
           <caret line="59" column="19" lean-forward="false" selection-start-line="59" selection-start-column="19" selection-end-line="59" selection-end-column="19" />
+          <folding />
         </state>
       </provider>
     </entry>
@@ -1036,6 +1055,7 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="432">
           <caret line="27" column="1" lean-forward="false" selection-start-line="27" selection-start-column="1" selection-end-line="27" selection-end-column="1" />
+          <folding />
         </state>
       </provider>
     </entry>
@@ -1073,6 +1093,9 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="224">
           <caret line="26" column="4" lean-forward="true" selection-start-line="26" selection-start-column="4" selection-end-line="29" selection-end-column="8" />
+          <folding>
+            <element signature="n#!!doc" expanded="false" />
+          </folding>
         </state>
       </provider>
     </entry>
@@ -1125,14 +1148,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/config/everoles.mod.json">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="119">
-          <caret line="7" column="2" lean-forward="false" selection-start-line="7" selection-start-column="2" selection-end-line="7" selection-end-column="32" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/config/discord.discord.env.json">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="85">
@@ -1157,10 +1172,18 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/config/everoles.mod.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="136">
+          <caret line="8" column="0" lean-forward="false" selection-start-line="8" selection-start-column="0" selection-end-line="21" selection-end-column="28" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/ModEveRoles.js">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="505">
-          <caret line="320" column="48" lean-forward="true" selection-start-line="319" selection-start-column="48" selection-end-line="320" selection-end-column="48" />
+        <state relative-caret-position="423">
+          <caret line="341" column="9" lean-forward="true" selection-start-line="341" selection-start-column="9" selection-end-line="341" selection-end-column="9" />
           <folding>
             <element signature="n#!!doc" expanded="true" />
           </folding>

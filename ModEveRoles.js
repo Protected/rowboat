@@ -15,6 +15,21 @@ class ModEveRoles extends Module {
 
     get optionalParams() { return [
         'port',   //Port to listen to on the callback
+        'allianceID',
+        'corpPrefix',
+        'corpPermissionName',
+        'alliancePrefix',
+        'alliancePermissionName',
+        'trueBluePrefix',
+        'trueBluePermissionName',
+        'bluePrefix',
+        'bluePermissionName',
+        'orangePrefix',
+        'orangePermissionName',
+        'redPrefix',
+        'redPermissionName',
+        'neutPrefix',
+        'neutPermissionName'
     ]; }
 
     get requiredParams() { return [
@@ -291,6 +306,42 @@ class ModEveRoles extends Module {
 
     }
 
+    processUser(discordId){
+
+        let userInfo = this.userAssoc[discordId];
+
+        if ( userInfo.corporationID == this._params['corporationID'] ){
+            this.applyTagsOnUser(discordId, this._params['corpPrefix'], this._params['corpPermissionName'] );
+            return;
+        }
+
+        if ( this._params['allianceID'] && userInfo.allianceID == this._params['allianceID'] ) {
+            this.applyTagsOnUser(discordId, this._params['alliancePrefix'], this._params['alliancePermissionName'] );
+            return;
+        }
+
+        let effectiveStanding = this.determineRelationship(discordId);
+
+        switch(effectiveStanding){
+            case 10:  this.applyTagsOnUser(discordId, this._params['trueBluePrefix'], this._params['trueBluePermissionName'] ); break;
+            case 5:   this.applyTagsOnUser(discordId, this._params['bluePrefix'], this._params['bluePermissionName'] ); break;
+            case -5:  this.applyTagsOnUser(discordId, this._params['orangePrefix'], this._params['orangePermissionName'] ); break;
+            case -10: this.applyTagsOnUser(discordId, this._params['redPrefix'], this._params['redPermissionName'] ); break;
+            case 0:
+            default:  this.applyTagsOnUser(discordId, this._params['neutPrefix'], this._params['neutPermissionName'] ); break;
+        }
+        return;
+    }
+
+    applyTagsOnUser(discordId, tagText, permissionName){
+        var member = env.server.members.get(userid);
+        if ( tagText ) {
+            member.setNickname("["+tagText+"] " + this.userAssoc[discordId].characterName, "EveRoles automatic change.");
+        } else {
+            member.setNickname(this.userAssoc[discordId].characterName, "EveRoles automatic change.");
+        }
+    }
+
     determineRelationship(discordId){
         let userInfo = this.userAssoc[discordId];
         let charID = userInfo.characterID;
@@ -337,7 +388,7 @@ class ModEveRoles extends Module {
         }
     }
     loadCorpContacts() {
-        let filePath = self.dataPath + corpContactsDataFilename;
+        let filePath = this.dataPath + corpContactsDataFilename;
         if (fs.existsSync(filePath)) {
             let ret = jf.readFileSync(filePath);
             if ( ret ) this.corpContacts = ret;
