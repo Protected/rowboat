@@ -172,7 +172,7 @@ class ModEveRoles extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'reload contacts', {
+        this.mod('Commands').registerCommand(this, 'reload', {
             description: "Reloads the corporation contacts from eve api.",
             args: [],
             minArgs: 0

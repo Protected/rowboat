@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="6f334f3e-2f7e-43ee-8504-1fffb7f7a0b3" name="Default" comment="New command for admins">
+    <list default="true" id="6f334f3e-2f7e-43ee-8504-1fffb7f7a0b3" name="Default" comment="">
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/ModEveRoles.js" afterPath="$PROJECT_DIR$/ModEveRoles.js" />
     </list>
@@ -27,8 +27,8 @@
       <file leaf-file-name="ModEveRoles.js" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/ModEveRoles.js">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="313">
-              <caret line="185" column="33" lean-forward="true" selection-start-line="185" selection-start-column="33" selection-end-line="185" selection-end-column="33" />
+            <state relative-caret-position="262">
+              <caret line="176" column="21" lean-forward="true" selection-start-line="176" selection-start-column="21" selection-end-line="176" selection-end-column="21" />
               <folding>
                 <element signature="n#!!doc" expanded="true" />
               </folding>
@@ -72,7 +72,7 @@
         <entry file="file://$PROJECT_DIR$/config/everoles.mod.json">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="119">
-              <caret line="7" column="32" lean-forward="false" selection-start-line="7" selection-start-column="32" selection-end-line="7" selection-end-column="32" />
+              <caret line="7" column="2" lean-forward="false" selection-start-line="7" selection-start-column="2" selection-end-line="7" selection-end-column="32" />
               <folding />
             </state>
           </provider>
@@ -98,11 +98,11 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="ModCardsAgainstHumanity.js" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/ModCardsAgainstHumanity.js">
+      <file leaf-file-name="ModMemo.js" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/ModMemo.js">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="629">
-              <caret line="37" column="50" lean-forward="false" selection-start-line="37" selection-start-column="50" selection-end-line="37" selection-end-column="50" />
+            <state relative-caret-position="92">
+              <caret line="66" column="8" lean-forward="true" selection-start-line="66" selection-start-column="8" selection-end-line="66" selection-end-column="151" />
               <folding />
             </state>
           </provider>
@@ -194,8 +194,8 @@
         <option value="$PROJECT_DIR$/config/config.json" />
         <option value="$PROJECT_DIR$/config/discord.discord.env.json" />
         <option value="$PROJECT_DIR$/ModPermissionDiscordRole.js" />
-        <option value="$PROJECT_DIR$/ModEveRoles.js" />
         <option value="$PROJECT_DIR$/config/everoles.mod.json" />
+        <option value="$PROJECT_DIR$/ModEveRoles.js" />
       </list>
     </option>
   </component>
@@ -773,7 +773,7 @@
       <workItem from="1497993382154" duration="647000" />
       <workItem from="1497994126785" duration="6916000" />
       <workItem from="1507852295444" duration="32257000" />
-      <workItem from="1508838926665" duration="3746000" />
+      <workItem from="1508838926665" duration="4118000" />
     </task>
     <task id="LOCAL-00001" summary="Fixed a couple issues with the conversion.">
       <created>1473804549645</created>
@@ -824,11 +824,18 @@
       <option name="project" value="LOCAL" />
       <updated>1479253478133</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="New command for admins to reload the corporation contacts.">
+      <created>1508850052225</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1508850052225</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="126316000" />
+    <option name="totallyTimeSpent" value="126688000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="-1928" y="-8" width="1936" height="1056" extended-state="6" />
@@ -887,7 +894,8 @@
     <MESSAGE value="logged ModUsers.&#10;-- Hotfix" />
     <MESSAGE value="genericErrorHandler dismantled for debug" />
     <MESSAGE value="Cards against humanity mod. v0.1" />
-    <option name="LAST_COMMIT_MESSAGE" value="Cards against humanity mod. v0.1" />
+    <MESSAGE value="New command for admins to reload the corporation contacts." />
+    <option name="LAST_COMMIT_MESSAGE" value="New command for admins to reload the corporation contacts." />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -1081,25 +1089,10 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/ModMemo.js">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-5970">
-          <caret line="363" column="4" lean-forward="false" selection-start-line="363" selection-start-column="4" selection-end-line="363" selection-end-column="4" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/ModAlerts.js">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="1728">
           <caret line="108" column="25" lean-forward="true" selection-start-line="108" selection-start-column="25" selection-end-line="108" selection-end-column="25" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/ModCardsAgainstHumanity.js">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="629">
-          <caret line="37" column="50" lean-forward="false" selection-start-line="37" selection-start-column="50" selection-end-line="37" selection-end-column="50" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -1148,15 +1141,31 @@
     <entry file="file://$PROJECT_DIR$/config/everoles.mod.json">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="119">
-          <caret line="7" column="32" lean-forward="false" selection-start-line="7" selection-start-column="32" selection-end-line="7" selection-end-column="32" />
+          <caret line="7" column="2" lean-forward="false" selection-start-line="7" selection-start-column="2" selection-end-line="7" selection-end-column="32" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/ModCardsAgainstHumanity.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-442">
+          <caret line="37" column="50" lean-forward="false" selection-start-line="37" selection-start-column="50" selection-end-line="37" selection-end-column="50" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/ModMemo.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="92">
+          <caret line="66" column="8" lean-forward="true" selection-start-line="66" selection-start-column="8" selection-end-line="66" selection-end-column="151" />
           <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/ModEveRoles.js">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="313">
-          <caret line="185" column="33" lean-forward="true" selection-start-line="185" selection-start-column="33" selection-end-line="185" selection-end-column="33" />
+        <state relative-caret-position="262">
+          <caret line="176" column="21" lean-forward="true" selection-start-line="176" selection-start-column="21" selection-end-line="176" selection-end-column="21" />
           <folding>
             <element signature="n#!!doc" expanded="true" />
           </folding>
