@@ -200,6 +200,7 @@ class ModEveRoles extends Module {
                         request.get({
                             url: "https://esi.tech.ccp.is/latest/corporations/"+self._params['corporationID']+"/contacts/",
                             headers: {
+                                "Authorization": "Bearer "+parsedBody.access_token,
                             }
                         }, (err, httpResponse, body) => {
                             let parsedBody = JSON.parse(body);

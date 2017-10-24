@@ -27,8 +27,8 @@
       <file leaf-file-name="ModEveRoles.js" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/ModEveRoles.js">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="187">
-              <caret line="212" column="73" lean-forward="false" selection-start-line="212" selection-start-column="73" selection-end-line="212" selection-end-column="73" />
+            <state relative-caret-position="357">
+              <caret line="207" column="64" lean-forward="false" selection-start-line="207" selection-start-column="64" selection-end-line="207" selection-end-column="64" />
               <folding>
                 <element signature="n#!!doc" expanded="true" />
               </folding>
@@ -773,7 +773,7 @@
       <workItem from="1497993382154" duration="647000" />
       <workItem from="1497994126785" duration="6916000" />
       <workItem from="1507852295444" duration="32257000" />
-      <workItem from="1508838926665" duration="5868000" />
+      <workItem from="1508838926665" duration="6100000" />
     </task>
     <task id="LOCAL-00001" summary="Fixed a couple issues with the conversion.">
       <created>1473804549645</created>
@@ -845,11 +845,18 @@
       <option name="project" value="LOCAL" />
       <updated>1508850592833</updated>
     </task>
-    <option name="localTasksCounter" value="11" />
+    <task id="LOCAL-00011" summary="Created corp callback.">
+      <created>1508853132381</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1508853132381</updated>
+    </task>
+    <option name="localTasksCounter" value="12" />
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="128438000" />
+    <option name="totallyTimeSpent" value="128670000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="-1928" y="-8" width="1936" height="1056" extended-state="6" />
@@ -911,7 +918,8 @@
     <MESSAGE value="New command for admins to reload the corporation contacts." />
     <MESSAGE value="changed command name" />
     <MESSAGE value="changed command name again" />
-    <option name="LAST_COMMIT_MESSAGE" value="changed command name again" />
+    <MESSAGE value="Created corp callback." />
+    <option name="LAST_COMMIT_MESSAGE" value="Created corp callback." />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -1180,8 +1188,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/ModEveRoles.js">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="187">
-          <caret line="212" column="73" lean-forward="false" selection-start-line="212" selection-start-column="73" selection-end-line="212" selection-end-column="73" />
+        <state relative-caret-position="357">
+          <caret line="207" column="64" lean-forward="false" selection-start-line="207" selection-start-column="64" selection-end-line="207" selection-end-column="64" />
           <folding>
             <element signature="n#!!doc" expanded="true" />
           </folding>
