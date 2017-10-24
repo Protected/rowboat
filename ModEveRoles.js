@@ -172,8 +172,10 @@ class ModEveRoles extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'reload', {
-            description: "Reloads the corporation contacts from eve api.",
+        this.mod("Commands").registerRootDetails(this, 'eve', {description: 'Eve commands.'});
+
+        this.mod('Commands').registerCommand(this, 'eve reload', {
+            description: "Reloads the corporation information from eve api.",
             args: [],
             minArgs: 0
         }, (env, type, userid, channelid, command, args, handle, ep) => {
