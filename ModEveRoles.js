@@ -9,6 +9,7 @@ var fs = require('fs');
 //Example URL: https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=http://wyvernia.net:8098&client_id=1370433d1bd74635839322c867a43bc4&state=uniquestate123
 
 const userDataFilename = "userData.json";
+const corpContactsDataFilename = "corpContactsData.json";
 
 class ModEveRoles extends Module {
 
@@ -23,6 +24,7 @@ class ModEveRoles extends Module {
         'eveSSOCorpClientId',     //Corp Client ID
         'eveSSOEncodedCorpClientIDAndSecretKey', //ClientID and SecretKey encoded with Base64 in this format: clientid:secretkey
         'adminPermissionName',    // Discord permission name that admins need to have to run the command.
+        'corporationID',          // ID of the corporation.
     ]; }
 
     get requiredEnvironments() { return [
@@ -145,6 +147,80 @@ class ModEveRoles extends Module {
             });
         });
 
+        app.get('/corpCallback', function(req, res) {
+            let state = req.query.state;
+            let code  = req.query.code;
+
+            let authInfo = self.authCodes[state];
+
+            if ( !authInfo ) {
+                res.send("Invalid link");
+                return;
+            }
+
+            let formData = {
+                "grant_type":"authorization_code",
+                "code": code
+            };
+
+            request.post(
+                {
+                    url:"https://login.eveonline.com/oauth/token",
+                    formData: formData,
+                    headers: {
+                        "Authorization": "Basic "+self._params['eveSSOEncodedCorpClientIDAndSecretKey'],
+                        "Content-Type": "application/json",
+                        "Host": "login.eveonline.com"
+                    }
+                }, (err, httpResponse, body) => {
+                    if (err) {
+                        res.send("Error validating");
+                        return;
+                    }
+
+                    let parsedBody = JSON.parse(body);
+                    if (!parsedBody) {
+                        res.send("Error validating");
+                        return;
+                    }
+
+                    request.get({
+                        url: "https://login.eveonline.com/oauth/verify",
+                        headers: {
+                            "Host": "login.eveonline.com",
+                            "Authorization": "Bearer "+parsedBody.access_token,
+                        }
+                    }, (err, httpResponse, body) => {
+                        let parsedBody = JSON.parse(body);
+                        if ( err || !parsedBody ){
+                            res.send("Error validating");
+                            return;
+                        }
+
+                        request.get({
+                            url: "https://esi.tech.ccp.is/latest/corporations/"+self._params['corporationID']+"/contacts/",
+                            headers: {
+                            }
+                        }, (err, httpResponse, body) => {
+                            let parsedBody = JSON.parse(body);
+                            if ( err || !parsedBody ){
+                                res.send("Error retrieving info");
+                                return;
+                            }
+
+                            self.corpContacts = parsedBody;
+                            let filePath = self.dataPath + corpContactsDataFilename;
+                            jf.writeFileSync(filePath,self.corpContacts);
+
+                            res.send("Successfully refreshed corporation information. You may close this window now.");
+                            self.env(authInfo.envName).msg(authInfo.discordID, "Your corporation information has been refreshed.");
+
+                        });
+                    });
+            });
+
+        });
+
         app.listen(8098, function() {
            console.log("Eve callback listening.");
         });
@@ -196,7 +272,7 @@ class ModEveRoles extends Module {
             }
 
             ep.priv("Login using the following link: ");
-            ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri="+this._params['callbackAddress']+"/corpCallback&client_id="+this._params['eveSSOCorpClientId']+"&state="+uuid+"&scopes=esi-corporations.read_contacts.v1");
+            ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri="+this._params['callbackAddress']+"/corpCallback&client_id="+this._params['eveSSOCorpClientId']+"&state="+uuid+"&scope=esi-corporations.read_contacts.v1");
 
             return true;
         });
