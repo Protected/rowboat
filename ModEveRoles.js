@@ -19,7 +19,10 @@ class ModEveRoles extends Module {
     get requiredParams() { return [
         'callbackAddress',    //Callback url. (Without the /callback)
         'eveSSOClientId',     //Client ID
-        'eveSSOEncodedClientIDAndSecretKey', //ClientID and SecretKey encoded with Base64 in this format: clientid:secretkey
+        'eveSSOEncodedClientIDAndSecretKey', //ClientID and SecretKey encoded with Base64 in this format: clientid:secretkey,
+        'eveSSOCorpClientId',     //Corp Client ID
+        'eveSSOEncodedCorpClientIDAndSecretKey', //ClientID and SecretKey encoded with Base64 in this format: clientid:secretkey
+        'adminPermissionName',    // Discord permission name that admins need to have to run the command.
     ]; }
 
     get requiredEnvironments() { return [
@@ -165,6 +168,33 @@ class ModEveRoles extends Module {
             }
             ep.priv("Login using the following link: ");
             ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri="+this._params['callbackAddress']+"/callback&client_id="+this._params['eveSSOClientId']+"&state="+uuid);
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'reload contacts', {
+            description: "Reloads the corporation contacts from eve api.",
+            args: [],
+            minArgs: 0
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            let uuid = uuidv4();
+            this.authCodes[uuid] = {
+                uuid: uuid,
+                discordID: userid,
+                time: new Date(),
+                envName: env.name
+            };
+            var member = env.server.members.get(userid);
+            let role = member.roles.find('name', this._params['adminPermissionName']);
+
+            if ( !role ) {
+                ep.priv("You do not have permission to run this command.");
+                return true;
+            }
+
+            ep.priv("Login using the following link: ");
+            ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri="+this._params['callbackAddress']+"/corpCallback&client_id="+this._params['eveSSOCorpClientId']+"&state="+uuid+"&scopes=esi-corporations.read_contacts.v1");
 
             return true;
         });
