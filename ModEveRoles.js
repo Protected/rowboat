@@ -75,6 +75,8 @@ class ModEveRoles extends Module {
         this.loadCorpContacts();
         this.loadUserInfo();
 
+        this.runTick();
+
         let self = this;
         //Initialize the webservice
         let app = express();
@@ -302,13 +304,17 @@ class ModEveRoles extends Module {
     }
 
     runTick() {
-        this.saveUserInfo();
+        for( let discordId in this.userAssoc ){
+            this.processUser(discordId);
+        }
 
     }
 
     processUser(discordId){
 
         let userInfo = this.userAssoc[discordId];
+
+        if ( !userInfo ) return;
 
         if ( userInfo.corporationID == this._params['corporationID'] ){
             this.applyTagsOnUser(discordId, this._params['corpPrefix'], this._params['corpPermissionName'] );
@@ -330,7 +336,6 @@ class ModEveRoles extends Module {
             case 0:
             default:  this.applyTagsOnUser(discordId, this._params['neutPrefix'], this._params['neutPermissionName'] ); break;
         }
-        return;
     }
 
     applyTagsOnUser(discordId, tagText, permissionName){
@@ -339,6 +344,12 @@ class ModEveRoles extends Module {
             member.setNickname("["+tagText+"] " + this.userAssoc[discordId].characterName, "EveRoles automatic change.");
         } else {
             member.setNickname(this.userAssoc[discordId].characterName, "EveRoles automatic change.");
+        }
+
+        if (permissionName){
+            let roles = env.server.roles;
+            let role = roles.find('name',permissionName);
+            member.addRole(role, "EveRoles automatic change.");
         }
     }
 
