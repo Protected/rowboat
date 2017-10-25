@@ -79,6 +79,17 @@ class ModEveRoles extends Module {
         setInterval(runTick,5000);
 
         let self = this;
+
+        this.neutPermissionName = this._params['neutPermissionName'];
+        this.redPermissionName = this._params['redPermissionName'];
+        this.orangePermissionName = this._params['orangePermissionName'];
+        this.bluePermissionName = this._params['bluePermissionName'];
+        this.trueBluePermissionName = this._params['trueBluePermissionName'];
+        this.corpPermissionName = this._params['corpPermissionName'];
+        this.alliancePermissionName = this._params['alliancePermissionName'];
+
+        this.relationPermissionNames=[this.neutPermissionName, this.redPermissionName, this.orangePermissionName, this.bluePermissionName, this.trueBluePermissionName, this.corpPermissionName, this.alliancePermissionName];
+
         //Initialize the webservice
         let app = express();
 
@@ -354,7 +365,17 @@ class ModEveRoles extends Module {
 
         if (permissionName){
             let roles = this.env(this.userAssoc[discordId].envName).server.roles;
+            let rolesToRemove = [];
+
+            for(let role of roles){
+                if ( !role.name == permissionName && this.relationPermissionNames.includes(role.name) ){
+                    rolesToRemove.push(role);
+                }
+            }
+
             let role = roles.find('name',permissionName);
+
+            member.removeRoles(rolesToRemove, "EveRoles automatic change.");
             member.addRole(role, "EveRoles automatic change.").then(success).catch(error);
         }
 
