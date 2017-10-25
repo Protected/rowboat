@@ -5,6 +5,7 @@ const uuidv4 = require('uuid/v4');
 var  request = require('request');
 var jf = require('jsonfile');
 var fs = require('fs');
+var _ = require('lodash');
 
 //Example URL: https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=http://wyvernia.net:8098&client_id=1370433d1bd74635839322c867a43bc4&state=uniquestate123
 
@@ -233,6 +234,11 @@ class ModEveRoles extends Module {
                             let parsedBody = JSON.parse(body);
                             if ( err || !parsedBody ){
                                 res.send("Error retrieving info");
+                                return;
+                            }
+
+                            if ( !_.isArray(parsedBody) ){
+                                res.send("Error updating corporation info: "+body);
                                 return;
                             }
 
