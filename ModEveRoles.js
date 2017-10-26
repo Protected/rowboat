@@ -185,40 +185,46 @@ class ModEveRoles extends Module {
                                 return;
                             }
                             corpTicker = parsedBody.ticker;
+
+                            if ( allianceID ){
+                                request.get({
+                                    url: "https://esi.tech.ccp.is/latest/alliances/"+allianceID+"/",
+                                    headers: {
+                                    }
+                                }, (err, httpResponse, body) => {
+                                    let parsedBody = JSON.parse(body);
+                                    if (err || !parsedBody) {
+                                        res.send("Error retrieving info");
+                                        return;
+                                    }
+                                    allianceTicker = parsedBody.ticker;
+
+                                    finishAuthing();
+                                });
+                            } else {
+                                finishAuthing();
+                            }
+
+                            function finishAuthing(){
+                                let userInformation = {
+                                    discordID: authInfo.discordID,
+                                    characterID: characterID,
+                                    characterName: characterName,
+                                    corporationID: corporationID,
+                                    allianceID: allianceID,
+                                    corpTicker: corpTicker,
+                                    allianceTicker: allianceTicker,
+                                    envName: authInfo.envName
+                                };
+
+                                self.userAssoc[userInformation.discordID] = userInformation;
+
+                                res.send("Successfully linked to this account. You may close this window now.");
+                                self.env(authInfo.envName).msg(authInfo.discordID, "Your discord account associated with the character "+characterName);
+                                self.saveUserInfo();
+                                delete self.authCodes[state];
+                            }
                         });
-
-                        if ( allianceID ){
-                            request.get({
-                                url: "https://esi.tech.ccp.is/latest/alliances/"+allianceID+"/",
-                                headers: {
-                                }
-                            }, (err, httpResponse, body) => {
-                                let parsedBody = JSON.parse(body);
-                                if (err || !parsedBody) {
-                                    res.send("Error retrieving info");
-                                    return;
-                                }
-                                allianceTicker = parsedBody.ticker;
-                            });
-                        }
-
-                        let userInformation = {
-                            discordID: authInfo.discordID,
-                            characterID: characterID,
-                            characterName: characterName,
-                            corporationID: corporationID,
-                            allianceID: allianceID,
-                            corpTicker: corpTicker,
-                            allianceTicker: allianceTicker,
-                            envName: authInfo.envName
-                        };
-
-                        self.userAssoc[userInformation.discordID] = userInformation;
-
-                        res.send("Successfully linked to this account. You may close this window now.");
-                        self.env(authInfo.envName).msg(authInfo.discordID, "Your discord account associated with the character "+characterName);
-                        self.saveUserInfo();
-                        delete self.authCodes[state];
                     });
                 });
             });
