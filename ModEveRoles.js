@@ -30,7 +30,8 @@ class ModEveRoles extends Module {
         'redPrefix',
         'redPermissionName',
         'neutPrefix',
-        'neutPermissionName'
+        'neutPermissionName',
+        'preferAllianceTicker'
     ]; }
 
     get requiredParams() { return [
@@ -40,7 +41,8 @@ class ModEveRoles extends Module {
         'eveSSOCorpClientId',     //Corp Client ID
         'eveSSOEncodedCorpClientIDAndSecretKey', //ClientID and SecretKey encoded with Base64 in this format: clientid:secretkey
         'adminPermissionName',    // Discord permission name that admins need to have to run the command.
-        'corporationID',          // ID of the corporation.
+        'contactsCorporationID',          // ID of the corporation with the contacts.
+        'corporationIDList'               //IDs of the corporations to be considered "main".
     ]; }
 
     get requiredEnvironments() { return [
@@ -151,6 +153,11 @@ class ModEveRoles extends Module {
                     let characterID = parsedBody.CharacterID;
                     let characterName = parsedBody.CharacterName;
 
+                    if ( !characterID ) {
+                        res.send("Error validating");
+                        return;
+                    }
+
                     request.get({
                         url: "https://esi.tech.ccp.is/latest/characters/"+characterID+"/",
                         headers: {
@@ -164,6 +171,36 @@ class ModEveRoles extends Module {
 
                         let corporationID = parsedBody.corporation_id;
                         let allianceID = parsedBody.alliance_id;
+                        let corpTicker = null;
+                        let allianceTicker = null;
+
+                        request.get({
+                            url: "https://esi.tech.ccp.is/latest/corporations/"+corporationID+"/",
+                            headers: {
+                            }
+                        }, (err, httpResponse, body) => {
+                            let parsedBody = JSON.parse(body);
+                            if (err || !parsedBody) {
+                                res.send("Error retrieving info");
+                                return;
+                            }
+                            corpTicker = parsedBody.ticker;
+                        });
+
+                        if ( allianceID ){
+                            request.get({
+                                url: "https://esi.tech.ccp.is/latest/alliances/"+allianceID+"/",
+                                headers: {
+                                }
+                            }, (err, httpResponse, body) => {
+                                let parsedBody = JSON.parse(body);
+                                if (err || !parsedBody) {
+                                    res.send("Error retrieving info");
+                                    return;
+                                }
+                                allianceTicker = parsedBody.ticker;
+                            });
+                        }
 
                         let userInformation = {
                             discordID: authInfo.discordID,
@@ -171,6 +208,8 @@ class ModEveRoles extends Module {
                             characterName: characterName,
                             corporationID: corporationID,
                             allianceID: allianceID,
+                            corpTicker: corpTicker,
+                            allianceTicker: allianceTicker,
                             envName: authInfo.envName
                         };
 
@@ -179,6 +218,7 @@ class ModEveRoles extends Module {
                         res.send("Successfully linked to this account. You may close this window now.");
                         self.env(authInfo.envName).msg(authInfo.discordID, "Your discord account associated with the character "+characterName);
                         self.saveUserInfo();
+                        delete self.authCodes[state];
                     });
                 });
             });
@@ -237,7 +277,7 @@ class ModEveRoles extends Module {
                         }
 
                         request.get({
-                            url: "https://esi.tech.ccp.is/latest/corporations/"+self._params['corporationID']+"/contacts/",
+                            url: "https://esi.tech.ccp.is/latest/corporations/"+self._params['contactsCorporationID']+"/contacts/",
                             headers: {
                                 "Authorization": "Bearer "+accessToken,
                             }
@@ -270,7 +310,9 @@ class ModEveRoles extends Module {
            console.log("Eve callback listening.");
         });
 
-        this.mod('Commands').registerCommand(this, 'authme', {
+        this.mod("Commands").registerRootDetails(this, 'eve', {description: 'Eve commands.'});
+
+        this.mod('Commands').registerCommand(this, 'eve auth', {
             description: "Authenticate with eve SSO.",
             args: [],
             minArgs: 0
@@ -293,7 +335,33 @@ class ModEveRoles extends Module {
             return true;
         });
 
-        this.mod("Commands").registerRootDetails(this, 'eve', {description: 'Eve commands.'});
+        this.mod('Commands').registerCommand(this, 'eve unlink', {
+            description: "Unlink the eve character associated with your discord account.",
+            args: [],
+            minArgs: 0
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            let uuid = uuidv4();
+            this.authCodes[uuid] = {
+                uuid: uuid,
+                discordID: userid,
+                time: new Date(),
+                envName: env.name
+            };
+
+            if ( !this.userAssoc[userid] ){
+                ep.priv("You have no character associated with you.");
+                return true;
+            }
+
+            this.applyTagsOnUser(userid,null,null);
+            delete this.userAssoc[userid];
+            self.saveUserInfo();
+
+            ep.priv("You have unlinked your eve character.");
+
+            return true;
+        });
 
         this.mod('Commands').registerCommand(this, 'eve reload', {
             description: "Reloads the corporation information from eve api.",
@@ -333,7 +401,7 @@ class ModEveRoles extends Module {
 
         if ( !userInfo ) return;
 
-        if ( userInfo.corporationID == this._params['corporationID'] ){
+        if ( this._params['corporationIDList'] && this._params['corporationIDList'].includes(userInfo.corporationID) ){
             this.applyTagsOnUser(discordId, this._params['corpPrefix'], this._params['corpPermissionName'] );
             return;
         }
@@ -356,26 +424,28 @@ class ModEveRoles extends Module {
     }
 
     applyTagsOnUser(discordId, tagText, permissionName){
-        let member = this.env(this.userAssoc[discordId].envName).server.members.get(discordId);
+        let userData = this.userAssoc[discordId];
+
+        let ticker = userData.allianceTicker && this._params['preferAllianceTicker'] ? userData.allianceTicker : userData.corpTicker;
+
+        let member = this.env(userData.envName).server.members.get(discordId);
         if ( tagText ) {
-            member.setNickname("["+tagText+"] " + this.userAssoc[discordId].characterName, "EveRoles automatic change.").then(success).catch(error);
+            member.setNickname("["+tagText+"]["+ticker+"] " + userData.characterName, "EveRoles automatic change.").then(success).catch(error);
         } else {
-            member.setNickname(this.userAssoc[discordId].characterName, "EveRoles automatic change.").then(success).catch(error);
+            member.setNickname("["+ticker+"] "+userData.characterName, "EveRoles automatic change.").then(success).catch(error);
         }
 
-        if (permissionName){
-            let roles = this.env(this.userAssoc[discordId].envName).server.roles;
-            let rolesToRemove = [];
-
-            for(let role of roles){
-                if ( !role.name == permissionName && this.relationPermissionNames.includes(role.name) ){
-                    rolesToRemove.push(role);
-                }
+        let roles = this.env(userData.envName).server.roles;
+        let rolesToRemove = [];
+        for(let role of roles){
+            if ( !role.name == permissionName && this.relationPermissionNames.includes(role.name) ){
+                rolesToRemove.push(role);
             }
+        }
+        member.removeRoles(rolesToRemove, "EveRoles automatic change.");
 
+        if (permissionName){
             let role = roles.find('name',permissionName);
-
-            member.removeRoles(rolesToRemove, "EveRoles automatic change.");
             member.addRole(role, "EveRoles automatic change.").then(success).catch(error);
         }
 
