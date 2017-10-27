@@ -1083,6 +1083,7 @@ class ModRajio extends Module {
         let sum = 0;
         let candidates = [];
         for (let hash in priorities) {
+            if (!priorities[hash]) continue;
             sum += priorities[hash];
             candidates.push([hash, sum]);
         }
