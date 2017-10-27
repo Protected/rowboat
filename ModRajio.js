@@ -897,6 +897,7 @@ class ModRajio extends Module {
         let userid = null;
         if (!song) {
             song = this.dequeue(true);
+            if (!song) return false;
             userid = song[1];
             song = song[0];
         }
@@ -1088,6 +1089,8 @@ class ModRajio extends Module {
             candidates.push([hash, sum]);
         }
         
+        if (!candidates.length) return null;
+        
         let pick = random.fraction() * sum;
         let selection = null;
         for (let item of candidates) {
@@ -1228,7 +1231,7 @@ class ModRajio extends Module {
             if (this._nopreference[listener]) continue;
             for (let otherlistener in userdata.users) {
                 if (listeners.find((checklistener) => checklistener == otherlistener)) continue;
-                result += userdata.users[otherlistener] * this.songrank.getSongLikeability(hash, otherlistener) * this.param(userdata.users[otherlistener] > 0 ? "pri.user.high" : "pri.user.low") / listeners.length;
+                result += userdata.users[otherlistener] * (this.songrank.getSongLikeability(hash, otherlistener) || 0) * this.param(userdata.users[otherlistener] > 0 ? "pri.user.high" : "pri.user.low") / listeners.length;
             }
         }
         
@@ -1399,15 +1402,17 @@ class ModRajio extends Module {
         
         //Unanimous dislike penalties (after cropping)
         
-        let upenalty = null;
-        if (this.unanimousOpinion(song.hash, listeners, -2)) {
-            upenalty = -priority;
-            priority = 0;
-            if (trace) components.unanimoushate = upenalty;
-        } else if (this.unanimousOpinion(song.hash, listeners, -1)) {
-            upenalty = priority / -2;
-            priority /= 2;
-            if (trace) components.unanimousdislike = upenalty;
+        if (listeners.length) {
+            let upenalty = null;
+            if (this.unanimousOpinion(song.hash, listeners, -2)) {
+                upenalty = -priority;
+                priority = 0;
+                if (trace) components.unanimoushate = upenalty;
+            } else if (this.unanimousOpinion(song.hash, listeners, -1)) {
+                upenalty = priority / -2;
+                priority /= 2;
+                if (trace) components.unanimousdislike = upenalty;
+            }
         }
         
         
