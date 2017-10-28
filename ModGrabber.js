@@ -687,7 +687,7 @@ class ModGrabber extends Module {
         //Attachment
         if (messageObj.attachments && messageObj.attachments.array().length) {
             for (let ma of messageObj.attachments.array()) {
-                if (!ma.filename || !ma.filename.match(/\.(mp3|ogg|flac|wav|wma|aac|m4a)$/) || ma.filesize < 20480) continue;
+                if (!ma.name || !ma.name.match(/\.(mp3|ogg|flac|wav|wma|aac|m4a)$/) || ma.size < 20480) continue;
                 this.grabFromAttachment(ma, messageObj, callbacks, readOnly);
             }
         }
@@ -791,7 +791,7 @@ class ModGrabber extends Module {
         if (mp.info.noextract) return;
         try {
             //Download attachment
-            this.log('Grabbing from attachment: ' + ma.filename + ' (' + ma.id + ')');
+            this.log('Grabbing from attachment: ' + ma.name + ' (' + ma.id + ')');
             this._downloads += 1;
             let attfiledl = request(ma.url);
         
@@ -824,7 +824,7 @@ class ModGrabber extends Module {
                         return;
                     }
                     
-                    let title = ma.filename;
+                    let title = ma.name;
                     let artist = '';
                     let album = '';
                     if (info.format && info.format.tags) {
@@ -835,7 +835,7 @@ class ModGrabber extends Module {
                     
                     let keywords = (mp.info.dkeywords || []);
                     
-                    this.persistTempDownload(temppath, ma.filename, mp, {
+                    this.persistTempDownload(temppath, ma.name, mp, {
                         length: Math.floor(duration),
                         source: ma.url,
                         sourceType: 'discord',
