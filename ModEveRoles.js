@@ -360,7 +360,7 @@ class ModEveRoles extends Module {
                 return true;
             }
 
-            this.applyTagsOnUser(userid,null,null);
+            this.applyTagsOnUser(userid, null, null, true);
             delete this.userAssoc[userid];
             self.saveUserInfo();
 
@@ -429,7 +429,7 @@ class ModEveRoles extends Module {
         }
     }
 
-    applyTagsOnUser(discordId, tagText, permissionName){
+    applyTagsOnUser(discordId, tagText, permissionName, stripAll){
         let userData = this.userAssoc[discordId];
 
         let ticker = userData.allianceTicker && this._params['preferAllianceTicker'] ? userData.allianceTicker : userData.corpTicker;
@@ -444,7 +444,7 @@ class ModEveRoles extends Module {
         let roles = this.env(userData.envName).server.roles;
         let rolesToRemove = [];
         for(let role of roles){
-            if ( !role.name == permissionName && this.relationPermissionNames.includes(role.name) ){
+            if ( stripAll || (!role.name == permissionName && this.relationPermissionNames.includes(role.name)) ){
                 rolesToRemove.push(role);
             }
         }
