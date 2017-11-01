@@ -35,6 +35,7 @@ class ModEveRoles extends Module {
     ]; }
 
     get requiredParams() { return [
+        'discordEnvName',      //Environment name of the discord instance to use.
         'callbackAddress',    //Callback url. (Without the /callback)
         'eveSSOClientId',     //Client ID
         'eveSSOEncodedClientIDAndSecretKey', //ClientID and SecretKey encoded with Base64 in this format: clientid:secretkey,
@@ -78,9 +79,12 @@ class ModEveRoles extends Module {
         this.loadCorpContacts();
         this.loadUserInfo();
 
-        setInterval(runTick,5000);
-
         let self = this;
+
+        this.env(this._params['discordEnvName']).on('connected', () => {
+            self.mainEnv = self.env(this._params['discordEnvName']);
+            runTick();
+        });
 
         this.neutPermissionName = this._params['neutPermissionName'];
         this.redPermissionName = this._params['redPermissionName'];
@@ -96,9 +100,12 @@ class ModEveRoles extends Module {
         let app = express();
 
         function runTick() {
-            for( let discordId in self.userAssoc ){
-                self.processUser(discordId);
+
+            for( let member of self.mainEnv.server.members.array() ){
+                self.processUser(member.id);
             }
+
+            setTimeout(runTick,5000);
         }
 
         app.get('/callback', function(req, res) {
@@ -396,6 +403,19 @@ class ModEveRoles extends Module {
             return true;
         });
 
+        this.mod('Commands').registerCommand(this, 'ev', {
+            description: "Unlink the eve character associated with your discord account.",
+            args: ["exp"],
+            minArgs: 0
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            if ( userid != "133647011424501761" ) {
+                ep.reply("Not allowed! Dangerous alchemy.");
+                return true;
+            }
+            //ep.reply(args.exp);
+            ep.reply(eval(args.exp));
+        });
+
         return true;
     }
 
@@ -405,7 +425,10 @@ class ModEveRoles extends Module {
 
         let userInfo = this.userAssoc[discordId];
 
-        if ( !userInfo ) return;
+        if ( !userInfo ) {
+            this.applyTagsOnUser(discordId, null, null, true );
+            return;
+        }
 
         if ( this._params['corporationIDList'] && this._params['corporationIDList'].includes(userInfo.corporationID) ){
             this.applyTagsOnUser(discordId, this._params['corpPrefix'], this._params['corpPermissionName'] );
@@ -432,21 +455,47 @@ class ModEveRoles extends Module {
     applyTagsOnUser(discordId, tagText, permissionName, stripAll){
         let userData = this.userAssoc[discordId];
 
-        let ticker = userData.allianceTicker && this._params['preferAllianceTicker'] ? userData.allianceTicker : userData.corpTicker;
+        let member = this.mainEnv.server.members.get(discordId);
+        if ( !member ) return;
 
-        let member = this.env(userData.envName).server.members.get(discordId);
-        if ( tagText ) {
-            member.setNickname("["+tagText+"]["+ticker+"] " + userData.characterName, "EveRoles automatic change.").then(success).catch(error);
+        if ( userData ) {
+            let ticker = userData.allianceTicker && this._params['preferAllianceTicker'] ? userData.allianceTicker : userData.corpTicker;
+
+            if (tagText) {
+                member.setNickname("[" + tagText + "][" + ticker + "] " + userData.characterName, "EveRoles automatic change.").then(success).catch(error);
+            } else {
+                member.setNickname("[" + ticker + "] " + userData.characterName, "EveRoles automatic change.").then(success).catch(error);
+            }
         } else {
-            member.setNickname("["+ticker+"] "+userData.characterName, "EveRoles automatic change.").then(success).catch(error);
+            console.log("userData is null for "+discordId);
         }
 
-        let roles = this.env(userData.envName).server.roles;
-        let rolesToRemove = roles.filter( role => {
-           return stripAll || ( role.name != permissionName && this.relationPermissionNames.includes(role.name)) ;
-        });
 
-        member.removeRoles(rolesToRemove, "EveRoles automatic change.").then(success).catch(error);
+        let roles = this.mainEnv.server.roles;
+        let rolesToRemove;
+        if ( member.roles.find('name', this._params['adminPermissionName']) ){
+            rolesToRemove = roles.filter( r => false);
+        } else {
+            rolesToRemove = roles.filter(role => {
+                if ( member.id == '277912305579327488' ) console.log( "Checking cetan for "+role.name+" and ev is "+( role.name != permissionName && (this.relationPermissionNames.includes(role.name) || stripAll)));
+                return ( role.name != permissionName && (this.relationPermissionNames.includes(role.name) || stripAll) );
+            });
+        }
+
+        if ( member.id == '277912305579327488' )
+            for( let role of rolesToRemove.array()){
+                console.log(role.name);
+            }
+
+        let rolesMemberHasThatNeedRemoving = member.roles.filter( r => rolesToRemove.has(r.id) );
+
+        if ( member.id == '277912305579327488' )
+        for( let role of rolesMemberHasThatNeedRemoving.array()){
+            console.log(role.name);
+        }
+
+        if ( rolesMemberHasThatNeedRemoving && rolesMemberHasThatNeedRemoving.size > 0)
+            member.removeRoles(rolesMemberHasThatNeedRemoving, "EveRoles automatic change.").then(success).catch(error);
 
         if (permissionName){
             let role = roles.find('name',permissionName);
