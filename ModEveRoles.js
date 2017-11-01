@@ -442,23 +442,23 @@ class ModEveRoles extends Module {
         }
 
         let roles = this.env(userData.envName).server.roles;
-        let rolesToRemove = [];
-        for(let role of roles){
-            if ( stripAll || (!role.name == permissionName && this.relationPermissionNames.includes(role.name)) ){
-                rolesToRemove.push(role);
-            }
-        }
-        member.removeRoles(rolesToRemove, "EveRoles automatic change.");
+        let rolesToRemove = roles.filter( role => {
+           return stripAll || ( role.name != permissionName && this.relationPermissionNames.includes(role.name)) ;
+        });
+
+        member.removeRoles(rolesToRemove, "EveRoles automatic change.").then(success).catch(error);
 
         if (permissionName){
             let role = roles.find('name',permissionName);
             member.addRole(role, "EveRoles automatic change.").then(success).catch(error);
         }
 
-        function success(msg){
+        function success(msg) {
+
         }
 
-        function error(err){
+        function error(err) {
+            console.log(err);
         }
     }
 
