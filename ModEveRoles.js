@@ -57,7 +57,7 @@ class ModEveRoles extends Module {
     constructor(name) {
         super('EveRoles', name);
     }
-    
+
     initialize(opt) {
         if (!super.initialize(opt)) return false;
 
@@ -105,7 +105,20 @@ class ModEveRoles extends Module {
                 self.processUser(member.id);
             }
 
-            setTimeout(runTick,5000);
+            _.each(self.userAssoc, ua => {
+               if ( !ua.lastChecked ) ua.lastChecked = 1;
+            });
+
+            let usersToCheck = _.orderBy(self.userAssoc, ua => ua.lastChecked );
+            usersToCheck = _.take(usersToCheck,5);
+
+            for( let user of usersToCheck ){
+                console.log("Checking for "+user.discordID);
+                self.checkUser(user.discordID);
+            }
+
+            self.loadUserInfo();
+            setTimeout(runTick,10000);
         }
 
         app.get('/callback', function(req, res) {
@@ -134,107 +147,131 @@ class ModEveRoles extends Module {
                         "Host": "login.eveonline.com"
                     }
                 }, (err, httpResponse, body) => {
-                if ( err ) {
-                    res.send("Error validating");
-                    return;
-                }
-
-                let parsedBody = JSON.parse(body);
-                if ( !parsedBody ){
-                    res.send("Error validating");
-                    return;
-                }
-
-                request.get({
-                    url: "https://login.eveonline.com/oauth/verify",
-                    headers: {
-                        "Host": "login.eveonline.com",
-                        "Authorization": "Bearer "+parsedBody.access_token,
-                    }
-                }, (err, httpResponse, body) => {
-                    let parsedBody = JSON.parse(body);
-                    if ( err || !parsedBody ){
+                    if ( err ) {
                         res.send("Error validating");
                         return;
                     }
-                    let characterID = parsedBody.CharacterID;
-                    let characterName = parsedBody.CharacterName;
 
-                    if ( !characterID ) {
+                    let parsedBody = JSON.parse(body);
+                    if ( !parsedBody ){
                         res.send("Error validating");
                         return;
                     }
 
                     request.get({
-                        url: "https://esi.tech.ccp.is/latest/characters/"+characterID+"/",
+                        url: "https://login.eveonline.com/oauth/verify",
                         headers: {
+                            "Host": "login.eveonline.com",
+                            "Authorization": "Bearer "+parsedBody.access_token,
                         }
                     }, (err, httpResponse, body) => {
-                        let parsedBody = JSON.parse(body);
+                        let parsedBody;
+                        try {
+                            parsedBody = JSON.parse(body);
+                        } catch( e ){
+                            res.send("Error validating");
+                            return;
+                        }
                         if ( err || !parsedBody ){
-                            res.send("Error retrieving info");
+                            res.send("Error validating");
+                            return;
+                        }
+                        let characterID = parsedBody.CharacterID;
+                        let characterName = parsedBody.CharacterName;
+
+                        if ( !characterID ) {
+                            res.send("Error validating");
                             return;
                         }
 
-                        let corporationID = parsedBody.corporation_id;
-                        let allianceID = parsedBody.alliance_id;
-                        let corpTicker = null;
-                        let allianceTicker = null;
-
                         request.get({
-                            url: "https://esi.tech.ccp.is/latest/corporations/"+corporationID+"/",
+                            url: "https://esi.tech.ccp.is/latest/characters/"+characterID+"/",
                             headers: {
                             }
                         }, (err, httpResponse, body) => {
-                            let parsedBody = JSON.parse(body);
-                            if (err || !parsedBody) {
+                            let parsedBody;
+                            try {
+                                parsedBody = JSON.parse(body);
+                            } catch( e ){
+                                res.send("Error validating");
+                                return;
+                            }
+                            if ( err || !parsedBody ){
                                 res.send("Error retrieving info");
                                 return;
                             }
-                            corpTicker = parsedBody.ticker;
 
-                            if ( allianceID ){
-                                request.get({
-                                    url: "https://esi.tech.ccp.is/latest/alliances/"+allianceID+"/",
-                                    headers: {
-                                    }
-                                }, (err, httpResponse, body) => {
-                                    let parsedBody = JSON.parse(body);
-                                    if (err || !parsedBody) {
-                                        res.send("Error retrieving info");
-                                        return;
-                                    }
-                                    allianceTicker = parsedBody.ticker;
+                            let corporationID = parsedBody.corporation_id;
+                            let allianceID = parsedBody.alliance_id;
+                            let corpTicker = null;
+                            let allianceTicker = null;
 
+                            request.get({
+                                url: "https://esi.tech.ccp.is/latest/corporations/"+corporationID+"/",
+                                headers: {
+                                }
+                            }, (err, httpResponse, body) => {
+                                let parsedBody;
+                                try {
+                                    parsedBody = JSON.parse(body);
+                                } catch( e ){
+                                    res.send("Error validating");
+                                    return;
+                                }
+                                if (err || !parsedBody) {
+                                    res.send("Error retrieving info");
+                                    return;
+                                }
+                                corpTicker = parsedBody.ticker;
+
+                                if ( allianceID ){
+                                    request.get({
+                                        url: "https://esi.tech.ccp.is/latest/alliances/"+allianceID+"/",
+                                        headers: {
+                                        }
+                                    }, (err, httpResponse, body) => {
+                                        let parsedBody;
+                                        try {
+                                            parsedBody = JSON.parse(body);
+                                        } catch( e ){
+                                            res.send("Error validating");
+                                            return;
+                                        }
+                                        if (err || !parsedBody) {
+                                            res.send("Error retrieving info");
+                                            return;
+                                        }
+                                        allianceTicker = parsedBody.ticker;
+
+                                        finishAuthing();
+                                    });
+                                } else {
                                     finishAuthing();
-                                });
-                            } else {
-                                finishAuthing();
-                            }
+                                }
 
-                            function finishAuthing(){
-                                let userInformation = {
-                                    discordID: authInfo.discordID,
-                                    characterID: characterID,
-                                    characterName: characterName,
-                                    corporationID: corporationID,
-                                    allianceID: allianceID,
-                                    corpTicker: corpTicker,
-                                    allianceTicker: allianceTicker,
-                                    envName: authInfo.envName
-                                };
+                                function finishAuthing(){
+                                    let userInformation = {
+                                        discordID: authInfo.discordID,
+                                        characterID: characterID,
+                                        characterName: characterName,
+                                        corporationID: corporationID,
+                                        allianceID: allianceID,
+                                        corpTicker: corpTicker,
+                                        allianceTicker: allianceTicker,
+                                        envName: authInfo.envName
+                                    };
 
-                                self.userAssoc[userInformation.discordID] = userInformation;
+                                    self.userAssoc[userInformation.discordID] = userInformation;
 
-                                res.send("Successfully linked to this account. You may close this window now.");
-                                self.env(authInfo.envName).msg(authInfo.discordID, "Your discord account associated with the character "+characterName);
-                                self.saveUserInfo();
-                                delete self.authCodes[state];
-                            }
+                                    res.send("Successfully linked to this account. You may close this window now.");
+                                    self.env(authInfo.envName).msg(authInfo.discordID, "Your discord account associated with the character "+characterName);
+                                    self.saveUserInfo();
+                                    delete self.authCodes[state];
+                                }
+                            });
                         });
                     });
                 });
-            });
         });
 
         app.get('/corpCallback', function(req, res) {
@@ -268,7 +305,13 @@ class ModEveRoles extends Module {
                         return;
                     }
 
-                    let parsedBody = JSON.parse(body);
+                    let parsedBody;
+                    try {
+                        parsedBody = JSON.parse(body);
+                    } catch( e ){
+                        res.send("Error validating");
+                        return;
+                    }
                     if (!parsedBody) {
                         res.send("Error validating");
                         return;
@@ -283,7 +326,13 @@ class ModEveRoles extends Module {
                             "Authorization": "Bearer "+parsedBody.access_token,
                         }
                     }, (err, httpResponse, body) => {
-                        let parsedBody = JSON.parse(body);
+                        let parsedBody;
+                        try {
+                            parsedBody = JSON.parse(body);
+                        } catch( e ){
+                            res.send("Error validating");
+                            return;
+                        }
                         if ( err || !parsedBody ){
                             res.send("Error validating");
                             return;
@@ -295,7 +344,13 @@ class ModEveRoles extends Module {
                                 "Authorization": "Bearer "+accessToken,
                             }
                         }, (err, httpResponse, body) => {
-                            let parsedBody = JSON.parse(body);
+                            let parsedBody;
+                            try {
+                                parsedBody = JSON.parse(body);
+                            } catch( e ){
+                                res.send("Error validating");
+                                return;
+                            }
                             if ( err || !parsedBody ){
                                 res.send("Error retrieving info");
                                 return;
@@ -315,12 +370,12 @@ class ModEveRoles extends Module {
 
                         });
                     });
-            });
+                });
 
         });
 
         app.listen(8098, function() {
-           console.log("Eve callback listening.");
+            console.log("Eve callback listening.");
         });
 
         this.mod("Commands").registerRootDetails(this, 'eve', {description: 'Eve commands.'});
@@ -467,7 +522,7 @@ class ModEveRoles extends Module {
                 member.setNickname("[" + ticker + "] " + userData.characterName, "EveRoles automatic change.").then(success).catch(error);
             }
         } else {
-            console.log("userData is null for "+discordId);
+            if (!stripAll) console.log("userData is null for "+discordId);
         }
 
 
@@ -477,22 +532,11 @@ class ModEveRoles extends Module {
             rolesToRemove = roles.filter( r => false);
         } else {
             rolesToRemove = roles.filter(role => {
-                if ( member.id == '277912305579327488' ) console.log( "Checking cetan for "+role.name+" and ev is "+( role.name != permissionName && (this.relationPermissionNames.includes(role.name) || stripAll)));
                 return ( role.name != permissionName && (this.relationPermissionNames.includes(role.name) || stripAll) );
             });
         }
 
-        if ( member.id == '277912305579327488' )
-            for( let role of rolesToRemove.array()){
-                console.log(role.name);
-            }
-
         let rolesMemberHasThatNeedRemoving = member.roles.filter( r => rolesToRemove.has(r.id) );
-
-        if ( member.id == '277912305579327488' )
-        for( let role of rolesMemberHasThatNeedRemoving.array()){
-            console.log(role.name);
-        }
 
         if ( rolesMemberHasThatNeedRemoving && rolesMemberHasThatNeedRemoving.size > 0)
             member.removeRoles(rolesMemberHasThatNeedRemoving, "EveRoles automatic change.").then(success).catch(error);
@@ -544,6 +588,87 @@ class ModEveRoles extends Module {
         if (allianceStandings) return allianceStandings;
 
         return 0;
+    }
+
+    checkUser(discordId) {
+        let self = this;
+        let userData = this.userAssoc[discordId];
+        if ( !userData ) return;
+
+        request.get({
+            url: "https://esi.tech.ccp.is/latest/characters/"+userData.characterID+"/",
+            headers: {
+            }
+        }, (err, httpResponse, body) => {
+            let parsedBody;
+            try {
+                parsedBody = JSON.parse(body);
+            } catch( e ){
+                return;
+            }
+            if ( err || !parsedBody ){
+                return;
+            }
+
+            let corporationID = parsedBody.corporation_id;
+            let allianceID = parsedBody.alliance_id;
+            let corpTicker = null;
+            let allianceTicker = null;
+
+            request.get({
+                url: "https://esi.tech.ccp.is/latest/corporations/"+corporationID+"/",
+                headers: {
+                }
+            }, (err, httpResponse, body) => {
+                let parsedBody;
+                try {
+                    parsedBody = JSON.parse(body);
+                } catch( e ){
+                    return;
+                }
+                if (err || !parsedBody) {
+                    return;
+                }
+                corpTicker = parsedBody.ticker;
+
+                if ( allianceID ){
+                    request.get({
+                        url: "https://esi.tech.ccp.is/latest/alliances/"+allianceID+"/",
+                        headers: {
+                        }
+                    }, (err, httpResponse, body) => {
+                        let parsedBody;
+                        try {
+                            parsedBody = JSON.parse(body);
+                        } catch( e ){
+                            return;
+                        }
+                        if (err || !parsedBody) {
+                            return;
+                        }
+                        allianceTicker = parsedBody.ticker;
+
+                        finishAuthing();
+                    });
+                } else {
+                    finishAuthing();
+                }
+
+                function finishAuthing(){
+
+                    self.userAssoc[discordId].corporationID = corporationID;
+                    self.userAssoc[discordId].allianceID = allianceID;
+                    self.userAssoc[discordId].corpTicker = corpTicker;
+                    self.userAssoc[discordId].allianceTicker = allianceTicker;
+                    self.userAssoc[discordId].lastChecked = Date.now();
+
+                    self.saveUserInfo();
+
+                    console.log("Updated character "+self.userAssoc[discordId].characterName);
+                }
+            });
+        });
+
     }
 
 
