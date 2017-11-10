@@ -1241,8 +1241,8 @@ class ModRajio extends Module {
     
     unanimousOpinion(hash, listeners, likeability) {
         for (let listener of listeners) {
-            if (likeability > 0 && this.songrank.getSongLikeability(hash, listener) < likeability
-                    || likeability < 0 && this.songrank.getSongLikeability(hash, listener) > likeability) {
+            let listenerlik = this.songrank.getSongLikeability(hash, listener);
+            if (listenerlik === null || likeability > 0 && listenerlik < likeability || likeability < 0 && listenerlik > likeability) {
                 return false;
             }
         }
