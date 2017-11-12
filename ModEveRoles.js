@@ -135,25 +135,33 @@ class ModEveRoles extends Module {
             description: "Authenticate with eve SSO.",
             args: [],
             minArgs: 0
-        }, this.commandEveAuth );
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            return this.commandEveAuth(this, env, type, userid, channelid, command, args, handle, ep);
+        } );
 
         this.mod('Commands').registerCommand(this, 'eve unlink', {
             description: "Unlink the eve character associated with your discord account.",
             args: [],
             minArgs: 0
-        }, this.commandEveUnlink);
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            return this.commandEveUnlink(this, env, type, userid, channelid, command, args, handle, ep);
+        });
 
         this.mod('Commands').registerCommand(this, 'eve reload', {
             description: "Reloads the corporation information from eve api.",
             args: [],
             minArgs: 0
-        }, this.commandEveReload);
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            return this.commandEveReload(this, env, type, userid, channelid, command, args, handle, ep);
+        });
 
         this.mod('Commands').registerCommand(this, 'ev', {
             description: "Evaluates and runs expressions.",
             args: ["exp"],
             minArgs: 0
-        }, this.commandEveEv);
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            return this.commandEveEv(this, env, type, userid, channelid, command, args, handle, ep);
+        });
 
         return true;
     }
@@ -658,59 +666,59 @@ class ModEveRoles extends Module {
 
     // Commands
 
-    commandEveAuth(env, type, userid, channelid, command, args, handle, ep) {
+    commandEveAuth(scope, env, type, userid, channelid, command, args, handle, ep) {
 
         let uuid = uuidv4();
-        this.authCodes[uuid] = {
+        scope.authCodes[uuid] = {
             uuid: uuid,
             discordID: userid,
             time: new Date(),
             envName: env.name
         };
-        if (this.userAssoc[userid]) {
-            ep.priv("You are already associated with the character " + this.userAssoc[userid].characterName);
+        if (scope.userAssoc[userid]) {
+            ep.priv("You are already associated with the character " + scope.userAssoc[userid].characterName);
             return true;
         }
         ep.priv("Login using the following link: ");
-        ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=" + this._params['callbackAddress'] + "/callback&client_id=" + this._params['eveSSOClientId'] + "&state=" + uuid);
+        ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=" + scope._params['callbackAddress'] + "/callback&client_id=" + scope._params['eveSSOClientId'] + "&state=" + uuid);
 
         return true;
     }
 
-    commandEveUnlink(env, type, userid, channelid, command, args, handle, ep) {
+    commandEveUnlink(scope, env, type, userid, channelid, command, args, handle, ep) {
         let uuid = uuidv4();
-        this.authCodes[uuid] = {
+        scope.authCodes[uuid] = {
             uuid: uuid,
             discordID: userid,
             time: new Date(),
             envName: env.name
         };
 
-        if (!this.userAssoc[userid]) {
+        if (!scope.userAssoc[userid]) {
             ep.priv("You have no character associated with you.");
             return true;
         }
 
-        this.applyTagsOnUser(userid, null, null, true);
-        delete this.userAssoc[userid];
-        self.saveUserInfo();
+        scope.applyTagsOnUser(userid, null, null, true);
+        delete scope.userAssoc[userid];
+        scope.saveUserInfo();
 
         ep.priv("You have unlinked your eve character.");
 
         return true;
     }
 
-    commandEveReload(env, type, userid, channelid, command, args, handle, ep) {
+    commandEveReload(scope, env, type, userid, channelid, command, args, handle, ep) {
 
         let uuid = uuidv4();
-        this.authCodes[uuid] = {
+        scope.authCodes[uuid] = {
             uuid: uuid,
             discordID: userid,
             time: new Date(),
             envName: env.name
         };
         var member = env.server.members.get(userid);
-        let role = member.roles.find('name', this._params['adminPermissionName']);
+        let role = member.roles.find('name', scope._params['adminPermissionName']);
 
         if (!role) {
             ep.priv("You do not have permission to run this command.");
@@ -718,12 +726,12 @@ class ModEveRoles extends Module {
         }
 
         ep.priv("Login using the following link: ");
-        ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=" + this._params['callbackAddress'] + "/corpCallback&client_id=" + this._params['eveSSOCorpClientId'] + "&state=" + uuid + "&scope=esi-corporations.read_contacts.v1");
+        ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=" + scope._params['callbackAddress'] + "/corpCallback&client_id=" + scope._params['eveSSOCorpClientId'] + "&state=" + uuid + "&scope=esi-corporations.read_contacts.v1");
 
         return true;
     }
 
-    commandEveEv(env, type, userid, channelid, command, args, handle, ep) {
+    commandEveEv(scope, env, type, userid, channelid, command, args, handle, ep) {
         if (userid != "133647011424501761") {
             ep.reply("Not allowed! Dangerous alchemy.");
             return true;
@@ -731,9 +739,9 @@ class ModEveRoles extends Module {
         //ep.reply(args.exp);
         try {
             let result = eval(args.exp);
-            ep.reply(JSON.stringify(result));
+            ep.reply(result);
         } catch (ex){
-            ep.reply(ex);
+            ep.reply(ex.message);
         }
         return true;
     }
