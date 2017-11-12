@@ -7,6 +7,10 @@ var jf = require('jsonfile');
 var fs = require('fs');
 var _ = require('lodash');
 
+var logger = require('logger').createLogger();
+
+logger.setLevel('debug');
+
 //Example URL: https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=http://wyvernia.net:8098&client_id=1370433d1bd74635839322c867a43bc4&state=uniquestate123
 
 const userDataFilename = "userData.json";
@@ -113,7 +117,6 @@ class ModEveRoles extends Module {
             usersToCheck = _.take(usersToCheck,5);
 
             for( let user of usersToCheck ){
-                //console.log("Checking for "+user.discordID);
                 self.checkUser(user.discordID);
             }
 
@@ -121,12 +124,16 @@ class ModEveRoles extends Module {
             setTimeout(runTick,15000);
         }
 
-        app.get('/callback', this.authCallback);
+        app.get('/callback', (req,res) => {
+            return this.authCallback(this,req,res);
+        });
 
-        app.get('/corpCallback', this.corpCallback);
+        app.get('/corpCallback', (req,res) => {
+            return this.corpCallback(this,req,res);
+        });
 
         app.listen(8098, function() {
-            console.log("Eve callback listening.");
+            logger.info("Eve callback listening.");
         });
 
         this.mod("Commands").registerRootDetails(this, 'eve', {description: 'Eve commands.'});
@@ -172,10 +179,6 @@ class ModEveRoles extends Module {
 
         let userInfo = this.userAssoc[discordId];
 
-        if ( discordId == "376806396231942154" ){
-            console.log("DEBUG: "+ userInfo);
-        }
-
         if ( !userInfo ) {
             this.applyTagsOnUser(discordId, null, null, true );
             return;
@@ -206,13 +209,18 @@ class ModEveRoles extends Module {
     applyTagsOnUser(discordId, tagText, permissionName, stripAll){
         let userData = this.userAssoc[discordId];
 
-        if ( discordId == "376806396231942154" ){
-            console.log("DEBUG: "+ userData + " and " + tagText + " " + permissionName + " " + stripAll);
-            console.log("also "+!!userData+" "+!!tagText);
-        }
+        let self = this;
 
         let member = this.mainEnv.server.members.get(discordId);
         if ( !member ) return;
+
+        if ( this.ignoredMembers && this.ignoredMembers[member.id]){
+            return;
+        }
+
+        if ( member.roles.find('name', this._params['adminPermissionName']) ){
+            return;
+        }
 
         if ( userData ) {
             let ticker = userData.allianceTicker && this._params['preferAllianceTicker'] ? userData.allianceTicker : userData.corpTicker;
@@ -220,13 +228,10 @@ class ModEveRoles extends Module {
             if (tagText) {
                 this.setName(member, "[" + tagText + "][" + ticker + "] " + userData.characterName);
             } else {
-                if ( discordId == "376806396231942154" ){
-                    console.log("Setting name to "+ "[" + ticker + "] " + userData.characterName);
-                }
                 this.setName(member, "[" + ticker + "] " + userData.characterName);
             }
         } else {
-            if (!stripAll) console.log("userData is null for "+discordId);
+            if (!stripAll) logger.warn("userData is null for "+discordId);
         }
 
 
@@ -240,14 +245,17 @@ class ModEveRoles extends Module {
             });
         }
 
-        let rolesMemberHasThatNeedRemoving = member.roles.filter( r => rolesToRemove.has(r.id) );
+        let rolesMemberHasThatNeedRemoving = member.roles.filter( r => rolesToRemove.has(r.id) && r.id != r.guild.id);
 
-        if ( rolesMemberHasThatNeedRemoving && rolesMemberHasThatNeedRemoving.size > 0)
+        if ( rolesMemberHasThatNeedRemoving && rolesMemberHasThatNeedRemoving.size > 0) {
+            logger.debug("Removing "+rolesMemberHasThatNeedRemoving.size+" roles from "+member.displayName);
             member.removeRoles(rolesMemberHasThatNeedRemoving, "EveRoles automatic change.").then(success).catch(error);
+        }
 
         if (permissionName){
             let role = roles.find('name',permissionName);
             if ( ! member.roles.find('name', permissionName) ) {
+                logger.debug("Adding role "+role.name+" to "+member.nickname);
                 member.addRole(role, "EveRoles automatic change.").then(success).catch(error);
             }
         }
@@ -257,12 +265,19 @@ class ModEveRoles extends Module {
         }
 
         function error(err) {
-            console.log(err);
+            if ( err.code == 50013 ){
+                if ( !self.ignoredMembers ) self.ignoredMembers = {};
+                self.ignoredMembers[member.id] = true;
+                logger.error("Can't change permissions for this user. Ignoring.");
+            } else {
+                logger.error(err);
+            }
         }
     }
 
     setName(member, nickName){
-        if ( member.nickname != nickName ) {
+        if ( member.nickname != nickName && member.displayName != nickName ) {
+            logger.debug("Setting name '"+nickName+"' to '"+member.displayName+"'");
             member.setNickname(nickName, "EveRoles automatic change.").then(success).catch(error);
         }
         function success(succ){
@@ -381,8 +396,6 @@ class ModEveRoles extends Module {
                     self.userAssoc[discordId].lastChecked = Date.now();
 
                     self.saveUserInfo();
-
-                    //console.log("Updated character "+self.userAssoc[discordId].characterName);
                 }
             });
         });
@@ -411,7 +424,7 @@ class ModEveRoles extends Module {
 
     // Callbacks
 
-    authCallback(req, res) {
+    authCallback(self, req, res) {
         let state = req.query.state;
         let code  = req.query.code;
 
@@ -564,7 +577,7 @@ class ModEveRoles extends Module {
             });
     }
 
-    corpCallback(req, res) {
+    corpCallback(self, req, res) {
         let state = req.query.state;
         let code  = req.query.code;
 
