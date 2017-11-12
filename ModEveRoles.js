@@ -113,12 +113,12 @@ class ModEveRoles extends Module {
             usersToCheck = _.take(usersToCheck,5);
 
             for( let user of usersToCheck ){
-                console.log("Checking for "+user.discordID);
+                //console.log("Checking for "+user.discordID);
                 self.checkUser(user.discordID);
             }
 
             self.loadUserInfo();
-            setTimeout(runTick,10000);
+            setTimeout(runTick,15000);
         }
 
         app.get('/callback', function(req, res) {
@@ -480,6 +480,10 @@ class ModEveRoles extends Module {
 
         let userInfo = this.userAssoc[discordId];
 
+        if ( discordId == "376806396231942154" ){
+            console.log("DEBUG: "+ userInfo);
+        }
+
         if ( !userInfo ) {
             this.applyTagsOnUser(discordId, null, null, true );
             return;
@@ -510,6 +514,11 @@ class ModEveRoles extends Module {
     applyTagsOnUser(discordId, tagText, permissionName, stripAll){
         let userData = this.userAssoc[discordId];
 
+        if ( discordId == "376806396231942154" ){
+            console.log("DEBUG: "+ userData + " and " + tagText + " " + permissionName + " " + stripAll);
+            console.log("also "+!!userData+" "+!!tagText);
+        }
+
         let member = this.mainEnv.server.members.get(discordId);
         if ( !member ) return;
 
@@ -517,9 +526,12 @@ class ModEveRoles extends Module {
             let ticker = userData.allianceTicker && this._params['preferAllianceTicker'] ? userData.allianceTicker : userData.corpTicker;
 
             if (tagText) {
-                member.setNickname("[" + tagText + "][" + ticker + "] " + userData.characterName, "EveRoles automatic change.").then(success).catch(error);
+                this.setName(member, "[" + tagText + "][" + ticker + "] " + userData.characterName);
             } else {
-                member.setNickname("[" + ticker + "] " + userData.characterName, "EveRoles automatic change.").then(success).catch(error);
+                if ( discordId == "376806396231942154" ){
+                    console.log("Setting name to "+ "[" + ticker + "] " + userData.characterName);
+                }
+                this.setName(member, "[" + ticker + "] " + userData.characterName);
             }
         } else {
             if (!stripAll) console.log("userData is null for "+discordId);
@@ -543,7 +555,9 @@ class ModEveRoles extends Module {
 
         if (permissionName){
             let role = roles.find('name',permissionName);
-            member.addRole(role, "EveRoles automatic change.").then(success).catch(error);
+            if ( ! member.roles.find('name', permissionName) ) {
+                member.addRole(role, "EveRoles automatic change.").then(success).catch(error);
+            }
         }
 
         function success(msg) {
@@ -552,6 +566,18 @@ class ModEveRoles extends Module {
 
         function error(err) {
             console.log(err);
+        }
+    }
+
+    setName(member, nickName){
+        if ( member.nickname != nickName ) {
+            member.setNickname(nickName, "EveRoles automatic change.").then(success).catch(error);
+        }
+        function success(succ){
+
+        }
+        function error(err){
+
         }
     }
 
@@ -664,7 +690,7 @@ class ModEveRoles extends Module {
 
                     self.saveUserInfo();
 
-                    console.log("Updated character "+self.userAssoc[discordId].characterName);
+                    //console.log("Updated character "+self.userAssoc[discordId].characterName);
                 }
             });
         });
