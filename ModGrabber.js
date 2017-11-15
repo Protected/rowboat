@@ -745,23 +745,31 @@ class ModGrabber extends Module {
                 this.log('Grabbing from youtube: ' + url);
                 this._downloads += 1;
             
-                //Plug video download into ffmpeg
+                //Youtube -> FFmpeg -> Hard drive
+                
                 let video = ytdl(url, {filter: 'audioonly'});
+                
                 let ffmpeg = new FFmpeg(video);
-                
-                ffmpeg.on('error', (err) => {
-                    this.log('error', err);
-                });
-                
                 if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
                 
-                //Prepare stream for writing to disk
                 let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
                 let stream = fs.createWriteStream(temppath);
+
+                let audio = ffmpeg.format('mp3').pipe(stream);
                 
+                ffmpeg.on('error', (error) => {
+                    this.log('error', '[Youtube, FFmpeg] ' + error);
+                    audio.destroy();
+                });
+                
+                stream.on('error', (error) => {
+                    this.log('error', '[Youtube, Write] ' + error);
+                    audio.destroy();
+                });
+            
                 stream.on('finish', () => {
                     this._downloads -= 1;
-                
+                    
                     this.persistTempDownload(temppath, url, mp, {
                         length: parseInt(info.length_seconds),
                         source: url,
@@ -775,10 +783,6 @@ class ModGrabber extends Module {
                     }, messageObj, callbacks, readOnly);
                 });
                 
-                //Plug ffmpeg into writing stream
-                let output = ffmpeg.format('mp3').pipe(stream);
-                output.on('error', video.end.bind(video));
-                output.on('error', stream.emit.bind(stream, 'error'));
             });
         } catch (exception) {
             this.log('error', exception);
@@ -790,24 +794,31 @@ class ModGrabber extends Module {
         let mp = this.obtainMessageParams(messageObj);
         if (mp.info.noextract) return;
         try {
-            //Download attachment
             this.log('Grabbing from attachment: ' + ma.name + ' (' + ma.id + ')');
             this._downloads += 1;
+            
+            //Attachment -> FFmpeg -> Hard drive
+            
             let attfiledl = request(ma.url);
         
-            //Plug attachment download into ffmpeg
             let ffmpeg = new FFmpeg(attfiledl);
-            
-            ffmpeg.on('error', (err) => {
-                this.log('error', err);
-            });
-            
             if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
             
-            //Prepare stream for writing to disk
             let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
             let stream = fs.createWriteStream(temppath);
             
+            let audio = ffmpeg.format('mp3').pipe(stream);
+            
+            ffmpeg.on('error', (error) => {
+                this.log('error', '[Attachment, FFmpeg] ' + error);
+                audio.destroy();
+            });
+            
+            stream.on('error', (error) => {
+                this.log('error', '[Attachment, Write] ' + error);
+                audio.destroy();
+            });
+
             stream.on('finish', () => {
                 this._downloads -= 1;
                 
@@ -849,12 +860,6 @@ class ModGrabber extends Module {
                 });
                 
             });
-            
-            //Plug ffmpeg into writing stream
-            let output = ffmpeg.format('mp3').pipe(stream);
-            output.on('error', attfiledl.end.bind(attfiledl));
-            output.on('error', stream.emit.bind(stream, 'error'));
-            
         } catch (exception) {
             this.log('error', exception);
         }
@@ -867,9 +872,11 @@ class ModGrabber extends Module {
         try {
             let filename = sourceSpecificId;
         
-            //Download
             this.log('Grabbing from ' + sourceType + ' URL: ' + url + ' (' + sourceSpecificId + ')');
             this._downloads += 1;
+            
+            //URL -> FFmpeg -> Hard drive
+            
             let filedl = request(url);
             
             filedl.on('response', (response) => {
@@ -879,18 +886,23 @@ class ModGrabber extends Module {
                     if (getfilename) filename = getfilename[1];
                 }
                 
-                //Plug attachment download into ffmpeg
                 let ffmpeg = new FFmpeg(filedl);
-                
-                ffmpeg.on('error', (err) => {
-                    this.log('error', err);
-                });
-                
                 if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
                 
-                //Prepare stream for writing to disk
                 let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
                 let stream = fs.createWriteStream(temppath);
+                
+                let audio = ffmpeg.format('mp3').pipe(stream);
+                
+                ffmpeg.on('error', (error) => {
+                    this.log('error', '[URL, FFmpeg] ' + error);
+                    audio.destroy();
+                });
+                
+                stream.on('error', (error) => {
+                    this.log('error', '[URL, Write] ' + error);
+                    audio.destroy();
+                });
                 
                 stream.on('finish', () => {
                     this._downloads -= 1;
@@ -934,13 +946,7 @@ class ModGrabber extends Module {
                     
                 });
                 
-                //Plug ffmpeg into writing stream
-                let output = ffmpeg.format('mp3').pipe(stream);
-                output.on('error', filedl.end.bind(filedl));
-                output.on('error', stream.emit.bind(stream, 'error'));
-                
             });
-            
         } catch (exception) {
             this.log('error', exception);
         }
@@ -1151,6 +1157,11 @@ class ModGrabber extends Module {
             } catch (exception) {
                 this.log('error', 'Error in callback while removing ' + hash);
             }
+        }
+        
+        let info = this._index[hash];
+        if (this._indexSourceTypeAndId[info.sourceType] && this._indexSourceTypeAndId[info.sourceType][info.sourceSpecificId]) {
+            delete this._indexSourceTypeAndId[info.sourceType][info.sourceSpecificId];
         }
         
         delete this._index[hash];
