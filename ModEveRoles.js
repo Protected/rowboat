@@ -359,7 +359,7 @@ class ModEveRoles extends Module {
                 } catch( e ){
                     return;
                 }
-                if (err || !parsedBody) {
+                if (err || !parsedBody || !parsedBody.ticker ) {
                     return;
                 }
                 corpTicker = parsedBody.ticker;
@@ -376,7 +376,7 @@ class ModEveRoles extends Module {
                         } catch( e ){
                             return;
                         }
-                        if (err || !parsedBody) {
+                        if (err || !parsedBody || !parsedBody.ticker) {
                             return;
                         }
                         allianceTicker = parsedBody.ticker;
