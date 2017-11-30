@@ -1159,7 +1159,7 @@ class ModGrabber extends Module {
             }
         }
         
-        let info = this._index[hash];
+        info = this._index[hash];
         if (this._indexSourceTypeAndId[info.sourceType] && this._indexSourceTypeAndId[info.sourceType][info.sourceSpecificId]) {
             delete this._indexSourceTypeAndId[info.sourceType][info.sourceSpecificId];
         }
