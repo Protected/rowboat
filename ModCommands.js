@@ -667,7 +667,8 @@ class ModCommands extends Module {
                         } else {
                             env.msg(authorid, (typeof msg == "object" ? msg : env.applyFormatting(msg)));
                         }
-                    }
+                    },
+                    rawobject: rawobject
                 }
             )) {
                 this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : '') + ': Rejected by handler of |' + targetmod + '|.');
