@@ -20,7 +20,7 @@ class ModEveRoles extends Module {
 
     get optionalParams() { return [
         'port',   //Port to listen to on the callback
-        'allianceID',
+        'allianceIDList',
         'corpPrefix',
         'corpPermissionName',
         'alliancePrefix',
@@ -189,7 +189,7 @@ class ModEveRoles extends Module {
             return;
         }
 
-        if ( this._params['allianceID'] && userInfo.allianceID == this._params['allianceID'] ) {
+        if ( this._params['allianceIDList'] && this._params['allianceIDList'].includes(userInfo.allianceID) ) {
             this.applyTagsOnUser(discordId, this._params['alliancePrefix'], this._params['alliancePermissionName'] );
             return;
         }
