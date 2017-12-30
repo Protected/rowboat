@@ -897,6 +897,7 @@ class ModRajio extends Module {
         let userid = null;
         if (!song) {
             song = this.dequeue(true);
+            if (!song) return false;
             userid = song[1];
             song = song[0];
         }
@@ -1083,9 +1084,12 @@ class ModRajio extends Module {
         let sum = 0;
         let candidates = [];
         for (let hash in priorities) {
+            if (!priorities[hash]) continue;
             sum += priorities[hash];
             candidates.push([hash, sum]);
         }
+        
+        if (!candidates.length) return null;
         
         let pick = random.fraction() * sum;
         let selection = null;
@@ -1227,11 +1231,22 @@ class ModRajio extends Module {
             if (this._nopreference[listener]) continue;
             for (let otherlistener in userdata.users) {
                 if (listeners.find((checklistener) => checklistener == otherlistener)) continue;
-                result += userdata.users[otherlistener] * this.songrank.getSongLikeability(hash, otherlistener) * this.param(userdata.users[otherlistener] > 0 ? "pri.user.high" : "pri.user.low") / listeners.length;
+                result += userdata.users[otherlistener] * (this.songrank.getSongLikeability(hash, otherlistener) || 0) * this.param(userdata.users[otherlistener] > 0 ? "pri.user.high" : "pri.user.low") / listeners.length;
             }
         }
         
         return result;
+    }
+    
+    
+    unanimousOpinion(hash, listeners, likeability) {
+        for (let listener of listeners) {
+            let listenerlik = this.songrank.getSongLikeability(hash, listener);
+            if (listenerlik === null || listenerlik === undefined || likeability > 0 && listenerlik < likeability || likeability < 0 && listenerlik > likeability) {
+                return false;
+            }
+        }
+        return true;
     }
     
     
@@ -1377,12 +1392,31 @@ class ModRajio extends Module {
         if (trace) components.kwglobal = ckwglobal.reduce((comp, bonus) => comp + bonus, 0);
         
         
-        //Wrap it up
+        //Subtotal and crop
         
         if (trace) components.subtotal = priority;
         
         if (priority < this.param('pri.min')) priority = this.param('pri.min');
         if (priority > this.param('pri.max')) priority = this.param('pri.max');
+        
+        
+        //Unanimous dislike penalties (after cropping)
+        
+        if (listeners.length) {
+            let upenalty = null;
+            if (this.unanimousOpinion(song.hash, listeners, -2)) {
+                upenalty = -priority;
+                priority = 0;
+                if (trace) components.unanimoushate = upenalty;
+            } else if (this.unanimousOpinion(song.hash, listeners, -1)) {
+                upenalty = priority / -2;
+                priority /= 2;
+                if (trace) components.unanimousdislike = upenalty;
+            }
+        }
+        
+        
+        //Queue bonus (after cropping)
         
         let queuepos = this._queue.findIndex((item) => item.song.hash == song.hash);
         if (queuepos > -1) {
