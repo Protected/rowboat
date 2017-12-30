@@ -7,6 +7,10 @@ var jf = require('jsonfile');
 var fs = require('fs');
 var _ = require('lodash');
 
+var logger = require('logger').createLogger();
+
+logger.setLevel('debug');
+
 //Example URL: https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=http://wyvernia.net:8098&client_id=1370433d1bd74635839322c867a43bc4&state=uniquestate123
 
 const userDataFilename = "userData.json";
@@ -35,6 +39,7 @@ class ModEveRoles extends Module {
     ]; }
 
     get requiredParams() { return [
+        'discordEnvName',      //Environment name of the discord instance to use.
         'callbackAddress',    //Callback url. (Without the /callback)
         'eveSSOClientId',     //Client ID
         'eveSSOEncodedClientIDAndSecretKey', //ClientID and SecretKey encoded with Base64 in this format: clientid:secretkey,
@@ -56,7 +61,7 @@ class ModEveRoles extends Module {
     constructor(name) {
         super('EveRoles', name);
     }
-    
+
     initialize(opt) {
         if (!super.initialize(opt)) return false;
 
@@ -78,9 +83,12 @@ class ModEveRoles extends Module {
         this.loadCorpContacts();
         this.loadUserInfo();
 
-        setInterval(runTick,5000);
-
         let self = this;
+
+        this.env(this._params['discordEnvName']).on('connected', () => {
+            self.mainEnv = self.env(this._params['discordEnvName']);
+            runTick();
+        });
 
         this.neutPermissionName = this._params['neutPermissionName'];
         this.redPermissionName = this._params['redPermissionName'];
@@ -96,224 +104,36 @@ class ModEveRoles extends Module {
         let app = express();
 
         function runTick() {
-            for( let discordId in self.userAssoc ){
-                self.processUser(discordId);
+
+            for( let member of self.mainEnv.server.members.array() ){
+                self.processUser(member.id);
             }
+
+            _.each(self.userAssoc, ua => {
+                if ( !ua.lastChecked ) ua.lastChecked = 1;
+            });
+
+            let usersToCheck = _.orderBy(self.userAssoc, ua => ua.lastChecked );
+            usersToCheck = _.take(usersToCheck,5);
+
+            for( let user of usersToCheck ){
+                self.checkUser(user.discordID);
+            }
+
+            self.loadUserInfo();
+            setTimeout(runTick,15000);
         }
 
-        app.get('/callback', function(req, res) {
-            let state = req.query.state;
-            let code  = req.query.code;
-
-            let authInfo = self.authCodes[state];
-
-            if ( !authInfo ) {
-                res.send("Invalid link");
-                return;
-            }
-
-            let formData = {
-                "grant_type":"authorization_code",
-                "code": code
-            };
-
-            request.post(
-                {
-                    url:"https://login.eveonline.com/oauth/token",
-                    formData: formData,
-                    headers: {
-                        "Authorization": "Basic "+self._params['eveSSOEncodedClientIDAndSecretKey'],
-                        "Content-Type": "application/json",
-                        "Host": "login.eveonline.com"
-                    }
-                }, (err, httpResponse, body) => {
-                if ( err ) {
-                    res.send("Error validating");
-                    return;
-                }
-
-                let parsedBody = JSON.parse(body);
-                if ( !parsedBody ){
-                    res.send("Error validating");
-                    return;
-                }
-
-                request.get({
-                    url: "https://login.eveonline.com/oauth/verify",
-                    headers: {
-                        "Host": "login.eveonline.com",
-                        "Authorization": "Bearer "+parsedBody.access_token,
-                    }
-                }, (err, httpResponse, body) => {
-                    let parsedBody = JSON.parse(body);
-                    if ( err || !parsedBody ){
-                        res.send("Error validating");
-                        return;
-                    }
-                    let characterID = parsedBody.CharacterID;
-                    let characterName = parsedBody.CharacterName;
-
-                    if ( !characterID ) {
-                        res.send("Error validating");
-                        return;
-                    }
-
-                    request.get({
-                        url: "https://esi.tech.ccp.is/latest/characters/"+characterID+"/",
-                        headers: {
-                        }
-                    }, (err, httpResponse, body) => {
-                        let parsedBody = JSON.parse(body);
-                        if ( err || !parsedBody ){
-                            res.send("Error retrieving info");
-                            return;
-                        }
-
-                        let corporationID = parsedBody.corporation_id;
-                        let allianceID = parsedBody.alliance_id;
-                        let corpTicker = null;
-                        let allianceTicker = null;
-
-                        request.get({
-                            url: "https://esi.tech.ccp.is/latest/corporations/"+corporationID+"/",
-                            headers: {
-                            }
-                        }, (err, httpResponse, body) => {
-                            let parsedBody = JSON.parse(body);
-                            if (err || !parsedBody) {
-                                res.send("Error retrieving info");
-                                return;
-                            }
-                            corpTicker = parsedBody.ticker;
-
-                            if ( allianceID ){
-                                request.get({
-                                    url: "https://esi.tech.ccp.is/latest/alliances/"+allianceID+"/",
-                                    headers: {
-                                    }
-                                }, (err, httpResponse, body) => {
-                                    let parsedBody = JSON.parse(body);
-                                    if (err || !parsedBody) {
-                                        res.send("Error retrieving info");
-                                        return;
-                                    }
-                                    allianceTicker = parsedBody.ticker;
-
-                                    finishAuthing();
-                                });
-                            } else {
-                                finishAuthing();
-                            }
-
-                            function finishAuthing(){
-                                let userInformation = {
-                                    discordID: authInfo.discordID,
-                                    characterID: characterID,
-                                    characterName: characterName,
-                                    corporationID: corporationID,
-                                    allianceID: allianceID,
-                                    corpTicker: corpTicker,
-                                    allianceTicker: allianceTicker,
-                                    envName: authInfo.envName
-                                };
-
-                                self.userAssoc[userInformation.discordID] = userInformation;
-
-                                res.send("Successfully linked to this account. You may close this window now.");
-                                self.env(authInfo.envName).msg(authInfo.discordID, "Your discord account associated with the character "+characterName);
-                                self.saveUserInfo();
-                                delete self.authCodes[state];
-                            }
-                        });
-                    });
-                });
-            });
+        app.get('/callback', (req,res) => {
+            return this.authCallback(this,req,res);
         });
 
-        app.get('/corpCallback', function(req, res) {
-            let state = req.query.state;
-            let code  = req.query.code;
-
-            let authInfo = self.authCodes[state];
-
-            if ( !authInfo ) {
-                res.send("Invalid link");
-                return;
-            }
-
-            let formData = {
-                "grant_type":"authorization_code",
-                "code": code
-            };
-
-            request.post(
-                {
-                    url:"https://login.eveonline.com/oauth/token",
-                    formData: formData,
-                    headers: {
-                        "Authorization": "Basic "+self._params['eveSSOEncodedCorpClientIDAndSecretKey'],
-                        "Content-Type": "application/json",
-                        "Host": "login.eveonline.com"
-                    }
-                }, (err, httpResponse, body) => {
-                    if (err) {
-                        res.send("Error validating");
-                        return;
-                    }
-
-                    let parsedBody = JSON.parse(body);
-                    if (!parsedBody) {
-                        res.send("Error validating");
-                        return;
-                    }
-
-                    let accessToken = parsedBody.access_token;
-
-                    request.get({
-                        url: "https://login.eveonline.com/oauth/verify",
-                        headers: {
-                            "Host": "login.eveonline.com",
-                            "Authorization": "Bearer "+parsedBody.access_token,
-                        }
-                    }, (err, httpResponse, body) => {
-                        let parsedBody = JSON.parse(body);
-                        if ( err || !parsedBody ){
-                            res.send("Error validating");
-                            return;
-                        }
-
-                        request.get({
-                            url: "https://esi.tech.ccp.is/latest/corporations/"+self._params['contactsCorporationID']+"/contacts/",
-                            headers: {
-                                "Authorization": "Bearer "+accessToken,
-                            }
-                        }, (err, httpResponse, body) => {
-                            let parsedBody = JSON.parse(body);
-                            if ( err || !parsedBody ){
-                                res.send("Error retrieving info");
-                                return;
-                            }
-
-                            if ( !_.isArray(parsedBody) ){
-                                res.send("Error updating corporation info: "+body);
-                                return;
-                            }
-
-                            self.corpContacts = parsedBody;
-                            let filePath = self.dataPath + corpContactsDataFilename;
-                            jf.writeFileSync(filePath,self.corpContacts);
-
-                            res.send("Successfully refreshed corporation information. You may close this window now.");
-                            self.env(authInfo.envName).msg(authInfo.discordID, "Your corporation information has been refreshed.");
-
-                        });
-                    });
-            });
-
+        app.get('/corpCallback', (req,res) => {
+            return this.corpCallback(this,req,res);
         });
 
         app.listen(8098, function() {
-           console.log("Eve callback listening.");
+            logger.info("Eve callback listening.");
         });
 
         this.mod("Commands").registerRootDetails(this, 'eve', {description: 'Eve commands.'});
@@ -323,50 +143,15 @@ class ModEveRoles extends Module {
             args: [],
             minArgs: 0
         }, (env, type, userid, channelid, command, args, handle, ep) => {
-
-            let uuid = uuidv4();
-            this.authCodes[uuid] = {
-                uuid: uuid,
-                discordID: userid,
-                time: new Date(),
-                envName: env.name
-            };
-            if ( this.userAssoc[userid] ){
-                ep.priv("You are already associated with the character " + this.userAssoc[userid].characterName);
-                return true;
-            }
-            ep.priv("Login using the following link: ");
-            ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri="+this._params['callbackAddress']+"/callback&client_id="+this._params['eveSSOClientId']+"&state="+uuid);
-
-            return true;
-        });
+            return this.commandEveAuth(this, env, type, userid, channelid, command, args, handle, ep);
+        } );
 
         this.mod('Commands').registerCommand(this, 'eve unlink', {
             description: "Unlink the eve character associated with your discord account.",
             args: [],
             minArgs: 0
         }, (env, type, userid, channelid, command, args, handle, ep) => {
-
-            let uuid = uuidv4();
-            this.authCodes[uuid] = {
-                uuid: uuid,
-                discordID: userid,
-                time: new Date(),
-                envName: env.name
-            };
-
-            if ( !this.userAssoc[userid] ){
-                ep.priv("You have no character associated with you.");
-                return true;
-            }
-
-            this.applyTagsOnUser(userid, null, null, true);
-            delete this.userAssoc[userid];
-            self.saveUserInfo();
-
-            ep.priv("You have unlinked your eve character.");
-
-            return true;
+            return this.commandEveUnlink(this, env, type, userid, channelid, command, args, handle, ep);
         });
 
         this.mod('Commands').registerCommand(this, 'eve reload', {
@@ -374,26 +159,15 @@ class ModEveRoles extends Module {
             args: [],
             minArgs: 0
         }, (env, type, userid, channelid, command, args, handle, ep) => {
+            return this.commandEveReload(this, env, type, userid, channelid, command, args, handle, ep);
+        });
 
-            let uuid = uuidv4();
-            this.authCodes[uuid] = {
-                uuid: uuid,
-                discordID: userid,
-                time: new Date(),
-                envName: env.name
-            };
-            var member = env.server.members.get(userid);
-            let role = member.roles.find('name', this._params['adminPermissionName']);
-
-            if ( !role ) {
-                ep.priv("You do not have permission to run this command.");
-                return true;
-            }
-
-            ep.priv("Login using the following link: ");
-            ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri="+this._params['callbackAddress']+"/corpCallback&client_id="+this._params['eveSSOCorpClientId']+"&state="+uuid+"&scope=esi-corporations.read_contacts.v1");
-
-            return true;
+        this.mod('Commands').registerCommand(this, 'ev', {
+            description: "Evaluates and runs expressions.",
+            args: ["exp"],
+            minArgs: 0
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            return this.commandEveEv(this, env, type, userid, channelid, command, args, handle, ep);
         });
 
         return true;
@@ -405,7 +179,10 @@ class ModEveRoles extends Module {
 
         let userInfo = this.userAssoc[discordId];
 
-        if ( !userInfo ) return;
+        if ( !userInfo ) {
+            this.applyTagsOnUser(discordId, null, null, true );
+            return;
+        }
 
         if ( this._params['corporationIDList'] && this._params['corporationIDList'].includes(userInfo.corporationID) ){
             this.applyTagsOnUser(discordId, this._params['corpPrefix'], this._params['corpPermissionName'] );
@@ -432,33 +209,82 @@ class ModEveRoles extends Module {
     applyTagsOnUser(discordId, tagText, permissionName, stripAll){
         let userData = this.userAssoc[discordId];
 
-        let ticker = userData.allianceTicker && this._params['preferAllianceTicker'] ? userData.allianceTicker : userData.corpTicker;
+        let self = this;
 
-        let member = this.env(userData.envName).server.members.get(discordId);
-        if ( tagText ) {
-            member.setNickname("["+tagText+"]["+ticker+"] " + userData.characterName, "EveRoles automatic change.").then(success).catch(error);
-        } else {
-            member.setNickname("["+ticker+"] "+userData.characterName, "EveRoles automatic change.").then(success).catch(error);
+        let member = this.mainEnv.server.members.get(discordId);
+        if ( !member ) return;
+
+        if ( this.ignoredMembers && this.ignoredMembers[member.id]){
+            return;
         }
 
-        let roles = this.env(userData.envName).server.roles;
-        let rolesToRemove = [];
-        for(let role of roles){
-            if ( stripAll || (!role.name == permissionName && this.relationPermissionNames.includes(role.name)) ){
-                rolesToRemove.push(role);
+        if ( member.roles.find('name', this._params['adminPermissionName']) ){
+            return;
+        }
+
+        if ( userData ) {
+            let ticker = userData.allianceTicker && this._params['preferAllianceTicker'] ? userData.allianceTicker : userData.corpTicker;
+
+            if (tagText) {
+                this.setName(member, "[" + tagText + "][" + ticker + "] " + userData.characterName);
+            } else {
+                this.setName(member, "[" + ticker + "] " + userData.characterName);
             }
+        } else {
+            if (!stripAll) logger.warn("userData is null for "+discordId);
         }
-        member.removeRoles(rolesToRemove, "EveRoles automatic change.");
+
+
+        let roles = this.mainEnv.server.roles;
+        let rolesToRemove;
+        if ( member.roles.find('name', this._params['adminPermissionName']) ){
+            rolesToRemove = roles.filter( r => false);
+        } else {
+            rolesToRemove = roles.filter(role => {
+                return ( role.name != permissionName && (this.relationPermissionNames.includes(role.name) || stripAll) );
+            });
+        }
+
+        let rolesMemberHasThatNeedRemoving = member.roles.filter( r => rolesToRemove.has(r.id) && r.id != r.guild.id);
+
+        if ( rolesMemberHasThatNeedRemoving && rolesMemberHasThatNeedRemoving.size > 0) {
+            logger.debug("Removing "+rolesMemberHasThatNeedRemoving.size+" roles from "+member.displayName);
+            member.removeRoles(rolesMemberHasThatNeedRemoving, "EveRoles automatic change.").then(success).catch(error);
+        }
 
         if (permissionName){
             let role = roles.find('name',permissionName);
-            member.addRole(role, "EveRoles automatic change.").then(success).catch(error);
+            if ( ! member.roles.find('name', permissionName) ) {
+                logger.debug("Adding role "+role.name+" to "+member.nickname);
+                member.addRole(role, "EveRoles automatic change.").then(success).catch(error);
+            }
         }
 
-        function success(msg){
+        function success(msg) {
+
         }
 
+        function error(err) {
+            if ( err.code == 50013 ){
+                if ( !self.ignoredMembers ) self.ignoredMembers = {};
+                self.ignoredMembers[member.id] = true;
+                logger.error("Can't change permissions for this user. Ignoring.");
+            } else {
+                logger.error(err);
+            }
+        }
+    }
+
+    setName(member, nickName){
+        if ( member.nickname != nickName && member.displayName != nickName ) {
+            logger.debug("Setting name '"+nickName+"' to '"+member.displayName+"'");
+            member.setNickname(nickName, "EveRoles automatic change.").then(success).catch(error);
+        }
+        function success(succ){
+
+        }
         function error(err){
+
         }
     }
 
@@ -497,6 +323,85 @@ class ModEveRoles extends Module {
         return 0;
     }
 
+    checkUser(discordId) {
+        let self = this;
+        let userData = this.userAssoc[discordId];
+        if ( !userData ) return;
+
+        request.get({
+            url: "https://esi.tech.ccp.is/latest/characters/"+userData.characterID+"/",
+            headers: {
+            }
+        }, (err, httpResponse, body) => {
+            let parsedBody;
+            try {
+                parsedBody = JSON.parse(body);
+            } catch( e ){
+                return;
+            }
+            if ( err || !parsedBody ){
+                return;
+            }
+
+            let corporationID = parsedBody.corporation_id;
+            let allianceID = parsedBody.alliance_id;
+            let corpTicker = null;
+            let allianceTicker = null;
+
+            request.get({
+                url: "https://esi.tech.ccp.is/latest/corporations/"+corporationID+"/",
+                headers: {
+                }
+            }, (err, httpResponse, body) => {
+                let parsedBody;
+                try {
+                    parsedBody = JSON.parse(body);
+                } catch( e ){
+                    return;
+                }
+                if (err || !parsedBody || !parsedBody.ticker ) {
+                    return;
+                }
+                corpTicker = parsedBody.ticker;
+
+                if ( allianceID ){
+                    request.get({
+                        url: "https://esi.tech.ccp.is/latest/alliances/"+allianceID+"/",
+                        headers: {
+                        }
+                    }, (err, httpResponse, body) => {
+                        let parsedBody;
+                        try {
+                            parsedBody = JSON.parse(body);
+                        } catch( e ){
+                            return;
+                        }
+                        if (err || !parsedBody || !parsedBody.ticker) {
+                            return;
+                        }
+                        allianceTicker = parsedBody.ticker;
+
+                        finishAuthing();
+                    });
+                } else {
+                    finishAuthing();
+                }
+
+                function finishAuthing(){
+
+                    self.userAssoc[discordId].corporationID = corporationID;
+                    self.userAssoc[discordId].allianceID = allianceID;
+                    self.userAssoc[discordId].corpTicker = corpTicker;
+                    self.userAssoc[discordId].allianceTicker = allianceTicker;
+                    self.userAssoc[discordId].lastChecked = Date.now();
+
+                    self.saveUserInfo();
+                }
+            });
+        });
+
+    }
+
 
     saveUserInfo() {
         let filePath = this.dataPath + userDataFilename;
@@ -517,7 +422,342 @@ class ModEveRoles extends Module {
         }
     }
 
-    // # Module code below this line #
+    // Callbacks
+
+    authCallback(self, req, res) {
+        let state = req.query.state;
+        let code  = req.query.code;
+
+        let authInfo = self.authCodes[state];
+
+        if ( !authInfo ) {
+            res.send("Invalid link");
+            return;
+        }
+
+        let formData = {
+            "grant_type":"authorization_code",
+            "code": code
+        };
+
+        request.post(
+            {
+                url:"https://login.eveonline.com/oauth/token",
+                formData: formData,
+                headers: {
+                    "Authorization": "Basic "+self._params['eveSSOEncodedClientIDAndSecretKey'],
+                    "Content-Type": "application/json",
+                    "Host": "login.eveonline.com"
+                }
+            }, (err, httpResponse, body) => {
+                if ( err ) {
+                    res.send("Error validating");
+                    return;
+                }
+
+                let parsedBody = JSON.parse(body);
+                if ( !parsedBody ){
+                    res.send("Error validating");
+                    return;
+                }
+
+                request.get({
+                    url: "https://login.eveonline.com/oauth/verify",
+                    headers: {
+                        "Host": "login.eveonline.com",
+                        "Authorization": "Bearer "+parsedBody.access_token,
+                    }
+                }, (err, httpResponse, body) => {
+                    let parsedBody;
+                    try {
+                        parsedBody = JSON.parse(body);
+                    } catch( e ){
+                        res.send("Error validating");
+                        return;
+                    }
+                    if ( err || !parsedBody ){
+                        res.send("Error validating");
+                        return;
+                    }
+                    let characterID = parsedBody.CharacterID;
+                    let characterName = parsedBody.CharacterName;
+
+                    if ( !characterID ) {
+                        res.send("Error validating");
+                        return;
+                    }
+
+                    request.get({
+                        url: "https://esi.tech.ccp.is/latest/characters/"+characterID+"/",
+                        headers: {
+                        }
+                    }, (err, httpResponse, body) => {
+                        let parsedBody;
+                        try {
+                            parsedBody = JSON.parse(body);
+                        } catch( e ){
+                            res.send("Error validating");
+                            return;
+                        }
+                        if ( err || !parsedBody ){
+                            res.send("Error retrieving info");
+                            return;
+                        }
+
+                        let corporationID = parsedBody.corporation_id;
+                        let allianceID = parsedBody.alliance_id;
+                        let corpTicker = null;
+                        let allianceTicker = null;
+
+                        request.get({
+                            url: "https://esi.tech.ccp.is/latest/corporations/"+corporationID+"/",
+                            headers: {
+                            }
+                        }, (err, httpResponse, body) => {
+                            let parsedBody;
+                            try {
+                                parsedBody = JSON.parse(body);
+                            } catch( e ){
+                                res.send("Error validating");
+                                return;
+                            }
+                            if (err || !parsedBody) {
+                                res.send("Error retrieving info");
+                                return;
+                            }
+                            corpTicker = parsedBody.ticker;
+
+                            if ( allianceID ){
+                                request.get({
+                                    url: "https://esi.tech.ccp.is/latest/alliances/"+allianceID+"/",
+                                    headers: {
+                                    }
+                                }, (err, httpResponse, body) => {
+                                    let parsedBody;
+                                    try {
+                                        parsedBody = JSON.parse(body);
+                                    } catch( e ){
+                                        res.send("Error validating");
+                                        return;
+                                    }
+                                    if (err || !parsedBody) {
+                                        res.send("Error retrieving info");
+                                        return;
+                                    }
+                                    allianceTicker = parsedBody.ticker;
+
+                                    finishAuthing();
+                                });
+                            } else {
+                                finishAuthing();
+                            }
+
+                            function finishAuthing(){
+                                let userInformation = {
+                                    discordID: authInfo.discordID,
+                                    characterID: characterID,
+                                    characterName: characterName,
+                                    corporationID: corporationID,
+                                    allianceID: allianceID,
+                                    corpTicker: corpTicker,
+                                    allianceTicker: allianceTicker,
+                                    envName: authInfo.envName
+                                };
+
+                                self.userAssoc[userInformation.discordID] = userInformation;
+
+                                res.send("Successfully linked to this account. You may close this window now.");
+                                self.env(authInfo.envName).msg(authInfo.discordID, "Your discord account associated with the character "+characterName);
+                                self.saveUserInfo();
+                                delete self.authCodes[state];
+                            }
+                        });
+                    });
+                });
+            });
+    }
+
+    corpCallback(self, req, res) {
+        let state = req.query.state;
+        let code  = req.query.code;
+
+        let authInfo = self.authCodes[state];
+
+        if ( !authInfo ) {
+            res.send("Invalid link");
+            return;
+        }
+
+        let formData = {
+            "grant_type":"authorization_code",
+            "code": code
+        };
+
+        request.post(
+            {
+                url:"https://login.eveonline.com/oauth/token",
+                formData: formData,
+                headers: {
+                    "Authorization": "Basic "+self._params['eveSSOEncodedCorpClientIDAndSecretKey'],
+                    "Content-Type": "application/json",
+                    "Host": "login.eveonline.com"
+                }
+            }, (err, httpResponse, body) => {
+                if (err) {
+                    res.send("Error validating");
+                    return;
+                }
+
+                let parsedBody;
+                try {
+                    parsedBody = JSON.parse(body);
+                } catch( e ){
+                    res.send("Error validating");
+                    return;
+                }
+                if (!parsedBody) {
+                    res.send("Error validating");
+                    return;
+                }
+
+                let accessToken = parsedBody.access_token;
+
+                request.get({
+                    url: "https://login.eveonline.com/oauth/verify",
+                    headers: {
+                        "Host": "login.eveonline.com",
+                        "Authorization": "Bearer "+parsedBody.access_token,
+                    }
+                }, (err, httpResponse, body) => {
+                    let parsedBody;
+                    try {
+                        parsedBody = JSON.parse(body);
+                    } catch( e ){
+                        res.send("Error validating");
+                        return;
+                    }
+                    if ( err || !parsedBody ){
+                        res.send("Error validating");
+                        return;
+                    }
+
+                    request.get({
+                        url: "https://esi.tech.ccp.is/latest/corporations/"+self._params['contactsCorporationID']+"/contacts/",
+                        headers: {
+                            "Authorization": "Bearer "+accessToken,
+                        }
+                    }, (err, httpResponse, body) => {
+                        let parsedBody;
+                        try {
+                            parsedBody = JSON.parse(body);
+                        } catch( e ){
+                            res.send("Error validating");
+                            return;
+                        }
+                        if ( err || !parsedBody ){
+                            res.send("Error retrieving info");
+                            return;
+                        }
+
+                        if ( !_.isArray(parsedBody) ){
+                            res.send("Error updating corporation info: "+body);
+                            return;
+                        }
+
+                        self.corpContacts = parsedBody;
+                        let filePath = self.dataPath + corpContactsDataFilename;
+                        jf.writeFileSync(filePath,self.corpContacts);
+
+                        res.send("Successfully refreshed corporation information. You may close this window now.");
+                        self.env(authInfo.envName).msg(authInfo.discordID, "Your corporation information has been refreshed.");
+
+                    });
+                });
+            });
+
+    }
+
+    // Commands
+
+    commandEveAuth(scope, env, type, userid, channelid, command, args, handle, ep) {
+
+        let uuid = uuidv4();
+        scope.authCodes[uuid] = {
+            uuid: uuid,
+            discordID: userid,
+            time: new Date(),
+            envName: env.name
+        };
+        if (scope.userAssoc[userid]) {
+            ep.priv("You are already associated with the character " + scope.userAssoc[userid].characterName);
+            return true;
+        }
+        ep.priv("Login using the following link: ");
+        ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=" + scope._params['callbackAddress'] + "/callback&client_id=" + scope._params['eveSSOClientId'] + "&state=" + uuid);
+
+        return true;
+    }
+
+    commandEveUnlink(scope, env, type, userid, channelid, command, args, handle, ep) {
+        let uuid = uuidv4();
+        scope.authCodes[uuid] = {
+            uuid: uuid,
+            discordID: userid,
+            time: new Date(),
+            envName: env.name
+        };
+
+        if (!scope.userAssoc[userid]) {
+            ep.priv("You have no character associated with you.");
+            return true;
+        }
+
+        scope.applyTagsOnUser(userid, null, null, true);
+        delete scope.userAssoc[userid];
+        scope.saveUserInfo();
+
+        ep.priv("You have unlinked your eve character.");
+
+        return true;
+    }
+
+    commandEveReload(scope, env, type, userid, channelid, command, args, handle, ep) {
+
+        let uuid = uuidv4();
+        scope.authCodes[uuid] = {
+            uuid: uuid,
+            discordID: userid,
+            time: new Date(),
+            envName: env.name
+        };
+        var member = env.server.members.get(userid);
+        let role = member.roles.find('name', scope._params['adminPermissionName']);
+
+        if (!role) {
+            ep.priv("You do not have permission to run this command.");
+            return true;
+        }
+
+        ep.priv("Login using the following link: ");
+        ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=" + scope._params['callbackAddress'] + "/corpCallback&client_id=" + scope._params['eveSSOCorpClientId'] + "&state=" + uuid + "&scope=esi-corporations.read_contacts.v1");
+
+        return true;
+    }
+
+    commandEveEv(scope, env, type, userid, channelid, command, args, handle, ep) {
+        if (userid != "133647011424501761") {
+            ep.reply("Not allowed! Dangerous alchemy.");
+            return true;
+        }
+        //ep.reply(args.exp);
+        try {
+            let result = eval(args.exp);
+            ep.reply(result);
+        } catch (ex){
+            ep.reply(ex.message);
+        }
+        return true;
+    }
 
 }
 
