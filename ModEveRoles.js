@@ -110,7 +110,7 @@ class ModEveRoles extends Module {
             }
 
             _.each(self.userAssoc, ua => {
-                if ( !ua.lastChecked ) ua.lastChecked = 1;
+               if ( !ua.lastChecked ) ua.lastChecked = 1;
             });
 
             let usersToCheck = _.orderBy(self.userAssoc, ua => ua.lastChecked );
