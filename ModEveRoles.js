@@ -184,7 +184,7 @@ class ModEveRoles extends Module {
             return;
         }
 
-        if ( this._params['corporationIDList'] && this._params['corporationIDList'].includes(userInfo.corporationID) ){
+        if ( this._params['corporationIDList'] && this._params['corporationIDList'].includes(userInfo.corporationID+"") ){
             this.applyTagsOnUser(discordId, this._params['corpPrefix'], this._params['corpPermissionName'] );
             return;
         }
