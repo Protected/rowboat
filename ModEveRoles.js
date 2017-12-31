@@ -189,10 +189,10 @@ class ModEveRoles extends Module {
             return;
         }
 
-        if ( this._params['allianceIDList'] && this._params['allianceIDList'].includes(userInfo.allianceID) ) {
+        if ( this._params['allianceIDList'] && this._params['allianceIDList'].includes(userInfo.allianceID+"") ){
             this.applyTagsOnUser(discordId, this._params['alliancePrefix'], this._params['alliancePermissionName'] );
             return;
-        }
+        } 
 
         let effectiveStanding = this.determineRelationship(discordId);
 
