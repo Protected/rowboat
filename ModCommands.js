@@ -653,30 +653,35 @@ class ModCommands extends Module {
         //Invoke command callback
         //callback(env, type, userid, channelid, command, args, handle, ep)
         
-        if (!descriptor.callback[targetmod](env, type, authorid, channelid, command, passargs, handle, {
-                reply: function(msg) {
-                    env.msg(channelid, (typeof msg == "object" ? msg : env.applyFormatting(msg)));
-                },
-                pub: function(msg) {
-                    env.msg((channelid == authorid ? null : channelid), (typeof msg == "object" ? msg : env.applyFormatting(msg)));
-                },
-                priv: function(msg) {
-                    if (descriptor.unobtrusive) {
-                        env.notice(authorid, (typeof msg == "object" ? msg : env.applyFormatting(msg)));
-                    } else {
-                        env.msg(authorid, (typeof msg == "object" ? msg : env.applyFormatting(msg)));
-                    }
+        try {
+            if (!descriptor.callback[targetmod](env, type, authorid, channelid, command, passargs, handle, {
+                    reply: function(msg) {
+                        env.msg(channelid, (typeof msg == "object" ? msg : env.applyFormatting(msg)));
+                    },
+                    pub: function(msg) {
+                        env.msg((channelid == authorid ? null : channelid), (typeof msg == "object" ? msg : env.applyFormatting(msg)));
+                    },
+                    priv: function(msg) {
+                        if (descriptor.unobtrusive) {
+                            env.notice(authorid, (typeof msg == "object" ? msg : env.applyFormatting(msg)));
+                        } else {
+                            env.msg(authorid, (typeof msg == "object" ? msg : env.applyFormatting(msg)));
+                        }
+                    },
+                    rawobject: rawobject
                 }
-            }
-        )) {
-            this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : '') + ': Rejected by handler of |' + targetmod + '|.');
-            if (descriptor.unobtrusive) {
-                env.notice(authorid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
+            )) {
+                this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : '') + ': Rejected by handler of |' + targetmod + '|.');
+                if (descriptor.unobtrusive) {
+                    env.notice(authorid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
+                } else {
+                    env.msg(channelid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
+                }
             } else {
-                env.msg(channelid, env.applyFormatting("Syntax: " + prefix + this.buildCommandSyntax(command)));
+                this.eventLog(env, authorid, channelid, descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : ''));
             }
-        } else {
-            this.eventLog(env, authorid, channelid, descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : ''));
+        } catch (e) {
+            this.log('error', e);
         }
 
         return true;

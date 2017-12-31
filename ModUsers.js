@@ -295,6 +295,8 @@ class ModUsers extends Module {
 
     addUser(handle) {
         if (this._userhandles[handle]) return false;
+        
+        if (!handle.match(/^[0-9a-zA-Z]+$/)) return false;
 
         var newuser = {
             handle: handle,
