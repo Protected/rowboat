@@ -205,8 +205,8 @@ class ModEveRoles extends Module {
 
             logger.debug("Received kill "+killID);
 
-            if ( (this._params['corporationIDList'] && this._params['corporationIDList'].includes(victim.corporationID+""))
-            ||   (this._params['allianceIDList'] && this._params['allianceIDList'].includes(victim.allianceID+""))
+            if ( (this._params['corporationIDList'] && this._params['corporationIDList'].includes(victim.corporation_id+""))
+            ||   (this._params['allianceIDList'] && this._params['allianceIDList'].includes(victim.alliance_id+""))
             ||   hasSomeoneInAttackerList(pkg.killmail.attackers) ) {
                 this.processKillmail(parsedBody);
             }
@@ -216,8 +216,8 @@ class ModEveRoles extends Module {
         function hasSomeoneInAttackerList(attackers) {
             if ( !attackers || !attackers.length ) return false;
             for( let attacker of attackers ){
-                if ( (self._params['corporationIDList'] && self._params['corporationIDList'].includes(attacker.corporationID+""))
-                ||   (self._params['allianceIDList'] && self._params['allianceIDList'].includes(attacker.allianceID+"")) ) {
+                if ( (self._params['corporationIDList'] && self._params['corporationIDList'].includes(attacker.corporation_id+""))
+                ||   (self._params['allianceIDList'] && self._params['allianceIDList'].includes(attacker.alliance_id+"")) ) {
                     return true;
                 }
             }
