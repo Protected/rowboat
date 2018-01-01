@@ -201,7 +201,7 @@ class ModEveRoles extends Module {
             let victim = pkg.killmail.victim;
 
             let zkb = pkg.zkb;
-            let killID = zkb.killID;
+            let killID = pkg.killID;
 
             logger.debug("Received kill "+killID);
 
@@ -229,7 +229,7 @@ class ModEveRoles extends Module {
         let pkg = body.package;
         let victim = pkg.killmail.victim;
         let zkb = pkg.zkb;
-        let killID = zkb.killID;
+        let killID = pkg.killID;
         let link = "https://zkillboard.com/kill/"+killID+"/";
         logger.debug("Sending kill "+killID);
         this.mainEnv.server.channels.find('name','kills').send(link).then(message => logger.debug(message)).catch(logger.warn);
