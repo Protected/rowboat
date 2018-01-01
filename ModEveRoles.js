@@ -2,7 +2,7 @@
 var Module = require('./Module.js');
 var express = require('express');
 const uuidv4 = require('uuid/v4');
-var  request = require('request');
+var request = require('request');
 var jf = require('jsonfile');
 var fs = require('fs');
 var _ = require('lodash');
@@ -18,45 +18,53 @@ const corpContactsDataFilename = "corpContactsData.json";
 
 class ModEveRoles extends Module {
 
-    get optionalParams() { return [
-        'port',   //Port to listen to on the callback
-        'allianceIDList',
-        'corpPrefix',
-        'corpPermissionName',
-        'alliancePrefix',
-        'alliancePermissionName',
-        'trueBluePrefix',
-        'trueBluePermissionName',
-        'bluePrefix',
-        'bluePermissionName',
-        'orangePrefix',
-        'orangePermissionName',
-        'redPrefix',
-        'redPermissionName',
-        'neutPrefix',
-        'neutPermissionName',
-        'preferAllianceTicker'
-    ]; }
+    get optionalParams() {
+        return [
+            'port',   //Port to listen to on the callback
+            'allianceIDList',
+            'corpPrefix',
+            'corpPermissionName',
+            'alliancePrefix',
+            'alliancePermissionName',
+            'trueBluePrefix',
+            'trueBluePermissionName',
+            'bluePrefix',
+            'bluePermissionName',
+            'orangePrefix',
+            'orangePermissionName',
+            'redPrefix',
+            'redPermissionName',
+            'neutPrefix',
+            'neutPermissionName',
+            'preferAllianceTicker'
+        ];
+    }
 
-    get requiredParams() { return [
-        'discordEnvName',      //Environment name of the discord instance to use.
-        'callbackAddress',    //Callback url. (Without the /callback)
-        'eveSSOClientId',     //Client ID
-        'eveSSOEncodedClientIDAndSecretKey', //ClientID and SecretKey encoded with Base64 in this format: clientid:secretkey,
-        'eveSSOCorpClientId',     //Corp Client ID
-        'eveSSOEncodedCorpClientIDAndSecretKey', //ClientID and SecretKey encoded with Base64 in this format: clientid:secretkey
-        'adminPermissionName',    // Discord permission name that admins need to have to run the command.
-        'contactsCorporationID',          // ID of the corporation with the contacts.
-        'corporationIDList'               //IDs of the corporations to be considered "main".
-    ]; }
+    get requiredParams() {
+        return [
+            'discordEnvName',      //Environment name of the discord instance to use.
+            'callbackAddress',    //Callback url. (Without the /callback)
+            'eveSSOClientId',     //Client ID
+            'eveSSOEncodedClientIDAndSecretKey', //ClientID and SecretKey encoded with Base64 in this format: clientid:secretkey,
+            'eveSSOCorpClientId',     //Corp Client ID
+            'eveSSOEncodedCorpClientIDAndSecretKey', //ClientID and SecretKey encoded with Base64 in this format: clientid:secretkey
+            'adminPermissionName',    // Discord permission name that admins need to have to run the command.
+            'contactsCorporationID',          // ID of the corporation with the contacts.
+            'corporationIDList'               //IDs of the corporations to be considered "main".
+        ];
+    }
 
-    get requiredEnvironments() { return [
-        'Discord'
-    ]; }
+    get requiredEnvironments() {
+        return [
+            'Discord'
+        ];
+    }
 
-    get requiredModules() { return [
-        'Commands'
-    ]; }
+    get requiredModules() {
+        return [
+            'Commands'
+        ];
+    }
 
     constructor(name) {
         super('EveRoles', name);
@@ -99,46 +107,46 @@ class ModEveRoles extends Module {
         this.corpPermissionName = this._params['corpPermissionName'];
         this.alliancePermissionName = this._params['alliancePermissionName'];
 
-        this.relationPermissionNames=[this.neutPermissionName, this.redPermissionName, this.orangePermissionName, this.bluePermissionName, this.trueBluePermissionName, this.corpPermissionName, this.alliancePermissionName];
+        this.relationPermissionNames = [this.neutPermissionName, this.redPermissionName, this.orangePermissionName, this.bluePermissionName, this.trueBluePermissionName, this.corpPermissionName, this.alliancePermissionName];
 
         //Initialize the webservice
         let app = express();
 
         function runTick() {
 
-            for( let member of self.mainEnv.server.members.array() ){
+            for (let member of self.mainEnv.server.members.array()) {
                 self.processUser(member.id);
             }
 
             _.each(self.userAssoc, ua => {
-               if ( !ua.lastChecked ) ua.lastChecked = 1;
+                if (!ua.lastChecked) ua.lastChecked = 1;
             });
 
-            let usersToCheck = _.orderBy(self.userAssoc, ua => ua.lastChecked );
-            usersToCheck = _.take(usersToCheck,5);
+            let usersToCheck = _.orderBy(self.userAssoc, ua => ua.lastChecked);
+            usersToCheck = _.take(usersToCheck, 5);
 
-            for( let user of usersToCheck ){
+            for (let user of usersToCheck) {
                 self.checkUser(user.discordID);
             }
 
             self.loadUserInfo();
-            setTimeout(runTick,15000);
+            setTimeout(runTick, 15000);
         }
 
-        function checkKills(){
+        function checkKills() {
             let promise = self.getKills();
-            promise.then( msg => setTimeout(checkKills, 500) , logger.warn );
+            promise.then(msg => setTimeout(checkKills, 500), logger.warn);
         }
 
-        app.get('/callback', (req,res) => {
-            return this.authCallback(this,req,res);
+        app.get('/callback', (req, res) => {
+            return this.authCallback(this, req, res);
         });
 
-        app.get('/corpCallback', (req,res) => {
-            return this.corpCallback(this,req,res);
+        app.get('/corpCallback', (req, res) => {
+            return this.corpCallback(this, req, res);
         });
 
-        app.listen(8098, function() {
+        app.listen(8098, function () {
             logger.info("Eve callback listening.");
         });
 
@@ -150,7 +158,7 @@ class ModEveRoles extends Module {
             minArgs: 0
         }, (env, type, userid, channelid, command, args, handle, ep) => {
             return this.commandEveAuth(this, env, type, userid, channelid, command, args, handle, ep);
-        } );
+        });
 
         this.mod('Commands').registerCommand(this, 'eve unlink', {
             description: "Unlink the eve character associated with your discord account.",
@@ -180,11 +188,11 @@ class ModEveRoles extends Module {
     }
 
 
-    getKills(){
+    getKills() {
         let self = this;
         //https://redisq.zkillboard.com/listen.php?queueID=AWRyder
 
-        let promise = new Promise( handleGetKills );
+        let promise = new Promise(handleGetKills);
 
         return promise;
 
@@ -201,7 +209,7 @@ class ModEveRoles extends Module {
                     parsedBody = JSON.parse(body);
                 } catch (e) {
                     logger.warn("Bad json " + e);
-                    logger.debug("body:"+body);
+                    logger.debug("body:" + body);
                     resolve("k");
                     return;
                 }
@@ -245,7 +253,7 @@ class ModEveRoles extends Module {
         }
     }
 
-    processKillmail(body, loss, resolve){
+    processKillmail(body, loss, resolve) {
 
         const numberWithCommas = (x) => {
             var parts = x.toString().split(".");
@@ -257,82 +265,134 @@ class ModEveRoles extends Module {
         let victim = pkg.killmail.victim;
         let zkb = pkg.zkb;
         let killID = pkg.killID;
-        let link = "https://zkillboard.com/kill/"+killID+"/";
+        let link = "https://zkillboard.com/kill/" + killID + "/";
 
         request.get({
-            url: "https://esi.tech.ccp.is/latest/characters/"+victim.character_id+"/",
+            url: "https://esi.tech.ccp.is/latest/characters/" + victim.character_id + "/",
             headers: {},
             timeout: 10000
         }, (err, httpResponse, body) => {
             let parsedBody;
             try {
                 parsedBody = JSON.parse(body);
-            } catch( e ){
+            } catch (e) {
                 resolve("Bad at ccp");
                 return;
             }
-            if ( err || !parsedBody ){
+            if (err || !parsedBody) {
                 resolve("Bad at ccp");
                 return;
             }
 
             let name = parsedBody.name;
-            let msg = (loss?":cry:":":smile:")+" Looks like *" + name + "* lost a " + "ship" + " worth " + numberWithCommas(zkb.totalValue) + " ISK. " + link;
-            logger.debug("Sending kill "+killID);
-            this.mainEnv.server.channels.find('name','kills').send(msg).then(logger.debug).catch(logger.warn);
-            resolve("yay");
+            let msg = (loss ? ":cry:" : ":smile:") + " Looks like *" + name + "* lost a " + "ship" + " worth " + numberWithCommas(zkb.totalValue) + " ISK. " + link;
+
+            request.get({
+                url: link,
+                headers: {},
+                timeout: 10000
+            }, (err, httpResponse, body) => {
+
+                if (err || !body) {
+                    resolve("Bad at zkill");
+                    return;
+                }
+
+                let regexTitle = /meta name="og:title" content="(.*?)"/;
+                let regexDescription = /meta name="og:description" content="(.*?)"/;
+                let regexImage = /meta name="og:image" content="(.*?)"/;
+
+
+                let match = regexTitle.exec(body);
+                let title = match[1];
+                match = regexDescription.exec(body);
+                let description = match[1];
+                match = regexImage.exec(body);
+                let image = match[1];
+
+                logger.debug("Sending kill " + killID);
+
+
+                this.mainEnv.server.channels.find('name', 'kills').send(msg, {
+                    embed: {
+                        title: title,
+                        url: link,
+                        description: description,
+                        color: loss?16711680:65280,
+                        thumbnail: {
+                            url: image
+                        }
+                    }
+                })
+                    .then(logger.debug)
+                    .catch(logger.warn);
+
+                resolve("yay");
+
+            });
+
         });
     }
 
 
-    processUser(discordId){
+    processUser(discordId) {
 
         let userInfo = this.userAssoc[discordId];
 
-        if ( !userInfo ) {
-            this.applyTagsOnUser(discordId, null, null, true );
+        if (!userInfo) {
+            this.applyTagsOnUser(discordId, null, null, true);
             return;
         }
 
-        if ( this._params['corporationIDList'] && this._params['corporationIDList'].includes(userInfo.corporationID+"") ){
-            this.applyTagsOnUser(discordId, this._params['corpPrefix'], this._params['corpPermissionName'] );
+        if (this._params['corporationIDList'] && this._params['corporationIDList'].includes(userInfo.corporationID + "")) {
+            this.applyTagsOnUser(discordId, this._params['corpPrefix'], this._params['corpPermissionName']);
             return;
         }
 
-        if ( this._params['allianceIDList'] && this._params['allianceIDList'].includes(userInfo.allianceID+"") ){
-            this.applyTagsOnUser(discordId, this._params['alliancePrefix'], this._params['alliancePermissionName'] );
+        if (this._params['allianceIDList'] && this._params['allianceIDList'].includes(userInfo.allianceID + "")) {
+            this.applyTagsOnUser(discordId, this._params['alliancePrefix'], this._params['alliancePermissionName']);
             return;
-        } 
+        }
 
         let effectiveStanding = this.determineRelationship(discordId);
 
-        switch(effectiveStanding){
-            case 10:  this.applyTagsOnUser(discordId, this._params['trueBluePrefix'], this._params['trueBluePermissionName'] ); break;
-            case 5:   this.applyTagsOnUser(discordId, this._params['bluePrefix'], this._params['bluePermissionName'] ); break;
-            case -5:  this.applyTagsOnUser(discordId, this._params['orangePrefix'], this._params['orangePermissionName'] ); break;
-            case -10: this.applyTagsOnUser(discordId, this._params['redPrefix'], this._params['redPermissionName'] ); break;
+        switch (effectiveStanding) {
+            case 10:
+                this.applyTagsOnUser(discordId, this._params['trueBluePrefix'], this._params['trueBluePermissionName']);
+                break;
+            case 5:
+                this.applyTagsOnUser(discordId, this._params['bluePrefix'], this._params['bluePermissionName']);
+                break;
+            case -5:
+                this.applyTagsOnUser(discordId, this._params['orangePrefix'], this._params['orangePermissionName']);
+                break;
+            case -10:
+                this.applyTagsOnUser(discordId, this._params['redPrefix'], this._params['redPermissionName']);
+                break;
             case 0:
-            default:  this.applyTagsOnUser(discordId, this._params['neutPrefix'], this._params['neutPermissionName'] ); break;
+            default:
+                this.applyTagsOnUser(discordId, this._params['neutPrefix'], this._params['neutPermissionName']);
+                break;
         }
     }
 
-    applyTagsOnUser(discordId, tagText, permissionName, stripAll){
+    applyTagsOnUser(discordId, tagText, permissionName, stripAll) {
         let userData = this.userAssoc[discordId];
 
         let self = this;
 
         let member = this.mainEnv.server.members.get(discordId);
-        if ( !member ) return;
+        if (!member) return;
 
-        if ( this.ignoredMembers && this.ignoredMembers[member.id]){
+        if (this.ignoredMembers && this.ignoredMembers[member.id]) {
             return;
         }
 
-        if ( member.roles.find('name', this._params['adminPermissionName']) ){
+        if (member.roles.find('name', this._params['adminPermissionName'])) {
             return;
         }
 
-        if ( userData ) {
+        if (userData) {
             let ticker = userData.allianceTicker && this._params['preferAllianceTicker'] ? userData.allianceTicker : userData.corpTicker;
 
             if (tagText) {
@@ -341,31 +401,31 @@ class ModEveRoles extends Module {
                 this.setName(member, "[" + ticker + "] " + userData.characterName);
             }
         } else {
-            if (!stripAll) logger.warn("userData is null for "+discordId);
+            if (!stripAll) logger.warn("userData is null for " + discordId);
         }
 
 
         let roles = this.mainEnv.server.roles;
         let rolesToRemove;
-        if ( member.roles.find('name', this._params['adminPermissionName']) ){
-            rolesToRemove = roles.filter( r => false);
+        if (member.roles.find('name', this._params['adminPermissionName'])) {
+            rolesToRemove = roles.filter(r => false);
         } else {
             rolesToRemove = roles.filter(role => {
                 return ( role.name != permissionName && (this.relationPermissionNames.includes(role.name) || stripAll) );
             });
         }
 
-        let rolesMemberHasThatNeedRemoving = member.roles.filter( r => rolesToRemove.has(r.id) && r.id != r.guild.id);
+        let rolesMemberHasThatNeedRemoving = member.roles.filter(r => rolesToRemove.has(r.id) && r.id != r.guild.id);
 
-        if ( rolesMemberHasThatNeedRemoving && rolesMemberHasThatNeedRemoving.size > 0) {
-            logger.debug("Removing "+rolesMemberHasThatNeedRemoving.size+" roles from "+member.displayName);
+        if (rolesMemberHasThatNeedRemoving && rolesMemberHasThatNeedRemoving.size > 0) {
+            logger.debug("Removing " + rolesMemberHasThatNeedRemoving.size + " roles from " + member.displayName);
             member.removeRoles(rolesMemberHasThatNeedRemoving, "EveRoles automatic change.").then(success).catch(error);
         }
 
-        if (permissionName){
-            let role = roles.find('name',permissionName);
-            if ( ! member.roles.find('name', permissionName) ) {
-                logger.debug("Adding role "+role.name+" to "+member.nickname);
+        if (permissionName) {
+            let role = roles.find('name', permissionName);
+            if (!member.roles.find('name', permissionName)) {
+                logger.debug("Adding role " + role.name + " to " + member.nickname);
                 member.addRole(role, "EveRoles automatic change.").then(success).catch(error);
             }
         }
@@ -375,8 +435,8 @@ class ModEveRoles extends Module {
         }
 
         function error(err) {
-            if ( err.code == 50013 ){
-                if ( !self.ignoredMembers ) self.ignoredMembers = {};
+            if (err.code == 50013) {
+                if (!self.ignoredMembers) self.ignoredMembers = {};
                 self.ignoredMembers[member.id] = true;
                 logger.error("Can't change permissions for this user. Ignoring.");
             } else {
@@ -385,22 +445,22 @@ class ModEveRoles extends Module {
         }
     }
 
-    setName(member, nickName){
-        if ( member.nickname != nickName && member.displayName != nickName ) {
-            logger.debug("Setting name '"+nickName+"' to '"+member.displayName+"'");
+    setName(member, nickName) {
+        if (member.nickname != nickName && member.displayName != nickName) {
+            logger.debug("Setting name '" + nickName + "' to '" + member.displayName + "'");
             member.setNickname(nickName, "EveRoles automatic change.").then(success).catch(error);
         }
-        function success(succ){
+        function success(succ) {
 
         }
-        function error(err){
+
+        function error(err) {
 
         }
     }
 
 
-
-    determineRelationship(discordId){
+    determineRelationship(discordId) {
         let userInfo = this.userAssoc[discordId];
         let charID = userInfo.characterID;
         let corpID = userInfo.corporationID;
@@ -410,16 +470,16 @@ class ModEveRoles extends Module {
         let corpStandings = undefined;
         let allianceStandings = undefined;
 
-        for( let corpContact of this.corpContacts){
-            if ( corpContact.contact_type == "character") {
+        for (let corpContact of this.corpContacts) {
+            if (corpContact.contact_type == "character") {
                 if (charID == corpContact.contact_id) {
                     charStandings = corpContact.standing;
                 }
-            } else if ( corpContact.contact_type == "corporation") {
+            } else if (corpContact.contact_type == "corporation") {
                 if (corpID == corpContact.contact_id) {
                     corpStandings = corpContact.standing;
                 }
-            } else if ( corpContact.contact_type == "alliance") {
+            } else if (corpContact.contact_type == "alliance") {
                 if (allianceID == corpContact.contact_id) {
                     allianceStandings = corpContact.standing;
                 }
@@ -436,20 +496,19 @@ class ModEveRoles extends Module {
     checkUser(discordId) {
         let self = this;
         let userData = this.userAssoc[discordId];
-        if ( !userData ) return;
+        if (!userData) return;
 
         request.get({
-            url: "https://esi.tech.ccp.is/latest/characters/"+userData.characterID+"/",
-            headers: {
-            }
+            url: "https://esi.tech.ccp.is/latest/characters/" + userData.characterID + "/",
+            headers: {}
         }, (err, httpResponse, body) => {
             let parsedBody;
             try {
                 parsedBody = JSON.parse(body);
-            } catch( e ){
+            } catch (e) {
                 return;
             }
-            if ( err || !parsedBody ){
+            if (err || !parsedBody) {
                 return;
             }
 
@@ -459,31 +518,29 @@ class ModEveRoles extends Module {
             let allianceTicker = null;
 
             request.get({
-                url: "https://esi.tech.ccp.is/latest/corporations/"+corporationID+"/",
-                headers: {
-                }
+                url: "https://esi.tech.ccp.is/latest/corporations/" + corporationID + "/",
+                headers: {}
             }, (err, httpResponse, body) => {
                 let parsedBody;
                 try {
                     parsedBody = JSON.parse(body);
-                } catch( e ){
+                } catch (e) {
                     return;
                 }
-                if (err || !parsedBody || !parsedBody.ticker ) {
+                if (err || !parsedBody || !parsedBody.ticker) {
                     return;
                 }
                 corpTicker = parsedBody.ticker;
 
-                if ( allianceID ){
+                if (allianceID) {
                     request.get({
-                        url: "https://esi.tech.ccp.is/latest/alliances/"+allianceID+"/",
-                        headers: {
-                        }
+                        url: "https://esi.tech.ccp.is/latest/alliances/" + allianceID + "/",
+                        headers: {}
                     }, (err, httpResponse, body) => {
                         let parsedBody;
                         try {
                             parsedBody = JSON.parse(body);
-                        } catch( e ){
+                        } catch (e) {
                             return;
                         }
                         if (err || !parsedBody || !parsedBody.ticker) {
@@ -497,7 +554,7 @@ class ModEveRoles extends Module {
                     finishAuthing();
                 }
 
-                function finishAuthing(){
+                function finishAuthing() {
 
                     self.userAssoc[discordId].corporationID = corporationID;
                     self.userAssoc[discordId].allianceID = allianceID;
@@ -515,20 +572,22 @@ class ModEveRoles extends Module {
 
     saveUserInfo() {
         let filePath = this.dataPath + userDataFilename;
-        jf.writeFileSync(filePath,this.userAssoc);
+        jf.writeFileSync(filePath, this.userAssoc);
     }
+
     loadUserInfo() {
         let filePath = this.dataPath + userDataFilename;
         if (fs.existsSync(filePath)) {
             let ret = jf.readFileSync(filePath);
-            if ( ret ) this.userAssoc = ret;
+            if (ret) this.userAssoc = ret;
         }
     }
+
     loadCorpContacts() {
         let filePath = this.dataPath + corpContactsDataFilename;
         if (fs.existsSync(filePath)) {
             let ret = jf.readFileSync(filePath);
-            if ( ret ) this.corpContacts = ret;
+            if (ret) this.corpContacts = ret;
         }
     }
 
@@ -536,37 +595,37 @@ class ModEveRoles extends Module {
 
     authCallback(self, req, res) {
         let state = req.query.state;
-        let code  = req.query.code;
+        let code = req.query.code;
 
         let authInfo = self.authCodes[state];
 
-        if ( !authInfo ) {
+        if (!authInfo) {
             res.send("Invalid link");
             return;
         }
 
         let formData = {
-            "grant_type":"authorization_code",
+            "grant_type": "authorization_code",
             "code": code
         };
 
         request.post(
             {
-                url:"https://login.eveonline.com/oauth/token",
+                url: "https://login.eveonline.com/oauth/token",
                 formData: formData,
                 headers: {
-                    "Authorization": "Basic "+self._params['eveSSOEncodedClientIDAndSecretKey'],
+                    "Authorization": "Basic " + self._params['eveSSOEncodedClientIDAndSecretKey'],
                     "Content-Type": "application/json",
                     "Host": "login.eveonline.com"
                 }
             }, (err, httpResponse, body) => {
-                if ( err ) {
+                if (err) {
                     res.send("Error validating");
                     return;
                 }
 
                 let parsedBody = JSON.parse(body);
-                if ( !parsedBody ){
+                if (!parsedBody) {
                     res.send("Error validating");
                     return;
                 }
@@ -575,41 +634,40 @@ class ModEveRoles extends Module {
                     url: "https://login.eveonline.com/oauth/verify",
                     headers: {
                         "Host": "login.eveonline.com",
-                        "Authorization": "Bearer "+parsedBody.access_token,
+                        "Authorization": "Bearer " + parsedBody.access_token,
                     }
                 }, (err, httpResponse, body) => {
                     let parsedBody;
                     try {
                         parsedBody = JSON.parse(body);
-                    } catch( e ){
+                    } catch (e) {
                         res.send("Error validating");
                         return;
                     }
-                    if ( err || !parsedBody ){
+                    if (err || !parsedBody) {
                         res.send("Error validating");
                         return;
                     }
                     let characterID = parsedBody.CharacterID;
                     let characterName = parsedBody.CharacterName;
 
-                    if ( !characterID ) {
+                    if (!characterID) {
                         res.send("Error validating");
                         return;
                     }
 
                     request.get({
-                        url: "https://esi.tech.ccp.is/latest/characters/"+characterID+"/",
-                        headers: {
-                        }
+                        url: "https://esi.tech.ccp.is/latest/characters/" + characterID + "/",
+                        headers: {}
                     }, (err, httpResponse, body) => {
                         let parsedBody;
                         try {
                             parsedBody = JSON.parse(body);
-                        } catch( e ){
+                        } catch (e) {
                             res.send("Error validating");
                             return;
                         }
-                        if ( err || !parsedBody ){
+                        if (err || !parsedBody) {
                             res.send("Error retrieving info");
                             return;
                         }
@@ -620,14 +678,13 @@ class ModEveRoles extends Module {
                         let allianceTicker = null;
 
                         request.get({
-                            url: "https://esi.tech.ccp.is/latest/corporations/"+corporationID+"/",
-                            headers: {
-                            }
+                            url: "https://esi.tech.ccp.is/latest/corporations/" + corporationID + "/",
+                            headers: {}
                         }, (err, httpResponse, body) => {
                             let parsedBody;
                             try {
                                 parsedBody = JSON.parse(body);
-                            } catch( e ){
+                            } catch (e) {
                                 res.send("Error validating");
                                 return;
                             }
@@ -637,16 +694,15 @@ class ModEveRoles extends Module {
                             }
                             corpTicker = parsedBody.ticker;
 
-                            if ( allianceID ){
+                            if (allianceID) {
                                 request.get({
-                                    url: "https://esi.tech.ccp.is/latest/alliances/"+allianceID+"/",
-                                    headers: {
-                                    }
+                                    url: "https://esi.tech.ccp.is/latest/alliances/" + allianceID + "/",
+                                    headers: {}
                                 }, (err, httpResponse, body) => {
                                     let parsedBody;
                                     try {
                                         parsedBody = JSON.parse(body);
-                                    } catch( e ){
+                                    } catch (e) {
                                         res.send("Error validating");
                                         return;
                                     }
@@ -662,7 +718,7 @@ class ModEveRoles extends Module {
                                 finishAuthing();
                             }
 
-                            function finishAuthing(){
+                            function finishAuthing() {
                                 let userInformation = {
                                     discordID: authInfo.discordID,
                                     characterID: characterID,
@@ -677,7 +733,7 @@ class ModEveRoles extends Module {
                                 self.userAssoc[userInformation.discordID] = userInformation;
 
                                 res.send("Successfully linked to this account. You may close this window now.");
-                                self.env(authInfo.envName).msg(authInfo.discordID, "Your discord account associated with the character "+characterName);
+                                self.env(authInfo.envName).msg(authInfo.discordID, "Your discord account associated with the character " + characterName);
                                 self.saveUserInfo();
                                 delete self.authCodes[state];
                             }
@@ -689,26 +745,26 @@ class ModEveRoles extends Module {
 
     corpCallback(self, req, res) {
         let state = req.query.state;
-        let code  = req.query.code;
+        let code = req.query.code;
 
         let authInfo = self.authCodes[state];
 
-        if ( !authInfo ) {
+        if (!authInfo) {
             res.send("Invalid link");
             return;
         }
 
         let formData = {
-            "grant_type":"authorization_code",
+            "grant_type": "authorization_code",
             "code": code
         };
 
         request.post(
             {
-                url:"https://login.eveonline.com/oauth/token",
+                url: "https://login.eveonline.com/oauth/token",
                 formData: formData,
                 headers: {
-                    "Authorization": "Basic "+self._params['eveSSOEncodedCorpClientIDAndSecretKey'],
+                    "Authorization": "Basic " + self._params['eveSSOEncodedCorpClientIDAndSecretKey'],
                     "Content-Type": "application/json",
                     "Host": "login.eveonline.com"
                 }
@@ -721,7 +777,7 @@ class ModEveRoles extends Module {
                 let parsedBody;
                 try {
                     parsedBody = JSON.parse(body);
-                } catch( e ){
+                } catch (e) {
                     res.send("Error validating");
                     return;
                 }
@@ -736,47 +792,47 @@ class ModEveRoles extends Module {
                     url: "https://login.eveonline.com/oauth/verify",
                     headers: {
                         "Host": "login.eveonline.com",
-                        "Authorization": "Bearer "+parsedBody.access_token,
+                        "Authorization": "Bearer " + parsedBody.access_token,
                     }
                 }, (err, httpResponse, body) => {
                     let parsedBody;
                     try {
                         parsedBody = JSON.parse(body);
-                    } catch( e ){
+                    } catch (e) {
                         res.send("Error validating");
                         return;
                     }
-                    if ( err || !parsedBody ){
+                    if (err || !parsedBody) {
                         res.send("Error validating");
                         return;
                     }
 
                     request.get({
-                        url: "https://esi.tech.ccp.is/latest/corporations/"+self._params['contactsCorporationID']+"/contacts/",
+                        url: "https://esi.tech.ccp.is/latest/corporations/" + self._params['contactsCorporationID'] + "/contacts/",
                         headers: {
-                            "Authorization": "Bearer "+accessToken,
+                            "Authorization": "Bearer " + accessToken,
                         }
                     }, (err, httpResponse, body) => {
                         let parsedBody;
                         try {
                             parsedBody = JSON.parse(body);
-                        } catch( e ){
+                        } catch (e) {
                             res.send("Error validating");
                             return;
                         }
-                        if ( err || !parsedBody ){
+                        if (err || !parsedBody) {
                             res.send("Error retrieving info");
                             return;
                         }
 
-                        if ( !_.isArray(parsedBody) ){
-                            res.send("Error updating corporation info: "+body);
+                        if (!_.isArray(parsedBody)) {
+                            res.send("Error updating corporation info: " + body);
                             return;
                         }
 
                         self.corpContacts = parsedBody;
                         let filePath = self.dataPath + corpContactsDataFilename;
-                        jf.writeFileSync(filePath,self.corpContacts);
+                        jf.writeFileSync(filePath, self.corpContacts);
 
                         res.send("Successfully refreshed corporation information. You may close this window now.");
                         self.env(authInfo.envName).msg(authInfo.discordID, "Your corporation information has been refreshed.");
@@ -863,7 +919,7 @@ class ModEveRoles extends Module {
         try {
             let result = eval(args.exp);
             ep.reply(result);
-        } catch (ex){
+        } catch (ex) {
             ep.reply(ex.message);
         }
         return true;
