@@ -126,8 +126,8 @@ class ModEveRoles extends Module {
         }
 
         function checkKills(){
-            let promise = self.getKills;
-            promise.then( msg => setTimeout(checkKills, 500) );
+            let promise = self.getKills();
+            promise.then( msg => setTimeout(checkKills, 500) , logger.warn );
         }
 
         app.get('/callback', (req,res) => {
