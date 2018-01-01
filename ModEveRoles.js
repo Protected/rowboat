@@ -289,8 +289,13 @@ class ModEveRoles extends Module {
 
             request.get({
                 url: link,
-                headers: {},
-                timeout: 10000
+                headers: {
+                    "accept":"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+                    "accept-language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7,fr;q=0.6",
+                    "cache-control": "max-age=0",
+                    "user-agent": "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36",
+                },
+                timeout: 10000,
             }, (err, httpResponse, body) => {
 
                 if (err || !body) {
