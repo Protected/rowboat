@@ -126,7 +126,7 @@ class ModEveRoles extends Module {
         }
 
         function checkKills(){
-            let promise = new Promise(self.getKills);
+            let promise = self.getKills;
             promise.then( msg => setTimeout(checkKills, 500) );
         }
 
@@ -180,55 +180,64 @@ class ModEveRoles extends Module {
     }
 
 
-    getKills(resolve, reject){
+    getKills(){
         let self = this;
         //https://redisq.zkillboard.com/listen.php?queueID=AWRyder
 
-        request.get({
-            url: "https://redisq.zkillboard.com/listen.php?queueID=R0WB0ATARCH",
-            headers: {
-            },
-	    timeout: 10000 
-        }, (err, httpResponse, body) => {
+        let promise = new Promise( handleGetKills );
 
-            let parsedBody;
-            try {
-                parsedBody = JSON.parse(body);
-            } catch( e ){
-                reject(e);
-                return;
-            }
+        return promise;
 
-            if ( parsedBody.package == null ) { reject(); return;}
-            logger.debug("Got something!  "+body);
-            let pkg = parsedBody.package;
-            let victim = pkg.killmail.victim;
-            let zkb = pkg.zkb;
-            let killID = pkg.killID;
+        function handleGetKills(resolve, reject) {
 
-            logger.debug("Received kill "+killID);
+            request.get({
+                url: "https://redisq.zkillboard.com/listen.php?queueID=R0WB0ATARCH",
+                headers: {},
+                timeout: 10000
+            }, (err, httpResponse, body) => {
 
-            if ( (this._params['corporationIDList'] && this._params['corporationIDList'].includes(victim.corporation_id+""))
-            ||   (this._params['allianceIDList'] && this._params['allianceIDList'].includes(victim.alliance_id+""))
-            ) {
-                this.processKillmail(parsedBody, true);
-            }
-            if ( hasSomeoneInAttackerList(pkg.killmail.attackers ) ) {
-                this.processKillmail(parsedBody, false);
-            }
-            resolve("yay");
-        });
-
-
-        function hasSomeoneInAttackerList(attackers) {
-            if ( !attackers || !attackers.length ) return false;
-            for( let attacker of attackers ){
-                if ( (self._params['corporationIDList'] && self._params['corporationIDList'].includes(attacker.corporation_id+""))
-                ||   (self._params['allianceIDList'] && self._params['allianceIDList'].includes(attacker.alliance_id+"")) ) {
-                    return true;
+                let parsedBody;
+                try {
+                    parsedBody = JSON.parse(body);
+                } catch (e) {
+                    reject(e);
+                    return;
                 }
+
+                if (parsedBody.package == null) {
+                    reject();
+                    return;
+                }
+                logger.debug("Got something!  " + body);
+                let pkg = parsedBody.package;
+                let victim = pkg.killmail.victim;
+                let zkb = pkg.zkb;
+                let killID = pkg.killID;
+
+                logger.debug("Received kill " + killID);
+
+                if ((this._params['corporationIDList'] && this._params['corporationIDList'].includes(victim.corporation_id + ""))
+                    || (this._params['allianceIDList'] && this._params['allianceIDList'].includes(victim.alliance_id + ""))
+                ) {
+                    this.processKillmail(parsedBody, true);
+                }
+                if (hasSomeoneInAttackerList(pkg.killmail.attackers)) {
+                    this.processKillmail(parsedBody, false);
+                }
+                resolve("yay");
+            });
+
+
+            function hasSomeoneInAttackerList(attackers) {
+                if (!attackers || !attackers.length) return false;
+                for (let attacker of attackers) {
+                    if ((self._params['corporationIDList'] && self._params['corporationIDList'].includes(attacker.corporation_id + ""))
+                        || (self._params['allianceIDList'] && self._params['allianceIDList'].includes(attacker.alliance_id + ""))) {
+                        return true;
+                    }
+                }
+                return false;
             }
-            return false;
         }
     }
 
