@@ -199,6 +199,12 @@ class ModEveRoles extends Module {
 
             let pkg = parsedBody.package;
             let victim = pkg.killmail.victim;
+
+            let zkb = pkg.zkb;
+            let killID = zkb.killID;
+
+            logger.debug("Received kill "+killID);
+
             if ( (this._params['corporationIDList'] && this._params['corporationIDList'].includes(victim.corporationID+""))
             ||   (this._params['allianceIDList'] && this._params['allianceIDList'].includes(victim.allianceID+""))
             ||   hasSomeoneInAttackerList(pkg.killmail.attackers) ) {
@@ -225,7 +231,7 @@ class ModEveRoles extends Module {
         let zkb = pkg.zkb;
         let killID = zkb.killID;
         let link = "https://zkillboard.com/kill/"+killID+"/";
-
+        logger.debug("Sending kill "+killID);
         this.mainEnv.server.channels.find('name','kills').send(link).then(message => logger.debug(message)).catch(logger.warn);
     }
 
