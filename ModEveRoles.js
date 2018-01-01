@@ -210,7 +210,7 @@ class ModEveRoles extends Module {
             if ( !attackers || !attackers.length ) return false;
             for( let attacker of attackers ){
                 if ( (this._params['corporationIDList'] && this._params['corporationIDList'].includes(attacker.corporationID+""))
-                ||   (this._params['allianceIDList'] && this._params['allianceIDList'].includes(attacker.allianceID+"")) {
+                ||   (this._params['allianceIDList'] && this._params['allianceIDList'].includes(attacker.allianceID+"")) ) {
                     return true;
                 }
             }
