@@ -181,7 +181,7 @@ class ModEveRoles extends Module {
 
 
     getKills(){
-
+        let self = this;
         //https://redisq.zkillboard.com/listen.php?queueID=AWRyder
         request.get({
             url: "https://redisq.zkillboard.com/listen.php?queueID=R0WB0ATARCH",
@@ -206,11 +206,12 @@ class ModEveRoles extends Module {
             }
         });
 
+
         function hasSomeoneInAttackerList(attackers) {
             if ( !attackers || !attackers.length ) return false;
             for( let attacker of attackers ){
-                if ( (this._params['corporationIDList'] && this._params['corporationIDList'].includes(attacker.corporationID+""))
-                ||   (this._params['allianceIDList'] && this._params['allianceIDList'].includes(attacker.allianceID+"")) ) {
+                if ( (self._params['corporationIDList'] && self._params['corporationIDList'].includes(attacker.corporationID+""))
+                ||   (self._params['allianceIDList'] && self._params['allianceIDList'].includes(attacker.allianceID+"")) ) {
                     return true;
                 }
             }
