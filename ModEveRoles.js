@@ -126,8 +126,8 @@ class ModEveRoles extends Module {
         }
 
         function checkKills(){
-            self.getKills();
-            setTimeout(checkKills,500);
+            let promise = new Promise(self.getKills);
+            promise.then( msg => setTimeout(checkKills, 500) );
         }
 
         app.get('/callback', (req,res) => {
@@ -180,7 +180,7 @@ class ModEveRoles extends Module {
     }
 
 
-    getKills(){
+    getKills(resolve, reject){
         let self = this;
         //https://redisq.zkillboard.com/listen.php?queueID=AWRyder
 
@@ -195,10 +195,11 @@ class ModEveRoles extends Module {
             try {
                 parsedBody = JSON.parse(body);
             } catch( e ){
+                reject(e);
                 return;
             }
 
-            if ( parsedBody.package == null ) return;
+            if ( parsedBody.package == null ) { reject(); return;}
             logger.debug("Got something!  "+body);
             let pkg = parsedBody.package;
             let victim = pkg.killmail.victim;
@@ -209,9 +210,13 @@ class ModEveRoles extends Module {
 
             if ( (this._params['corporationIDList'] && this._params['corporationIDList'].includes(victim.corporation_id+""))
             ||   (this._params['allianceIDList'] && this._params['allianceIDList'].includes(victim.alliance_id+""))
-            ||   hasSomeoneInAttackerList(pkg.killmail.attackers) ) {
-                this.processKillmail(parsedBody);
+            ) ) {
+                this.processKillmail(parsedBody, true);
             }
+            if ( hasSomeoneInAttackerList(pkg.killmail.attackers ) ) {
+                this.processKillmail(parsedBody, false);
+            }
+            resolve("yay");
         });
 
 
@@ -227,14 +232,16 @@ class ModEveRoles extends Module {
         }
     }
 
-    processKillmail(body){
+    processKillmail(body, loss){
         let pkg = body.package;
         let victim = pkg.killmail.victim;
         let zkb = pkg.zkb;
         let killID = pkg.killID;
         let link = "https://zkillboard.com/kill/"+killID+"/";
+
+        let msg = (loss?":cry:":":smile:")+" Looks like " + "XXX" + "lost a " + "YYY" + " worth " + zkb.totalValue + " ISK. " + link;
         logger.debug("Sending kill "+killID);
-        this.mainEnv.server.channels.find('name','kills').send(link).then(message => logger.debug(message)).catch(logger.warn);
+        this.mainEnv.server.channels.find('name','kills').send(msg).then(message => logger.debug(message)).catch(logger.warn);
     }
 
 
