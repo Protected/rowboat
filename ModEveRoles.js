@@ -216,13 +216,13 @@ class ModEveRoles extends Module {
 
                 logger.debug("Received kill " + killID);
 
-                if ((this._params['corporationIDList'] && this._params['corporationIDList'].includes(victim.corporation_id + ""))
-                    || (this._params['allianceIDList'] && this._params['allianceIDList'].includes(victim.alliance_id + ""))
+                if ((self._params['corporationIDList'] && self._params['corporationIDList'].includes(victim.corporation_id + ""))
+                    || (self._params['allianceIDList'] && self._params['allianceIDList'].includes(victim.alliance_id + ""))
                 ) {
-                    this.processKillmail(parsedBody, true);
+                    self.processKillmail(parsedBody, true);
                 }
                 if (hasSomeoneInAttackerList(pkg.killmail.attackers)) {
-                    this.processKillmail(parsedBody, false);
+                    self.processKillmail(parsedBody, false);
                 }
                 resolve("yay");
             });
