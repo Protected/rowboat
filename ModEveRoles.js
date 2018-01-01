@@ -88,6 +88,7 @@ class ModEveRoles extends Module {
         this.env(this._params['discordEnvName']).on('connected', () => {
             self.mainEnv = self.env(this._params['discordEnvName']);
             runTick();
+            checkKills();
         });
 
         this.neutPermissionName = this._params['neutPermissionName'];
@@ -122,6 +123,11 @@ class ModEveRoles extends Module {
 
             self.loadUserInfo();
             setTimeout(runTick,15000);
+        }
+
+        function checkKills(){
+            self.getKills();
+            setTimeout(checkKills,100);
         }
 
         app.get('/callback', (req,res) => {
@@ -173,6 +179,42 @@ class ModEveRoles extends Module {
         return true;
     }
 
+
+    getKills(){
+
+        //https://redisq.zkillboard.com/listen.php?queueID=AWRyder
+        request.get({
+            url: "https://redisq.zkillboard.com/listen.php?queueID=R0WB0ATARCH",
+            headers: {
+            }
+        }, (err, httpResponse, body) => {
+            let parsedBody;
+            try {
+                parsedBody = JSON.parse(body);
+            } catch( e ){
+                return;
+            }
+
+            if ( parsedBody.package == null ) return;
+
+            let pkg = parsedBody.package;
+            let victim = pkg.killmail.victim;
+            if ( (this._params['corporationIDList'] && this._params['corporationIDList'].includes(victim.corporationID+""))
+            ||   (this._params['allianceIDList'] && this._params['allianceIDList'].includes(victim.allianceID+"")) ) {
+                this.processKillmail(parsedBody);
+            }
+        });
+    }
+
+    processKillmail(body){
+        let pkg = body.package;
+        let victim = pkg.killmail.victim;
+        let zkb = pkg.zkb;
+        let killID = zkb.killID;
+        let link = "https://zkillboard.com/kill/"+killID+"/";
+
+        this.mainEnv.server.channels.find('name','kills').send(link).then(message => logger.debug(message)).catch(logger.warn);
+    }
 
 
     processUser(discordId){
