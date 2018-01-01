@@ -200,12 +200,14 @@ class ModEveRoles extends Module {
                 try {
                     parsedBody = JSON.parse(body);
                 } catch (e) {
-                    reject(e);
+                    logger.warn("Bad json " + e);
+                    resolve("k");
                     return;
                 }
 
                 if (parsedBody.package == null) {
-                    reject("rip");
+                    logger.warn("Pkg is null!");
+                    resolve("rip");
                     return;
                 }
                 logger.debug("Got something!  " + body);
