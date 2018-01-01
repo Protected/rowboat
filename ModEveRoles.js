@@ -201,6 +201,7 @@ class ModEveRoles extends Module {
                     parsedBody = JSON.parse(body);
                 } catch (e) {
                     logger.warn("Bad json " + e);
+                    logger.debug("body:"+body);
                     resolve("k");
                     return;
                 }
@@ -221,12 +222,13 @@ class ModEveRoles extends Module {
                 if ((self._params['corporationIDList'] && self._params['corporationIDList'].includes(victim.corporation_id + ""))
                     || (self._params['allianceIDList'] && self._params['allianceIDList'].includes(victim.alliance_id + ""))
                 ) {
-                    self.processKillmail(parsedBody, true);
+                    self.processKillmail(parsedBody, true, resolve);
                 }
-                if (hasSomeoneInAttackerList(pkg.killmail.attackers)) {
-                    self.processKillmail(parsedBody, false);
+                else if (hasSomeoneInAttackerList(pkg.killmail.attackers)) {
+                    self.processKillmail(parsedBody, false, resolve);
+                } else {
+                    resolve("yay");
                 }
-                resolve("yay");
             });
 
 
@@ -243,16 +245,43 @@ class ModEveRoles extends Module {
         }
     }
 
-    processKillmail(body, loss){
+    processKillmail(body, loss, resolve){
+
+        const numberWithCommas = (x) => {
+            var parts = x.toString().split(".");
+            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+            return parts.join(".");
+        }
+
         let pkg = body.package;
         let victim = pkg.killmail.victim;
         let zkb = pkg.zkb;
         let killID = pkg.killID;
         let link = "https://zkillboard.com/kill/"+killID+"/";
 
-        let msg = (loss?":cry:":":smile:")+" Looks like " + "XXX" + "lost a " + "YYY" + " worth " + zkb.totalValue + " ISK. " + link;
-        logger.debug("Sending kill "+killID);
-        this.mainEnv.server.channels.find('name','kills').send(msg).then(logger.debug).catch(logger.warn);
+        request.get({
+            url: "https://esi.tech.ccp.is/latest/characters/"+victim.character_id+"/",
+            headers: {},
+            timeout: 10000
+        }, (err, httpResponse, body) => {
+            let parsedBody;
+            try {
+                parsedBody = JSON.parse(body);
+            } catch( e ){
+                resolve("Bad at ccp");
+                return;
+            }
+            if ( err || !parsedBody ){
+                resolve("Bad at ccp");
+                return;
+            }
+
+            let name = parsedBody.name;
+            let msg = (loss?":cry:":":smile:")+" Looks like *" + name + "* lost a " + "ship" + " worth " + numberWithCommas(zkb.totalValue) + " ISK. " + link;
+            logger.debug("Sending kill "+killID);
+            this.mainEnv.server.channels.find('name','kills').send(msg).then(logger.debug).catch(logger.warn);
+            resolve("yay");
+        });
     }
 
 
