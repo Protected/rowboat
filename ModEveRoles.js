@@ -127,7 +127,7 @@ class ModEveRoles extends Module {
 
         function checkKills(){
             self.getKills();
-            setTimeout(checkKills,100);
+            setTimeout(checkKills,500);
         }
 
         app.get('/callback', (req,res) => {
