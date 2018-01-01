@@ -205,7 +205,7 @@ class ModEveRoles extends Module {
                 }
 
                 if (parsedBody.package == null) {
-                    reject();
+                    reject("rip");
                     return;
                 }
                 logger.debug("Got something!  " + body);
@@ -250,7 +250,7 @@ class ModEveRoles extends Module {
 
         let msg = (loss?":cry:":":smile:")+" Looks like " + "XXX" + "lost a " + "YYY" + " worth " + zkb.totalValue + " ISK. " + link;
         logger.debug("Sending kill "+killID);
-        this.mainEnv.server.channels.find('name','kills').send(msg).then(message => logger.debug(message)).catch(logger.warn);
+        this.mainEnv.server.channels.find('name','kills').send(msg).then(logger.debug).catch(logger.warn);
     }
 
 
