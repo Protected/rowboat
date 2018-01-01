@@ -210,7 +210,7 @@ class ModEveRoles extends Module {
 
             if ( (this._params['corporationIDList'] && this._params['corporationIDList'].includes(victim.corporation_id+""))
             ||   (this._params['allianceIDList'] && this._params['allianceIDList'].includes(victim.alliance_id+""))
-            ) ) {
+            ) {
                 this.processKillmail(parsedBody, true);
             }
             if ( hasSomeoneInAttackerList(pkg.killmail.attackers ) ) {
