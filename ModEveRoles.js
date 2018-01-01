@@ -200,10 +200,22 @@ class ModEveRoles extends Module {
             let pkg = parsedBody.package;
             let victim = pkg.killmail.victim;
             if ( (this._params['corporationIDList'] && this._params['corporationIDList'].includes(victim.corporationID+""))
-            ||   (this._params['allianceIDList'] && this._params['allianceIDList'].includes(victim.allianceID+"")) ) {
+            ||   (this._params['allianceIDList'] && this._params['allianceIDList'].includes(victim.allianceID+""))
+            ||   hasSomeoneInAttackerList(pkg.killmail.attackers) ) {
                 this.processKillmail(parsedBody);
             }
         });
+
+        function hasSomeoneInAttackerList(attackers) {
+            if ( !attackers || !attackers.length ) return false;
+            for( let attacker of attackers ){
+                if ( (this._params['corporationIDList'] && this._params['corporationIDList'].includes(attacker.corporationID+""))
+                ||   (this._params['allianceIDList'] && this._params['allianceIDList'].includes(attacker.allianceID+"")) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     processKillmail(body){
