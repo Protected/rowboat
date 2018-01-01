@@ -183,11 +183,14 @@ class ModEveRoles extends Module {
     getKills(){
         let self = this;
         //https://redisq.zkillboard.com/listen.php?queueID=AWRyder
+
         request.get({
             url: "https://redisq.zkillboard.com/listen.php?queueID=R0WB0ATARCH",
             headers: {
-            }
+            },
+	    timeout: 10000 
         }, (err, httpResponse, body) => {
+
             let parsedBody;
             try {
                 parsedBody = JSON.parse(body);
@@ -196,10 +199,9 @@ class ModEveRoles extends Module {
             }
 
             if ( parsedBody.package == null ) return;
-
+            logger.debug("Got something!  "+body);
             let pkg = parsedBody.package;
             let victim = pkg.killmail.victim;
-
             let zkb = pkg.zkb;
             let killID = pkg.killID;
 
