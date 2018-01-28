@@ -10,3 +10,4 @@ ModCustom*.js
 songs/*
 package-lock.json
 .idea
+data
