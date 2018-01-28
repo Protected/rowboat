@@ -255,88 +255,93 @@ class ModEveRoles extends Module {
 
     processKillmail(body, loss, resolve) {
 
-        const numberWithCommas = (x) => {
-            var parts = x.toString().split(".");
-            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, "'");
-            return parts.join(".");
-        }
+        try {
+            const numberWithCommas = (x) => {
+                var parts = x.toString().split(".");
+                parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+                return parts.join(".");
+            };
 
-        let pkg = body.package;
-        let victim = pkg.killmail.victim;
-        let zkb = pkg.zkb;
-        let killID = pkg.killID;
-        let link = "https://zkillboard.com/kill/" + killID + "/";
-
-        request.get({
-            url: "https://esi.tech.ccp.is/latest/characters/" + victim.character_id + "/",
-            headers: {},
-            timeout: 10000
-        }, (err, httpResponse, body) => {
-            let parsedBody;
-            try {
-                parsedBody = JSON.parse(body);
-            } catch (e) {
-                resolve("Bad at ccp");
-                return;
-            }
-            if (err || !parsedBody) {
-                resolve("Bad at ccp");
-                return;
-            }
-
-            let name = parsedBody.name;
-            let msg = (loss ? ":cry:" : ":smile:") + " Looks like *" + name + "* lost a " + "ship" + " worth " + numberWithCommas(zkb.totalValue) + " ISK. " + link;
+            let pkg = body.package;
+            let victim = pkg.killmail.victim;
+            let zkb = pkg.zkb;
+            let killID = pkg.killID;
+            let link = "https://zkillboard.com/kill/" + killID + "/";
 
             request.get({
-                url: link,
-                headers: {
-                    "accept":"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
-                    "accept-language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7,fr;q=0.6",
-                    "cache-control": "max-age=0",
-                    "user-agent": "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36",
-                },
-                timeout: 10000,
+                url: "https://esi.tech.ccp.is/latest/characters/" + victim.character_id + "/",
+                headers: {},
+                timeout: 10000
             }, (err, httpResponse, body) => {
-
-                if (err || !body) {
-                    resolve("Bad at zkill");
+                let parsedBody;
+                try {
+                    parsedBody = JSON.parse(body);
+                } catch (e) {
+                    resolve("Bad at ccp");
+                    return;
+                }
+                if (err || !parsedBody) {
+                    resolve("Bad at ccp");
                     return;
                 }
 
-                let regexTitle = /meta name="og:title" content="(.*?)"/;
-                let regexDescription = /meta name="og:description" content="(.*?)"/;
-                let regexImage = /meta name="og:image" content="(.*?)"/;
+                let name = parsedBody.name;
+                let msg = (loss ? ":cry:" : ":smile:") + " Looks like *" + name + "* lost a " + "ship" + " worth " + numberWithCommas(zkb.totalValue) + " ISK. " + link;
 
+                request.get({
+                    url: link,
+                    headers: {
+                        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+                        "accept-language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7,fr;q=0.6",
+                        "cache-control": "max-age=0",
+                        "user-agent": "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36",
+                    },
+                    timeout: 10000,
+                }, (err, httpResponse, body) => {
 
-                let match = regexTitle.exec(body);
-                let title = match[1];
-                match = regexDescription.exec(body);
-                let description = match[1];
-                match = regexImage.exec(body);
-                let image = match[1];
-
-                logger.debug("Sending kill " + killID);
-
-
-                this.mainEnv.server.channels.find('name', 'kills').send(msg, {
-                    embed: {
-                        title: title,
-                        url: link,
-                        description: description,
-                        color: loss?16711680:65280,
-                        thumbnail: {
-                            url: image
-                        }
+                    if (err || !body) {
+                        resolve("Bad at zkill");
+                        return;
                     }
-                })
-                    .then(logger.debug)
-                    .catch(logger.warn);
 
-                resolve("yay");
+                    let regexTitle = /meta name="og:title" content="(.*?)"/;
+                    let regexDescription = /meta name="og:description" content="(.*?)"/;
+                    let regexImage = /meta name="og:image" content="(.*?)"/;
+
+
+                    let match = regexTitle.exec(body);
+                    let title = match[1];
+                    match = regexDescription.exec(body);
+                    let description = match[1];
+                    match = regexImage.exec(body);
+                    let image = match[1];
+
+                    logger.debug("Sending kill " + killID);
+
+
+                    this.mainEnv.server.channels.find('name', 'kills').send(msg, {
+                        embed: {
+                            title: title,
+                            url: link,
+                            description: description,
+                            color: loss ? 16711680 : 65280,
+                            thumbnail: {
+                                url: image
+                            }
+                        }
+                    })
+                        .then(logger.debug)
+                        .catch(logger.warn);
+
+                    resolve("yay");
+
+                });
 
             });
-
-        });
+        }catch(ex ){
+            logger.warn(ex);
+            resolve("Bad ex");
+        }
     }
 
 
