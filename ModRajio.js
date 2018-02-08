@@ -940,7 +940,7 @@ class ModRajio extends Module {
         
             this.abortskip();
         
-            vc.play(this.grabber.songPathByHash(song.hash), options).once("close", () => {
+            vc.play(this.grabber.songPathByHash(song.hash), options).once("finish", () => {
                 if (this._play) {
                     this.remember(this._play);
                 }
