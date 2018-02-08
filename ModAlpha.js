@@ -93,7 +93,7 @@ class ModAlpha extends Module {
                     if (env.envName == 'Discord') {
                         let showntitle = false;
                         for (let subpod of result.subpods) {
-                            let re = new discord.RichEmbed()
+                            let re = new discord.MessageEmbed()
                                     .setColor([255,194,48])
                                     ;
                             if (!showntitle) {

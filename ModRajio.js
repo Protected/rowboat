@@ -400,7 +400,7 @@ class ModRajio extends Module {
             this.dchan.members.get(userid).setDeaf(true);
             
             let vc = this.denv.server.voiceConnection;
-            //vc.playFile('beep.ogg');
+            //vc.play('beep.ogg');
         
             return true;
         });
@@ -940,7 +940,7 @@ class ModRajio extends Module {
         
             this.abortskip();
         
-            vc.playFile(this.grabber.songPathByHash(song.hash), options).once("end", () => {
+            vc.play(this.grabber.songPathByHash(song.hash), options).once("end", () => {
                 if (this._play) {
                     this.remember(this._play);
                 }
