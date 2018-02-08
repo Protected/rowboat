@@ -350,7 +350,7 @@ class ModRajio extends Module {
             } else {
                 let vc = this.denv.server.voiceConnection;
                 ep.reply('**[Playing]** ' + '`' + this._play.hash + ' ' + this._play.name + (this._play.author ? ' (' + this._play.author + ')' : '')
-                    + ' <' + (vc && vc.dispatcher ? this.secondsToHms(Math.round(vc.dispatcher.time / 1000.0)) + ' / ' : '') + this.secondsToHms(this._play.length) + '>`');
+                    + ' <' + (vc && vc.dispatcher ? this.secondsToHms(Math.round(vc.dispatcher.streamTime / 1000.0)) + ' / ' : '') + this.secondsToHms(this._play.length) + '>`');
             }
         
             return true;
@@ -940,7 +940,7 @@ class ModRajio extends Module {
         
             this.abortskip();
         
-            vc.play(this.grabber.songPathByHash(song.hash), options).once("end", () => {
+            vc.play(this.grabber.songPathByHash(song.hash), options).once("close", () => {
                 if (this._play) {
                     this.remember(this._play);
                 }
@@ -991,13 +991,13 @@ class ModRajio extends Module {
             return this.stopSong();
         }
         
-        this.log('Pausing song: ' + this._play.hash + ' at ' + vc.dispatcher.time);
+        this.log('Pausing song: ' + this._play.hash + ' at ' + vc.dispatcher.streamTime);
         
         if (this.param('announcestatus')) {
             this.denv.client.realClient.user.setActivity("*Paused*", {type: 'STREAMING'}).catch(() => {});
         }
         
-        this._pause = [this._play, vc.dispatcher.time];
+        this._pause = [this._play, vc.dispatcher.streamTime];
         this._play = null;
         vc.dispatcher.end();
         
