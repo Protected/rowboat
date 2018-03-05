@@ -183,10 +183,10 @@ class ModGrabber extends Module {
         
             if (args.hash && args.hash != "-") {
                 this._scanQueue.push([this._index[args.hash], args.format, {
-                    accepted: (messageObj, messageAuthor, reply, hash) => reply(hash + ": Got it."),
-                    errorDuration: (messageObj, messageAuthor, reply, label) => reply(messageObj.hash + ": I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds."),
-                    errorNotFound: (messageObj, messageAuthor, reply) => reply(messageObj.hash + ": the song you tried to replace could not be found."),
-                    errorEncoding: (messageObj, messageAuthor, reply) => reply(messageObj.hash + ": the song could not be obtained or converted.")
+                    accepted: (messageObj, a, b, hash) => ep.reply(hash + ": Got it."),
+                    errorDuration: (messageObj) => ep.reply(messageObj.hash + ": I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds."),
+                    errorNotFound: (messageObj) => ep.reply(messageObj.hash + ": the song you tried to replace could not be found."),
+                    errorEncoding: (messageObj) => ep.reply(messageObj.hash + ": the song could not be obtained or converted.")
                 }]);
                 ep.reply("Regrab requested.");
                 return true;
@@ -198,13 +198,13 @@ class ModGrabber extends Module {
         
             for (let hash in this._index) {
                 this._scanQueue.push([this._index[hash], args.format, {
-                    accepted: (messageObj, messageAuthor, reply, hash) => {
+                    accepted: (messageObj, a, b, hash) => {
                         i += 1;
-                        if (!(i % 100)) reply(i + " accepted so far.");
+                        if (!(i % 100)) ep.reply(i + " accepted so far.");
                     },
-                    errorDuration: (messageObj, messageAuthor, reply, label) => reply(messageObj.hash + ": I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds."),
-                    errorNotFound: (messageObj, messageAuthor, reply) => reply(messageObj.hash + ": the song you tried to replace could not be found."),
-                    errorEncoding: (messageObj, messageAuthor, reply) => reply(messageObj.hash + ": the song could not be obtained or converted.")
+                    errorDuration: (messageObj) => ep.reply(messageObj.hash + ": I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds."),
+                    errorNotFound: (messageObj) => ep.reply(messageObj.hash + ": the song you tried to replace could not be found."),
+                    errorEncoding: (messageObj) => ep.reply(messageObj.hash + ": the song could not be obtained or converted.")
                 }]);
             }
             
