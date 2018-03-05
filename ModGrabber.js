@@ -788,7 +788,7 @@ class ModGrabber extends Module {
     }
     
     reGrab(info, format, callbacks, readOnly) {
-        if (this.isDownloadPathFull() || !song) return false;
+        if (this.isDownloadPathFull() || !info) return false;
         
         info = Object.assign({}, info);
         info.regrab = true;
