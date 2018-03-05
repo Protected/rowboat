@@ -182,14 +182,30 @@ class ModGrabber extends Module {
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (args.hash && args.hash != "-") {
-                this._scanQueue.push(this._index[args.hash], args.format, {});
+                this._scanQueue.push([this._index[args.hash], args.format, {
+                    accepted: (messageObj, messageAuthor, reply, hash) => reply(hash + ": Got it."),
+                    errorDuration: (messageObj, messageAuthor, reply, label) => reply(messageObj.hash + ": I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds."),
+                    errorNotFound: (messageObj, messageAuthor, reply) => reply(messageObj.hash + ": the song you tried to replace could not be found."),
+                    errorEncoding: (messageObj, messageAuthor, reply) => reply(messageObj.hash + ": the song could not be obtained or converted.")
+                }]);
                 ep.reply("Regrab requested.");
+                return true;
             }
         
             ep.reply("Sit tight, this will take a long time...");
         
+            let i = 0;
+        
             for (let hash in this._index) {
-                this._scanQueue.push(this._index[hash], args.format, {});
+                this._scanQueue.push([this._index[hash], args.format, {
+                    accepted: (messageObj, messageAuthor, reply, hash) => {
+                        i += 1;
+                        if (!(i % 100)) reply(i + " accepted so far.");
+                    },
+                    errorDuration: (messageObj, messageAuthor, reply, label) => reply(messageObj.hash + ": I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds."),
+                    errorNotFound: (messageObj, messageAuthor, reply) => reply(messageObj.hash + ": the song you tried to replace could not be found."),
+                    errorEncoding: (messageObj, messageAuthor, reply) => reply(messageObj.hash + ": the song could not be obtained or converted.")
+                }]);
             }
             
             return true;
