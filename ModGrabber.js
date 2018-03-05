@@ -176,10 +176,15 @@ class ModGrabber extends Module {
         
         this.mod('Commands').registerCommand(this, 'grab regrab', {
             description: 'Fix the library by attempting to redownload songs from source (if not missing).',
-            args: ['format'],
+            args: ['hash', 'format'],
             minArgs: 0,
             permissions: [PERM_ADMIN]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            if (args.hash && args.hash != "-") {
+                this._scanQueue.push(this._index[args.hash], args.format, {});
+                ep.reply("Regrab requested.");
+            }
         
             ep.reply("Sit tight, this will take a long time...");
         
@@ -188,7 +193,7 @@ class ModGrabber extends Module {
             }
             
             return true;
-        );
+        });
         
         
         this.mod('Commands').registerCommand(this, 'grab undo', {
@@ -1062,7 +1067,7 @@ class ModGrabber extends Module {
             if (err) throw err;
             
             let hash = crypto.createHash('md5').update(data).digest('hex');
-            let realpath = this.param('downloadPath') + '/' + hash + (this.param('storePcm') ? '.pcm' : '.mp3');
+            let realpath = this.param('downloadPath') + '/' + hash + '.' + mp.info.format;
             
             let now = moment().unix();
             
