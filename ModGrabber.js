@@ -146,7 +146,7 @@ class ModGrabber extends Module {
             
             var scanning = null;
             var scanner = () => {
-                channel.fetchMessages({
+                channel.messages.fetch({
                     limit: 100,
                     before: scanning
                 }).then((messages) => {
