@@ -902,10 +902,12 @@ class ModGrabber extends Module {
             this.log('Grabbing from attachment: ' + ma.name + ' (' + ma.id + ')');
             this._downloads += 1;
             
+            let prepnum = this._preparing++;
+            
             //Attachment -> Hard drive
             
             let attfiledl = request(ma.url);
-            let prepath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '_a.tmp';
+            let prepath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '_a.tmp';
             let prestream = fs.createWriteStream(prepath);
             
             attfiledl.on('error', (error) => {
@@ -922,44 +924,44 @@ class ModGrabber extends Module {
             
             prestream.on('finish', () => {
             
-                //Hard drive -> FFmpeg -> Hard drive
-        
-                let ffmpeg = new FFmpeg(prepath);
-                if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
-                
-                let temppath = this.param('downloadPath') + '/' + 'dl_' + this._preparing + '.tmp';
-                let stream = fs.createWriteStream(temppath);
-                
-                if (mp.info.format == 'pcm') {
-                    ffmpeg.format('s16le').audioBitrate('48k').audioChannels(2);
-                } else if (mp.info.format == 'flac') {
-                    ffmpeg.format('flac');
-                } else {
-                    ffmpeg.format('mp3');
-                }
-                let audio = ffmpeg.pipe(stream);
-                
-                ffmpeg.on('error', (error) => {
-                    this.log('error', '[Attachment, FFmpeg] ' + error);
-                    audio.destroy();
-                });
-                
-                stream.on('error', (error) => {
-                    this.log('error', '[Attachment, Rewrite] ' + error);
-                    audio.destroy();
-                });
+                //Get song info
+                FFmpeg(prepath).ffprobe((err, info) => {
+                    if (err) {
+                        this.log('warn', err);
+                        return;
+                    }
+            
+                    //Hard drive -> FFmpeg -> Hard drive
+            
+                    let ffmpeg = new FFmpeg(prepath);
+                    if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
+                    
+                    let temppath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '.tmp';
+                    let stream = fs.createWriteStream(temppath);
+                    
+                    if (mp.info.format == 'pcm') {
+                        ffmpeg.format('s16le').audioBitrate('48k').audioChannels(2);
+                    } else if (mp.info.format == 'flac') {
+                        ffmpeg.format('flac');
+                    } else {
+                        ffmpeg.format('mp3');
+                    }
+                    let audio = ffmpeg.pipe(stream);
+                    
+                    ffmpeg.on('error', (error) => {
+                        this.log('error', '[Attachment, FFmpeg] ' + error);
+                        audio.destroy();
+                    });
+                    
+                    stream.on('error', (error) => {
+                        this.log('error', '[Attachment, Rewrite] ' + error);
+                        audio.destroy();
+                    });
 
-                stream.on('finish', () => {
-                    this._downloads -= 1;
-                    
-                    fs.unlink(prepath, (err) => {});
-                    
-                    //Get song info
-                    FFmpeg(temppath).ffprobe((err, info) => {
-                        if (err) {
-                            this.log('warn', err);
-                            return;
-                        }
+                    stream.on('finish', () => {
+                        this._downloads -= 1;
+                        
+                        fs.unlink(prepath, (err) => {});
         
                         let duration = parseFloat(info.format.duration || info.streams[0].duration);
                         if (duration < this.param('minDuration') || duration > this.param('maxDuration')) {
