@@ -722,7 +722,7 @@ class ModGrabber extends Module {
                     interval: messageObj.sourcePartial,
                     format: messageObj.format
                 },
-                interval: null,
+                interval: messageObj.sourcePartial,
                 reply: null
             }
         }
