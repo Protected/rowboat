@@ -176,7 +176,7 @@ class ModGrabber extends Module {
         
         this.mod('Commands').registerCommand(this, 'grab regrab', {
             description: 'Fix the library by attempting to redownload songs from source (if not missing).',
-            args: ['hash', 'format'],
+            args: ['hash', 'format', 'onlyreformat'],
             minArgs: 0,
             permissions: [PERM_ADMIN]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -197,6 +197,8 @@ class ModGrabber extends Module {
             let i = 0;
         
             for (let hash in this._index) {
+                let curformat = this._index[hash].format || 'mp3';
+                if (args.format && args.onlyreformat && curformat == args.format) continue;
                 this._scanQueue.push([this._index[hash], args.format, {
                     accepted: (messageObj, a, b, hash) => {
                         i += 1;
@@ -799,7 +801,7 @@ class ModGrabber extends Module {
         } else if (info.sourceType == 'discord') {
             this.grabFromAttachment({name: info.name, id: info.sourceSpecificId, url: info.source}, info, callbacks, readOnly);
         } else if (info.source) {
-            this.grabFromUrl(info.source, info.sourceType, info.sourceSpecificId, info, callbacks, readOnly);
+            this.grabFromURL(info.source, info.sourceType, info.sourceSpecificId, info, callbacks, readOnly);
         }
         
         return true;
