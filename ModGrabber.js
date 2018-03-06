@@ -1041,7 +1041,7 @@ class ModGrabber extends Module {
                 prestream.on('finish', () => {
             
                     //Get song info
-                    FFmpeg(temppath).ffprobe((err, info) => {
+                    FFmpeg(prepath).ffprobe((err, info) => {
                         if (err) {
                             this.log('warn', err);
                             return;
