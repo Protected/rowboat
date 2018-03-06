@@ -719,7 +719,7 @@ class ModGrabber extends Module {
                     artist: null,
                     album: null,
                     replace: messageObj.hash,
-                    interval: null,
+                    interval: messageObj.sourcePartial,
                     format: messageObj.format
                 },
                 interval: null,
