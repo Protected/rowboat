@@ -1011,82 +1011,106 @@ class ModGrabber extends Module {
             this.log('Grabbing from ' + sourceType + ' URL: ' + url + ' (' + sourceSpecificId + ')');
             this._downloads += 1;
             
-            //URL -> FFmpeg -> Hard drive
+            let prepnum = this._preparing++;
+            
+            //URL -> Hard drive
             
             let filedl = request(url);
+            let prepath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '_a.tmp';
+            let prestream = fs.createWriteStream(prepath);
+            
+            filedl.on('error', (error) => {
+                this.log('error', '[URL, Download] ' + error);
+                filedl.destroy();
+            });
+            
+            prestream.on('error', (error) => {
+                this.log('error', '[URL, Write] ' + error);
+                filedl.destroy();
+            });
+            
+            filedl.pipe(prestream);
             
             filedl.on('response', (response) => {
-                
+            
                 if (response.headers['content-disposition']) {
                     let getfilename = response.headers['content-disposition'].match(/filename="([^"]+)"/);
                     if (getfilename) filename = getfilename[1];
                 }
-                
-                let ffmpeg = new FFmpeg(filedl);
-                if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
-                
-                let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
-                let stream = fs.createWriteStream(temppath);
-                
-                if (mp.info.format == 'pcm') {
-                    ffmpeg.format('s16le').audioBitrate('48k').audioChannels(2);
-                } else if (mp.info.format == 'flac') {
-                    ffmpeg.format('flac');
-                } else {
-                    ffmpeg.format('mp3');
-                }
-                let audio = ffmpeg.pipe(stream);
-                
-                ffmpeg.on('error', (error) => {
-                    this.log('error', '[URL, FFmpeg] ' + error);
-                    audio.destroy();
-                });
-                
-                stream.on('error', (error) => {
-                    this.log('error', '[URL, Write] ' + error);
-                    audio.destroy();
-                });
-                
-                stream.on('finish', () => {
-                    this._downloads -= 1;
-                    
+            
+                prestream.on('finish', () => {
+            
                     //Get song info
                     FFmpeg(temppath).ffprobe((err, info) => {
                         if (err) {
                             this.log('warn', err);
                             return;
                         }
-        
-                        let duration = parseFloat(info.format.duration || info.streams[0].duration);
-                        if (duration < this.param('minDuration') || duration > this.param('maxDuration')) {
-                            if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
-                            return;
+                        
+                        //Hard drive -> FFmpeg -> Hard drive
+                        
+                        let ffmpeg = new FFmpeg(prepath);
+                        if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
+                        
+                        let temppath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '.tmp';
+                        let stream = fs.createWriteStream(temppath);
+                        
+                        if (mp.info.format == 'pcm') {
+                            ffmpeg.format('s16le').audioBitrate('48k').audioChannels(2);
+                        } else if (mp.info.format == 'flac') {
+                            ffmpeg.format('flac');
+                        } else {
+                            ffmpeg.format('mp3');
                         }
+                        let audio = ffmpeg.pipe(stream);
                         
-                        let title = filename;
-                        let artist = '';
-                        let album = '';
-                        if (info.format && info.format.tags) {
-                            if (info.format.tags.title) title = info.format.tags.title;
-                            if (info.format.tags.artist) artist = info.format.tags.artist;
-                            if (info.format.tags.album) album = info.format.tags.album;
-                        }
+                        ffmpeg.on('error', (error) => {
+                            this.log('error', '[URL, FFmpeg] ' + error);
+                            audio.destroy();
+                        });
                         
-                        let keywords = (mp.info.dkeywords || []);
+                        stream.on('error', (error) => {
+                            this.log('error', '[URL, Rewrite] ' + error);
+                            audio.destroy();
+                        });
                         
-                        this.persistTempDownload(temppath, url, mp, {
-                            length: Math.floor(duration),
-                            source: url,
-                            sourceType: sourceType,
-                            sourceSpecificId: sourceSpecificId,
-                            sourceLoudness: null,
-                            name: title,
-                            author: artist,
-                            album: album,
-                            keywords: keywords
-                        }, messageObj, callbacks, readOnly);
+                        stream.on('finish', () => {
+                            this._downloads -= 1;
+                            
+                            fs.unlink(prepath, (err) => {});
+
+                            let duration = parseFloat(info.format.duration || info.streams[0].duration);
+                            if (duration < this.param('minDuration') || duration > this.param('maxDuration')) {
+                                if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
+                                return;
+                            }
+                            
+                            let title = filename;
+                            let artist = '';
+                            let album = '';
+                            if (info.format && info.format.tags) {
+                                if (info.format.tags.title) title = info.format.tags.title;
+                                if (info.format.tags.artist) artist = info.format.tags.artist;
+                                if (info.format.tags.album) album = info.format.tags.album;
+                            }
+                            
+                            let keywords = (mp.info.dkeywords || []);
+                            
+                            this.persistTempDownload(temppath, url, mp, {
+                                length: Math.floor(duration),
+                                source: url,
+                                sourceType: sourceType,
+                                sourceSpecificId: sourceSpecificId,
+                                sourceLoudness: null,
+                                name: title,
+                                author: artist,
+                                album: album,
+                                keywords: keywords
+                            }, messageObj, callbacks, readOnly);
+                        });
+                        
                     });
-                    
+                
                 });
                 
             });
