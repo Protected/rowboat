@@ -902,73 +902,95 @@ class ModGrabber extends Module {
             this.log('Grabbing from attachment: ' + ma.name + ' (' + ma.id + ')');
             this._downloads += 1;
             
-            //Attachment -> FFmpeg -> Hard drive
+            //Attachment -> Hard drive
             
             let attfiledl = request(ma.url);
-        
-            let ffmpeg = new FFmpeg(attfiledl);
-            if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
+            let prepath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '_a.tmp';
+            let prestream = fs.createWriteStream(prepath);
             
-            let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
-            let stream = fs.createWriteStream(temppath);
-            
-            if (mp.info.format == 'pcm') {
-                ffmpeg.format('s16le').audioBitrate('48k').audioChannels(2);
-            } else if (mp.info.format == 'flac') {
-                ffmpeg.format('flac');
-            } else {
-                ffmpeg.format('mp3');
-            }
-            let audio = ffmpeg.pipe(stream);
-            
-            ffmpeg.on('error', (error) => {
-                this.log('error', '[Attachment, FFmpeg] ' + error);
-                audio.destroy();
+            attfiledl.on('error', (error) => {
+                this.log('error', '[Attachment, Download] ' + error);
+                attfiledl.destroy();
             });
             
-            stream.on('error', (error) => {
+            prestream.on('error', (error) => {
                 this.log('error', '[Attachment, Write] ' + error);
-                audio.destroy();
+                attfiledl.destroy();
             });
-
-            stream.on('finish', () => {
-                this._downloads -= 1;
+            
+            attfiledl.pipe(prestream);
+            
+            prestream.on('finish', () => {
+            
+                //Hard drive -> FFmpeg -> Hard drive
+        
+                let ffmpeg = new FFmpeg(prepath);
+                if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
                 
-                //Get song info
-                FFmpeg(temppath).ffprobe((err, info) => {
-                    if (err) {
-                        this.log('warn', err);
-                        return;
-                    }
-    
-                    let duration = parseFloat(info.format.duration || info.streams[0].duration);
-                    if (duration < this.param('minDuration') || duration > this.param('maxDuration')) {
-                        if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
-                        return;
-                    }
+                let temppath = this.param('downloadPath') + '/' + 'dl_' + this._preparing + '.tmp';
+                let stream = fs.createWriteStream(temppath);
+                
+                if (mp.info.format == 'pcm') {
+                    ffmpeg.format('s16le').audioBitrate('48k').audioChannels(2);
+                } else if (mp.info.format == 'flac') {
+                    ffmpeg.format('flac');
+                } else {
+                    ffmpeg.format('mp3');
+                }
+                let audio = ffmpeg.pipe(stream);
+                
+                ffmpeg.on('error', (error) => {
+                    this.log('error', '[Attachment, FFmpeg] ' + error);
+                    audio.destroy();
+                });
+                
+                stream.on('error', (error) => {
+                    this.log('error', '[Attachment, Rewrite] ' + error);
+                    audio.destroy();
+                });
+
+                stream.on('finish', () => {
+                    this._downloads -= 1;
                     
-                    let title = ma.name;
-                    let artist = '';
-                    let album = '';
-                    if (info.format && info.format.tags) {
-                        if (info.format.tags.title) title = info.format.tags.title;
-                        if (info.format.tags.artist) artist = info.format.tags.artist;
-                        if (info.format.tags.album) album = info.format.tags.album;
-                    }
+                    fs.unlink(prepath, (err) => {});
                     
-                    let keywords = (mp.info.dkeywords || []);
+                    //Get song info
+                    FFmpeg(temppath).ffprobe((err, info) => {
+                        if (err) {
+                            this.log('warn', err);
+                            return;
+                        }
+        
+                        let duration = parseFloat(info.format.duration || info.streams[0].duration);
+                        if (duration < this.param('minDuration') || duration > this.param('maxDuration')) {
+                            if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
+                            return;
+                        }
+                        
+                        let title = ma.name;
+                        let artist = '';
+                        let album = '';
+                        if (info.format && info.format.tags) {
+                            if (info.format.tags.title) title = info.format.tags.title;
+                            if (info.format.tags.artist) artist = info.format.tags.artist;
+                            if (info.format.tags.album) album = info.format.tags.album;
+                        }
+                        
+                        let keywords = (mp.info.dkeywords || []);
+                        
+                        this.persistTempDownload(temppath, ma.name, mp, {
+                            length: Math.floor(duration),
+                            source: ma.url,
+                            sourceType: 'discord',
+                            sourceSpecificId: ma.id,
+                            sourceLoudness: null,
+                            name: title,
+                            author: artist,
+                            album: album,
+                            keywords: keywords
+                        }, messageObj, callbacks, readOnly);
+                    });
                     
-                    this.persistTempDownload(temppath, ma.name, mp, {
-                        length: Math.floor(duration),
-                        source: ma.url,
-                        sourceType: 'discord',
-                        sourceSpecificId: ma.id,
-                        sourceLoudness: null,
-                        name: title,
-                        author: artist,
-                        album: album,
-                        keywords: keywords
-                    }, messageObj, callbacks, readOnly);
                 });
                 
             });
