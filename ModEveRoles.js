@@ -24,6 +24,8 @@ class ModEveRoles extends Module {
             'port',   //Port to listen to on the callback
             'allianceIDList',
             'corpPrefix',
+            'discordWelcomeMessage',
+            'discordWelcomeChannel',
             'corpPermissionName',
             'alliancePrefix',
             'alliancePermissionName',
@@ -94,11 +96,28 @@ class ModEveRoles extends Module {
 
         let self = this;
 
+        // Events
         this.env(this._params['discordEnvName']).on('connected', () => {
             self.mainEnv = self.env(this._params['discordEnvName']);
             runTick();
             checkKills();
         });
+
+        logger.debug("Welcome: #"+this._params['discordWelcomeChannel']+": "+this._params['discordWelcomeMessage']);
+
+        if ( this._params['discordWelcomeMessage'] && this._params['discordWelcomeChannel'] ) {
+            this.env(this._params['discordEnvName']).on("guildMemberAdd", (member) => {
+
+                logger.info(member.user.username + " joined ");
+                let msg = this._params['discordWelcomeMessage'].replace("{username}", member.user.username);
+
+                this.mainEnv.server.channels
+                    .find('name', this._params['discordWelcomeChannel'])
+                    .send(msg)
+                    .then(logger.debug)
+                    .catch(logger.warn);
+            });
+        }
 
         this.neutPermissionName = this._params['neutPermissionName'];
         this.redPermissionName = this._params['redPermissionName'];
@@ -220,13 +239,10 @@ class ModEveRoles extends Module {
                     resolve("rip");
                     return;
                 }
-                logger.debug("Got something!  " + body);
                 let pkg = parsedBody.package;
                 let victim = pkg.killmail.victim;
                 let zkb = pkg.zkb;
                 let killID = pkg.killID;
-
-                logger.debug("Received kill " + killID);
 
                 if ((self._params['corporationIDList'] && self._params['corporationIDList'].includes(victim.corporation_id + ""))
                     || (self._params['allianceIDList'] && self._params['allianceIDList'].includes(victim.alliance_id + ""))
