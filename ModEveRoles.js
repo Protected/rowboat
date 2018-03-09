@@ -106,7 +106,7 @@ class ModEveRoles extends Module {
         logger.debug("Welcome: #"+this._params['discordWelcomeChannel']+": "+this._params['discordWelcomeMessage']);
 
         if ( this._params['discordWelcomeMessage'] && this._params['discordWelcomeChannel'] ) {
-            this.env(this._params['discordEnvName']).on("guildMemberAdd", (member) => {
+            this.env(this._params['discordEnvName']).client.on("guildMemberAdd", (member) => {
 
                 logger.info(member.user.username + " joined ");
                 let msg = this._params['discordWelcomeMessage'].replace("{username}", member.user.username);
