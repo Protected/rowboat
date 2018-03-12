@@ -865,11 +865,13 @@ class ModGrabber extends Module {
                 ffmpeg.on('error', (error) => {
                     this.log('error', '[Youtube, FFmpeg] ' + error);
                     audio.destroy();
+                    this._downloads -= 1;
                 });
                 
                 stream.on('error', (error) => {
                     this.log('error', '[Youtube, Write] ' + error);
                     audio.destroy();
+                    this._downloads -= 1;
                 });
             
                 stream.on('finish', () => {
@@ -913,11 +915,13 @@ class ModGrabber extends Module {
             attfiledl.on('error', (error) => {
                 this.log('error', '[Attachment, Download] ' + error);
                 attfiledl.destroy();
+                this._downloads -= 1;
             });
             
             prestream.on('error', (error) => {
                 this.log('error', '[Attachment, Write] ' + error);
                 attfiledl.destroy();
+                this._downloads -= 1;
             });
             
             attfiledl.pipe(prestream);
@@ -951,11 +955,13 @@ class ModGrabber extends Module {
                     ffmpeg.on('error', (error) => {
                         this.log('error', '[Attachment, FFmpeg] ' + error);
                         audio.destroy();
+                        this._downloads -= 1;
                     });
                     
                     stream.on('error', (error) => {
                         this.log('error', '[Attachment, Rewrite] ' + error);
                         audio.destroy();
+                        this._downloads -= 1;
                     });
 
                     stream.on('finish', () => {
@@ -1022,11 +1028,13 @@ class ModGrabber extends Module {
             filedl.on('error', (error) => {
                 this.log('error', '[URL, Download] ' + error);
                 filedl.destroy();
+                this._downloads -= 1;
             });
             
             prestream.on('error', (error) => {
                 this.log('error', '[URL, Write] ' + error);
                 filedl.destroy();
+                this._downloads -= 1;
             });
             
             filedl.pipe(prestream);
@@ -1067,11 +1075,13 @@ class ModGrabber extends Module {
                         ffmpeg.on('error', (error) => {
                             this.log('error', '[URL, FFmpeg] ' + error);
                             audio.destroy();
+                            this._downloads -= 1;
                         });
                         
                         stream.on('error', (error) => {
                             this.log('error', '[URL, Rewrite] ' + error);
                             audio.destroy();
+                            this._downloads -= 1;
                         });
                         
                         stream.on('finish', () => {
