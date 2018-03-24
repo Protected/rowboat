@@ -773,7 +773,7 @@ class ModGrabber extends Module {
         }
         
         //Google Drive
-        let gdurl = messageObj.content.match(/(?:https?:\/\/|\/\/)?(?:drive|docs)\.google\.com\/(?:(?:open|uc)\?id=|file\/d\/)([\w_]{28,})(?![\w_])/);
+        let gdurl = messageObj.content.match(/(?:https?:\/\/|\/\/)?(?:drive|docs)\.google\.com\/(?:(?:open|uc)\?id=|file\/d\/)([\w_-]{28,})(?![\w_])/);
         if (gdurl) {
             gdurl = 'https://docs.google.com/uc?id=' + gdurl[1];
             this.grabFromURL(gdurl, 'gdrive', gdurl[1], messageObj, callbacks, readOnly);
