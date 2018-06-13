@@ -6,6 +6,11 @@ const random = require('meteor-random');
 const moment = require('moment');
 const diff = require('diff');
 
+try {
+    var gd = require('node-gd');
+    var discord = require('discord.js');
+} catch (err) {}
+
 const PERM_ADMIN = 'administrator';
 const PERM_MODERATOR = 'moderator';
 
@@ -805,11 +810,23 @@ class ModDictionaryGame extends Module {
         //Register challenge start time
         this._wordStart = moment().unix();
         
-        //Send word to channel and start timer
+        //Send word to channel
         let env = this.env(this.param('env'));
         let query = (this._current.mode == MODE_INVERTED ? this._current.right : this._current.left);
-        env.msg(this._channelid, env.applyFormatting("**" + this.escapeNormalizedFormatting(query) + "**"));
+
+        if (gd && env.envName == "Discord") {
+            //Fancy (png image of rendered font): Requires gd, node-gd and Discord
+            let png = this.createPngFromText(query);
+            let re = new discord.RichEmbed()
+                .attachFile({name: "query.png", attachment: png})
+                .setImage("attachment://query.png");
+            env.msg(this._channelid, re);
+        } else {
+            //Plaintext (normal)
+            env.msg(this._channelid, env.applyFormatting("**" + this.escapeNormalizedFormatting(query) + "**"));
+        }
         
+        //Start countdown timer
         this._timer = setTimeout(() => this.endWord(), this._timerLength * 1000);
     }
 
@@ -944,6 +961,27 @@ class ModDictionaryGame extends Module {
         this._mode = null;
         this._player = null;
         this._channelid = null;
+    }
+
+
+    //Auxiliary
+
+
+    createPngFromText(text, size, color) {
+        if (!size) size = 32;  //pt
+        if (!color) color = [0, 0, 0];  //R, G, B in decimal integers
+        let img = gd.createTrueColorSync(1, 1);
+        let bb = img.stringFTBBox(gd.trueColorAlpha(255, 255, 255, 127), __dirname + '/DejaVuSansMono.ttf', size, 0, 0, 0, text);
+        let w = Math.abs(bb[4] - bb[0]) + 4, h = Math.abs(bb[5] - bb[1]) + 4;
+        img.destroy();
+        img = gd.createTrueColorSync(w, h);
+        img.alphaBlending(0);
+        img.saveAlpha(1);
+        img.filledRectangle(0, 0, w, h, gd.trueColorAlpha(255, 255, 255, 127));
+        img.stringFT(gd.trueColorAlpha(color[0], color[1], color[2], 0), __dirname + '/DejaVuSansMono.ttf', size, 0, -1 * bb[6] + 2, -1 * bb[7] + 2, text);
+        let ptr = img.pngPtr();
+        img.destroy();
+        return ptr;
     }
 
 }
