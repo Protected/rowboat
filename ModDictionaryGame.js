@@ -136,7 +136,6 @@ class ModDictionaryGame extends Module {
         
         
         this.mod('Commands').registerCommand(this, 'dg add', {
-            environments: [this.param('env')],
             description: "Adds one or more translations to one of your dictionaries.",
             details: [
                 "Each translation should be in the format: WORD=TRANSLATED (no spaces within the translation).",
@@ -190,7 +189,6 @@ class ModDictionaryGame extends Module {
 
 
         this.mod('Commands').registerCommand(this, 'dg remove', {
-            environments: [this.param('env')],
             description: "Removes one or more translations from one of your dictionaries.",
             details: [
                 "List only the left-hand-side words to be removed from the dictionary.",
@@ -242,7 +240,6 @@ class ModDictionaryGame extends Module {
 
 
         this.mod('Commands').registerCommand(this, 'dg delete', {
-            environments: [this.param('env')],
             description: "Deletes a dictionary or category. All translations in it will be lost.",
             args: ["dictionary"]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -286,7 +283,6 @@ class ModDictionaryGame extends Module {
 
 
         this.mod('Commands').registerCommand(this, 'dg list', {
-            environments: [this.param('env')],
             description: "Lists existing dictionaries matching the given optional pattern.",
             details: [
                 "By default, all of your dictionaries will be listed. Use *|* to show all dictionaries."
@@ -326,7 +322,6 @@ class ModDictionaryGame extends Module {
 
 
         this.mod('Commands').registerCommand(this, 'dg show', {
-            environments: [this.param('env')],
             description: "Shows all translations in a given dictionary.",
             args: ["dictionary", "page"],
             minArgs: 1
@@ -371,7 +366,6 @@ class ModDictionaryGame extends Module {
 
 
         this.mod('Commands').registerCommand(this, 'dg play', {
-            environments: [this.param('env')],
             description: "Starts a new game.",
             details: [
                 "You can list dictionaries to include in the game. By default, all your dictionaries will be included.",
@@ -387,7 +381,6 @@ class ModDictionaryGame extends Module {
 
 
         this.mod('Commands').registerCommand(this, 'dg contest', {
-            environments: [this.param('env')],
             description: "Starts a new game for everyone in the channel.",
             details: [
                 "This command takes the same arguments as dg play ."
@@ -399,9 +392,9 @@ class ModDictionaryGame extends Module {
 
 
         this.mod('Commands').registerCommand(this, 'dg end', {
-            environments: [this.param('env')],
             description: "Ends an ongoing game immediately."
         }, (env, type, userid, channelid, command, args, handle, ep) => {
+            if (env.name != this.param('env')) return true;
 
             if (!this._playing) {
                 ep.reply("There is no ongoing game.");
@@ -711,19 +704,22 @@ class ModDictionaryGame extends Module {
     prepareGame(gametype) {
         //This function will return the dg play/dg contest handler. 
         return function(env, type, userid, channelid, command, args, handle, ep) {
+
+            if (env.name != this.param('env')) return true;
+
+            if (type == "regular" && this.param('channels').length && this.param('channels').indexOf(channelid) < 0) {
+                ep.reply("You can't play in this channel.");
+                return true;
+            }
+
+            if (this._playing) {
+                ep.reply("The game is already running.");
+                return true;
+            }
+
             //The handler creates and executes an async function. The async function returns a promise, which we ignore.
             //This allows us to use dictionary queries synchronously.
             (async function() {
-
-                if (type == "regular" && this.param('channels').length && this.param('channels').indexOf(channelid) < 0) {
-                    ep.reply("You can't play in this channel.");
-                    return;
-                }
-
-                if (this._playing) {
-                    ep.reply("The game is already running.");
-                    return;
-                }
 
                 let maxCount = this.param("playCount");
                 let timeout = this.param("playTimeout");
@@ -783,6 +779,7 @@ class ModDictionaryGame extends Module {
                 this._timer = setTimeout(() => this.playWord(), DELAY_START * 1000);
 
             }).apply(this);
+            
             return true;
         }.bind(this);
     }
