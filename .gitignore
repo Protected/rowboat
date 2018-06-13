@@ -2,7 +2,7 @@ node_modules
 config/config.json
 config/*.env.json
 config/*.mod.json
-*.data.json
+data/*
 test.js
 ModCustom*.js
 *.log

@@ -919,7 +919,7 @@ class ModRajio extends Module {
         }
         
         if (this.param('announcestatus')) {
-            this.denv.client.realClient.user.setActivity(song.name, {type: 'STREAMING'}).catch(() => {});
+            this.denv.client.realClient.user.setActivity(song.name, {type: 'PLAYING'}).catch(() => {});
         }
         
         let att = 1.0;
@@ -1237,7 +1237,7 @@ class ModRajio extends Module {
             if (this._nopreference[listener]) continue;
             for (let otherlistener in userdata.users) {
                 if (listeners.find((checklistener) => checklistener == otherlistener)) continue;
-                result += userdata.users[otherlistener] * (this.songrank.getSongLikeability(hash, otherlistener) || 0) * this.param(userdata.users[otherlistener] > 0 ? "pri.user.high" : "pri.user.low") / listeners.length;
+                result += userdata.users[otherlistener] * (this.songrank ? this.songrank.getSongLikeability(hash, otherlistener) : 0) * this.param(userdata.users[otherlistener] > 0 ? "pri.user.high" : "pri.user.low") / listeners.length;
             }
         }
         
@@ -1246,6 +1246,7 @@ class ModRajio extends Module {
     
     
     unanimousOpinion(hash, listeners, likeability) {
+        if (!this.songrank) return false;
         for (let listener of listeners) {
             let listenerlik = this.songrank.getSongLikeability(hash, listener);
             if (listenerlik === null || listenerlik === undefined || likeability > 0 && listenerlik < likeability || likeability < 0 && listenerlik > likeability) {
@@ -1347,7 +1348,7 @@ class ModRajio extends Module {
             priaplskipcounter: for (let ts in skipdata) {
                 if (ts < now - this.param('pri.skip.cap')) continue;
                 for (let userid of skipdata[ts]) {
-                    if (songrank.getSongLikeability(song.hash, userid) < this.param('pri.skip.cutoff')) {
+                    if (!songrank || songrank.getSongLikeability(song.hash, userid) < this.param('pri.skip.cutoff')) {
                         applicable += 1;
                         continue priaplskipcounter;
                     }

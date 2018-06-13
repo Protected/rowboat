@@ -133,6 +133,10 @@ class Module {
     stripNormalizedFormatting(text) {
         return text.replace(/__(.*?)__/g, "$1").replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1");
     }
+
+    escapeNormalizedFormatting(text) {
+        return text.replace(/__(.*?)__/g, "\\_\\_$1\\_\\_").replace(/\*\*(.*?)\*\*/g, "\\*\\*$1\\*\\*").replace(/\*(.*?)\*/g, "\\*$1\\*");
+    }
     
         
 }
