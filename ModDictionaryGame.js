@@ -306,8 +306,8 @@ class ModDictionaryGame extends Module {
                         ep.reply("Nothing to show.");
                     } else {
                         let pageEnd = Math.min(results.length - 1, pageStart + this.param('pageSize'));
-                        ep.reply(env.applyFormatting("Search for **" + this.escapeNormalizedFormatting(this.dictionaryMapToName(dictmap, env)) + "**: "
-                            + (pageStart + 1) + " to " + (pageEnd + 1)));
+                        ep.reply("Search for **" + this.escapeNormalizedFormatting(this.dictionaryMapToName(dictmap, env)) + "**: "
+                            + (pageStart + 1) + " to " + (pageEnd + 1));
                         for (let i = pageStart; i < results.length && i <= pageEnd; i++) {
                             ep.reply("  " + this.dictionaryMapToName(results[i], env, userid));
                         }
@@ -350,10 +350,10 @@ class ModDictionaryGame extends Module {
                         ep.reply("Nothing to show.");
                     } else {
                         let pageEnd = Math.min(results.length - 1, pageStart + this.param('pageSize'));
-                        ep.reply(env.applyFormatting("Contents of **" + this.escapeNormalizedFormatting(this.dictionaryMapToName(dictmap, env)) + "**: "
-                            + (pageStart + 1) + " to " + (pageEnd + 1)));
+                        ep.reply("Contents of **" + this.escapeNormalizedFormatting(this.dictionaryMapToName(dictmap, env)) + "**: "
+                            + (pageStart + 1) + " to " + (pageEnd + 1));
                         for (let i = pageStart; i < results.length && i <= pageEnd; i++) {
-                            ep.reply(env.applyFormatting("  *" + results[i].left + "* = " + results[i].right));
+                            ep.reply("  *" + results[i].left + "* = " + results[i].right);
                         }
                     }
                 })
@@ -779,7 +779,7 @@ class ModDictionaryGame extends Module {
                 this._timer = setTimeout(() => this.playWord(), DELAY_START * 1000);
 
             }).apply(this);
-            
+
             return true;
         }.bind(this);
     }
@@ -927,13 +927,15 @@ class ModDictionaryGame extends Module {
 
         if (this._count) {
             if (this._playing == PLAYING_PLAYER) {
-                //Display single player stats
-                let stats = this._stats[this._player];
-                env.msg(this._channelid, env.applyFormatting('**Score: __' + (stats.right * 3 + stats.almost) + '__**')
-                    + ` [Right: ${stats.right} (${(stats.right / this._count * 100).toFixed(1)}%)`
-                    + ` ; Almost: ${stats.almost} (${(stats.almost / this._count * 100).toFixed(1)}%)`
-                    + ` ; Wrong: ${stats.wrong} (${(stats.wrong / this._count * 100).toFixed(1)}%)`
-                    + ` ; Missed: ${this._missed} (${(this._missed / this._count * 100).toFixed(1)}%)]`);
+                if (this._stats[this._player]) {
+                    //Display single player stats
+                    let stats = this._stats[this._player];
+                    env.msg(this._channelid, env.applyFormatting('**Score: __' + (stats.right * 3 + stats.almost) + '__**')
+                        + ` [Right: ${stats.right} (${(stats.right / this._count * 100).toFixed(1)}%)`
+                        + ` ; Almost: ${stats.almost} (${(stats.almost / this._count * 100).toFixed(1)}%)`
+                        + ` ; Wrong: ${stats.wrong} (${(stats.wrong / this._count * 100).toFixed(1)}%)`
+                        + ` ; Missed: ${this._missed} (${(this._missed / this._count * 100).toFixed(1)}%)]`);
+                }
             } else {
                 //Display contest stats
                 let sortedStats = [];
@@ -976,7 +978,7 @@ class ModDictionaryGame extends Module {
         img.saveAlpha(1);
         img.filledRectangle(0, 0, w, h, gd.trueColorAlpha(255, 255, 255, 127));
         img.stringFT(gd.trueColorAlpha(color[0], color[1], color[2], 0), __dirname + '/DejaVuSansMono.ttf', size, 0, -1 * bb[6] + 2, -1 * bb[7] + 2, text);
-        let ptr = img.pngPtr();
+        let ptr = Buffer.from(img.pngPtr(), "binary");
         img.destroy();
         return ptr;
     }
