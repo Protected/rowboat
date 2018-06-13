@@ -27,6 +27,8 @@ const DELAY_LATEREPLY = 2;
 const TIMEOUT_MIN = 3;
 const TIMEOUT_MAX = 60;
 
+const FANCY_FONT = "meiryo.ttc";
+
 
 class ModDictionaryGame extends Module {
 
@@ -970,14 +972,14 @@ class ModDictionaryGame extends Module {
         if (!size) size = 32;  //pt
         if (!color) color = [0, 0, 0];  //R, G, B in decimal integers
         let img = gd.createTrueColorSync(1, 1);
-        let bb = img.stringFTBBox(gd.trueColorAlpha(255, 255, 255, 127), __dirname + '/DejaVuSansMono.ttf', size, 0, 0, 0, text);
+        let bb = img.stringFTBBox(gd.trueColorAlpha(255, 255, 255, 127), __dirname + '/' + FANCY_FONT, size, 0, 0, 0, text);
         let w = Math.abs(bb[4] - bb[0]) + 4, h = Math.abs(bb[5] - bb[1]) + 4;
         img.destroy();
         img = gd.createTrueColorSync(w, h);
         img.alphaBlending(0);
         img.saveAlpha(1);
         img.filledRectangle(0, 0, w, h, gd.trueColorAlpha(255, 255, 255, 127));
-        img.stringFT(gd.trueColorAlpha(color[0], color[1], color[2], 0), __dirname + '/DejaVuSansMono.ttf', size, 0, -1 * bb[6] + 2, -1 * bb[7] + 2, text);
+        img.stringFT(gd.trueColorAlpha(color[0], color[1], color[2], 0), __dirname + '/' + FANCY_FONT, size, 0, -1 * bb[6] + 2, -1 * bb[7] + 2, text);
         let ptr = Buffer.from(img.pngPtr(), "binary");
         img.destroy();
         return ptr;
