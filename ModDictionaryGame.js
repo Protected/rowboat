@@ -818,7 +818,7 @@ class ModDictionaryGame extends Module {
 
                 //Start the game
 
-                let categories = Object.keys(words.reduce((acc, current) => acc[current] = true, {}));
+                let categories = Object.keys(words.reduce((acc, current) => {acc[current] = true; return acc;}, {}));
 
                 this._playing = gametype;
                 this._timerLength = timeout;
