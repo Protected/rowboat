@@ -730,7 +730,24 @@ class ModDictionaryGame extends Module {
                 let mode = MODE_NORMAL;
                 let words = [];
 
-                for (let dictname of args.dictionary) {
+                //Simplify dictionary references in parameters (reduce [lists,of,alternatives])
+
+                let unresolved = args.dictionary;
+                let dictnames = [];
+                for (let dictname = unresolved.shift(); unresolved.length; dictname = unresolved.shift()) {
+                    let grp = /\[([^\[\]]+)\]/.exec(dictname);
+                    if (grp) {
+                        for (let alt of grp[1].split(",")) {
+                            unresolved.push(dictname.replace(grp[0], alt));
+                        }
+                    } else {
+                        dictnames.push(dictname);
+                    }
+                }
+
+                //Analyze parameters; Obtain words/settings
+
+                for (let dictname of dictnames) {
                     let matches;
 
                     matches = /^count=([0-9])+$/i.exec(dictname);
@@ -765,6 +782,44 @@ class ModDictionaryGame extends Module {
                     return;
                 }
 
+                //Aggregate alternative translations for the same word in both directions
+
+                let indexLeft = {}, indexRight = {};
+                for (let word of words) {
+                    if (!indexLeft[word.category]) indexLeft[word.category] = {}
+                    if (!indexRight[word.category]) indexLindexRighteft[word.category] = {}
+
+                    //Aggregate .left (source)
+                    if (!indexLeft[word.category][word.left]) {
+                        //First time we see category+left; index it
+                        indexLeft[word.category][word.left] = word;
+                    } else {
+                        //Not the first time. If .right is new for this category+left, add as alternative
+                        if (typeof indexLeft[word.category][word.left].right == "string") {
+                            indexLeft[word.category][word.left].right = [indexLeft[word.category][word.left].right];
+                        }
+                        if (indexLeft[word.category][word.left].right.indexOf(word.right) < 0) {
+                            indexLeft[word.category][word.left].right.push(word.right);
+                        }
+                    }
+
+                    //Same thing for .right (translation)
+                    if (!indexRight[word.category][word.right]) {
+                        indexRight[word.category][word.right] = word;
+                    } else {
+                        if (typeof indexRight[word.category][word.right].left == "string") {
+                            indexRight[word.category][word.right].left = [indexRight[word.category][word.right].left];
+                        }
+                        if (indexRight[word.category][word.right].left.indexOf(word.left) < 0) {
+                            indexRight[word.category][word.right].left.push(word.left);
+                        }
+                    }
+                }
+
+                //Start the game
+
+                let categories = Object.keys(words.reduce((acc, current) => acc[current] = true, {}));
+
                 this._playing = gametype;
                 this._timerLength = timeout;
                 this._mode = mode;
@@ -778,7 +833,7 @@ class ModDictionaryGame extends Module {
                 this._previous = {};
                 this._stats = {};
                 this._missed = 0;
-                this._showCategory = args.dictionary.length > 1;
+                this._showCategory = categories.length > 1;
 
                 ep.reply("The game is about to start. Get ready...");
                 this._timer = setTimeout(() => this.playWord(), DELAY_START * 1000);
@@ -815,6 +870,10 @@ class ModDictionaryGame extends Module {
         //Send word to channel
         let env = this.env(this.param('env'));
         let query = (this._current.mode == MODE_INVERTED ? this._current.right : this._current.left);
+        if (typeof query != "string") {
+            //It's an array of alternatives; pick one
+            query = query[Math.floor(random.fraction() * query.length)];
+        }
 
         if (gd && env.envName == "Discord") {
             //Fancy (png image of rendered font): Requires gd, node-gd and Discord
@@ -836,7 +895,7 @@ class ModDictionaryGame extends Module {
 
 
     charsInCommon(attempt, answer) {
-        let changes = diff.diffChars(answer, attempt);
+        let changes = diff.diffChars(answer, attempt, {ignoreCase: true});
         let common = 0;
         for (let change of changes) {
             if (!change.added && !change.removed) {
@@ -846,6 +905,18 @@ class ModDictionaryGame extends Module {
         return common;
     }
 
+    pickClosestAnswer(attempt, answers) {
+        let commonresult = 0;
+        let answerresult = null;
+        for (let answer of answers) {
+            let common = this.charsInCommon(attempt, answer);
+            if (!answerresult || common > commonresult) {
+                commonresult = common;
+                answerresult = answer;
+            }
+        }
+        return {common: commonresult, answer: answerresult};
+    }
 
     onMessage(env, type, message, authorid, channelid, rawobj) {
         if (env.name != this.param('env')) return false;
@@ -856,8 +927,10 @@ class ModDictionaryGame extends Module {
         this._consecSkips = 0;
         
         //Check how far off whatever the player said is from the desired answer/translation
-        let answer = (this._current.mode == MODE_NORMAL ? this._current.right : this._current.left);
-        let common = this.charsInCommon(message.trim(), answer);
+        let answers = (this._current.mode == MODE_NORMAL ? this._current.right : this._current.left);
+        if (typeof answers == "string") answers = [answers];
+        let pick = this.pickClosestAnswer(message.trim(), answers);
+        let common = pick.common, answer = pick.answer;
 
         if (answer.length == common) {
             //Not off at all - Right answer! Carry on.
@@ -869,9 +942,10 @@ class ModDictionaryGame extends Module {
             //This mechanism allows people to retry if they were still typing the answer to the previous question.
             let offprev = 0;
             if (this._previous && moment().unix() - this._wordStart < DELAY_LATEREPLY) {
-                let answerprev = (this._previous.mode == MODE_NORMAL ? this._previous.right : this._previous.left);
-                let commonprev = this.charsInCommon(message.trim(), answerprev);
-                offprev = commonprev / answerprev.length;
+                let answersprev = (this._previous.mode == MODE_NORMAL ? this._previous.right : this._previous.left);
+                if (typeof answerspref == "string") answersprev = [answersprev];
+                let pickprev = this.pickClosestAnswer(message.trim(), answersprev);
+                offprev = this.pickprev.common / this.pickprev.answer.length;
             }
 
             let offcurrent = common / answer.length;
@@ -885,7 +959,7 @@ class ModDictionaryGame extends Module {
             if (offcurrent > this.param("almost")) {
                 //Wrong answer, but close to the right one - count as "almost" and say the right answer.
                 this._stats[authorid].almost += 1;
-                env.msg(channelid, "Almost! The right answer was " + answer);
+                env.msg(channelid, "Almost! " + (answers.length == 1 ? "The" : "A") + " right answer was " + answer);
             } else {
                 //Just plain wrong!
                 this._stats[authorid].wrong += 1;
