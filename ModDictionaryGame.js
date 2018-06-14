@@ -473,7 +473,7 @@ class ModDictionaryGame extends Module {
                             category TEXT NOT NULL,
                             left TEXT NOT NULL,
                             right TEXT NOT NULL,
-                            UNIQUE (envname, userid, language, category, left)
+                            UNIQUE (envname, userid, language, category, left, right)
                         )
                     `, (err) => {
                         if (err) {
@@ -734,7 +734,8 @@ class ModDictionaryGame extends Module {
 
                 let unresolved = args.dictionary;
                 let dictnames = [];
-                for (let dictname = unresolved.shift(); unresolved.length; dictname = unresolved.shift()) {
+                do {
+                    let dictname = unresolved.shift();
                     let grp = /\[([^\[\]]+)\]/.exec(dictname);
                     if (grp) {
                         for (let alt of grp[1].split(",")) {
@@ -743,7 +744,7 @@ class ModDictionaryGame extends Module {
                     } else {
                         dictnames.push(dictname);
                     }
-                }
+                } while (unresolved.length);
 
                 //Analyze parameters; Obtain words/settings
 
@@ -784,7 +785,7 @@ class ModDictionaryGame extends Module {
 
                 //Aggregate alternative translations for the same word in both directions
 
-                let indexLeft = {}, indexRight = {};
+                let indexLeft = {}, indexRight = {}, aggregatedwords = [];
                 for (let word of words) {
                     if (!indexLeft[word.category]) indexLeft[word.category] = {}
                     if (!indexRight[word.category]) indexRight[word.category] = {}
@@ -792,12 +793,20 @@ class ModDictionaryGame extends Module {
                     //Aggregate .left (source)
                     if (!indexLeft[word.category][word.left]) {
                         //First time we see category+left; index it
-                        indexLeft[word.category][word.left] = word;
+                        if (indexRight[word.category][word.right]) {
+                            //Translation already had a block so let's copy that one
+                            indexLeft[word.category][word.left] = indexRight[word.category][word.right];
+                            //If .left is new on that block, add as alternative
+                            if (indexLeft[word.category][word.left].left.indexOf(word.left) < 0) {
+                                indexLeft[word.category][word.left].left.push(word.left);
+                            }
+                        } else {
+                            //100% new, create indexed translation
+                            indexLeft[word.category][word.left] = {left: [word.left], right: [word.right], category: word.category};
+                            aggregatedwords.push(indexLeft[word.category][word.left]);
+                        }
                     } else {
                         //Not the first time. If .right is new for this category+left, add as alternative
-                        if (typeof indexLeft[word.category][word.left].right == "string") {
-                            indexLeft[word.category][word.left].right = [indexLeft[word.category][word.left].right];
-                        }
                         if (indexLeft[word.category][word.left].right.indexOf(word.right) < 0) {
                             indexLeft[word.category][word.left].right.push(word.right);
                         }
@@ -805,16 +814,23 @@ class ModDictionaryGame extends Module {
 
                     //Same thing for .right (translation)
                     if (!indexRight[word.category][word.right]) {
-                        indexRight[word.category][word.right] = word;
-                    } else {
-                        if (typeof indexRight[word.category][word.right].left == "string") {
-                            indexRight[word.category][word.right].left = [indexRight[word.category][word.right].left];
+                        if (indexLeft[word.category][word.left]) {
+                            indexRight[word.category][word.right] = indexLeft[word.category][word.left];
+                            if (indexRight[word.category][word.right].right.indexOf(word.right) < 0) {
+                                indexRight[word.category][word.right].right.push(word.right);
+                            }
+                        } else {
+                            indexRight[word.category][word.right] = {left: [word.left], right: [word.right], category: word.category};
+                            aggregatedwords.push(indexRight[word.category][word.right]);
                         }
+                    } else {
                         if (indexRight[word.category][word.right].left.indexOf(word.left) < 0) {
                             indexRight[word.category][word.right].left.push(word.left);
                         }
                     }
                 }
+
+                words = aggregatedwords;
 
                 //Start the game
 
