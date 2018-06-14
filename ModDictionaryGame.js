@@ -872,14 +872,14 @@ class ModDictionaryGame extends Module {
         if (this._words.length > 1) {
             while (this._previous == this._current) {
                 this._current = this._words[Math.floor(random.fraction() * this._words.length)];
-                if (this._mode == MODE_BOTH) {
-                    this._current.mode = random.fraction() * 2 < 1 ? MODE_NORMAL : MODE_INVERTED;
-                } else {
-                    this._current.mode = this._mode;
-                }
             }
         } else {
             this._current = this._words[0];
+        }
+        if (this._mode == MODE_BOTH) {
+            this._current.mode = random.fraction() * 2 < 1 ? MODE_NORMAL : MODE_INVERTED;
+        } else {
+            this._current.mode = this._mode;
         }
 
         //Register challenge start time
