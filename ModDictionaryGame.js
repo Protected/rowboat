@@ -78,6 +78,8 @@ class ModDictionaryGame extends Module {
         //Dictionary mode for ongoing game(MODE_*)
         this._mode = null;
 
+        this._showCategory = false;
+
         //Amount of words asked so far and maximum amount before the game automatically ends
         this._count = 0;
         this._maxCount = null;
@@ -540,8 +542,8 @@ class ModDictionaryGame extends Module {
             params['$language'] = map.language;
         }
         if (map.category) {
-            expr.push('category = $category');
-            params['$category'] = map.category;
+            expr.push('category LIKE $category');
+            params['$category'] = map.category.replace("*", "%");
         }
         if (map.left) {
             expr.push ('left = $left');
@@ -576,8 +578,8 @@ class ModDictionaryGame extends Module {
             params['$language'] = map.language;
         }
         if (map.category) {
-            expr.push('category = $category');
-            params['$category'] = map.category;
+            expr.push('category LIKE $category');
+            params['$category'] = map.category.replace("*", "%");
         }
         expr = expr.join(' AND ');
         return new Promise((resolve, reject) => {
@@ -609,15 +611,15 @@ class ModDictionaryGame extends Module {
             params['$language'] = map.language;
         }
         if (map.category) {
-            expr.push('category = $category');
-            params['$category'] = map.category;
+            expr.push('category LIKE $category');
+            params['$category'] = map.category.replace("*", "%");
         }
         expr = expr.join(' AND ');
         if (!expr) expr = '1';
         return new Promise((resolve, reject) => {
             if (!this._db) reject('Database connection not found.');
             this._db.all(`
-                SELECT DISTINCT left, right
+                SELECT DISTINCT category, left, right
                 FROM dictionary
                 WHERE ${expr}
                 ORDER BY userid, language, category
@@ -776,6 +778,7 @@ class ModDictionaryGame extends Module {
                 this._previous = {};
                 this._stats = {};
                 this._missed = 0;
+                this._showCategory = args.dictionary.length > 1;
 
                 ep.reply("The game is about to start. Get ready...");
                 this._timer = setTimeout(() => this.playWord(), DELAY_START * 1000);
@@ -819,10 +822,12 @@ class ModDictionaryGame extends Module {
             let re = new discord.RichEmbed()
                 .attachFile({name: "query.png", attachment: png})
                 .setImage("attachment://query.png");
+            if (this._showCategory) re.setDescription(this._current.category);
             env.msg(this._channelid, re);
         } else {
             //Plaintext (normal)
-            env.msg(this._channelid, env.applyFormatting("**" + this.escapeNormalizedFormatting(query) + "**"));
+            env.msg(this._channelid, env.applyFormatting("**" + this.escapeNormalizedFormatting(query) + "**"
+                + (this._showCategory ? "(" + this._current.category + ")" : "")));
         }
         
         //Start countdown timer
