@@ -878,6 +878,8 @@ class ModDictionaryGame extends Module {
                     this._current.mode = this._mode;
                 }
             }
+        } else {
+            this._current = this._words[0];
         }
 
         //Register challenge start time
