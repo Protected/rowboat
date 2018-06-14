@@ -787,7 +787,7 @@ class ModDictionaryGame extends Module {
                 let indexLeft = {}, indexRight = {};
                 for (let word of words) {
                     if (!indexLeft[word.category]) indexLeft[word.category] = {}
-                    if (!indexRight[word.category]) indexLindexRighteft[word.category] = {}
+                    if (!indexRight[word.category]) indexRight[word.category] = {}
 
                     //Aggregate .left (source)
                     if (!indexLeft[word.category][word.left]) {
