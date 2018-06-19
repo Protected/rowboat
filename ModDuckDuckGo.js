@@ -51,7 +51,7 @@ class ModDuckDuckGo extends Module {
         
             let ddg = new DDG("Rowboat");
             let isDiscord = (env.envName == "Discord");
-            let query = args.string.join(" ");
+            let query = args.query.join(" ");
             let strict = /^\+(.*)/.exec(query);
             if (strict) query = strict[1];
 
