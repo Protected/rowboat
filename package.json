@@ -32,6 +32,7 @@
     "meteor-random": "0.0.3",
     "minimist": "^1.2.0",
     "moment": "^2.22.2",
+    "node-ddg-api": "^0.1.4",
     "node-gd": "^1.5.4",
     "node-opus": "^0.3.0",
     "readline-sync": "^1.4.9",

@@ -1237,7 +1237,7 @@ class ModRajio extends Module {
             if (this._nopreference[listener]) continue;
             for (let otherlistener in userdata.users) {
                 if (listeners.find((checklistener) => checklistener == otherlistener)) continue;
-                result += userdata.users[otherlistener] * (this.songrank ? this.songrank.getSongLikeability(hash, otherlistener) : 0) * this.param(userdata.users[otherlistener] > 0 ? "pri.user.high" : "pri.user.low") / listeners.length;
+                result += userdata.users[otherlistener] * (this.songrank ? (this.songrank.getSongLikeability(hash, otherlistener) || 0) : 0) * this.param(userdata.users[otherlistener] > 0 ? "pri.user.high" : "pri.user.low") / listeners.length;
             }
         }
         

@@ -1322,8 +1322,7 @@ class ModGrabber extends Module {
     
     removeByHash(hash) {
         if (!this._index[hash]) return false;
-        fs.unlink(this.param('downloadPath') + '/' + hash + '.mp3', (err) => {});
-        fs.unlink(this.param('downloadPath') + '/' + hash + '.pcm', (err) => {});
+        fs.unlink(this.param('downloadPath') + '/' + hash + '.' + (this._index[hash].format || 'mp3'), (err) => {});
         
         let info = this._index[hash];
         for (let sharer of info.sharedBy) {            
