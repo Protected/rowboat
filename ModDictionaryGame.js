@@ -19,6 +19,14 @@ const MODE_INVERTED = 'inverted';
 const MODE_BOTH = 'both';
 const MODES = [MODE_NORMAL, MODE_INVERTED, MODE_BOTH];
 
+const DISPLAY_PLAINTEXT = 'plaintext';
+const DISPLAY_NORMAL = 'normal';
+
+const CORRECTIONS_NONE = 'none';
+const CORRECTIONS_IMMEDIATE = 'immediate';
+const CORRECTIONS_END = 'end';
+const CORRECTIONS = [CORRECTIONS_NONE, CORRECTIONS_IMMEDIATE, CORRECTIONS_END];
+
 const PLAYING_PLAYER = 'player';
 const PLAYING_CHANNEL = 'channel';
 
@@ -45,6 +53,7 @@ class ModDictionaryGame extends Module {
         'pageSize',             //Amount of results to show at a time when listing dictionary contents
         'playCount',            //Default amount of questions in a game
         'playTimeout',          //Default timeout for answers (s)
+        'playCorrections',      //Default corrections mode to use
         'almost',               //How close to the right answer a wrong answer must be to count as 'almost' ]0..1]
         'maxConsecSkips'        //How many unanswered questions before the game shuts down
     ]; }
@@ -63,6 +72,7 @@ class ModDictionaryGame extends Module {
         this._params['pageSize'] = 10;
         this._params['playCount'] = 20;
         this._params['playTimeout'] = 15;
+        this._params['playCorrections'] = CORRECTIONS_NONE;
         this._params['almost'] = 0.75;
         this._params['maxConsecSkips'] = 5;
 
@@ -75,10 +85,16 @@ class ModDictionaryGame extends Module {
         this._timer = null;
         this._timerLength = 0;
 
-        //Dictionary mode for ongoing game(MODE_*)
+        //Dictionary mode for ongoing game (MODE_*)
         this._mode = null;
 
+        //Corrections mode for ongoing game (CORRECTIONS_*)
+        this._corrections = null;
+
+        this._wrong = {};
+
         this._showCategory = false;
+        this._forcePlaintext = false;
 
         //Amount of words asked so far and maximum amount before the game automatically ends
         this._count = 0;
@@ -374,9 +390,11 @@ class ModDictionaryGame extends Module {
             details: [
                 "You can list dictionaries to include in the game. By default, all your dictionaries will be included.",
                 "The following settings can also be provided as arguments:",
-                "  count=NUMBER : The amount of questions before the game automatically ends.",
-                "  timeout=NUMBER : Lower the amount of seconds you have to give your answer.",
+                "  count=NUMBER : The amount of questions before the game automatically ends [" + this.param("playCount") + "].",
+                "  timeout=NUMBER : Lower the amount of seconds you have to give your answer [" + this.param("playTimeout") + "].",
                 "  mode=" + MODES.join("|") + " : Ask for backwards translations or pick a random direction each time [normal].",
+                "  corrections=" + CORRECTIONS.join("|") + " : Display correct answers for mistakes made by the player [" + this.param("playCorrections") + "].",
+                "  display=" + DISPLAY_NORMAL + "|" + DISPLAY_PLAINTEXT + " : Force plaintext mode.",
                 "See also: dg contest"
             ],
             args: ["dictionary", true],
@@ -728,6 +746,8 @@ class ModDictionaryGame extends Module {
                 let maxCount = this.param("playCount");
                 let timeout = this.param("playTimeout");
                 let mode = MODE_NORMAL;
+                let display = DISPLAY_NORMAL;
+                let corrections = this.param("playCorrections");
                 let words = [];
 
                 //Simplify dictionary references in parameters (reduce [lists,of,alternatives])
@@ -760,6 +780,14 @@ class ModDictionaryGame extends Module {
                     let regex = new RegExp("mode=(" + MODES.join("|") + ")", "i");
                     matches = regex.exec(dictname);
                     if (matches) { mode = matches[1]; continue; }
+
+                    regex = new RegExp("display=(" + DISPLAY_NORMAL + "|" + DISPLAY_PLAINTEXT + ")", "i");
+                    matches = regex.exec(dictname);
+                    if (matches) { display = matches[1]; continue; }
+
+                    regex = new RegExp("corrections=(" + CORRECTIONS.join("|") + ")", "i");
+                    matches = regex.exec(dictname);
+                    if (matches) { corrections = matches[1]; continue; }
 
                     let dict = this.dictionaryNameToMap(dictname, env);
                     if (!dict) {
@@ -839,6 +867,8 @@ class ModDictionaryGame extends Module {
                 this._playing = gametype;
                 this._timerLength = timeout;
                 this._mode = mode;
+                this._corrections = corrections;
+                this._wrong = {};
                 this._count = 0;
                 this._consecSkips = 0;
                 this._maxCount = maxCount;
@@ -850,6 +880,7 @@ class ModDictionaryGame extends Module {
                 this._stats = {};
                 this._missed = 0;
                 this._showCategory = categories.length > 1;
+                this._forcePlaintext = (display == DISPLAY_PLAINTEXT);
 
                 ep.reply("The game is about to start. Get ready...");
                 this._timer = setTimeout(() => this.playWord(), DELAY_START * 1000);
@@ -893,7 +924,7 @@ class ModDictionaryGame extends Module {
             query = query[Math.floor(random.fraction() * query.length)];
         }
 
-        if (gd && env.envName == "Discord" && query.length <= 20) {
+        if (gd && env.envName == "Discord" && query.length <= 20 && !this._forcePlaintext) {
             //Fancy (png image of rendered font): Requires gd, node-gd and Discord
             let png = this.createPngFromText(query);
             let re = new discord.RichEmbed()
@@ -943,6 +974,8 @@ class ModDictionaryGame extends Module {
         if (!this._current) return false;  //Still in preparation time
 
         this._consecSkips = 0;
+
+        let query = (this._current.mode == MODE_INVERTED ? this._current.right : this._current.left);
         
         //Check how far off whatever the player said is from the desired answer/translation
         let answers = (this._current.mode == MODE_NORMAL ? this._current.right : this._current.left);
@@ -981,7 +1014,13 @@ class ModDictionaryGame extends Module {
             } else {
                 //Just plain wrong!
                 this._stats[authorid].wrong += 1;
-                env.msg(channelid, "WRONG!");
+                let also = "";
+                if (this._corrections == CORRECTIONS_IMMEDIATE) {
+                    also =  " " + (answers.length == 1 ? "The" : "A") + " right answer was " + answer;
+                } else if (this._corrections == CORRECTIONS_END) {
+                    this._wrong[query] = answer;
+                }
+                env.msg(channelid, "WRONG!" + also);
             }
 
         }
@@ -999,10 +1038,20 @@ class ModDictionaryGame extends Module {
         this._timer = null;
 
         let env = this.env(this.param('env'));
+
+        let query = (this._current.mode == MODE_INVERTED ? this._current.right : this._current.left);
+        let answers = (this._current.mode == MODE_NORMAL ? this._current.right : this._current.left);
+        let answer = (typeof answers == "string" ? answers : answers[0]);
         
         //Timer ran out.
         this._missed += 1;
-        env.msg(this._channelid, "Time up!");
+        let also = "";
+        if (this._corrections == CORRECTIONS_IMMEDIATE) {
+            also =  " " + (answers.length == 1 ? "The" : "A") + " right answer was " + answer;
+        } else if (this._corrections == CORRECTIONS_END) {
+            this._wrong[query] = answer;
+        }
+        env.msg(this._channelid, "Time up!" + also);
 
         this._consecSkips += 1;
         if (this._consecSkips >= this.param("maxConsecSkips")) {
@@ -1025,6 +1074,7 @@ class ModDictionaryGame extends Module {
         env.msg(this._channelid, "Game ended after " + this._count + " word" + (this._count != 1 ? "s" : "") + ".");
 
         if (this._count) {
+
             if (this._playing == PLAYING_PLAYER) {
                 if (this._stats[this._player]) {
                     //Display single player stats
@@ -1053,6 +1103,14 @@ class ModDictionaryGame extends Module {
                         + ` W: ${stats.wrong} (${(stats.wrong / this._count * 100).toFixed(1)}%)]`);
                 }
             }
+
+            if (this._corrections = CORRECTIONS_END && Object.keys(this._wrong).length) {
+                env.msg(this._channelid, "**__Your mistakes:__**");
+                for (let key in this._wrong) {
+                    env.msg(this._channelid, `  ${key} = **${this._wrong[key]}**`);
+                }
+            }
+
         }
 
         this._playing = null;
