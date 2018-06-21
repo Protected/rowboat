@@ -893,7 +893,7 @@ class ModDictionaryGame extends Module {
             query = query[Math.floor(random.fraction() * query.length)];
         }
 
-        if (gd && env.envName == "Discord") {
+        if (gd && env.envName == "Discord" && query.length <= 20) {
             //Fancy (png image of rendered font): Requires gd, node-gd and Discord
             let png = this.createPngFromText(query);
             let re = new discord.RichEmbed()
