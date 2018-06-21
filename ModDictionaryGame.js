@@ -963,7 +963,7 @@ class ModDictionaryGame extends Module {
                 let answersprev = (this._previous.mode == MODE_NORMAL ? this._previous.right : this._previous.left);
                 if (typeof answerspref == "string") answersprev = [answersprev];
                 let pickprev = this.pickClosestAnswer(message.trim(), answersprev);
-                offprev = this.pickprev.common / this.pickprev.answer.length;
+                offprev = pickprev.common / pickprev.answer.length;
             }
 
             let offcurrent = common / answer.length;
