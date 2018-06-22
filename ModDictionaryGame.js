@@ -800,6 +800,10 @@ class ModDictionaryGame extends Module {
                         continue;
                     }
 
+                    if (dict.userid === undefined) {
+                        dict.userid = userid;
+                    }
+
                     try {
                         let contents = await this.dictionaryContents(env.name, dict);
                         if (!contents.length) {
@@ -1153,9 +1157,10 @@ class ModDictionaryGame extends Module {
 
         //Generate image
         img = gd.createTrueColorSync(w, h);
-        img.alphaBlending(0);
         img.saveAlpha(1);
+        img.alphaBlending(0);
         img.filledRectangle(0, 0, w, h, gdbgcolor);
+        img.alphaBlending(1);
         img.stringFT(gdcolor, __dirname + '/' + font, size, 0, -1 * bb[6] + 2, -1 * bb[7] + 2, text);
         let ptr = Buffer.from(img.pngPtr(), "binary");
         img.destroy();
