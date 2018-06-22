@@ -35,8 +35,6 @@ const DELAY_LATEREPLY = 2;
 const TIMEOUT_MIN = 3;
 const TIMEOUT_MAX = 60;
 
-const FANCY_FONT = "meiryo.ttc";
-
 
 class ModDictionaryGame extends Module {
 
@@ -55,7 +53,11 @@ class ModDictionaryGame extends Module {
         'playTimeout',          //Default timeout for answers (s)
         'playCorrections',      //Default corrections mode to use
         'almost',               //How close to the right answer a wrong answer must be to count as 'almost' ]0..1]
-        'maxConsecSkips'        //How many unanswered questions before the game shuts down
+        'maxConsecSkips',       //How many unanswered questions before the game shuts down
+        'fancyColor',           //Discord embedded image text color
+        'fancyBgcolor',         //Discord embedded image background color (null for transparent)
+        'fancyFont',            //Discord embedded image font file
+        'fancySize',            //Discord embedded image font size'
     ]; }
 
     get requiredModules() { return [
@@ -75,6 +77,9 @@ class ModDictionaryGame extends Module {
         this._params['playCorrections'] = CORRECTIONS_NONE;
         this._params['almost'] = 0.75;
         this._params['maxConsecSkips'] = 5;
+        this._params['fancyColor'] = [0, 0, 0];
+        this._params['fancyBgcolor'] = [255, 255, 255];
+        this._params['fancyFont'] = 'meiryo.ttc';
 
         this._db = null;
 
@@ -926,7 +931,8 @@ class ModDictionaryGame extends Module {
 
         if (gd && env.envName == "Discord" && query.length <= 20 && !this._forcePlaintext) {
             //Fancy (png image of rendered font): Requires gd, node-gd and Discord
-            let png = this.createPngFromText(query);
+            let png = this.createPngFromText(query, this.param('fancyFont'), this.param('fancySize'),
+                    this.param('fancyColor'), this.param('fancyBgcolor'));
             let re = new discord.RichEmbed()
                 .attachFile({name: "query.png", attachment: png})
                 .setImage("attachment://query.png");
@@ -1123,21 +1129,42 @@ class ModDictionaryGame extends Module {
     //Auxiliary
 
 
-    createPngFromText(text, size, color) {
+    createPngFromText(text, font, size, color, bgcolor) {
         if (!size) size = 32;  //pt
         if (!color) color = [0, 0, 0];  //R, G, B in decimal integers
+
+        //Invert color if required for better contrast
+        let gdbgcolor;
+        if (bgcolor) {
+            gdbgcolor = gd.trueColorAlpha(bgcolor[0], bgcolor[1], bgcolor[2], 0);
+            if (this.isColorDark(color) == this.isColorDark(bgcolor)) {
+                color = color.map((channel) => 255 - channel);
+            }
+        } else {
+            gdbgcolor = gd.trueColorAlpha(255, 255, 255, 127);
+        }
+        let gdcolor = gd.trueColorAlpha(color[0], color[1], color[2], 0);
+
+        //Calculate image size
         let img = gd.createTrueColorSync(1, 1);
-        let bb = img.stringFTBBox(gd.trueColorAlpha(255, 255, 255, 127), __dirname + '/' + FANCY_FONT, size, 0, 0, 0, text);
+        let bb = img.stringFTBBox(gdbgcolor, __dirname + '/' + font, size, 0, 0, 0, text);
         let w = Math.abs(bb[4] - bb[0]) + 4, h = Math.abs(bb[5] - bb[1]) + 4;
         img.destroy();
+
+        //Generate image
         img = gd.createTrueColorSync(w, h);
         img.alphaBlending(0);
         img.saveAlpha(1);
-        img.filledRectangle(0, 0, w, h, gd.trueColorAlpha(255, 255, 255, 127));
-        img.stringFT(gd.trueColorAlpha(color[0], color[1], color[2], 0), __dirname + '/' + FANCY_FONT, size, 0, -1 * bb[6] + 2, -1 * bb[7] + 2, text);
+        img.filledRectangle(0, 0, w, h, gdbgcolor);
+        img.stringFT(gdcolor, __dirname + '/' + font, size, 0, -1 * bb[6] + 2, -1 * bb[7] + 2, text);
         let ptr = Buffer.from(img.pngPtr(), "binary");
         img.destroy();
+
         return ptr;
+    }
+
+    isColorDark(color) {
+        return (color[0] / 128 + color[1] / 85 + color[2] / 255) / 6 < 0.4;
     }
 
 }
