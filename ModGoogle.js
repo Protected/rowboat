@@ -46,7 +46,7 @@ class ModGoogle extends Module {
                 "For details on each parameter: https://developers.google.com/custom-search/json-api/v1/reference/cse/list#parameters"
             ],
             types: ["regular"]
-        }, (env, type, userid, channelid, command, args, handle, ep)=> {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             var url = 'https://www.googleapis.com/customsearch/v1?key=' + this.param('apikey') + '&cx=' + this.param('cx')
                     + '&num=' + this.param('results')

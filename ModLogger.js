@@ -153,7 +153,7 @@ class ModLogger extends Module {
             
             if (!this.ready(log)) {
                 if (!log.warned) {
-                    this.log('warning', 'Unable to open event log with template "' + log.outputFile + '" for channel "' + logchannel + '".');
+                    this.log('warn', 'Unable to open event log with template "' + log.outputFile + '" for channel "' + logchannel + '".');
                     log.warned = true;
                 }
                 continue;

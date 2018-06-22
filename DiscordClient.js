@@ -137,14 +137,17 @@ class DiscordClient extends ModernEventEmitter {
             }
             
             //Deliver message to Discord
-            pack.targetchan.send(
-                msgparts.join("\n"),
-                {
-                    disable_everyone: true,
-                    split: {char: "\n"},
-                    embed: embed
-                }
-            ).catch();
+            let todeliver = msgparts.join("\n");
+            let deliveropts = {
+                disable_everyone: true,
+                split: {char: "\n"},
+                embed: embed
+            };
+            if (todeliver.trim().match(/```$/)) {
+                deliveropts.split.prepend = '```';
+                deliveropts.split.append = '```';
+            }
+            pack.targetchan.send(todeliver, deliveropts).catch();
             
             //List environments that target the server the package was delivered to
             let notifyEnvironments = [];

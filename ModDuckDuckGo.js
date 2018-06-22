@@ -1,7 +1,7 @@
 /* Module: DuckDuckGo -- Adds a command, "duck", which performs a DuckDuckGo query. */
 
-var Module = require('./Module.js');
-var DDG = require('node-ddg-api').DDG;
+const Module = require('./Module.js');
+const DDG = require('node-ddg-api').DDG;
 
 try {
     var discord = require('discord.js');
@@ -47,10 +47,10 @@ class ModDuckDuckGo extends Module {
                 "Prefix your query with a + to use strict mode, which skips disambiguations and doesn't include related topics."
             ],
             types: ["regular"]
-        }, (env, type, userid, channelid, command, args, handle, ep)=> {
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let ddg = new DDG("Rowboat");
-            let isDiscord = (env.envName == "Discord");
+            let isDiscord = (env.envName == "Discord" && discord);
             let query = args.query.join(" ");
             let strict = /^\+(.*)/.exec(query);
             if (strict) query = strict[1];

@@ -929,7 +929,7 @@ class ModDictionaryGame extends Module {
             query = query[Math.floor(random.fraction() * query.length)];
         }
 
-        if (gd && env.envName == "Discord" && query.length <= 20 && !this._forcePlaintext) {
+        if (gd && env.envName == "Discord" && discord && query.length <= 20 && !this._forcePlaintext) {
             //Fancy (png image of rendered font): Requires gd, node-gd and Discord
             let png = this.createPngFromText(query, this.param('fancyFont'), this.param('fancySize'),
                     this.param('fancyColor'), this.param('fancyBgcolor'));

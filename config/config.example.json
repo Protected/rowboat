@@ -8,7 +8,7 @@
         "Commands"
     ],
     "paths": {
-        "logger": "[logs/]Y-MM-DD[.log]",
+        "logger": "[logs/]Y-MM[.log]",
         "data": "data/"
     }
 }
