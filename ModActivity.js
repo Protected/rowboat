@@ -41,7 +41,7 @@ class ModActivity extends Module {
        
         //Load data
         
-        this._activitydata = this.loadData();
+        this._activitydata = this.loadData(null, null, {quiet: true});
         if (this._activitydata === false) return false;
         
         for (let envname in this._activitydata) {

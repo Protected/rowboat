@@ -185,7 +185,9 @@ class Module {
         if (!datafile) datafile = this.name.toLowerCase() + ".data.json";
         let datafilepath = (options && options.abspath ? datafile : this.dataPath() + datafile);
 
-        this.log("Loading datafile: " + datafilepath);
+        if (!options || !options.quiet) {
+            this.log("Loading datafile: " + datafilepath);
+        }
 
         //Create or load file from the filesystem
 
@@ -223,7 +225,9 @@ class Module {
         if (!datafile) datafile = this.name.toLowerCase() + ".data.json";
         let datafilepath = (options && options.abspath ? datafile : this.dataPath() + datafile);
 
-        this.log("Saving datafile: " + datafilepath);
+        if (!options || !options.quiet) {
+            this.log("Saving datafile: " + datafilepath);
+        }
 
         jsonfile.writeFileSync(datafilepath, data, (options && options.pretty ? {spaces: 4} : {}));
     }

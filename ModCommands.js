@@ -14,7 +14,8 @@ class ModCommands extends Module {
         'defaultprefix',        //Default prefix for commands
         'allowedenvs',          //List of environments to activate this module on
         'prefixes',             //Per-environment command prefixes
-        'permissions'           //Map of permissions to override hardcoded Module defaults for each command
+        'permissions',          //Map of permissions to override hardcoded Module defaults for each command
+        'aliases',              //Map of aliases (alternative names) for commands registered by Modules.
     ]; }
     
     get isRootAccess() { return true; }
@@ -32,6 +33,11 @@ class ModCommands extends Module {
         
         //{command => [permission, ...], ...} Also supports: true (always allow) and false (disable command)
         this._params['permissions'] = {};
+
+        //{command => [alias, ...], ...} Note: Permission overrides for commands do not propagate to their aliases.
+        //You can rename a command by disabling it using a permission override and then providing an alias for it.
+        //However, you can independentlhy provide permission overrides for aliases.
+        this._params['aliases'] = {};
     
         this._commands = [];
         this._index = {};
@@ -346,6 +352,14 @@ class ModCommands extends Module {
             this.log('error', 'Unable to register the command ID "' + commandid + '" because the token "command" is reserved and cannot be used here.');
             return false;
         }
+
+        let aliases = this._params['aliases'][commandid];
+        if (Array.isArray(aliases)) {
+            for (let alias of aliases) {
+                this.log('-> Registering alias for the command ID "' + commandid +'": "' + alias + '"');
+                this.registerCommand(mod, alias, options, callback);
+            }
+        }
         
         let descriptor = {
             modName: mod.modName,
@@ -440,6 +454,15 @@ class ModCommands extends Module {
     //Register metadata for a group of commands shared by multiple subcommands.
     registerRootDetails(mod, commandroot, options) {
         commandroot = commandroot.toLowerCase();
+
+        let aliases = this._params['aliases'][commandroot];
+        if (Array.isArray(aliases)) {
+            for (let alias of aliases) {
+                this.log('-> Registering alias for the root "' + commandroot +'": "' + alias + '"');
+                this.registerRootDetails(mod, alias, options);
+            }
+        }
+
         let rootdescriptor = {
             modName: mod.modName,
             commandroot: commandroot,
