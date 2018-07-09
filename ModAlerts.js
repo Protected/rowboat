@@ -1,8 +1,6 @@
 /* Module: Alerts -- Adds a command, "alert", which allows users to specify alert patterns. */
 
-var Module = require('./Module.js');
-var jf = require('jsonfile');
-var fs = require('fs');
+const Module = require('./Module.js');
 
 class ModAlerts extends Module {
 
@@ -18,7 +16,7 @@ class ModAlerts extends Module {
     constructor(name) {
         super('Alerts', name);
         
-        this._params['datafile'] = 'alerts.data.json';
+        this._params['datafile'] = null;
         
         this._data = {};
     }
@@ -27,8 +25,8 @@ class ModAlerts extends Module {
     initialize(opt) {
         if (!super.initialize(opt)) return false;
 
-        this._params['datafile'] = this.dataPath() + this._params['datafile'];
-        this.loadData();
+        this._data = this.loadData();
+        if (this._data === false) return false;
 
         
         var replyEmptyList = (reply) => {
@@ -114,7 +112,7 @@ class ModAlerts extends Module {
                 ttl: ttl
             };
 
-            this.saveData();
+            this._data.save();
             ep.reply('Saved pattern `' + args.pattern + '` with message "' + args.message + '"');
 
             return true;
@@ -145,7 +143,7 @@ class ModAlerts extends Module {
 
             delete rules[args.pattern];
 
-            this.saveData();
+            this._data.save();
             ep.reply('Deleted pattern `' + args.pattern + '`');
 
             return true;
@@ -157,34 +155,7 @@ class ModAlerts extends Module {
     
     
     // # Module code below this line #
-    
-
-    saveData() {
-        var fullPath = this.param('datafile');
-        jf.writeFileSync(fullPath, this._data);
-    }
-    
-
-    loadData() {
-        var fullPath = this.param('datafile');
         
-        try {
-            fs.accessSync(fullPath, fs.F_OK);
-        } catch (e) {
-            jf.writeFileSync(fullPath, {});
-        }
-
-        try {
-            this._data = jf.readFileSync(fullPath);
-        } catch(e) {
-            return false;
-        }
-        
-        if (!this._data) this._data = {};
-        
-        return true;
-    }
-    
 
     onMessageSent(env, type, targetid, message) {
         let dirty = false;
@@ -214,7 +185,7 @@ class ModAlerts extends Module {
         }
 
         if (dirty) {
-            this.saveData();
+            this._data.save();
         }
     }
 

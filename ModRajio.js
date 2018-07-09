@@ -1,10 +1,9 @@
 /* Module: Rajio -- Grabber add-on for playing songs on discord audio channels. */
 
-var Module = require('./Module.js');
-var moment = require('moment');
-var random = require('meteor-random');
-var fs = require('fs');
-var jsonfile = require('jsonfile');
+const Module = require('./Module.js');
+const moment = require('moment');
+const random = require('meteor-random');
+const fs = require('fs');
 
 const PERM_ADMIN = 'administrator';
 const PERM_MOD = 'moderator';
@@ -79,7 +78,7 @@ class ModRajio extends Module {
     constructor(name) {
         super('Rajio', name);
         
-        this._params['datafile'] = 'rajio.data.json';
+        this._params['datafile'] = null;
         
         this._params['channel'] = null;
         this._params['songrank'] = null;
@@ -191,8 +190,8 @@ class ModRajio extends Module {
         }
         
         
-        this._params['datafile'] = this.dataPath() + this._params['datafile'];
-        this.loadData();
+        this._userdata = this.loadData();
+        if (this._userdata === false) return false;
         
         
         this._channel = this.param('channel');
@@ -682,7 +681,7 @@ class ModRajio extends Module {
                 
                 userdata.kw[keyword] = level;
                 this._userdata[userid] = userdata;
-                this.saveData();
+                this._userdata.save();
                 
                 ep.reply('OK.');
             
@@ -707,7 +706,7 @@ class ModRajio extends Module {
                 
                 delete userdata.kw[keyword];
                 this._userdata[userid] = userdata;
-                this.saveData();
+                this._userdata.save();
                 
                 ep.reply('OK.');
             
@@ -777,7 +776,7 @@ class ModRajio extends Module {
                 
                 userdata.users[otheruserid] = level;
                 this._userdata[userid] = userdata;
-                this.saveData();
+                this._userdata.save();
                 
                 ep.reply('OK.');
             
@@ -810,7 +809,7 @@ class ModRajio extends Module {
                 
                 delete userdata.users[otheruserid];
                 this._userdata[userid] = userdata;
-                this.saveData();
+                this._userdata.save();
                 
                 ep.reply('OK.');
             
@@ -1442,33 +1441,6 @@ class ModRajio extends Module {
         return priority;
     }
     
-    
-    //Load and save data file
-    
-    loadData() {
-        var datafile = this.param('datafile');
-     
-        try {
-            fs.accessSync(datafile, fs.F_OK);
-        } catch (e) {
-            jsonfile.writeFileSync(datafile, {});
-        }
-
-        try {
-            this._userdata = jsonfile.readFileSync(datafile);
-        } catch (e) {
-            return false;
-        }
-        if (!this._userdata) this._userdata = {};
-        
-        return true;
-    }
-
-    saveData() {
-        var datafile = this.param('datafile');
-        
-        jsonfile.writeFileSync(datafile, this._userdata);
-    }
     
 }
 

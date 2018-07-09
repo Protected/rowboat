@@ -1,8 +1,9 @@
 /* Module -- This superclass should be extended by all module implementations. */
 'use strict';
 
-var jsonfile = require('jsonfile');
-var logger = require('./Logger.js');
+const jsonfile = require('jsonfile');
+const fs = require('fs');
+const logger = require('./Logger.js');
 
 class Module {
 
@@ -10,14 +11,34 @@ class Module {
     get modName() { return this._modName; }
     
     
+    /* Settings to override in your module */
+
+    //Return a list of configuration parameters that *must* be provided in the config file.
     get requiredParams() { return []; }
+
+    //Return a list of configuration parameters that can be provided in the config file. They should be initialized in the constructor.
     get optionalParams() { return []; }
     
+    
+    //Return true if the user can set up multiple instances of the module.
+    //The user must provide
     get isMultiInstanceable() { return false; }
+
+    //Request from the kernel a reference to itself. Don't do that if you don't need it. You probably don't need it.
     get isRootAccess() { return false; }
     
+
+    //Configured environments instances must include environments of the types listed here for this module to load.
     get requiredEnvironments() { return []; }
+
+    //Modules of the types listed here must be instances for this module to load.
     get requiredModules() { return []; }
+
+
+    /* Constructor */
+
+    //Override the constructor in your module. The first line should be: super('YourModule', name);
+    //You should only use your constructor to initialize optional parameters and class attributes.
 
     constructor(modName, name) {
     
@@ -33,27 +54,11 @@ class Module {
     }    
     
     
-    param(key) { return this._params[key]; }
-    get params() { return Object.assign({}, this._params); }
-    
-    env(name) { return this._environments[name]; }
-    mod(name) { return this._modules[name]; }
-    
-    config(key) {
-        var path = key.split(".");
-        var config = this._globalConfig;
-        while (path.length && typeof config == "object") {
-            config = config[path.shift()];
-        }
-        if (path.length) config = null;
-        return config;
-    }
-    
-    dataPath() {
-        return this.config("paths.data");
-    }
-    
-    
+    //Override this method in your module. The top line should be: if (!super.initialize(opt)) return false;
+    //You can use this method to register event listeners.
+    //When initialize runs, environments aren't yet connected. If you want to interact with an environment on connect,
+    //  initialize should register a callback for the connect event for that environment.
+
     initialize(opt) {
         var params = {};
         
@@ -120,7 +125,35 @@ class Module {
         return true;
     }
     
+
+    /* Miscellaneous helpers */
+
+    //Obtain module parameters.
+    param(key) { return this._params[key]; }
+    get params() { return Object.assign({}, this._params); }
     
+    //Obtain a reference to another module or environment by instance name.
+    //Only use a hardcoded name if the target module is not multi instanceable and is returned by requiredModules.
+    env(name) { return this._environments[name]; }
+    mod(name) { return this._modules[name]; }
+    
+    //Obtain entries from the main configuration file.
+    config(key) {
+        var path = key.split(".");
+        var config = this._globalConfig;
+        while (path.length && typeof config == "object") {
+            config = config[path.shift()];
+        }
+        if (path.length) config = null;
+        return config;
+    }
+    
+    //Shortcut for obtaining the path where datafiles should be stored.
+    dataPath() {
+        return this.config("paths.data");
+    }
+    
+    //Internal module logging (do not use to log environment events).
     log(method, subject) {
         if (subject === undefined) {
             subject = method;
@@ -130,6 +163,9 @@ class Module {
     }
     
 
+    //Remove formatting from a string in such a way that the resulting message will not be formatted, even if environment-specific
+    //  formatting is applied to it.
+
     stripNormalizedFormatting(text) {
         return text.replace(/__(.*?)__/g, "$1").replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1");
     }
@@ -137,7 +173,61 @@ class Module {
     escapeNormalizedFormatting(text) {
         return text.replace(/__(.*?)__/g, "\\_\\_$1\\_\\_").replace(/\*\*(.*?)\*\*/g, "\\*\\*$1\\*\\*").replace(/\*(.*?)\*/g, "\\*$1\\*");
     }
+
+
+    /* JSON datastores */
     
+
+    //Load data from a datafile, if it exists, and return a datastore
+
+    loadData(datafile, def, options) {
+        if (!datafile) datafile = this.param('datafile');
+        if (!datafile) datafile = this.name.toLowerCase() + ".data.json";
+        let datafilepath = (options && options.abspath ? datafile : this.dataPath() + datafile);
+
+        this.log("Loading datafile: " + datafilepath);
+
+        //Create or load file from the filesystem
+
+        try {
+            fs.accessSync(datafilepath, fs.F_OK);
+        } catch (e) {
+            jsonfile.writeFileSync(datafilepath, (def !== undefined ? def : {}));
+            this.log('warn', "Error accessing data file.");
+        }
+
+        let jsondata;
+        try {
+            jsondata = jsonfile.readFileSync(datafilepath);
+        } catch (e) {
+            this.log('error', `Error reading datafile: ${e}`);
+            return false;
+        }
+        if (!jsondata) jsondata = (def !== undefined ? def : {});
+
+        //Save method that persists the datastore when called.
+
+        Object.defineProperty(jsondata, 'save', {
+            value: () => {
+                this.saveData(datafile, jsondata, options);
+            }
+        });
+
+        return jsondata;
+    }
+
+    //Save any data into a datafile.
+
+    saveData(datafile, data, options) {
+        if (!datafile) datafile = this.param('datafile');
+        if (!datafile) datafile = this.name.toLowerCase() + ".data.json";
+        let datafilepath = (options && options.abspath ? datafile : this.dataPath() + datafile);
+
+        this.log("Saving datafile: " + datafilepath);
+
+        jsonfile.writeFileSync(datafilepath, data, (options && options.pretty ? {spaces: 4} : {}));
+    }
+
         
 }
 

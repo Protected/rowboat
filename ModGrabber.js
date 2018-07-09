@@ -1,14 +1,13 @@
 /* Module: Grabber -- Downloads song files referenced in a Discord channel and maintains a dynamic index w/ API. */
 
-var Module = require('./Module.js');
-var fs = require('fs');
-var ytdl = require('ytdl-core');
-var FFmpeg = require('fluent-ffmpeg');
-var crypto = require('crypto');
-var jsonfile = require('jsonfile');
-var moment = require('moment');
-var random = require('meteor-random');
-var request = require('request');
+const Module = require('./Module.js');
+const fs = require('fs');
+const ytdl = require('ytdl-core');
+const FFmpeg = require('fluent-ffmpeg');
+const crypto = require('crypto');
+const moment = require('moment');
+const random = require('meteor-random');
+const request = require('request');
 
 const PERM_ADMIN = 'administrator';
 const PERM_MODERATOR = 'moderator';
@@ -93,7 +92,17 @@ class ModGrabber extends Module {
 
         //Load index
         
-        if (!this.loadIndex()) return false;
+        this._index = this.loadData(this.param('downloadPath') + '/' + INDEXFILE, {}, {abspath: true, pretty: true});
+        if (this._index === false) return false;
+        
+        for (let hash in this._index) {
+            let info = this._index[hash];
+            if (!this._indexSourceTypeAndId[info.sourceType]) {
+                this._indexSourceTypeAndId[info.sourceType] = {};
+            }
+            this._indexSourceTypeAndId[info.sourceType][info.sourceSpecificId] = info;
+        }
+
         this.calculateDownloadPathUsage();
         
         
@@ -380,7 +389,7 @@ class ModGrabber extends Module {
             
             this._index[hash][args.field] = args.value.join(' ');
             
-            this.saveIndex();
+            this._index.save();
             
             ep.reply("Ok.");
         
@@ -490,7 +499,7 @@ class ModGrabber extends Module {
         
             if (this._index[hash].keywords.indexOf(args.keyword) < 0) {
                 this._index[hash].keywords.push(args.keyword);
-                this.saveIndex();
+                this._index.save();
                 ep.reply("Ok.");
             } else {
                 ep.reply("Already existed.");
@@ -532,7 +541,7 @@ class ModGrabber extends Module {
             let ind = this._index[hash].keywords.indexOf(args.keyword);
             if (ind > -1) {
                 this._index[hash].keywords.splice(ind, 1);
-                this.saveIndex();
+                this._index.save();
                 ep.reply("Ok.");
             } else {
                 ep.reply("Doesn't exist.");
@@ -549,41 +558,7 @@ class ModGrabber extends Module {
     // # Module code below this line #
     
     
-    //Index file manipulation
-
-    loadIndex() {
-        var indexfile = this.param('downloadPath') + '/' + INDEXFILE;
-     
-        try {
-            fs.accessSync(indexfile, fs.F_OK);
-        } catch (e) {
-            jsonfile.writeFileSync(indexfile, {});
-        }
-
-        try {
-            this._index = jsonfile.readFileSync(indexfile);
-        } catch (e) {
-            return false;
-        }
-        if (!this._index) this._index = {};
-        
-        for (let hash in this._index) {
-            let info = this._index[hash];
-            if (!this._indexSourceTypeAndId[info.sourceType]) {
-                this._indexSourceTypeAndId[info.sourceType] = {};
-            }
-            this._indexSourceTypeAndId[info.sourceType][info.sourceSpecificId] = info;
-        }
-        
-        return true;
-    }
-
-    saveIndex() {
-        var indexfile = this.param('downloadPath') + '/' + INDEXFILE;
-        
-        jsonfile.writeFileSync(indexfile, this._index, {spaces: 4});
-    }
-    
+    //Stats file manipulation
     
     loadStats() {
         if (this._stats) return true;
@@ -619,9 +594,7 @@ class ModGrabber extends Module {
     }
     
     saveStats() {
-        let statsfile = this.param('downloadPath') + '/' + STATSFILE;
-        
-        jsonfile.writeFileSync(statsfile, this._stats, {spaces: 4});
+        this.saveData(this.param('downloadPath') + '/' + STATSFILE, this._stats, {abspath: true, pretty: true});
     }
     
     
@@ -1161,7 +1134,7 @@ class ModGrabber extends Module {
                         this.setUserStat(mp.author, "sharemaxlength", Math.max(this.getUserStat(mp.author, "sharemaxlength") || Number.MAX_VALUE, info.length));
                         this.incrUserStat(mp.author, "shares");
                     }
-                    this.saveIndex();
+                    this._index.save();
                 }
                 if (callbacks.exists) callbacks.exists(messageObj, mp.authorName, mp.reply, hash);
                 return;
@@ -1234,7 +1207,7 @@ class ModGrabber extends Module {
                 }
 
                 this._index[hash] = entry;
-                this.saveIndex();
+                this._index.save();
                 
                 if (!this._indexSourceTypeAndId[entry.sourceType]) {
                     this._indexSourceTypeAndId[entry.sourceType] = {};
@@ -1351,7 +1324,7 @@ class ModGrabber extends Module {
         }
         
         delete this._index[hash];
-        this.saveIndex();
+        this._index.save();
         return true;
     }
     
@@ -1512,7 +1485,7 @@ class ModGrabber extends Module {
     setSongMeta(hash, field, value) {
         if (!this._index[hash]) return false;
         this._index[hash][field] = value;
-        this.saveIndex();
+        this._index.save();
         return true;
     }
 
@@ -1522,7 +1495,7 @@ class ModGrabber extends Module {
         var ret = false;
         if (this._index[hash].keywords.indexOf(keyword) < 0) {
             this._index[hash].keywords.push(keyword);
-            this.saveIndex();
+            this._index.save();
             ret = true;
         }
         return ret;
@@ -1534,7 +1507,7 @@ class ModGrabber extends Module {
         var ret = false;
         if (ind > -1) {
             this._index[hash].keywords.splice(ind, 1);
-            this.saveIndex();
+            this._index.save();
             ret = true;
         }
         return ret;

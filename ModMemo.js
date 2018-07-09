@@ -1,11 +1,9 @@
 /* Module: Memo -- Save a public message for another user to be auto-delivered on activity. */
 
-var Module = require('./Module.js');
-var fs = require('fs');
-var jsonfile = require('jsonfile');
-var moment = require('moment');
+const Module = require('./Module.js');
+const moment = require('moment');
 
-var PERM_ADMIN = 'administrator';
+const PERM_ADMIN = 'administrator';
 
 class ModMemo extends Module {
 
@@ -27,7 +25,7 @@ class ModMemo extends Module {
     constructor(name) {
         super('Memo', name);
         
-        this._params['datafile'] = 'memo.data.json';
+        this._params['datafile'] = null;
         this._params['outboxSize'] = 10;
         this._params['inboxDisplaySize'] = 10;
         this._params['inboxTsCutoff'] = 2592000;  //30 days
@@ -52,8 +50,23 @@ class ModMemo extends Module {
        
         //Load data
         
-        this._params['datafile'] = this.dataPath() + this._params['datafile'];
-        if (!this.loadMemos()) return false;
+        this._memo = this.loadData();
+        if (this._memo === false) return false;
+
+        //Next ID
+        
+        this._nextId = Object.keys(this._memo).reduce((highestId, id) => Math.max(highestId, id), 0) + 1;
+        
+        //Build indices
+        
+        for (let id in this._memo) {
+            let register = this._memo[id];
+            this.indexFromHandle(register);
+            this.indexFromUserid(register);
+            this.indexToHandle(register);
+            this.indexToDisplay(register);
+            this.indexToUserid(register);
+        }
         
 
         //Register callbacks
@@ -137,7 +150,7 @@ class ModMemo extends Module {
             ep.priv("Your message has successfully been scheduled for delivery with the ID **" + register.id + "**.");
             this.log('Registered new message ' + register.id + ' for delivery: ' + userid + ' on ' + env.name + '. Recipients: ' + elements.to.length);
             
-            this.saveMemos();
+            this._memo.save();
             
             return true;
         };
@@ -186,7 +199,7 @@ class ModMemo extends Module {
                 this.log('Canceled message ' + id + ' by request from ' + userid + ' on ' + env.name);
             }
             
-            this.saveMemos();
+            this._memo.save();
             
             return true;
         });
@@ -318,7 +331,7 @@ class ModMemo extends Module {
             
             }
             
-            if (changes) this.saveMemos();
+            if (changes) this._memo.save();
             
             return true;
         });
@@ -356,49 +369,6 @@ class ModMemo extends Module {
         if (minutes) result += (minutes + "m") + " ";
         if (delay) result += (delay + "s") + " ";
         return result.trim();
-    }
-    
-    
-    //Memo file manipulation
-
-    loadMemos() {
-        var datafile = this.param('datafile');
-     
-        try {
-            fs.accessSync(datafile, fs.F_OK);
-        } catch (e) {
-            jsonfile.writeFileSync(datafile, {});
-        }
-
-        try {
-            this._memo = jsonfile.readFileSync(datafile);
-        } catch (e) {
-            return false;
-        }
-        if (!this._memo) this._memo = {};
-        
-        //Next ID
-        
-        this._nextId = Object.keys(this._memo).reduce((highestId, id) => Math.max(highestId, id), 0) + 1;
-        
-        //Build indices
-        
-        for (let id in this._memo) {
-            let register = this._memo[id];
-            this.indexFromHandle(register);
-            this.indexFromUserid(register);
-            this.indexToHandle(register);
-            this.indexToDisplay(register);
-            this.indexToUserid(register);
-        }
-        
-        return true;
-    }
-
-    saveMemos() {
-        var datafile = this.param('datafile');
-        
-        jsonfile.writeFileSync(datafile, this._memo);
     }
     
     
@@ -831,7 +801,7 @@ class ModMemo extends Module {
             }
         }
         
-        if (changed) this.saveMemos();
+        if (changed) this._memo.save();
     }
     
     

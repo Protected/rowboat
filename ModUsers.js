@@ -1,8 +1,6 @@
 /* Module: Users -- Manage "known" user accounts and permission flags. */
 
 var Module = require('./Module.js');
-var fs = require('fs');
-var jsonfile = require('jsonfile');
 
 var PERM_ADMIN = 'administrator';
 var PERM_MOD = 'moderator';
@@ -17,7 +15,7 @@ class ModUsers extends Module {
     constructor(name) {
         super('Users', name);
         
-        this._params['datafile'] = 'users.data.json';
+        this._params['datafile'] = null;
         
         this._userdata = [];
         this._userhandles = {};
@@ -30,8 +28,13 @@ class ModUsers extends Module {
        
         //Load data
         
-        this._params['datafile'] = this.dataPath() + this._params['datafile'];
-        if (!this.loadUsers()) return false;
+        this._userdata = this.loadData(null, []);
+        if (this._userdata === false) return false;
+        
+        this._userhandles = {};
+        for (let eachuser of this._userdata) {
+            this._userhandles[eachuser.handle] = eachuser;
+        }
 
         
         //Register callbacks
@@ -260,39 +263,6 @@ class ModUsers extends Module {
 
     //User account manipulation (new accounts only have a handle)
 
-    loadUsers() {
-        var datafile = this.param('datafile');
-     
-        try {
-            fs.accessSync(datafile, fs.F_OK);
-        } catch (e) {
-            jsonfile.writeFileSync(datafile, []);
-            this.log('error', "Error accessing data file.");
-        }
-
-        try {
-            this._userdata = jsonfile.readFileSync(datafile);
-        } catch (e) {
-            this.log('error', `Error reading datafile: ${e}`);
-            return false;
-        }
-        if (!this._userdata) this._userdata = [];
-        
-        this._userhandles = {};
-        for (let eachuser of this._userdata) {
-            this._userhandles[eachuser.handle] = eachuser;
-        }
-        
-        return true;
-    }
-
-    saveUsers() {
-        var datafile = this.param('datafile');
-        
-        jsonfile.writeFileSync(datafile, this._userdata);
-    }
-
-
     addUser(handle) {
         if (this._userhandles[handle]) return false;
         
@@ -308,7 +278,7 @@ class ModUsers extends Module {
 
         this.log(`New user added: ${newuser}`);
 
-        this.saveUsers();
+        this._userdata.save();
         return true;
     }
 
@@ -323,7 +293,7 @@ class ModUsers extends Module {
         delete this._userhandles[handle];
 
         this.log(`Deleted user ${handle}`);
-        this.saveUsers();
+        this._userdata.save();
         return true;
     }
 
@@ -340,7 +310,7 @@ class ModUsers extends Module {
         delete this._userhandles[fromhandle];
         this._userhandles[tohandle] = desc;
 
-        this.saveUsers();
+        this._userdata.save();
         return true;
     }
 
@@ -361,7 +331,7 @@ class ModUsers extends Module {
             changed = true;
         }
 
-        if (changed) this.saveUsers();
+        if (changed) this._userdata.save();
         return true;
     }
 
@@ -380,7 +350,7 @@ class ModUsers extends Module {
             i -= 1;
         }
         
-        if (changed) this.saveUsers();
+        if (changed) this._userdata.save();
         return true;
     }
 
@@ -446,7 +416,7 @@ class ModUsers extends Module {
         }
         
         if (changed) {
-            this.saveUsers();
+            this._userdata.save();
             this.log(`Successfuly added ${perms} to user ${handle}`);
         }
         return true;
@@ -470,7 +440,7 @@ class ModUsers extends Module {
         
         if (changed) {
             this.log(`Successfuly removed ${perms} from user ${handle}`);
-            this.saveUsers();
+            this._userdata.save();
         }
         return true;
     }

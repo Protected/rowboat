@@ -1,9 +1,7 @@
 /* Module: Activity -- Commands for checking a user's most recent activity/presence. */
 
-var Module = require('./Module.js');
-var fs = require('fs');
-var jsonfile = require('jsonfile');
-var moment = require('moment');
+const Module = require('./Module.js');
+const moment = require('moment');
 
 class ModActivity extends Module {
 
@@ -22,7 +20,7 @@ class ModActivity extends Module {
     constructor(name) {
         super('Activity', name);
         
-        this._params['datafile'] = 'activity.data.json';
+        this._params['datafile'] = null;
         this._params['linesPerUser'] = 5;
         this._params['channelblacklist'] = [];
         
@@ -43,12 +41,20 @@ class ModActivity extends Module {
        
         //Load data
         
-        this._params['datafile'] = this.dataPath() + this._params['datafile'];
-        if (!this.loadActivity()) return false;
+        this._activitydata = this.loadData();
+        if (this._activitydata === false) return false;
         
+        for (let envname in this._activitydata) {
+            for (let nicknamelc in this._activitydata[envname]) {
+                let register = this._activitydata[envname][nicknamelc];
+                this.authorSeen(envname, register);
+                this.authorSpoke(envname, register);
+            }
+        }
+
         var self = this;
         this._activitysaver = setInterval(() => {
-            self.saveActivity.apply(self, null);
+            self._activitydata.save();
         }, 30000);
 
 
@@ -220,42 +226,6 @@ class ModActivity extends Module {
 
 
     //Activity file manipulation
-
-    loadActivity() {
-        var datafile = this.param('datafile');
-     
-        try {
-            fs.accessSync(datafile, fs.F_OK);
-        } catch (e) {
-            jsonfile.writeFileSync(datafile, {});
-        }
-
-        try {
-            this._activitydata = jsonfile.readFileSync(datafile);
-        } catch (e) {
-            return false;
-        }
-        if (!this._activitydata) this._activitydata = {};
-        
-        //Build indices
-        
-        for (let envname in this._activitydata) {
-            for (let nicknamelc in this._activitydata[envname]) {
-                let register = this._activitydata[envname][nicknamelc];
-                this.authorSeen(envname, register);
-                this.authorSpoke(envname, register);
-            }
-        }
-        
-        return true;
-    }
-
-    saveActivity() {
-        var datafile = this.param('datafile');
-        
-        jsonfile.writeFileSync(datafile, this._activitydata);
-    }
-    
     
     getNickRegister(env, nickname) {
         var envregister = this._activitydata[env];

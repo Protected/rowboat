@@ -1,5 +1,5 @@
-var jsonfile = require('jsonfile');
-var logger = require('./Logger.js');
+const jsonfile = require('jsonfile');
+const logger = require('./Logger.js');
 
 var config;
 var environments = {};

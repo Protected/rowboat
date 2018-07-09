@@ -1,8 +1,6 @@
 /* Module: FreeRoles -- Allows user to add or remove certain Discord roles to themselves. */
 
 var Module = require('./Module.js');
-var fs = require('fs');
-var jsonfile = require('jsonfile');
 
 var PERM_ADMIN = 'administrator';
 
@@ -29,7 +27,7 @@ class ModFreeRoles extends Module {
     constructor(name) {
         super('FreeRoles', name);
         
-        this._params['datafile'] = 'freeroles.data.json';
+        this._params['datafile'] = null;
         
         //{ENVNAME: {LCROLE: {name: ROLE, desc: DESCRIPTION}, ...}, ...}
         this._freeRoles = {};
@@ -41,8 +39,8 @@ class ModFreeRoles extends Module {
         
         //Load data
         
-        this._params['datafile'] = this.dataPath() + this._params['datafile'];
-        if (!this.loadData()) return false;
+        this._freeRoles = this.loadData();
+        if (this._freeRoles === false) return false;
         
         
         //Register callbacks
@@ -64,7 +62,7 @@ class ModFreeRoles extends Module {
                     this._freeRoles[env.name][lcrolenew] = this._freeRoles[env.name][lcrole];
                     delete this._freeRoles[env.name][lcrole];
                     this._freeRoles[env.name][lcrolenew].name = newRole.name;
-                    this.saveData();
+                    this._freeRoles.save();
                 }
             });
             
@@ -73,7 +71,7 @@ class ModFreeRoles extends Module {
                 let lcrole = role.name.toLowerCase();
                 if (this._freeRoles[env.name] && this._freeRoles[env.name][lcrole]) {
                     delete this._freeRoles[env.name][lcrole];
-                    this.saveData();
+                    this._freeRoles.save();
                 }
             });
         });
@@ -240,7 +238,7 @@ class ModFreeRoles extends Module {
                 desc: args.description.join(" ")
             };
             
-            this.saveData();
+            this._freeRoles.save();
             
             ep.reply('Role "' + args.role + '" added successfully.');
             
@@ -265,7 +263,7 @@ class ModFreeRoles extends Module {
             
             delete roles[lcrole];
             
-            this.saveData();
+            this._freeRoles.save();
             
             ep.reply('Role "' + args.role + '" removed successfully.');
             
@@ -279,33 +277,6 @@ class ModFreeRoles extends Module {
     
     // # Module code below this line #
 
-
-    //Data file manipulation
-
-    loadData() {
-        var datafile = this.param('datafile');
-     
-        try {
-            fs.accessSync(datafile, fs.F_OK);
-        } catch (e) {
-            jsonfile.writeFileSync(datafile, {});
-        }
-
-        try {
-            this._freeRoles = jsonfile.readFileSync(datafile);
-        } catch (e) {
-            return false;
-        }
-        if (!this._freeRoles) this._freeRoles = {};
-        
-        return true;
-    }
-
-    saveData() {
-        var datafile = this.param('datafile');
-        
-        jsonfile.writeFileSync(datafile, this._freeRoles);
-    }
     
     
 }
