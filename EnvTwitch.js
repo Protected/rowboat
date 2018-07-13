@@ -61,6 +61,7 @@ class EnvTwitch extends Environment {
 
                 this.log("Environment is now ready!");
                 this.emit('connected', this);
+                this._hasConnected = true;
                 resolve(this._client);
             });
             

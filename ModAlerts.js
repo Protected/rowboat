@@ -4,7 +4,6 @@ const Module = require('./Module.js');
 
 class ModAlerts extends Module {
 
-
     get optionalParams() { return [
         'datafile'
     ]; }

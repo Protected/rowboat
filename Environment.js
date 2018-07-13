@@ -21,6 +21,8 @@ class Environment extends ModernEventEmitter {
     
         this._envName = envName;
         this._name = name;
+
+        this._hasConnected = false;
         
         this._params = {};
         
@@ -86,6 +88,23 @@ class Environment extends ModernEventEmitter {
         }
     }
     
+    get hasConnected() {
+        return this._hasConnected;
+    }
+
+    whenConnected() {
+        //Return a promise that is resolved when the environment is connected
+        if (this._hasConnected) {
+            return Promise.resolve(this);
+        } else {
+            return new Promise((resolve, reject) => {
+                this.on('connected', (env) => {
+                    resolve(env);
+                });
+            });
+        }
+    }
+
 
     connect() {}
     disconnect() {}
@@ -126,10 +145,10 @@ class Environment extends ModernEventEmitter {
     displayNameToRoleId(displayName) { return null; }
     
     
-    normalizeFormatting(text) { return text; }
-    applyFormatting(text) { return text; }
+    normalizeFormatting(text) { return text; }                          //Convert formatting to a cross-environment normalized format
+    applyFormatting(text) { return text; }                              //Convert normalized formatting to environment-specific formatting
     
-    stripNormalizedFormatting(text) {
+    stripNormalizedFormatting(text) {                                   //Remove normalized formatting
         return text.replace(/__(.*?)__/g, "$1").replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1");
     }
 

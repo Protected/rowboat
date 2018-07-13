@@ -73,6 +73,7 @@ class EnvIRC extends Environment {
             
             this._client.addListener('registered', (messageObj) => {
                 this.emit('connected', this);
+                this._hasConnected = true;
                 if (this._client.nick != params.nickname) {
                     this.log('warning', "I am " + this._client.nick + " but should be " + params.nickname + "; Will try to retake.");
                     this._retake = setInterval(() => {

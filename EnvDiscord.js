@@ -47,7 +47,7 @@ class EnvDiscord extends Environment {
 
         this.log(`Connecting to ${params.servername}`);
 
-        this._localClient.prepareClient(this, this.param('token'), this.param('sendDelay'))
+        return this._localClient.prepareClient(this, this.param('token'), this.param('sendDelay'))
             .then((client) => {
                 this._client = client;
                 this._server = client.guilds.find("name", params.servername);
@@ -190,6 +190,7 @@ class EnvDiscord extends Environment {
                 
                 this.log("Environment is now ready!");
                 
+                this._hasConnected = true;
                 this.emit('connected', this);
             });
     }
