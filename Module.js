@@ -64,13 +64,15 @@ class Module {
         
         //Load and check parameters
         
-        var configname = this._modName.toLowerCase();
-        if (this.isMultiInstanceable) configname = this._name.toLowerCase() + "." + configname;
-        configname = "config/" + configname + ".mod.json";
+        var fileName = this.configfile;
         try {
-            params = jsonfile.readFileSync(configname);
+            params = jsonfile.readFileSync(fileName);
             this.log('Initializing module of type ' + this._modName + '.');
-        } catch(e) {}
+        } catch(e) {
+            if (e.code !== 'ENOENT') {
+                this.log('error', `Error trying to load the config file ${fileName} because of: ${e}`);
+            }
+        }
 
         for (let reqParam of this.requiredParams) {
             if (params[reqParam] !== undefined && params[reqParam] !== null) this._params[reqParam] = params[reqParam];
@@ -131,6 +133,13 @@ class Module {
     //Obtain module parameters.
     param(key) { return this._params[key]; }
     get params() { return Object.assign({}, this._params); }
+
+    get configfile() { 
+        let configname = this._modName.toLowerCase();
+        if (this.isMultiInstanceable) configname = this._name.toLowerCase() + "." + configname;
+        configname = "config/" + configname + ".mod.json";
+        return configname;
+    }
     
     //Obtain a reference to another module or environment by instance name.
     //Only use a hardcoded name if the target module is not multi instanceable and is returned by requiredModules.

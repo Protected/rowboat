@@ -31,6 +31,7 @@ class Environment extends ModernEventEmitter {
     
     param(key) { return this._params[key]; }
     get params() { return Object.assign({}, this._params); }
+    get configfile() { return "config/" + this._name.toLowerCase() + "." + this._envName.toLowerCase() + ".env.json"; }
     
     
     initialize(sharedInstances) {
@@ -38,7 +39,7 @@ class Environment extends ModernEventEmitter {
         
         //Load and check parameters
         
-        var fileName = "config/" + this._name.toLowerCase() + "." + this._envName.toLowerCase() + ".env.json";
+        var fileName = this.configfile;
         try {
             params = jsonfile.readFileSync(fileName);
             this.log(`Initializing environment of type ${this._envName}.`);
