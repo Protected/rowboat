@@ -539,8 +539,6 @@ class ModRSS extends Module {
                     }
                 }
 
-                this.log("Feed '" + feedid + "' updated successfully.");
-
                 feed.latest = moment().unix();
                 feed.latestresult = RESULT_SUCCESS;
                 this._data.save();
