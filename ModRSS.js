@@ -518,6 +518,8 @@ class ModRSS extends Module {
             
             parser.on("end", () => {
                 if (received.length) {
+                    let bootstrap = !feed.data.length;
+
                     received.reverse();
 
                     if (received[0].pubDate) {
@@ -531,7 +533,7 @@ class ModRSS extends Module {
                         feed.data.push(entry);
                         this._index[feedid][this.rssId(entry)] = entry;
         
-                        if (env && feed.channelid) {
+                        if (env && feed.channelid && !bootstrap) {
                             this.outputFeedEntry(env, feed.channelid, feed, entry);
                         }
                     }
@@ -575,7 +577,15 @@ class ModRSS extends Module {
             
             let imgcheck = entry.description.match(/<img[^>]+src="([^"]+)"/);
             if (imgcheck) {
-                msg.setImage(imgcheck[1]);
+                let imgurl = imgcheck[1];
+                if (imgurl.match(/^\/\//)) {
+                    let wrappercheck = feed.url.match(/^([^:]+:)/);
+                    imgurl = wrappercheck[1] + imgurl;
+                } else if (imgurl.match(/^\//)) {
+                    let basecheck = feed.url.match(/^([a-z0-9]+:\/\/[^/]+)\//i);
+                    imgurl = basecheck[1] + imgurl;
+                }
+                msg.setImage(imgurl);
             }
 
             msg.setDescription(striptags(entry.description.split("\n").map((item) => item.trim()).join("\n").replace(/\n+/g, "\n"), [], " "));
