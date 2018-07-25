@@ -112,11 +112,11 @@ class ModWhois extends Module {
         return new Promise((resolve, reject) => {
 
             whois.lookup(query, {
-                "server":  this.param('server'),
-                "follow":  this.param('follow'),
-                "timeout": this.param('timeout'),
-                "verbose": false,
-                "bind": this.param('bind')
+                server: this.param('server'),
+                follow: this.param('follow'),
+                timeout: this.param('timeout'),
+                verbose: false,
+                bind: this.param('bind')
             }, (err, data) => {
                 if (err) {
                     reject(err);

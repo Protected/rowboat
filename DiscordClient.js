@@ -10,11 +10,16 @@ const BRIDGE_EVENTS = [
     "guildMemberAdd",
     "guildMemberRemove",
     "guildMemberUpdate",
+    "guildMemberSpeaking",
     "presenceUpdate",
-    "presenceUpdate",
+    "roleCreate",
     "roleDelete",
+    "roleUpdate",
     "voiceStateUpdate", 
-    "messageReactionAdd"
+    "messageReactionAdd",
+    "channelCreate",
+    "channelDelete",
+    "channelUpdate"
 ];
 
 class DiscordClient extends ModernEventEmitter {

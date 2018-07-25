@@ -30,8 +30,10 @@ class ModernEventEmitter {
             ++this._eventsCount;
         } else {
             if (typeof existing === 'function') {
+                if (existing === listener) return;
                 existing = this._events[type] = prepend ? [listener, existing] : [existing, listener];
             } else {
+                if (existing.indexOf(listener) > -1) return;
                 if (prepend) {
                     existing.unshift(listener);
                 } else {

@@ -85,18 +85,23 @@ class ModRSS extends Module {
         //Register callbacks
         
         this.mod('Commands').registerRootDetails(this, 'rss', {description: 'Control RSS feeds.'});
-        
-        
-        this.mod('Commands').registerCommand(this, 'rss create', {
-            description: "Register a new RSS feed.",
-            args: ["url", "name", true],
-            permissions: [PERM_ADMIN]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+
+        let create = (announce) => (env, type, userid, channelid, command, args, handle, ep) => {
         
             let feedid = args.name.join("").toLowerCase();
             if (this._data[feedid]) {
                 ep.reply("There already exists a feed with this name.");
                 return true;
+            }
+
+            let announcechannel = null;
+            if (announce) {
+                if (env.channelIdToType(channelid) != "regular") {
+                    ep.reply("This command can only be used in a public channel.");
+                    return true;
+                }
+                announcechannel = channelid;
             }
 
             this.urlExists(args.url)
@@ -110,7 +115,7 @@ class ModRSS extends Module {
                         frequency: null,
                         color: null,
                         env: env.name,
-                        channelid: null,
+                        channelid: announcechannel,
                         creatorid: userid,
                         latest: null,
                         latestresult: null,
@@ -122,7 +127,19 @@ class ModRSS extends Module {
                 });
         
             return true;
-        });
+        };
+        
+        this.mod('Commands').registerCommand(this, 'rss create', {
+            description: "Register a new RSS feed.",
+            args: ["url", "name", true],
+            permissions: [PERM_ADMIN]
+        }, create(false));
+
+        this.mod('Commands').registerCommand(this, 'rss createhere', {
+            description: "Register a new RSS feed that announces to the current channel.",
+            args: ["url", "name", true],
+            permissions: [PERM_ADMIN]
+        }, create(true));
 
 
         this.mod('Commands').registerCommand(this, 'rss destroy', {
