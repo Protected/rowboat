@@ -286,7 +286,7 @@ class ModSongRanking extends Module {
         
         
         this.mod('Commands').registerCommand(this, 'song rank', {
-            description: 'Displays the global (balanced) rank of a song.',
+            description: 'Displays the rank of a song.',
             args: ['hashoroffset']
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
@@ -301,10 +301,16 @@ class ModSongRanking extends Module {
                 ep.reply('Hash not found.');
                 return true;
             }
-        
+            
+            let yourvotepart = '';
+            let yourvote = this.getSongLikeability(hash, userid);
+            if (yourvote) {
+                yourvotepart = ' (Your opinion: ' + yourvote + ')';
+            }
+
             let rank = this.computeSongRank(hash);
             if (rank !== null) {
-                ep.reply("Rank: " + rank);
+                ep.reply("Rank: " + rank + yourvotepart);
             } else {
                 ep.reply("Song is unranked.");
             }

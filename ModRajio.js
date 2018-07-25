@@ -949,17 +949,36 @@ class ModRajio extends Module {
             if (songrank) {
                 let likes = songrank.getAllSongLikes(song.hash);
                 if (Object.keys(likes).length > 0) {
+                    let listeners = this.listeners.map((member) => member.id);
+                    let listenerlikes = [];
+                    let otherlikes = [];    
                     let icons = songrank.likeabilityIcons;
-                    likespart = [];
                     for (let userid in likes) {
                         let icon = icons[likes[userid]];
                         if (!icon) continue;
-                        likespart.push(':' + icon + ':');
+                        if (listeners.indexOf(userid) > -1) {
+                            listenerlikes.push(':' + icon + ':');
+                        } else {
+                            otherlikes.push(':' + icon + ':');
+                        }
                     }
-                    if (likespart.length > 10) {
-                        likespart = ' ' + emoji.shortnameToUnicode(likespart.slice(0, 10).join(' ')) + ' . . .';
-                    } else {
-                        likespart = ' ' + emoji.shortnameToUnicode(likespart.join(' '));
+                    if (listenerlikes.length > 8) {
+                        listenerlikes = listenerlikes.reduce((acc, value) => acc[value] = (acc[value] ? acc[value] + 1 : 1), {});
+                        for (icon in listenerlikes) {
+                            likespart += ' ' + listenerlikes[icon] + 'x' + emoji.shortnameToUnicode(icon);
+                        }
+                    } else if (listenerlikes.length) {
+                        likespart += ' ' + emoji.shortnameToUnicode(listenerlikes.join(' '));
+                    }
+                    if (otherlikes.length > 8) {
+                        otherlikes = otherlikes.reduce((acc, value) => acc[value] = (acc[value] ? acc[value] + 1 : 1), {});
+                        likespart += ' (';
+                        for (icon in otherlikes) {
+                            likespart += otherlikes[icon] + 'x' + emoji.shortnameToUnicode(icon) + ' ';
+                        }
+                        likespart = likespart.trimRight() + ')';
+                    } else if (otherlikes.length) {
+                        likespart += ' (' + emoji.shortnameToUnicode(otherlikes.join(' ')) + ')';
                     }
                 }
             }
