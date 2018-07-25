@@ -1,10 +1,10 @@
 /* Module: SongRanking -- Grabber add-on for liking/disliking songs and rating them. */
 
-var Module = require('./Module.js');
-var emoji = require('emojione');
-var random = require('meteor-random');
+const Module = require('./Module.js');
+const emoji = require('emojione');
+const random = require('meteor-random');
 
-var LIKEABILITY_WORDS = {
+const LIKEABILITY_WORDS = {
     love: 2,
     adore: 2,
     blissful: 2,
@@ -35,7 +35,7 @@ var LIKEABILITY_WORDS = {
     poop: -2
 };
 
-var LIKEABILITY_REACTIONS = {
+const LIKEABILITY_REACTIONS = {
     ok_hand: 2,
     thumbsup: 2,
     clap: 2,
@@ -67,7 +67,14 @@ var LIKEABILITY_REACTIONS = {
     thumbsdown: -2,
     nauseated_face: -2,
     sick: -2
-}
+};
+
+const LIKEABILITY_ICONS = {
+    "-2": 'poop',
+    "-1": 'nauseated_face',
+    "1": 'slight_smile',
+    "2": 'ok_hand'
+};
 
 
 /*
@@ -121,7 +128,7 @@ class ModSongRanking extends Module {
 
         if (!this.grabber || this.grabber.modName != 'Grabber') return false;
         
-        
+
         //Build index
         
         for (let hash of this.grabber.everySong()) {
@@ -136,7 +143,7 @@ class ModSongRanking extends Module {
         
         //Register callbacks
 
-        var self = this;
+        let self = this;
         
         this.grabber.registerOnNewSong((messageObj, messageAuthor, reply, hash) => {
             
@@ -189,6 +196,7 @@ class ModSongRanking extends Module {
         
         this.denv.on('connected', (env) => {
         
+            this.grabber.setAdditionalStats('icons', this.likeabilityIcons);
             this.computeStatsIntoGrabberIndex(true);
         
             env.client.on('messageReactionAdd', (messageReaction, user) => {
@@ -241,7 +249,7 @@ class ModSongRanking extends Module {
         
             if (env.name != this.param('env')) return true;
             
-            var hash = this.grabber.bestSongForHashArg(args.hashoroffset);
+            let hash = this.grabber.bestSongForHashArg(args.hashoroffset);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -253,7 +261,7 @@ class ModSongRanking extends Module {
                 return true;
             }
         
-            var lik = args.likeability || 1;
+            let lik = args.likeability || 1;
             lik = parseInt(lik);
             if (isNaN(lik)) {
                 if (LIKEABILITY_WORDS[args.likeability] !== undefined) lik = LIKEABILITY_WORDS[args.likeability];
@@ -282,7 +290,7 @@ class ModSongRanking extends Module {
             args: ['hashoroffset']
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var hash = this.grabber.bestSongForHashArg(args.hashoroffset);
+            let hash = this.grabber.bestSongForHashArg(args.hashoroffset);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -294,7 +302,7 @@ class ModSongRanking extends Module {
                 return true;
             }
         
-            var rank = this.computeSongRank(hash);
+            let rank = this.computeSongRank(hash);
             if (rank !== null) {
                 ep.reply("Rank: " + rank);
             } else {
@@ -354,7 +362,7 @@ class ModSongRanking extends Module {
         this._index[userid][likeability].push(hash);
         
         //Fetch likeabilities of song
-        var likmap = this.grabber.getSongMeta(hash, "like");
+        let likmap = this.grabber.getSongMeta(hash, "like");
         if (!likmap) likmap = {};
         
         //Remove old likeability from songrank index if necessary
@@ -387,21 +395,28 @@ class ModSongRanking extends Module {
     
     
     getSongLikeability(hash, userid) {
-        var likmap = this.grabber.getSongMeta(hash, "like");
+        let likmap = this.grabber.getSongMeta(hash, "like");
         if (!likmap) return null;
         return likmap[userid];
+    }
+
+
+    getAllSongLikes(hash) {
+        let likmap = this.grabber.getSongMeta(hash, "like");
+        if (!likmap) return {};
+        return Object.assign({}, likmap);
     }
     
     
     computeSongRank(hash, users) {  //users is a list of Discord userids
-        var likmap = this.grabber.getSongMeta(hash, "like");
+        let likmap = this.grabber.getSongMeta(hash, "like");
         if (!likmap) return null;
         if (!users) {
             users = Object.keys(likmap);
         }
         
-        var i = 0; 
-        var acc = 0;
+        let i = 0; 
+        let acc = 0;
         for (let userid of users) {
             let scale = 1.0;
             let likeability = (likmap[userid] || 0);
@@ -428,6 +443,11 @@ class ModSongRanking extends Module {
         
         if (!i) return null;
         return acc;
+    }
+
+
+    get likeabilityIcons() {
+        return Object.assign({}, LIKEABILITY_ICONS);
     }
     
     

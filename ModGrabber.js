@@ -133,7 +133,8 @@ class ModGrabber extends Module {
             details: [
                 "The following expansions are natively provided for hash arguments:",
                 "  -NUMBER : References latest learned song or a recently learned song.",
-                "  (String) : Performs a search by string and returns the hash of the single result, or an error if there are 0 or more than 1 results."
+                "  (String) : Performs a search by string and returns the hash of the single result, or an error if there are 0 or more than 1 results.",
+                "  (?String) : Performs a search by string and returns the hash of a random result."
             ]
         });
         
@@ -145,16 +146,16 @@ class ModGrabber extends Module {
             permissions: [PERM_ADMIN]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var channel = env.server.channels.get(args.channelid);
+            let channel = env.server.channels.get(args.channelid);
             if (!channel) return false;
             
-            var endNow = false;
-            var cutoff = (moment().unix() - args.interval * 86400) * 1000;
+            let endNow = false;
+            let cutoff = (moment().unix() - args.interval * 86400) * 1000;
             
             ep.reply("Scanning...");
             
-            var scanning = null;
-            var scanner = () => {
+            let scanning = null;
+            let scanner = () => {
                 channel.messages.fetch({
                     limit: 100,
                     before: scanning
@@ -242,7 +243,7 @@ class ModGrabber extends Module {
                 return true;
             }
             
-            var info = this._index[this._sessionGrabs[-args.offset - 1][0]];
+            let info = this._index[this._sessionGrabs[-args.offset - 1][0]];
             if (info) {
                 if (info.seen.length > 1) {
                     info.seen = info.seen.filter((ts) => ts != this._sessionGrabs[-args.offset - 1][1]);
@@ -266,7 +267,7 @@ class ModGrabber extends Module {
             permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
                     
-            var hash = this.parseHashArg(args.hashoroffset);
+            let hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -295,7 +296,7 @@ class ModGrabber extends Module {
             minArgs: 0
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var hash = this.parseHashArg(args.hashoroffset, userid);
+            let hash = this.parseHashArg(args.hashoroffset, userid);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -365,7 +366,7 @@ class ModGrabber extends Module {
             permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var hash = this.parseHashArg(args.hashoroffset, userid);
+            let hash = this.parseHashArg(args.hashoroffset, userid);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -405,7 +406,7 @@ class ModGrabber extends Module {
             args: ['hashoroffset', 'field']
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var hash = this.parseHashArg(args.hashoroffset, userid);
+            let hash = this.parseHashArg(args.hashoroffset, userid);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -445,7 +446,7 @@ class ModGrabber extends Module {
             permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var hash = this.parseHashArg(args.hashoroffset, userid);
+            let hash = this.parseHashArg(args.hashoroffset, userid);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -476,7 +477,7 @@ class ModGrabber extends Module {
         
             args.keyword = args.keyword.join(" ");
         
-            var hash = this.parseHashArg(args.hashoroffset, userid);
+            let hash = this.parseHashArg(args.hashoroffset, userid);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -517,7 +518,7 @@ class ModGrabber extends Module {
         
             args.keyword = args.keyword.join(" ");
         
-            var hash = this.parseHashArg(args.hashoroffset);
+            let hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -566,7 +567,7 @@ class ModGrabber extends Module {
         //This file is rebuilt every time we start the module.
         
         this._stats = {users: {}};
-        
+
         let shareavglength = {};
         let sharemaxlength = {};
         let shareminlength = {};
@@ -627,10 +628,10 @@ class ModGrabber extends Module {
     
     
     extractMessageInfo(message) {
-        var warnauthor = !!message.match(/^!!/);
-        var noextract = !!message.match(/^XX/);
+        let warnauthor = !!message.match(/^!!/);
+        let noextract = !!message.match(/^XX/);
     
-        var dkeywords = message.match(/\[[A-Za-z0-9\u{3040}-\u{D7AF}\(\)' _-]+\]/gu);
+        let dkeywords = message.match(/\[[A-Za-z0-9\u{3040}-\u{D7AF}\(\)' _-]+\]/gu);
         if (!dkeywords) dkeywords = [];
         dkeywords = dkeywords.map((item) => {
             let ikeyword = item.match(/^\[([^\]]+)\]$/u);
@@ -638,24 +639,24 @@ class ModGrabber extends Module {
             return ikeyword[1];
         }).filter((item) => item);
         
-        var title = message.match(/\{(title|name|song)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?_-]+)\}/iu);
+        let title = message.match(/\{(title|name|song)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?_-]+)\}/iu);
         if (title) title = title[3];
-        var artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?_-]+)\}/iu);
+        let artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?_-]+)\}/iu);
         if (artist) artist = artist[3];
-        var album = message.match(/\{(album)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?_-]+)\}/iu);
+        let album = message.match(/\{(album)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?_-]+)\}/iu);
         if (album) album = album[3];
         
-        var replace = message.match(/\{replace(=|:) ?([0-9A-Fa-f]+)\}/iu);
+        let replace = message.match(/\{replace(=|:) ?([0-9A-Fa-f]+)\}/iu);
         if (replace) replace = replace[2];
         
-        var interval = null;
+        let interval = null;
         if (title) {
             interval = message.match(/<(([0-9:]+)?(,[0-9:]+)?)>/);
             if (interval) interval = this.parseInterval(interval[1]);
         }
         
         let format = this.param('defaultFormat');
-        var getformat = message.match(/\{format(=|:) ?(mp3|flac|pcm)\}/iu);
+        let getformat = message.match(/\{format(=|:) ?(mp3|flac|pcm)\}/iu);
         if (getformat) {
             if (getformat[2] == 'mp3') format = 'mp3';
             if (this.param('allowFlac') && getformat[2] == 'flac') format = 'flac';
@@ -1239,7 +1240,7 @@ class ModGrabber extends Module {
     //Download path
     
     calculateDownloadPathUsage() {
-        var total = 0;
+        let total = 0;
         for (let file of fs.readdirSync(this.param('downloadPath'))) {
             if (!file.match(/\.(mp3|flac|pcm)$/)) continue;
             total += fs.statSync(this.param('downloadPath') + '/' + file).size;
@@ -1271,7 +1272,7 @@ class ModGrabber extends Module {
         else if (typeof hashoroffset != "string") return null;
         
         hashoroffset = hashoroffset.trim();
-        var offset = hashoroffset.match(/^-([0-2]?[0-9])?/);
+        let offset = hashoroffset.match(/^-([0-2]?[0-9])?/);
         if (offset) {
             if (offset[1] == 0) return null;
             if (!offset[1]) offset[1] = 1;
@@ -1332,7 +1333,7 @@ class ModGrabber extends Module {
     dequeueAndScan() {
         if (!this._scanQueue) return;
         if (this._downloads >= this.param('maxSimDownloads')) return;
-        var item = this._scanQueue.shift();
+        let item = this._scanQueue.shift();
         if (!item) return;
         if (!item[1]) item[1] = {};
         if (!item[2]) item[2] = false;
@@ -1345,10 +1346,10 @@ class ModGrabber extends Module {
     
     
     filterSongsBySearchString(searchstr) {
-        var filters = searchstr.split(' & ');
+        let filters = searchstr.split(' & ');
         if (!filters.length) return [];
         
-        var results = [];
+        let results = [];
         for (let hash in this._index) results.push(this._index[hash]);
 
         for (let filter of filters) {
@@ -1362,11 +1363,15 @@ class ModGrabber extends Module {
     }
     
     parseSearchInMixedParam(str) {
-        let extract = str.match(/^\(([^)]+)\)$/);
+        let extract = str.match(/^\((\??)([^)]+)\)$/);
         if (!extract) return null;
-        var songs = this.filterSongsBySearchString(extract[1]);
+        let songs = this.filterSongsBySearchString(extract[2]);
         if (songs.length > 1) {
-            return true;
+            if (extract[1]) {
+                return songs[Math.floor(random.fraction() * songs.length)];
+            } else {
+                return true;
+            }
         } else if (songs.length == 1) {
             return songs[0];
         }
@@ -1376,13 +1381,13 @@ class ModGrabber extends Module {
     
     parseInterval(intervalstring) {  //"00:00:00,23:59:59" => [minseconds, maxseconds]
         if (!intervalstring) return [0, 0];
-        var parts = intervalstring.split(',');
-        var min = parts[0] || "0";
-        var max = parts[1] || String(Number.MAX_SAFE_INTEGER);
-        var minparts = min.match(/((([0-9]+):)?([0-9]{1,2}):)?([0-9]+)/);
-        var actualmin = (minparts ? parseInt(minparts[5]) + (parseInt(minparts[4])||0) * 60 + (parseInt(minparts[3])||0) * 3600 : 0);
-        var maxparts = max.match(/((([0-9]+):)?([0-9]{1,2}):)?([0-9]+)/);
-        var actualmax = (maxparts ? parseInt(maxparts[5]) + (parseInt(maxparts[4])||0) * 60 + (parseInt(maxparts[3])||0) * 3600 : Number.MAX_SAFE_INTEGER);
+        let parts = intervalstring.split(',');
+        let min = parts[0] || "0";
+        let max = parts[1] || String(Number.MAX_SAFE_INTEGER);
+        let minparts = min.match(/((([0-9]+):)?([0-9]{1,2}):)?([0-9]+)/);
+        let actualmin = (minparts ? parseInt(minparts[5]) + (parseInt(minparts[4])||0) * 60 + (parseInt(minparts[3])||0) * 3600 : 0);
+        let maxparts = max.match(/((([0-9]+):)?([0-9]{1,2}):)?([0-9]+)/);
+        let actualmax = (maxparts ? parseInt(maxparts[5]) + (parseInt(maxparts[4])||0) * 60 + (parseInt(maxparts[3])||0) * 3600 : Number.MAX_SAFE_INTEGER);
         if (actualmin > Number.MAX_SAFE_INTEGER) actualmin = Number.MAX_SAFE_INTEGER;
         if (actualmax < actualmin) actualmax = actualmin;
         return [actualmin, actualmax];
@@ -1428,9 +1433,9 @@ class ModGrabber extends Module {
     
     
     randomSong() {
-        var allhashes = Object.keys(this._index);
+        let allhashes = Object.keys(this._index);
         if (!allhashes.length) return null;
-        var hash = allhashes[Math.floor(random.fraction() * allhashes.length)];
+        let hash = allhashes[Math.floor(random.fraction() * allhashes.length)];
         return this._index[hash];
     }
     
@@ -1447,7 +1452,7 @@ class ModGrabber extends Module {
     
     
     findSong(searchstr, extended) {
-        var songs = this.filterSongsBySearchString(searchstr);
+        let songs = this.filterSongsBySearchString(searchstr);
         if (songs.length) {
             if (extended) {
                 return [songs[0], songs.length];
@@ -1492,7 +1497,7 @@ class ModGrabber extends Module {
 
     addSongKeyword(hash, keyword) {
         if (!this._index[hash]) return false;
-        var ret = false;
+        let ret = false;
         if (this._index[hash].keywords.indexOf(keyword) < 0) {
             this._index[hash].keywords.push(keyword);
             this._index.save();
@@ -1504,7 +1509,7 @@ class ModGrabber extends Module {
     removeSongKeyword(hash, keyword) {
         if (!this._index[hash]) return false;
         let ind = this._index[hash].keywords.indexOf(keyword);
-        var ret = false;
+        let ret = false;
         if (ind > -1) {
             this._index[hash].keywords.splice(ind, 1);
             this._index.save();
@@ -1560,6 +1565,11 @@ class ModGrabber extends Module {
                 delete this._stats.users[userid][field];
             }
         }
+        this.saveStats();
+    }
+
+    setAdditionalStats(field, value) {
+        this._stats[field] = value;
         this.saveStats();
     }
     

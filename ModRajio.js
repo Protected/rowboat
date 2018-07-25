@@ -4,6 +4,7 @@ const Module = require('./Module.js');
 const moment = require('moment');
 const random = require('meteor-random');
 const fs = require('fs');
+const emoji = require('emojione');
 
 const PERM_ADMIN = 'administrator';
 const PERM_MOD = 'moderator';
@@ -31,9 +32,13 @@ class ModRajio extends Module {
         'referenceloudness',    //Negative decibels; Play youtube songs with higher loudness at a lower volume to compensate
         'volume',               //Global volume multipler; Defaults to 1.0 and can be changed via command
         
-        'announcechannel',      //ID of a Discord text channel to announce song changes to
-        'announcedelay',        //Minimum seconds between announces
-        'announcestatus',       //Announce current song in bot's game (true/false)
+        'announcechannel',      //ID of a Discord text channel to announce rajio status information to
+        'announcedelay',        //Minimum seconds between song announces
+        'announcesongs',        //Announce when a song starts playing (true/false)
+        'announcejoins',        //Announce when people start/stop listening (true/false)
+        'announceskips',        //Announce skipped songs (true/false)
+
+        'usestatus',            //Announce current song in bot's game (true/false)
         'historylength',        //Maximum amount of recently played songs to remember
         
         'pri.base',             //Base priority
@@ -91,7 +96,11 @@ class ModRajio extends Module {
         
         this._params['announcechannel'] = null;
         this._params['announcedelay'] = 0;
-        this._params['announcestatus'] = true;
+        this._params['announcesongs'] = true;
+        this._params['announcejoins'] = true;
+        this._params['announceskips'] = true;
+
+        this._params['usestatus'] = true;
         this._params['historylength'] = 10;
         
         this._params['pri.base'] = 80.0;
@@ -237,6 +246,11 @@ class ModRajio extends Module {
                         //Skipper tried to undeafen themselves... Nah
                         member.setDeaf(true);
                     } else {
+
+                        if (this.param('announcejoins')) {
+                            this.announce('__Arrived__: ' + this.denv.idToDisplayName(member.id));
+                        }
+
                         if (this._undeafen[member.id]) {
                             member.setDeaf(false);
                             delete this._undeafen[member.id];
@@ -257,6 +271,11 @@ class ModRajio extends Module {
                     //I left the channel
                     this.stopSong();
                 } else {
+
+                    if (this.param('announcejoins')) {
+                        this.announce('__Departed__: ' + this.denv.idToDisplayName(member.id));
+                    }
+
                     this.autowithdraw(member.id);
                     if (this._nopreference[member.id]) delete this._nopreference[member.id];
                     if (!llisteners) {
@@ -391,7 +410,14 @@ class ModRajio extends Module {
                 skipdata[now] = Object.keys(this._skipper);
                 this.grabber.setSongMeta(this._play.hash, prefix + ".skipped", skipdata);
 
-                this.stopSong();                
+                let song = this._play;
+
+                this.stopSong();
+
+                if (this.param('announceskips')) {
+                    this.announce('**[Skipped]** ' + '`' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`');
+                }
+
                 this.playSong();
                 return true;
             }
@@ -883,6 +909,13 @@ class ModRajio extends Module {
     
     // # Module code below this line #
     
+
+    announce(msg) {
+        if (!this.param('announcechannel')) return false;
+        this.denv.msg(this.param('announcechannel'), msg);
+        return true;
+    }
+
     
     //Internal playback control
     
@@ -905,20 +938,38 @@ class ModRajio extends Module {
         
         this.log('Playing song: ' + song.hash);
         
-        if (this.param('announcechannel') && (!this._announced || moment().unix() > this._announced + this.param('announcedelay'))) {
-            let anchan = this.denv.server.channels.get(this.param('announcechannel'));
-            if (anchan) {
-                let reqby = '';
-                if (userid) {
-                    reqby = ' ** Requested by __' + this.denv.idToDisplayName(userid) + '__';
-                }
-                anchan.send('**[Now Playing]** ' + '`' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + ' <' + this.secondsToHms(song.length) + '>`' + reqby);
-                this._announced = moment().unix();
+        if (this.param('announcesongs') && (!this._announced || moment().unix() > this._announced + this.param('announcedelay'))) {
+            let reqby = '';
+            if (userid) {
+                reqby = ' ** Requested by __' + this.denv.idToDisplayName(userid) + '__';
             }
+
+            let likespart = '';
+            let songrank = this.songrank;
+            if (songrank) {
+                let likes = songrank.getAllSongLikes(song.hash);
+                if (Object.keys(likes).length > 0) {
+                    let icons = songrank.likeabilityIcons;
+                    likespart = [];
+                    for (let userid in likes) {
+                        let icon = icons[likes[userid]];
+                        if (!icon) continue;
+                        likespart.push(':' + icon + ':');
+                    }
+                    if (likespart.length > 10) {
+                        likespart = ' ' + emoji.shortnameToUnicode(likespart.slice(0, 10).join(' ')) + ' . . .';
+                    } else {
+                        likespart = ' ' + emoji.shortnameToUnicode(likespart.join(' '));
+                    }
+                }
+            }
+
+            this.announce('**[Now Playing]** ' + '`' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + ' <' + this.secondsToHms(song.length) + '>`' + likespart + reqby);
+            this._announced = moment().unix();
         }
         
-        if (this.param('announcestatus')) {
-            this.denv.client.realClient.user.setActivity(song.name, {type: 'PLAYING'}).catch(() => {});
+        if (this.param('usestatus')) {
+            this.denv.client.realClient.user.setActivity(song.name + (song.author ? " (" + song.author + ")" : ""), {type: 'PLAYING'}).catch(() => {});
         }
         
         let att = 1.0;
@@ -965,7 +1016,7 @@ class ModRajio extends Module {
         
         this.log('Stopping song' + (this._play ? ': ' + this._play.hash : '.'));
         
-        if (this.param('announcestatus')) {
+        if (this.param('usestatus')) {
             this.denv.client.realClient.user.setActivity(null).catch(() => {});
         }
         
@@ -998,8 +1049,8 @@ class ModRajio extends Module {
         
         this.log('Pausing song: ' + this._play.hash + ' at ' + vc.dispatcher.time);
         
-        if (this.param('announcestatus')) {
-            this.denv.client.realClient.user.setActivity("*Paused*", {type: 'STREAMING'}).catch(() => {});
+        if (this.param('usestatus')) {
+            this.denv.client.realClient.user.setActivity("*Paused*", {type: 'PLAYING'}).catch(() => {});
         }
         
         this._pause = [this._play, vc.dispatcher.time];
