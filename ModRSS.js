@@ -473,7 +473,8 @@ class ModRSS extends Module {
             let feed = this._data[feedid];
             let frequency = feed.frequency || this.param("frequency");
             if (!feed.latest || feed.latestresult != RESULT_SUCCESS || feed.latest + frequency <= now) {
-                this.updateFeed(feedid);
+                this.updateFeed(feedid)
+                    .catch((problem) => {});
             }
         }
     }

@@ -972,13 +972,13 @@ class ModRajio extends Module {
                     }
                     if (otherlikes.length > 8) {
                         otherlikes = otherlikes.reduce((acc, value) => acc[value] = (acc[value] ? acc[value] + 1 : 1), {});
-                        likespart += ' (';
+                        likespart += ' **[**';
                         for (icon in otherlikes) {
                             likespart += otherlikes[icon] + 'x' + emoji.shortnameToUnicode(icon) + ' ';
                         }
-                        likespart = likespart.trimRight() + ')';
+                        likespart = likespart.trimRight() + '**]**';
                     } else if (otherlikes.length) {
-                        likespart += ' (' + emoji.shortnameToUnicode(otherlikes.join(' ')) + ')';
+                        likespart += ' **[**' + emoji.shortnameToUnicode(otherlikes.join(' ')) + '**]**';
                     }
                 }
             }
