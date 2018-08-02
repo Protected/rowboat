@@ -591,20 +591,22 @@ class ModRSS extends Module {
                 msg.setTimestamp(this.rssPubDate(entry.pubDate).toDate());
             }
             
-            let imgcheck = entry.description.match(/<img[^>]+src="([^"]+)"/);
-            if (imgcheck) {
-                let imgurl = imgcheck[1];
-                if (imgurl.match(/^\/\//)) {
-                    let wrappercheck = feed.url.match(/^([^:]+:)/);
-                    imgurl = wrappercheck[1] + imgurl;
-                } else if (imgurl.match(/^\//)) {
-                    let basecheck = feed.url.match(/^([a-z0-9]+:\/\/[^/]+)\//i);
-                    imgurl = basecheck[1] + imgurl;
+            if (entry.description) {
+                let imgcheck = entry.description.match(/<img[^>]+src="([^"]+)"/);
+                if (imgcheck) {
+                    let imgurl = imgcheck[1];
+                    if (imgurl.match(/^\/\//)) {
+                        let wrappercheck = feed.url.match(/^([^:]+:)/);
+                        imgurl = wrappercheck[1] + imgurl;
+                    } else if (imgurl.match(/^\//)) {
+                        let basecheck = feed.url.match(/^([a-z0-9]+:\/\/[^/]+)\//i);
+                        imgurl = basecheck[1] + imgurl;
+                    }
+                    msg.setImage(imgurl);
                 }
-                msg.setImage(imgurl);
-            }
 
-            msg.setDescription(striptags(entry.description.split("\n").map((item) => item.trim()).join("\n").replace(/\n+/g, "\n"), [], " "));
+                msg.setDescription(striptags(entry.description.split("\n").map((item) => item.trim()).join("\n").replace(/\n+/g, "\n"), [], " "));
+            }
 
             if (entry.author) {
                 msg.setFooter(entry.author);

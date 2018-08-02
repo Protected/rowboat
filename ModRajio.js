@@ -964,21 +964,21 @@ class ModRajio extends Module {
                     }
                     if (listenerlikes.length > 8) {
                         listenerlikes = listenerlikes.reduce((acc, value) => acc[value] = (acc[value] ? acc[value] + 1 : 1), {});
+                        likespart += ' **[**';
                         for (icon in listenerlikes) {
-                            likespart += ' ' + listenerlikes[icon] + 'x' + emoji.shortnameToUnicode(icon);
+                            likespart += listenerlikes[icon] + 'x' + emoji.shortnameToUnicode(icon) + ' ';
                         }
+                        likespart = likespart.trimRight() + '**]**';
                     } else if (listenerlikes.length) {
-                        likespart += ' ' + emoji.shortnameToUnicode(listenerlikes.join(' '));
+                        likespart += ' **[**' + emoji.shortnameToUnicode(listenerlikes.join(' ')) + '**]**';
                     }
                     if (otherlikes.length > 8) {
                         otherlikes = otherlikes.reduce((acc, value) => acc[value] = (acc[value] ? acc[value] + 1 : 1), {});
-                        likespart += ' **[**';
                         for (icon in otherlikes) {
                             likespart += otherlikes[icon] + 'x' + emoji.shortnameToUnicode(icon) + ' ';
                         }
-                        likespart = likespart.trimRight() + '**]**';
                     } else if (otherlikes.length) {
-                        likespart += ' **[**' + emoji.shortnameToUnicode(otherlikes.join(' ')) + '**]**';
+                        likespart += emoji.shortnameToUnicode(otherlikes.join(' '));
                     }
                 }
             }
