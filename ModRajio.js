@@ -29,6 +29,7 @@ class ModRajio extends Module {
         'pause',                //Maximum amount of time in seconds to keep the current song paused when the module loses all listeners
         'autowithdraw',         //How long in seconds before a user withdraws from the queue if they are online but not a listener
         'queuesize',            //Maximum amount of songs in the request queue
+        'historysize',          //Maximum amount of recently played songs to remember
         'referenceloudness',    //Negative decibels; Play youtube songs with higher loudness at a lower volume to compensate
         'volume',               //Global volume multipler; Defaults to 1.0 and can be changed via command
         
@@ -39,37 +40,24 @@ class ModRajio extends Module {
         'announceskips',        //Announce skipped songs (true/false)
 
         'usestatus',            //Announce current song in bot's game (true/false)
-        'historylength',        //Maximum amount of recently played songs to remember
         
         'pri.base',             //Base priority
-        'pri.min',              //Minimum priority
-        'pri.max',              //Maximum priority not counting queue
-        'pri.rank.mtotal',      //Multiplier for global song rank
-        'pri.rank.mlistener',   //Multiplier for listener-specific song rank
-        'pri.request.mbonus',   //Maximum added priority per library item for songs at top of request queue
-        'pri.history.bonus',    //Maximum added priority for songs recently played in history
-        'pri.length.minlen',    //Minimum ideal song length (for no priority penalty)
-        'pri.length.maxlen',    //Maximum ideal song length (for no priority penalty)
-        'pri.length.maxexcs',   //Song length after which priority bonus is 0
-        'pri.length.penalty',   //Bonus priority for non-ideal song length (Gradient between ]0, min[; ]max, maxexcs[)
-        'pri.lastplay.cap',     //Seconds in the past after which recently played bonus no longer applies
-        'pri.lastplay.bonus',   //Bonus base for recently played song
-        'pri.lastreq.cap',      //Seconds in the past after which recently requested bonus no longer applies
-        'pri.lastreq.bonus',    //Bonus base for recently requested song
-        'pri.novelty.cap',      //Seconds in the past after which a song is no longer new
-        'pri.novelty.bonus',    //Bonus base for new song
-        'pri.plays.mplay',      //Multiplier of bonus per play
-        'pri.plays.exp',        //Exponent of bonus per play    m*plays^e
-        'pri.skip.cutoff',      //Minimum (included) listener-specific song rank for listener's skip to count towards making skip applicable
-        'pri.skip.cap',         //Seconds in the past after which a skip no longer yields the bonus
-        'pri.skip.mbonus',      //Skip bonus: mbonus * applicable_skips; all skips are cleared after song plays successfully
-        'pri.meta.high',        //Bonus multiplier for user-defined high priority keywords, divided by #listeners
-        'pri.meta.low',         //Bonus multiplier for user-defined low priority keywords (bonus will be negative), divided by #listeners
-        'pri.meta.max',         //Maximum amount of user-defined priority keywords
-        'pri.kw.global',        //{"keyword" => {bonus, mindate, maxdate}, ...} Modify priority if each keyword is found in song (dates are month-day)
-        'pri.user.high',        //Bonus multiplier for user-defined other-user-specific ranks, applicable if the other user is not listening, divided by #listeners
-        'pri.user.low',         //Bonus negated multiplier for user-defined other-user-specific ranks, applicable if the other user is not listening, divided by #listeners
-        'pri.user.max',         //Maximum amount of user-defined other users for bonus application
+        'pri.rank',             //Global song rank priority component
+        'pri.listen',           //Unbiased listener rank priority component
+        'pri.listen.slide',     //Weight of listener bias on rank, if applicable
+        'pri.listen.history',   //Weight of history position bias on slide, if applicable
+        'pri.length',           //Ideal length priority component
+        'pri.length.minlen',    //(s) Minimum ideal song length
+        'pri.length.maxlen',    //(s) Maximum ideal song length
+        'pri.length.maxexcs',   //(s) Song length after which priority bonus is 0)
+        'pri.lowplays',         //Low plays priority component
+        'pri.lowplays.max',     //Maximum amount of plays to receive this bonus
+        'pri.mitigatedslice',   //[0-1] Position of the plays-sorted library where priority multiplier is 1
+        'pri.queue.chance',     //[0-1] Odds that only a queued song will not have 0 priority, if there are queued songs
+        'pri.novelty.chance',   //[0-1] Odds that only a novelty will not have 0 priority, if there are novelties
+        'pri.novelty.duration', //(s) For how long a new song is considered a novelty
+        'pri.novelty.breaker',  //Maximum amount of plays above which a novelty is not treated as one, as a multiplier of the size of the library
+
     ]; }
     
     get requiredEnvironments() { return [
@@ -91,6 +79,7 @@ class ModRajio extends Module {
         this._params['pause'] = 900;
         this._params['autowithdraw'] = 120;
         this._params['queuesize'] = 10;
+        this._params['historysize'] = 20;
         this._params['referenceloudness'] = -20;
         this._params['volume'] = 1.0;
         
@@ -101,42 +90,60 @@ class ModRajio extends Module {
         this._params['announceskips'] = true;
 
         this._params['usestatus'] = true;
-        this._params['historylength'] = 10;
-        
-        this._params['pri.base'] = 80.0;
-        this._params['pri.min'] = 3.0;
-        this._params['pri.max'] = 250.0;
-        this._params['pri.rank.mtotal'] = 8.0;
-        this._params['pri.rank.mlistener'] = 35.0;
-        this._params['pri.request.mbonus'] = 120.0;
-        this._params['pri.history.bonus'] = -100.0;
-        this._params['pri.length.minlen'] = 200;
+
+        /*
+            SLIDE = Sum_[listener](Sum_[history](LISTENER_RANK * -1 * (maxhistory - HISTORY_POSITION) ^ pri.listen.history))/listeners
+
+            SONG_PRIORITY =
+                (
+                    pri.base
+                    + pri.rank * (GLOBAL_RANK / totalusers)
+                    + pri.listen * (LISTENER_RANK / listenerusers) * (SLIDE > 1 ? SLIDE ^ pri.listen.slide : 1)
+                    + pri.length * OPTIMAL_LENGTH_GRADIENT[0, 1]
+                    + pri.lowplays * (1 - Min(pri.lowplays.max, PLAYS) / pri.lowplays.max)
+                )
+                ^ (log(PLAYS_RANK + 1) / log(songcount * pri.mitigatedslice))
+                * (unanimous_hate ? 0 : (unanimous_dislike ? 0.5 : 1))
+        */
+
+        this._params['pri.base'] = 10.0;
+        this._params['pri.rank'] = 10.0;
+        this._params['pri.listen'] = 20.0;
+        this._params['pri.listen.slide'] = 0.5;
+        this._params['pri.listen.history'] = 0.3;
+        this._params['pri.length'] = 10.0;
+        this._params['pri.length.minlen'] = 180;
         this._params['pri.length.maxlen'] = 600;
         this._params['pri.length.maxexcs'] = 900;
-        this._params['pri.length.penalty'] = -30.0;
-        this._params['pri.lastplay.cap'] = 604800;
-        this._params['pri.lastplay.bonus'] = -100.0;
-        this._params['pri.lastreq.cap'] = 10800;
-        this._params['pri.lastreq.bonus'] = -40.0;
-        this._params['pri.novelty.cap'] = 259200;
-        this._params['pri.novelty.bonus'] = 50.0;
-        this._params['pri.plays.mplay'] = -2.8;
-        this._params['pri.plays.exp'] = 0.8;
-        this._params['pri.skip.cutoff'] = 0;
-        this._params['pri.skip.cap'] = 169200;
-        this._params['pri.skip.mbonus'] = -20.0;
-        this._params['pri.meta.high'] = 20.0;
-        this._params['pri.meta.low'] = 20.0;
-        this._params['pri.meta.max'] = 50;
-        this._params['pri.kw.global'] = {};
-        this._params['pri.user.high'] = 20.0;
-        this._params['pri.user.low'] = 20.0;
-        this._params['pri.user.max'] = 10;
+        this._params['pri.lowplays'] = 30.0;
+        this._params['pri.lowplays.max'] = 3;
+        this._params['pri.mitigatedslice'] = 0.1;
+
+        /*
+            If there are queued songs:
+            SONG_PRIORITY = rand() < pri.queue.chance
+                ? (isqueued ? (maxqueue - QUEUE_POSITION) / maxqueue : 0)
+                : SONG_PRIORITY
+        */
+
+        this._params['pri.queue.chance'] = 0.9;
+
+        /*
+            If there are novelties (novelty is defined as: song shared less than pri.novelty.duration seconds ago and with less than pri.novelty.breaker * songcount plays)
+            SONG_PRIORITY = rand() < pri.novelty.chance
+                ? (isnovelty ? SONG_PRIORITY : 0)
+                : SONG_PRIORITY
+        */
+
+        this._params['pri.novelty.chance'] = 0.05;
+        this._params['pri.novelty.duration'] = 691200;  //8 days
+        this._params['pri.novelty.breaker'] = 0.02;
         
         this._userdata = {};
         
         this._announced = null;
         this._history = [];  //[song, song, ...]
+        this._playscache = {};  //{hash: plays, ...}
         
         this._queue = [];  //[{song, userid}, ...] - plays from the left
         this._lastreq = {};  //{hash: ts, ...} - When a requested song was last played (not persisted)
@@ -331,7 +338,7 @@ class ModRajio extends Module {
         
         //Register module integrations
         
-        this.grabber.registerParserFilter(/^[#$]([0-9]+)?$/, (str, match, userid) => {
+        this.grabber.registerParserFilter(/^[$]([0-9]+)?$/, (str, match, userid) => {
             if ((!match[1] || match[1] == "0") && this._play) return this._play.hash;
             if (match[1] && this._history[match[1] - 1]) {
                 return this._history[match[1] - 1].hash;
@@ -345,7 +352,7 @@ class ModRajio extends Module {
         this.mod("Commands").registerRootDetails(this, 'rajio', {
             description: 'Commands for controlling the radio queue and playback.',
             details: [
-                'This feature adds the #NUMBER expansion to song library hash arguments, representing the currently playing song or a recently played song.'
+                'This feature adds the $NUMBER expansion to song library hash arguments, representing the currently playing song or a recently played song.'
             ]
         });
 
@@ -602,14 +609,17 @@ class ModRajio extends Module {
                 ep.reply('This command is only available to listeners.');
                 return true;
             }
+
+            if (!this._queue.length) {
+                ep.reply('The queue is empty.');
+                return true;
+            }
         
-            if (this._queue.length) {
-                for (let i = 0; i < this._queue.length; i++) {
-                    let song = this._queue[i].song;
-                    let width = String(this.param('queuesize')).length;        //
-                    let pos = ('0'.repeat(width) + String(i+1)).slice(-width); //0-padded i
-                    ep.reply('`[' + pos + '] ' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`');
-                }
+            for (let i = 0; i < this._queue.length; i++) {
+                let song = this._queue[i].song;
+                let width = String(this.param('queuesize')).length;        //
+                let pos = ('0'.repeat(width) + String(i+1)).slice(-width); //0-padded i
+                ep.reply('`[' + pos + '] ' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`');
             }
         
             return true;
@@ -624,10 +634,13 @@ class ModRajio extends Module {
                 ep.reply('No songs were played.');
                 return true;
             }
-            
-            for (let song of this._history) {
+
+            for (let i = 0; i < this._history.length; i++) {
+                let song = this._history[i];
                 if (!song) continue;
-                ep.reply('`' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`');
+                let width = String(this.param('historysize')).length;        //
+                let pos = ('0'.repeat(width) + String(i+1)).slice(-width);   //0-padded i
+                ep.reply('`[$' + pos + '] ' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`');
             }
         
             return true;
@@ -653,230 +666,11 @@ class ModRajio extends Module {
         
             return true;
         });
-
-        
-        if (this.param('pri.meta.max')) {
-        
-            this.mod('Commands').registerCommand(this, 'rajio metapriority', {
-                description: 'List your personal priorities.'
-            }, (env, type, userid, channelid, command, args, handle, ep) => {
-                
-                let userdata = this._userdata[userid];
-                if (!userdata) userdata = {};
-                
-                if (!userdata.kw || !Object.keys(userdata.kw).length) {
-                    ep.reply('You have set no priorities.');
-                    return true;
-                }
-                
-                for (let keyword in userdata.kw) {
-                    ep.reply('[' + (userdata.kw[keyword] > 0 ? 'High' : 'Low') + '] ' + keyword);
-                }
-                
-                return true;
-            });
-        
-            this.mod('Commands').registerCommand(this, 'rajio metapriority set', {
-                description: 'Set a personal priority (high or low) for a keyword.',
-                args: ['level', 'keyword', true]
-            }, (env, type, userid, channelid, command, args, handle, ep) => {
-                            
-                let level = 0;
-                if (args.level == "high") level = 1;
-                else if (args.level == "low") level = -1;
-                else {
-                    ep.reply('Please set the priority level to "high" or "low".');
-                    return true;
-                }
-            
-                let keyword = args.keyword.join(" ").toLowerCase().trim();
-                
-                if (!keyword.match(/^[a-zA-Z90-9_ !?.-]{3,}$/)) {
-                    ep.reply('Your keyword match must have at least 3 characters and contain only A-Z, 0-9 and the special characters _ - ! ? . and space.');
-                    return true;
-                }
-            
-                let userdata = this._userdata[userid];
-                if (!userdata) userdata = {};
-                if (!userdata.kw) userdata.kw = {};
-                
-                if (Object.keys(userdata.kw).length >= this.param('pri.meta.max') && !userdata.kw[keyword]) {
-                    ep.reply('You can\'t have more than ' + this.param('pri.meta.max') + ' keyword preferences.');
-                    return true;
-                }
-                
-                userdata.kw[keyword] = level;
-                this._userdata[userid] = userdata;
-                this._userdata.save();
-                
-                ep.reply('OK.');
-            
-                return true;
-            });
-            
-            this.mod('Commands').registerCommand(this, 'rajio metapriority unset', {
-                description: 'Unset a keyword\'s personal priority.',
-                args: ['keyword', true]
-            }, (env, type, userid, channelid, command, args, handle, ep) => {
-            
-                let keyword = args.keyword.join(" ").toLowerCase().trim();
-            
-                let userdata = this._userdata[userid];
-                if (!userdata) userdata = {};
-                if (!userdata.kw) userdata.kw = {};
-                
-                if (!userdata.kw[keyword]) {
-                    ep.reply('You do not have a priority for this keyword.');
-                    return true;
-                }
-                
-                delete userdata.kw[keyword];
-                this._userdata[userid] = userdata;
-                this._userdata.save();
-                
-                ep.reply('OK.');
-            
-                return true;
-            });
-            
-        }
-        
-        
-        if (this.param('pri.user.max')) {
-        
-            this.mod('Commands').registerCommand(this, 'rajio userpriority', {
-                description: 'List your personal likes and dislikes of other users\' preferences.'
-            }, (env, type, userid, channelid, command, args, handle, ep) => {
-                
-                let userdata = this._userdata[userid];
-                if (!userdata) userdata = {};
-                
-                if (!userdata.users || !Object.keys(userdata.users).length) {
-                    ep.reply('You have set no priorities.');
-                    return true;
-                }
-                
-                for (let otheruserid in userdata.users) {
-                    ep.reply('[' + (userdata.users[otheruserid] > 0 ? 'High' : 'Low') + '] ' + this.denv.idToDisplayName(otheruserid));
-                }
-                
-                return true;
-            });
-        
-            this.mod('Commands').registerCommand(this, 'rajio userpriority set', {
-                description: 'Set a personal appreciation (high or low) for another user\'s preferences.',
-                args: ['level', 'user', true]
-            }, (env, type, userid, channelid, command, args, handle, ep) => {
-                            
-                let level = 0;
-                if (args.level == "high") level = 1;
-                else if (args.level == "low") level = -1;
-                else {
-                    ep.reply('Please set the priority level to "high" or "low".');
-                    return true;
-                }
-            
-                let user = args.user.join(" ").toLowerCase().trim();
-                
-                let otheruserid = null;
-                if (this.denv.idToDisplayName(user) != user) otheruserid = user;
-                else otheruserid = this.denv.displayNameToId(user);
-                if (!otheruserid) {
-                    ep.reply('User not found. Please specify a valid user.');
-                    return true;
-                }
-                
-                if (userid == otheruserid) {
-                    ep.reply('That\'s you! Denied!');
-                    return true;
-                }
-            
-                let userdata = this._userdata[userid];
-                if (!userdata) userdata = {};
-                if (!userdata.users) userdata.users = {};
-                
-                if (Object.keys(userdata.users).length >= this.param('pri.user.max') && !userdata.users[otheruserid]) {
-                    ep.reply('You can\'t have more than ' + this.param('pri.user.max') + ' other user preferences.');
-                    return true;
-                }
-                
-                userdata.users[otheruserid] = level;
-                this._userdata[userid] = userdata;
-                this._userdata.save();
-                
-                ep.reply('OK.');
-            
-                return true;
-            });
-            
-            this.mod('Commands').registerCommand(this, 'rajio userpriority unset', {
-                description: 'Unset a personal appreciation for another user\'s preferences.',
-                args: ['user', true]
-            }, (env, type, userid, channelid, command, args, handle, ep) => {
-            
-                let user = args.user.join(" ").toLowerCase().trim();
-                
-                let otheruserid = null;
-                if (this.denv.idToDisplayName(user) != user) otheruserid = user;
-                else otheruserid = this.denv.displayNameToId(user);
-                if (!otheruserid) {
-                    ep.reply('User not found. Please specify a valid user.');
-                    return true;
-                }
-            
-                let userdata = this._userdata[userid];
-                if (!userdata) userdata = {};
-                if (!userdata.users) userdata.users = {};
-                
-                if (!userdata.users[otheruserid]) {
-                    ep.reply('You do not have a priority for this user.');
-                    return true;
-                }
-                
-                delete userdata.users[otheruserid];
-                this._userdata[userid] = userdata;
-                this._userdata.save();
-                
-                ep.reply('OK.');
-            
-                return true;
-            });
-            
-        }
-        
-        
-        this.mod('Commands').registerCommand(this, 'rajio priority', {
-            description: 'Show a song\'s current priority value.',
-            args: ['hashoroffset', true],
-            permissions: [PERM_ADMIN, PERM_MOD]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
-        
-            let arg = args.hashoroffset.join(" ");
-            
-            let hash = this.grabber.bestSongForHashArg(arg);
-            if (hash === false) {
-                ep.reply('Offset not found in recent history.');
-                return true;
-            } else if (hash === true) {
-                ep.reply('Reference matches more than one song; Please be more specific.');
-                return true;
-            } else if (!hash) {
-                ep.reply('Hash not found.');
-                return true;
-            }
-            
-            let prioritycomponents = this.songPriority(this.grabber.hashSong(hash), this.listeners.map((listener) => listener.id), true);
-            
-            ep.reply(prioritycomponents.priority - prioritycomponents.random);
-        
-            return true;
-        });
         
         
         this.mod('Commands').registerCommand(this, 'rajio apriority', {
             description: 'Analyze a song\'s current priority value.',
-            args: ['hashoroffset', true],
-            permissions: [PERM_ADMIN, PERM_MOD]
+            args: ['hashoroffset', true]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let arg = args.hashoroffset.join(" ");
@@ -893,12 +687,21 @@ class ModRajio extends Module {
                 return true;
             }
             
-            let prioritycomponents = this.songPriority(this.grabber.hashSong(hash), this.listeners.map((listener) => listener.id), true);
+            let prioritycomponents = this.songPriority(this.grabber.hashSong(hash), this.listeners.map((listener) => listener.id), false, false, true);
             
             for (let cname in prioritycomponents) {
                 ep.reply('`' + cname + ' = ' + prioritycomponents[cname] + '`');
             }
-        
+
+            let queuepos = this._queue.findIndex((item) => item.song.hash == hash);
+            if (queuepos > -1) {
+                ep.reply('`Queued in position ' + queuepos + ' .`');
+            }
+
+            if (this.isNovelty(hash)) {
+                ep.reply('`This song can play as a novelty.`');
+            }
+
             return true;
         });
 
@@ -968,9 +771,9 @@ class ModRajio extends Module {
                         for (icon in listenerlikes) {
                             likespart += listenerlikes[icon] + 'x' + emoji.shortnameToUnicode(icon) + ' ';
                         }
-                        likespart = likespart.trimRight() + '**]**';
+                        likespart = likespart.trimRight() + '**]** ';
                     } else if (listenerlikes.length) {
-                        likespart += ' **[**' + emoji.shortnameToUnicode(listenerlikes.join(' ')) + '**]**';
+                        likespart += ' **[**' + emoji.shortnameToUnicode(listenerlikes.join(' ')) + '**]** ';
                     }
                     if (otherlikes.length > 8) {
                         otherlikes = otherlikes.reduce((acc, value) => acc[value] = (acc[value] ? acc[value] + 1 : 1), {});
@@ -1150,9 +953,12 @@ class ModRajio extends Module {
     dequeue(getrequester) {
         let listeners = this.listeners.map((listener) => listener.id);
     
+        let usequeue = (this._queue.length ? random().fraction() < this.param('pri.queue.chance') : false);
+        let usenovelty = (this.isThereANovelty() ? random().fraction() < this.param('pri.novelty.chance') : false);
+
         let priorities = {};
         for (let hash of this.grabber.everySong()) {
-            let priority = this.songPriority(this.grabber.hashSong(hash), listeners);
+            let priority = this.songPriority(this.grabber.hashSong(hash), listeners, usequeue, usenovelty);
             priorities[hash] = priority;
         }
         
@@ -1244,14 +1050,16 @@ class ModRajio extends Module {
     
     remember(song) {
         this._history.unshift(song);
-        if (this._history.length > this.param('historylength')) {
-            this._history = this._history.slice(0, this.param('historylength'));
+        if (this._history.length > this.param('historysize')) {
+            this._history = this._history.slice(0, this.param('historysize'));
         }
         
         let prefix = "rajio." + this.name.toLowerCase();
+        let plays = (this.grabber.getSongMeta(song.hash, prefix + ".plays") || 0) + 1;
         this.grabber.setSongMeta(song.hash, prefix + ".lastplayed", moment().unix());
-        this.grabber.setSongMeta(song.hash, prefix + ".plays", (this.grabber.getSongMeta(song.hash, prefix + ".plays") || 0) + 1);
+        this.grabber.setSongMeta(song.hash, prefix + ".plays", plays);
         this.grabber.setSongMeta(song.hash, prefix + ".skipped", null);
+        this._playscache[song.hash] = plays;
     }
     
     
@@ -1276,44 +1084,6 @@ class ModRajio extends Module {
     }
     
     
-    personalPriorityBonus(keywords, listeners) {
-        let result = 0;
-        if (!keywords || !listeners) return result;
-        
-        for (let keyword of keywords) {
-           for (let listener of listeners) {
-                let userdata = this._userdata[listener];
-                if (!userdata || !userdata.kw) continue;
-                if (this._nopreference[listener]) continue;
-                for (let keywordmatch in userdata.kw) {
-                    if (keyword.match(new RegExp('^' + keywordmatch.replace(/[-\/\\^$*+?.()|[\]{}]/gu, '\\$&').replace(' ', '.*') + '$'))) {
-                        result += userdata.kw[keywordmatch] * this.param(userdata.kw[keywordmatch] > 0 ? "pri.meta.high" : "pri.meta.low") / listeners.length;
-                    }
-                }
-            }
-        }
-        
-        return result;
-    }
-    
-    otherUserPriorityBonus(hash, listeners) {
-        let result = 0;
-        if (!listeners) return result;
-        
-        for (let listener of listeners) {
-            let userdata = this._userdata[listener];
-            if (!userdata || !userdata.users) continue;
-            if (this._nopreference[listener]) continue;
-            for (let otherlistener in userdata.users) {
-                if (listeners.find((checklistener) => checklistener == otherlistener)) continue;
-                result += userdata.users[otherlistener] * (this.songrank ? (this.songrank.getSongLikeability(hash, otherlistener) || 0) : 0) * this.param(userdata.users[otherlistener] > 0 ? "pri.user.high" : "pri.user.low") / listeners.length;
-            }
-        }
-        
-        return result;
-    }
-    
-    
     unanimousOpinion(hash, listeners, likeability) {
         if (!this.songrank) return false;
         for (let listener of listeners) {
@@ -1324,13 +1094,63 @@ class ModRajio extends Module {
         }
         return true;
     }
+
+    calculateListenerSlide(listeners) {
+        if (!this.songrank) return 0;
+        let slide = 0;
+        for (let i = 0; i < this._history.length; i++) {
+            let song = this._history[i];
+            let comp = (this.songrank.computeSongRank(song.hash, listeners) || 0) / listeners.length
+            comp *= -1 * Math.pow(this._history.length - i, this.param('pri.listen.history'));
+            slide += comp;
+        }
+        return slide;
+    }
+
+    playsRank(hash) {
+        let prefix = "rajio." + this.name.toLowerCase();
+        let songs = this.grabber.everySong();
+        if (Object.keys(this._playscache).length != songs.length) {
+            for (let songhash of songs) {
+                if (!this._playscache[songhash]) {
+                    this._playscache[songhash] = (this.grabber.getSongMeta(songhash, prefix + ".plays") || 0);
+                }
+            }
+        }
+        let rank = 0;
+        let plays = this._playscache[hash];
+        for (let songhash in this._playscache) {
+            if (this._playscache[songhash] > plays) {
+                rank += 1;
+            }
+        }
+        return rank;
+    }
+
+    isNovelty(hash, songcount) {
+        if (!songcount) songcount = this.grabber.everySong().length;
+        let seen = this.grabber.getSongMeta(hash, "seen");
+        if (!seen || moment().unix() - seen[0] > this.param('pri.novelty.duration')) return false;
+        if (this.grabber.getSongMeta(hash, "plays") > songcount * this.param("pri.novelty.breaker")) return false;
+        return true;
+    }
+
+    isThereANovelty() {
+        let everysong = this.grabber.everySong();
+        for (let hash of everysong) {
+            if (this.isNovelty(hash, everysong.length)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     
-    
-    
-    songPriority(song, listeners, trace) {
+    songPriority(song, listeners, usequeue, usenovelty, trace) {
         let prefix = "rajio." + this.name.toLowerCase();
         let priority = this.param('pri.base');
         let components = {base: priority};
+        let songcount = this.grabber.everySong().length;
         
         let prelisteners = (listeners || []);
         listeners = [];
@@ -1345,138 +1165,58 @@ class ModRajio extends Module {
         let songrank = this.songrank;
         
         if (songrank) {
-            let crank = (songrank.computeSongRank(song.hash, null) || 0) * this.param('pri.rank.mtotal');
+            let calcrank = songrank.computeSongRank(song.hash, null, true);
+            let crank = (calcrank.rank || 0);
+            if (calcrank.users.length) crank /= calcrank.users.length;
+            crank *= this.param('pri.rank');
             priority += crank;
             if (trace) components.rank = crank;
             
             if (listeners.length) {
-                let clrank = (songrank.computeSongRank(song.hash, listeners) || 0) * this.param('pri.rank.mlistener');
-                priority += clrank;
-                if (trace) components.listenerrank = clrank;
+                let slide = this.calculateListenerSlide(listeners);
+                if (trace) components.slide = slide;
+                let clisten = (songrank.computeSongRank(song.hash, listeners) || 0) / listeners.length * this.param('pri.listen');
+                if (trace) components.prelisten = clisten;
+                clisten *= (slide > 1 ? Math.pow(slide, this.param('pri.listen.slide')) : 1);
+                priority += clisten;
+                if (trace) components.listen = clisten;
             }
         }
-        
-        //Position in history
-        
-        let historypos = this._history.findIndex((item) => item.hash == song.hash);
-        if (historypos > -1) {
-            let chistory = (this.param('historylength') - historypos) / this.param('historylength') * this.param('pri.history.bonus');
-            priority += chistory;
-            if (trace) components.history = chistory;
-        }
-        
+                
         
         //Proximity to optimal length
         
         let clength = 0;
-        if (song.length >= this.param('pri.length.maxexcs')) {
-            clength = this.param('pri.length.penalty');
+        if (song.length >= this.param('pri.length.minlen') && song.length <= this.param('pri.length.maxlen')) {
+            clength = this.param('pri.length');
         } else if (song.length > this.param('pri.length.maxlen') && song.length < this.param('pri.length.maxexcs')) {
-            clength = this.param('pri.length.penalty') * ((song.length - this.param('pri.length.maxlen')) / (this.param('pri.length.maxexcs') - this.param('pri.length.maxlen')));
+            clength = this.param('pri.length') * ((this.param('pri.length.maxexcs') - song.length) / (this.param('pri.length.maxexcs') - this.param('pri.length.maxlen')));
         } else if (song.length < this.param('pri.length.minlen')) {
-            clength = this.param('pri.length.penalty') * ((this.param('pri.length.minlen') - song.length) / this.param('pri.length.minlen'));
+            clength = this.param('pri.length') * (song.length / this.param('pri.length.minlen'));
         }
         priority += clength;
         if (trace) components.length = clength;
-        
-        
-        //Time-based components (last played, last requested, novelty)
-        
-        let now = moment().unix();
-        
-        let lastplayed = song[prefix + ".lastplayed"];
-        if (lastplayed && lastplayed > now - this.param('pri.lastplay.cap')) {
-            let coef = (lastplayed - now + this.param('pri.lastplay.cap')) / this.param('pri.lastplay.cap');
-            let clplayed = Math.pow(coef, 2) * this.param('pri.lastplay.bonus');
-            priority += clplayed;
-            if (trace) components.lastplayed = clplayed;
-        }
-        
-        let lastreq = this._lastreq[song.hash];
-        if (lastreq && lastreq > now - this.param('pri.lastreq.cap')) {
-            let coef = (lastreq - now + this.param('pri.lastreq.cap')) / this.param('pri.lastreq.cap');
-            let clreq = coef * this.param('pri.lastreq.bonus');
-            priority += clreq;
-            if (trace) components.lastreq = clreq;
-        }
-        
-        let earliestseen = song.seen.reduce((min, item) => Math.min(min, item), Number.MAX_SAFE_INTEGER);
-        if (earliestseen > now - this.param('pri.novelty.cap')) {
-            let coef = (earliestseen - now + this.param('pri.novelty.cap')) / this.param('pri.novelty.cap');
-            let cnovelty = coef * this.param('pri.novelty.bonus');
-            priority += cnovelty;
-            if (trace) components.novelty = cnovelty;
-        }
-        
-        
-        //Skips (Use song rank and time)
-        
-        let skipdata = song[prefix + ".skipped"];
-        if (skipdata) {
-            let applicable = 0;
-            priaplskipcounter: for (let ts in skipdata) {
-                if (ts < now - this.param('pri.skip.cap')) continue;
-                for (let userid of skipdata[ts]) {
-                    if (!songrank || songrank.getSongLikeability(song.hash, userid) < this.param('pri.skip.cutoff')) {
-                        applicable += 1;
-                        continue priaplskipcounter;
-                    }
-                }
-            }
-            let cskips = applicable * this.param('pri.skip.mbonus');
-            priority += cskips;
-            if (trace) components.skips = cskips;
-        }
-        
-        
-        //Amount of times played
-        
-        let plays = song[prefix + ".plays"];
-        if (plays) {
-            let coef = Math.pow(plays, this.param('pri.plays.exp'));
-            let cplays = coef * this.param('pri.plays.mplay');
-            priority += cplays;
-            if (trace) components.plays = cplays;
-        }
 
+
+        //Low plays
         
-        //Keywords and other users' ranks
-        
-        let allwords = this.grabber.allSongWords(song.hash);
-        
-        let cmetapri = this.personalPriorityBonus(allwords, listeners);
-        priority += cmetapri;
-        if (trace) components.metapriority = cmetapri;
-        
-        let cotheruserpri = this.otherUserPriorityBonus(song.hash, listeners);
-        priority += cotheruserpri;
-        if (trace) components.otheruserpriority = cotheruserpri;
-        
-        let ckwglobal = [];
-        for (let keyword in this.param('pri.kw.global')) {
-            let descriptor = this.param('pri.kw.global')[keyword];
-            if (!descriptor.bonus) continue;
-            if (!allwords.find((kw) => kw.toLowerCase().trim().match(new RegExp('^' + keyword.toLowerCase().trim().replace(/[-\/\\^$*+?.()|[\]{}]/gu, '\\$&').replace(' ', '.*') + '$')))) continue;
-            if (descriptor.mindate && descriptor.maxdate) {
-                let now = moment();
-                if (!now.isAfter(now.year() + '-' + descriptor.mindate + ' 00:00:00')) continue;
-                if (!now.isBefore(now.year() + '-' + descriptor.maxdate + ' 23:59:59')) continue;
-            }
-            priority += descriptor.bonus;
-            if (trace) ckwglobal.push(descriptor.bonus);
-        }
-        if (trace) components.kwglobal = ckwglobal.reduce((comp, bonus) => comp + bonus, 0);
-        
-        
-        //Subtotal and crop
-        
-        if (trace) components.subtotal = priority;
-        
-        if (priority < this.param('pri.min')) priority = this.param('pri.min');
-        if (priority > this.param('pri.max')) priority = this.param('pri.max');
-        
-        
-        //Unanimous dislike penalties (after cropping)
+        let plays = song[prefix + ".plays"] || 0;
+        let clowplays = (1 - Math.min(this.param('pri.lowplays.max'), plays) / this.param('pri.lowplays.max')) * this.param('pri.lowplays');
+        priority += clowplays;
+        if (trace) components.lowplays = clowplays;
+
+
+        //Comparative plays
+
+        if (trace) components.baseabsolute = priority;
+        let playsrank = this.playsRank(song.hash);
+        let playsfactor = Math.log(playsrank + 1) / Math.log(1 + songcount * this.param('pri.mitigatedslice'));
+        if (trace) components.playsfactor = playsfactor;
+        priority = Math.pow(priority, playsfactor);
+        if (trace) components.withplays = priority;
+
+
+        //Unanimous dislike penalties
         
         if (listeners.length) {
             let upenalty = null;
@@ -1490,19 +1230,31 @@ class ModRajio extends Module {
                 if (trace) components.unanimousdislike = upenalty;
             }
         }
-        
-        
-        //Queue bonus (after cropping)
-        
-        let queuepos = this._queue.findIndex((item) => item.song.hash == song.hash);
-        if (queuepos > -1) {
-            let cqueue = (this.param('queuesize') - queuepos) / this.param('queuesize') * this.param('pri.request.mbonus') * this.grabber.everySong().length;
-            priority += cqueue;
-            if (trace) components.queue = cqueue;
-        }
-        if (priority < 0) priority = 0;
 
-        
+
+        //Queue
+
+        if (usequeue && this._queue.length) {
+            let queuepos = this._queue.findIndex((item) => item.song.hash == song.hash);
+            if (queuepos > -1) {
+                priority = (this.param('queuesize') - queuepos) / this.param('queuesize');
+                if (trace) components.queuereset = priority;
+            } else {
+                priority = 0;
+                if (trace) components.queuereset = priority;
+            }
+
+        }
+
+
+        //Novelty
+
+        if (usenovelty && !this.isNovelty(song.hash, songcount)) {
+            priority = 0;
+            if (trace) components.noveltyreset = priority;
+        }
+
+
         if (trace) {
             components.priority = priority;
             return components;

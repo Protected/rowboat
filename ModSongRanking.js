@@ -220,7 +220,7 @@ class ModSongRanking extends Module {
         
         //Register module integrations
         
-        this.grabber.registerParserFilter(/^£(-?[12])?$/, (str, match, userid) => {
+        this.grabber.registerParserFilter(/^&(-?[12])?$/, (str, match, userid) => {
             if (!userid) return null;
             let likeability = (match[1] || 0);
             if (!likeability) return this.grabber.randomSong().hash;
@@ -414,9 +414,9 @@ class ModSongRanking extends Module {
     }
     
     
-    computeSongRank(hash, users) {  //users is a list of Discord userids
+    computeSongRank(hash, users, full) {  //users is a list of Discord userids
         let likmap = this.grabber.getSongMeta(hash, "like");
-        if (!likmap) return null;
+        if (!likmap) return (full ? {users: [], rank: null} : null);
         if (!users) {
             users = Object.keys(likmap);
         }
@@ -447,8 +447,8 @@ class ModSongRanking extends Module {
             i += 1;
         }
         
-        if (!i) return null;
-        return acc;
+        if (!i) return (full ? {users: users, rank: null} : null);
+        return (full ? {users: users, rank: acc} : acc);
     }
 
 
