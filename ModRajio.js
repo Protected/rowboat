@@ -953,8 +953,8 @@ class ModRajio extends Module {
     dequeue(getrequester) {
         let listeners = this.listeners.map((listener) => listener.id);
     
-        let usequeue = (this._queue.length ? random().fraction() < this.param('pri.queue.chance') : false);
-        let usenovelty = (this.isThereANovelty() ? random().fraction() < this.param('pri.novelty.chance') : false);
+        let usequeue = (this._queue.length ? random.fraction() < this.param('pri.queue.chance') : false);
+        let usenovelty = (this.isThereANovelty() ? random.fraction() < this.param('pri.novelty.chance') : false);
 
         let priorities = {};
         for (let hash of this.grabber.everySong()) {
