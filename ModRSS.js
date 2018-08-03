@@ -29,7 +29,8 @@ class ModRSS extends Module {
         'timer',                //Timer interval (s)
         'timeout',              //Timeout for HTTP requests (ms)
         'timestampformat',      //Display format for timestamps
-        'color'                 //Default color hint for feeds (Discord only)
+        'richembed',            //Whether to use richembeds in Discord environments
+        'color',                //Default color hint for feeds (Discord richembeds only)
     ]; }
 
     get requiredModules() { return [
@@ -46,6 +47,7 @@ class ModRSS extends Module {
         this._params['timer'] = 15;
         this._params['timeout'] = 5000;
         this._params['timestampformat'] = "YYYY-MM-DD HH:mm";
+        this._params['richembed'] = false;
         this._params['color'] = [0, 30, 120];
 
         //{feed: {name, url, frequency, env, channelid, creatorid, latest, latestresult, data: [entries, ...]}}
@@ -363,7 +365,7 @@ class ModRSS extends Module {
             let feedenv = this.env(feed.env);
             let msg;
 
-            if (env.envName == "Discord") {
+            if (env.envName == "Discord" && this.param("richembed")) {
                 msg = new discord.RichEmbed();
 
                 msg.setColor(feed.color || this.param("color"));
@@ -383,7 +385,17 @@ class ModRSS extends Module {
 
             } else {
 
-
+                msg = "**" + feed.name + "** - " + feed.url + "\n";
+                msg += "Update frequency (s): " + (feed.frequency || this.param("frequency"));
+                msg += "Environment: " + feed.env;
+                msg += "Creator: " + (feedenv ? feedenv.idToDisplayName(feed.creatorid) : feed.creatorid);
+                if (feed.channelid) {
+                    msg += "Announce channel: " + (feedenv ? feedenv.channelIdToDisplayName(feed.channelid) : feed.channelid);
+                }
+                if (feed.latest) {
+                    msg += "Latest sync: " + (moment(feed.latest * 1000).fromNow() + " (" + feed.latestresult + ")");
+                    msg += "Seen entries: " + feed.data.length;
+                }
 
             }
 
@@ -579,7 +591,7 @@ class ModRSS extends Module {
         let channeltype = env.channelIdToType(channelid);
         if (channeltype != "regular") return false;
 
-        if (env.envName == "Discord") {
+        if (env.envName == "Discord" && this.param("richembed")) {
 
             msg = new discord.RichEmbed();
             msg.setColor(feed.color || this.param("color"));
@@ -605,7 +617,11 @@ class ModRSS extends Module {
                     msg.setImage(imgurl);
                 }
 
-                msg.setDescription(striptags(entry.description.split("\n").map((item) => item.trim()).join("\n").replace(/\n+/g, "\n"), [], " "));
+                let description = striptags(entry.description.split("\n").map((item) => item.trim()).join("\n").replace(/\n+/g, "\n"), [], " ");
+                if (description.length > 2048) {
+                    description = description.substr(0, 2044) + "...";
+                }
+                msg.setDescription(description);
             }
 
             if (entry.author) {
