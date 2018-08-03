@@ -386,15 +386,15 @@ class ModRSS extends Module {
             } else {
 
                 msg = "**" + feed.name + "** - " + feed.url + "\n";
-                msg += "Update frequency (s): " + (feed.frequency || this.param("frequency"));
-                msg += "Environment: " + feed.env;
-                msg += "Creator: " + (feedenv ? feedenv.idToDisplayName(feed.creatorid) : feed.creatorid);
+                msg += "Update frequency (s): " + (feed.frequency || this.param("frequency")) + "\n";
+                msg += "Environment: " + feed.env + "\n";
+                msg += "Creator: " + (feedenv ? feedenv.idToDisplayName(feed.creatorid) : feed.creatorid) + "\n";
                 if (feed.channelid) {
-                    msg += "Announce channel: " + (feedenv ? feedenv.channelIdToDisplayName(feed.channelid) : feed.channelid);
+                    msg += "Announce channel: " + (feedenv ? feedenv.channelIdToDisplayName(feed.channelid) : feed.channelid) + "\n";
                 }
                 if (feed.latest) {
-                    msg += "Latest sync: " + (moment(feed.latest * 1000).fromNow() + " (" + feed.latestresult + ")");
-                    msg += "Seen entries: " + feed.data.length;
+                    msg += "Latest sync: " + (moment(feed.latest * 1000).fromNow() + " (" + feed.latestresult + ")") + "\n";
+                    msg += "Seen entries: " + feed.data.length + "\n";
                 }
 
             }
