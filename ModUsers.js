@@ -1,7 +1,9 @@
 /* Module: Users -- Manage "known" user accounts and permission flags. */
 
-var fs = require('fs');
+var fs = require('fs-extra');
 var jsonfile = require('jsonfile');
+var archiver = require('archiver');
+var path = require('path');
 
 var environments = null;
 var modules = null;
@@ -248,10 +250,68 @@ function loadUsers(datafile) {
     return true;
 }
 
-function saveUsers(datafile) {
-    jsonfile.writeFile(datafile, userdata);
+function saveUsers(dest, data) {
+    return fs.exists(dest)
+        .then(function (exists) {
+            console.log(dest + " exists? " + exists);
+            if (exists) {
+                return archive(dest);
+            }
+        })
+        .then(function () {
+            return fs.writeFile(dest, JSON.stringify(data))
+        })
 }
 
+function getNextArchiveName(destFile) {
+    let archivePath = path.dirname(destFile);
+    let targetName = path.basename(destFile);
+    let files = fs.readdirSync(archivePath);
+    let rex = new RegExp(targetName + "\\.(\\d)\\.tar\\.gz");
+    let indices = files.map(f => {
+        let match = rex.exec(f);
+        return match != null ? match[1] : null;
+    }).filter(ar => ar != null);
+
+    let maxIndex = Math.max.apply(null, indices);
+    maxIndex = maxIndex < 0 ? 0 : maxIndex;
+    return destFile + "." + maxIndex + ".tar.gz";
+}
+
+function archive(dest) {
+    return new Promise(function (resolve, reject) {
+
+        console.log("Archiving " + dest);
+        let archiveName = getNextArchiveName(dest);
+
+        var output = fs.createWriteStream(archiveName);
+        var archive = archiver('tar', {
+            gzip: true,
+        });
+
+        output.on('close', function () {
+            console.log(dest + " archived, " + archive.pointer() + ' total bytes written');
+            resolve();
+        });
+
+        archive.on('warning', function (err) {
+            if (err.code === 'ENOENT') {
+                console.warn("Trying to archive file " + dest);
+                console.warn(err);
+            } else {
+                reject(err);
+            }
+        });
+
+        archive.on('error', function (err) {
+            reject(err);
+        });
+
+        archive.pipe(output);
+        archive.file(dest, {name: path.basename(dest)});
+        archive.finalize();
+    });
+}
 
 function addUser(handle) {
     if (userhandles[handle]) return false;
@@ -263,8 +323,8 @@ function addUser(handle) {
     }
     userdata.push(newuser);
     userhandles[handle] = newuser;
-    
-    saveUsers(datafile);
+
+    saveUsers(datafile, userdata);
     return true;
 }
 
@@ -301,7 +361,7 @@ function addId(handle, env, idpattern) {
         changed = true;
     }
 
-    if (changed) saveUsers(datafile);
+    if (changed) saveUsers(datafile, userdata);
     return true;
 }
 
@@ -319,17 +379,17 @@ function delId(handle, env, idpattern) {
         changed = true;
         i -= 1;
     }
-    
-    if (changed) saveUsers(datafile);
+
+    if (changed) saveUsers(datafile, userdata);
     return true;
 }
 
 function getIds(handle, env) {
     var chuser = getUser(handle);
     if (!chuser) return [];
-    
+
     if (!env) return chuser.ids;
-    
+
     return chuser.ids.map(function(item) {
         return (item.env == env ? item.idpattern : null);
     }).filter(function(idpattern) {
@@ -343,21 +403,21 @@ function isIdHandle(handle, env, id, strict) {
             return false;
         }
     }
-    
+
     var ids = getIds(handle, env);
-    
+
     for (var i = 0; i < ids.length; i++) {
         if (RegExp(ids[i]).exec(id)) {
             return true;
         }
     }
-    
+
     return false;
 }
 
 function getHandlesById(env, id, strict) {
     var result = [];
-    
+
     for (var i = 0; i < userdata.length; i++) {
         if (isIdHandle(userdata[i].handle, env, id, strict)) {
             result.push(userdata[i].handle);
@@ -372,11 +432,11 @@ function getHandlesById(env, id, strict) {
 
 function addPerms(handle, perms) {
     if (!perms) return false;
-    
+
     var changed = false;
     var chuser = getUser(handle);
     if (!chuser) return false;
-    
+
     for (var i = 0; i < perms.length; i++) {
         var perm = perms[i].toLowerCase();
         if (!chuser.perms.find(function(checkperm) { return checkperm == perm; })) {
@@ -384,18 +444,18 @@ function addPerms(handle, perms) {
             changed = true;
         }
     }
-    
-    if (changed) saveUsers(datafile);
+
+    if (changed) saveUsers(datafile, userdata);
     return true;
 }
 
 function delPerms(handle, perms) {
     if (!perms) return false;
-    
+
     var changed = false;
     var chuser = getUser(handle);
     if (!chuser) return false;
-    
+
     for (var i = 0; i < perms.length; i++) {
         var perm = perms[i].toLowerCase();
         var ind = chuser.perms.findIndex(function(checkperm) { return checkperm == perm; });
@@ -404,8 +464,8 @@ function delPerms(handle, perms) {
             changed = true;
         }
     }
-    
-    if (changed) saveUsers(datafile);
+
+    if (changed) saveUsers(datafile, userdata);
     return true;
 }
 
@@ -420,7 +480,9 @@ function hasAllPerms(handle, perms) {
     if (!checkuser) return false;
     for (var i = 0; i < perms.length; i++) {
         var perm = perms[i].toLowerCase();
-        if (!checkuser.perms.find(function(checkperm) { return checkperm == perm; })) {
+        if (!checkuser.perms.find(function (checkperm) {
+            return checkperm == perm;
+        })) {
             return false;
         }
     }
@@ -432,7 +494,9 @@ function hasAnyPerm(handle, perms) {
     if (!checkuser) return false;
     for (var i = 0; i < perms.length; i++) {
         var perm = perms[i].toLowerCase();
-        if (checkuser.perms.find(function(checkperm) { return checkperm == perm; })) {
+        if (checkuser.perms.find(function (checkperm) {
+            return checkperm == perm;
+        })) {
             return true;
         }
     }
@@ -447,4 +511,6 @@ exports.getHandlesById = getHandlesById;
 exports.getPerms = getPerms;
 exports.hasAllPerms = hasAllPerms;
 exports.hasAnyPerm = hasAnyPerm;
+
+exports.saveUsers = saveUsers;
 
