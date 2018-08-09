@@ -41,7 +41,8 @@ class ModEveRoles extends Module {
             'redPermissionName',
             'neutPrefix',
             'neutPermissionName',
-            'preferAllianceTicker'
+            'preferAllianceTicker',
+            'killChannelName'
         ];
     }
 
@@ -355,7 +356,7 @@ class ModEveRoles extends Module {
                     logger.debug("Sending kill " + killID);
 
 
-                    this.mainEnv.server.channels.find('name', 'kills').send(msg, {
+                    this.mainEnv.server.channels.find('name', this._params['killChannelName'] || 'kills').send(msg, {
                         embed: {
                             title: title,
                             url: link,
