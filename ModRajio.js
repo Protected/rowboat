@@ -939,15 +939,21 @@ class ModRajio extends Module {
         this._pending = setTimeout(() => {
         
             this.abortskip();
-        
-            vc.playFile(this.grabber.songPathByHash(song.hash), options).once("end", () => {
+            
+            let ender = () => {
                 if (this._play) {
                     this.remember(this._play);
                 }
                 if (!this._pause) {
                     this.playSong();
                 }
-            });
+            };
+            
+            if (song.format == 'pcm') {
+                vc.playConvertedStream(fs.createReadStream(this.grabber.songPathByHash(song.hash)), options).once("end", ender);
+            } else {
+                vc.playFile(this.grabber.songPathByHash(song.hash), options).once("end", ender);
+            }
             
             this._pending = null;
         }, this.param('leadin') > 0 ? this.param('leadin') * 1000 : 1);
