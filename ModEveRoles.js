@@ -1,20 +1,21 @@
 /* Module: EveRoles -- Bunch of automated tasks that grant roles based on eve SeAT. */
-var Module = require('./Module.js');
-var express = require('express');
+const Module = require('./Module.js');
+const express = require('express');
 const uuidv4 = require('uuid/v4');
-var request = require('request');
-var jf = require('jsonfile');
-var fs = require('fs');
-var _ = require('lodash');
+const request = require('request');
+const requestpn = require('request-promise-native');
+const jf = require('jsonfile');
+const fs = require('fs');
+const _ = require('lodash');
 
-var logger = require('logger').createLogger();
+const logger = require('logger').createLogger();
 
 logger.setLevel('debug');
 
 //Example URL: https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=http://wyvernia.net:8098&client_id=1370433d1bd74635839322c867a43bc4&state=uniquestate123
 
 const userDataFilename = "userData.json";
-const corpContactsDataFilename = "corpContactsData.json";
+const contactsDataFilename = "contactsData.json";
 
 class ModEveRoles extends Module {
 
@@ -23,6 +24,10 @@ class ModEveRoles extends Module {
             'port',   //Port to listen to on the callback
             'allianceIDList',
             'corpPrefix',
+            'discordWelcomeMessage',
+            'discordWelcomeChannel',
+            'discordPartMessage',
+            'discordPartChannel',
             'corpPermissionName',
             'alliancePrefix',
             'alliancePermissionName',
@@ -49,7 +54,7 @@ class ModEveRoles extends Module {
             'eveSSOCorpClientId',     //Corp Client ID
             'eveSSOEncodedCorpClientIDAndSecretKey', //ClientID and SecretKey encoded with Base64 in this format: clientid:secretkey
             'adminPermissionName',    // Discord permission name that admins need to have to run the command.
-            'contactsCorporationID',          // ID of the corporation with the contacts.
+            'contactsAllianceID',          // ID of the corporation with the contacts.
             'corporationIDList'               //IDs of the corporations to be considered "main".
         ];
     }
@@ -93,11 +98,42 @@ class ModEveRoles extends Module {
 
         let self = this;
 
+        // Events
         this.env(this._params['discordEnvName']).on('connected', () => {
             self.mainEnv = self.env(this._params['discordEnvName']);
             runTick();
             checkKills();
         });
+
+        logger.debug("Welcome: #"+this._params['discordWelcomeChannel']+": "+this._params['discordWelcomeMessage']);
+
+        if ( this._params['discordWelcomeMessage'] && this._params['discordWelcomeChannel'] ) {
+            this.env(this._params['discordEnvName']).client.on("guildMemberAdd", (member) => {
+
+                logger.info(member.user.username + " joined ");
+                let msg = this._params['discordWelcomeMessage'].replace("{username}", member.user.username);
+
+                this.mainEnv.server.channels
+                    .find('name', this._params['discordWelcomeChannel'])
+                    .send(msg)
+                    .then(logger.debug)
+                    .catch(logger.warn);
+            });
+        }
+
+        if ( this._params['discordPartMessage'] && this._params['discordPartChannel'] ) {
+            this.env(this._params['discordEnvName']).client.on("guildMemberRemove", (member) => {
+
+                logger.info(member.user.username + " left ");
+                let msg = this._params['discordPartMessage'].replace("{username}", member.user.username);
+
+                this.mainEnv.server.channels
+                    .find('name', this._params['discordPartChannel'])
+                    .send(msg)
+                    .then(logger.debug)
+                    .catch(logger.warn);
+            });
+        }
 
         this.neutPermissionName = this._params['neutPermissionName'];
         this.redPermissionName = this._params['redPermissionName'];
@@ -219,20 +255,19 @@ class ModEveRoles extends Module {
                     resolve("rip");
                     return;
                 }
-                logger.debug("Got something!  " + body);
                 let pkg = parsedBody.package;
                 let victim = pkg.killmail.victim;
                 let zkb = pkg.zkb;
                 let killID = pkg.killID;
 
-                logger.debug("Received kill " + killID);
-
                 if ((self._params['corporationIDList'] && self._params['corporationIDList'].includes(victim.corporation_id + ""))
                     || (self._params['allianceIDList'] && self._params['allianceIDList'].includes(victim.alliance_id + ""))
                 ) {
+                    logger.debug("Kill received, our loss. corp_id: " + victim.corporation_id + ", alliance_id: " + victim.alliance_id);
                     self.processKillmail(parsedBody, true, resolve);
                 }
                 else if (hasSomeoneInAttackerList(pkg.killmail.attackers)) {
+                    logger.debug("Kill received, not ours. Kill ID: " + killID)
                     self.processKillmail(parsedBody, false, resolve);
                 } else {
                     resolve("yay");
@@ -245,6 +280,7 @@ class ModEveRoles extends Module {
                 for (let attacker of attackers) {
                     if ((self._params['corporationIDList'] && self._params['corporationIDList'].includes(attacker.corporation_id + ""))
                         || (self._params['allianceIDList'] && self._params['allianceIDList'].includes(attacker.alliance_id + ""))) {
+                        logger.debug("Kill received, our kill. Attacker: corp_id: " + attacker.corporation_id + ", alliance_id: ", attacker.alliance_id)
                         return true;
                     }
                 }
@@ -338,7 +374,7 @@ class ModEveRoles extends Module {
                 });
 
             });
-        }catch(ex ){
+        } catch (ex) {
             logger.warn(ex);
             resolve("Bad ex");
         }
@@ -371,6 +407,9 @@ class ModEveRoles extends Module {
                 this.applyTagsOnUser(discordId, this._params['trueBluePrefix'], this._params['trueBluePermissionName']);
                 break;
             case 5:
+                this.applyTagsOnUser(discordId, this._params['bluePrefix'], this._params['bluePermissionName']);
+                break;
+            case 4.7:
                 this.applyTagsOnUser(discordId, this._params['bluePrefix'], this._params['bluePermissionName']);
                 break;
             case -5:
@@ -421,7 +460,7 @@ class ModEveRoles extends Module {
             rolesToRemove = roles.filter(r => false);
         } else {
             rolesToRemove = roles.filter(role => {
-                return ( role.name != permissionName && (this.relationPermissionNames.includes(role.name) || stripAll) );
+                return (role.name != permissionName && (this.relationPermissionNames.includes(role.name) || stripAll));
             });
         }
 
@@ -460,6 +499,7 @@ class ModEveRoles extends Module {
             logger.debug("Setting name '" + nickName + "' to '" + member.displayName + "'");
             member.setNickname(nickName, "EveRoles automatic change.").then(success).catch(error);
         }
+
         function success(succ) {
 
         }
@@ -594,7 +634,7 @@ class ModEveRoles extends Module {
     }
 
     loadCorpContacts() {
-        let filePath = this.dataPath + corpContactsDataFilename;
+        let filePath = this.dataPath + contactsDataFilename;
         if (fs.existsSync(filePath)) {
             let ret = jf.readFileSync(filePath);
             if (ret) this.corpContacts = ret;
@@ -788,10 +828,12 @@ class ModEveRoles extends Module {
                 try {
                     parsedBody = JSON.parse(body);
                 } catch (e) {
+                    logger.error(e);
                     res.send("Error validating");
                     return;
                 }
                 if (!parsedBody) {
+                    logger.error(parsedBody);
                     res.send("Error validating");
                     return;
                 }
@@ -809,45 +851,54 @@ class ModEveRoles extends Module {
                     try {
                         parsedBody = JSON.parse(body);
                     } catch (e) {
+                        logger.error(e);
                         res.send("Error validating");
                         return;
                     }
                     if (err || !parsedBody) {
+                        logger.error(err);
+                        logger.error(parsedBody);
                         res.send("Error validating");
                         return;
                     }
 
-                    request.get({
-                        url: "https://esi.tech.ccp.is/latest/corporations/" + self._params['contactsCorporationID'] + "/contacts/",
+
+                    logger.debug("Before requestpn");
+                    requestpn({
+                        method: 'GET',
+                        uri: 'https://esi.tech.ccp.is/latest/alliances/' + self._params['contactsAllianceID'] + "/contacts/",
                         headers: {
                             "Authorization": "Bearer " + accessToken,
-                        }
-                    }, (err, httpResponse, body) => {
-                        let parsedBody;
-                        try {
-                            parsedBody = JSON.parse(body);
-                        } catch (e) {
-                            res.send("Error validating");
-                            return;
-                        }
-                        if (err || !parsedBody) {
+                        },
+                        json: true
+                    }).then(function (data) {
+
+                        logger.debug("Got request: " + JSON.stringify(data));
+
+                        if (!data) {
                             res.send("Error retrieving info");
+                            logger.error("Error retrieving info.");
                             return;
                         }
 
-                        if (!_.isArray(parsedBody)) {
+                        if (!_.isArray(data)) {
+                            logger.error("Data is not an array! "+ JSON.stringify(data) );
                             res.send("Error updating corporation info: " + body);
                             return;
                         }
 
-                        self.corpContacts = parsedBody;
-                        let filePath = self.dataPath + corpContactsDataFilename;
+                        self.corpContacts = data;
+                        let filePath = self.dataPath + contactsDataFilename;
                         jf.writeFileSync(filePath, self.corpContacts);
 
                         res.send("Successfully refreshed corporation information. You may close this window now.");
                         self.env(authInfo.envName).msg(authInfo.discordID, "Your corporation information has been refreshed.");
 
+                    }, function(err){
+                        res.send("Error getting corp contacts.");
+                        logger.error(err);
                     });
+
                 });
             });
 
@@ -915,16 +966,21 @@ class ModEveRoles extends Module {
         }
 
         ep.priv("Login using the following link: ");
-        ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=" + scope._params['callbackAddress'] + "/corpCallback&client_id=" + scope._params['eveSSOCorpClientId'] + "&state=" + uuid + "&scope=esi-corporations.read_contacts.v1");
+        ep.priv("https://login.eveonline.com/oauth/authorize/?response_type=code&redirect_uri=" + scope._params['callbackAddress'] + "/corpCallback&client_id=" + scope._params['eveSSOCorpClientId'] + "&state=" + uuid + "&scope=esi-alliances.read_contacts.v1");
 
         return true;
     }
 
     commandEveEv(scope, env, type, userid, channelid, command, args, handle, ep) {
-        if (userid != "133647011424501761") {
-            ep.reply("Not allowed! Dangerous alchemy.");
+
+        var member = env.server.members.get(userid);
+        let role = member.roles.find('name', scope._params['adminPermissionName']);
+
+        if (!role) {
+            ep.priv("You do not have permission to run this command.");
             return true;
         }
+
         //ep.reply(args.exp);
         try {
             let result = eval(args.exp);
@@ -939,3 +995,4 @@ class ModEveRoles extends Module {
 
 
 module.exports = ModEveRoles;
+
