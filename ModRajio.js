@@ -739,13 +739,6 @@ class ModRajio extends Module {
         if (!this.listeners.length) return Promise.reject("No listeners.");
         if (!this.dchan || this.dchan.type != "voice") return Promise.reject("Voice channel not found.");
         return this.dchan.join()
-        /* Join event does this
-            .then((connection) => {
-                if (this.listeners.length) {
-                    this.playSong();
-                }
-            })
-        */
             .catch((reason) => {
                 this.log("error", "Error connecting to voice channel: " + reason)
             });
@@ -841,6 +834,7 @@ class ModRajio extends Module {
             seek: (seek ? Math.round(seek / 1000.0) : 0)
         };
         
+        this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.playing', song.hash);
         this._play = song;
         this._pending = setTimeout(() => {
         
@@ -871,6 +865,7 @@ class ModRajio extends Module {
         let vc = this.denv.server.voiceConnection;
         
         this.log('Stopping song' + (this._play ? ': ' + this._play.hash : '.'));
+        this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.playing', null);
         
         if (this.param('usestatus')) {
             this.denv.client.realClient.user.setActivity(null).catch(() => {});
@@ -995,6 +990,8 @@ class ModRajio extends Module {
             let priority = this.songPriority(this.grabber.hashSong(hash), listeners, usequeue, usenovelty);
             priorities[hash] = priority;
         }
+
+        this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.latestpriorities', priorities);
         
         let sum = 0;
         let candidates = [];
