@@ -223,15 +223,10 @@ class ModRajio extends Module {
         //Prepare player
         
         this.denv.on("connected", () => {
-            if (this.dchan && this.dchan.type == "voice") {
-                this.dchan.join().then((connection) => {
-                    if (this.listeners.length) {
-                        this.playSong();
-                    }
-                });
-            } else {
-                this._disabled = true;
-            }
+            this.joinDchan()
+                .catch((reason) => {
+                    this.log('Did not join voice channel on connect: ' + reason);
+                })
         });
             
         
@@ -252,7 +247,7 @@ class ModRajio extends Module {
                 if (member.id == myid) {
                     if (llisteners) {
                         //I joined the channel
-                        this.playSong();
+                        this.resumeSong() || this.playSong();
                     }
                 } else {
                     if (this._skipper[member.id] && !member.deaf) {
@@ -271,7 +266,10 @@ class ModRajio extends Module {
                         if (!member.deaf) {
                             if (!this.playing) {
                                 //First listener joined the channel
-                                this.resumeSong() || this.playSong();
+                                this.joinDchan()
+                                    .catch((reason) => {
+                                        this.log('Did not join voice channel on first listener: ' + reason);
+                                    })
                             }
                             this.stayafterall(member.id);
                         }
@@ -282,7 +280,7 @@ class ModRajio extends Module {
             if (oldMember.voiceChannelID == dchanid && member.voiceChannelID != dchanid) {
                 if (member.id == myid) {
                     //I left the channel
-                    this.stopSong();
+                    if (!this._pause) this.stopSong();
                 } else {
 
                     if (this.param('announcejoins')) {
@@ -294,6 +292,7 @@ class ModRajio extends Module {
                     if (!llisteners) {
                         //Last listener left the channel
                         this.pauseSong();
+                        this.dchan.leave();
                     }
                 }
             }
@@ -312,6 +311,7 @@ class ModRajio extends Module {
                     if (!llisteners) {
                         //Last listener was deafened
                         this.pauseSong();
+                        this.dchan.leave();
                     }
                 } else if (oldMember.deaf && !member.deaf) {
                     if (this._skipper[member.id] && member.voiceChannelID == dchanid) {
@@ -319,7 +319,10 @@ class ModRajio extends Module {
                         member.setDeaf(true);
                     } else if (llisteners == 1) {
                         //First listener was undeafened
-                        this.resumeSong() || this.playSong();
+                        this.joinDchan()
+                            .catch((reason) => {
+                                this.log('Did not join voice channel on first listener: ' + reason);
+                            })
                     }
                 }
             }
@@ -475,7 +478,7 @@ class ModRajio extends Module {
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (!this._disabled) {
-                ep.reply('The radio is already running!');
+                ep.reply('The radio is already enabled!');
                 return true;
             }
 
@@ -498,13 +501,16 @@ class ModRajio extends Module {
                 return true;
             }
             
-            this.dchan.join().then((connection) => {
-                this._disabled = false;
-                if (this.listeners.length) {
-                    this.playSong();
-                }
-                ep.reply('The radio has now been re-enabled.');
-            });
+            this._disabled = false;
+
+            this.joinDchan()
+                .then(() => {
+                    ep.reply('The radio has now been enabled.');
+                })
+                .catch((reason) => {
+                    ep.reply('The radio has now been enabled.');
+                    this.log('Did not join voice channel on enable: ' + reason);
+                });
             
             return true;
         });
@@ -719,10 +725,30 @@ class ModRajio extends Module {
     // # Module code below this line #
     
 
+    //Discord stuff
+
     announce(msg) {
         if (!this.param('announcechannel')) return false;
         this.denv.msg(this.param('announcechannel'), msg);
         return true;
+    }
+
+
+    joinDchan() {
+        if (this._disabled) return Promise.reject("Rajio is disabled.");
+        if (!this.listeners.length) return Promise.reject("No listeners.");
+        if (!this.dchan || this.dchan.type != "voice") return Promise.reject("Voice channel not found.");
+        return this.dchan.join()
+        /* Join event does this
+            .then((connection) => {
+                if (this.listeners.length) {
+                    this.playSong();
+                }
+            })
+        */
+            .catch((reason) => {
+                this.log("error", "Error connecting to voice channel: " + reason)
+            });
     }
 
     
@@ -793,7 +819,8 @@ class ModRajio extends Module {
                 }
             }
 
-            this.announce('**[Now Playing]** ' + '`' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + ' <' + this.secondsToHms(song.length) + '>`' + likespart + reqby);
+            this.announce('**[' + (seek ? 'Resuming' : 'Now Playing') + ']** ' + '`' + song.hash
+                    + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + ' <' + this.secondsToHms(song.length) + '>`' + likespart + reqby);
             this._announced = moment().unix();
         }
         
