@@ -37,7 +37,9 @@ class ModGrabber extends Module {
         'maxDiskUsage',         //Amount of disk space grabber is allowed to use in the downloadPath excluding index (bytes)
         'maxSimDownloads',      //Maximum simultaneous downloads
         'scanDelay',            //Delay between attempts to process messages (pending messages are queued) (ms)
-        'permissionsReplace',   //List of sufficient permissions to replace previously indexed songs
+        'selfDeleteExpiration', //Deadline for sharer to delete a song (counted from song's first share) (s)
+        'permissionsDeleteAll', //List of sufficient permissions for deleting songs not shared by the user
+        'permissionsReplace',   //List of sufficient permissions for replacing previously indexed songs
         'defaultFormat',        //Default storage format
         'allowPcm',             //Allow PCM storage
         'allowFlac'             //Allow FLAC storage
@@ -61,7 +63,11 @@ class ModGrabber extends Module {
         this._params['maxDiskUsage'] = null;
         this._params['maxSimDownloads'] = 2;
         this._params['scanDelay'] = 200;
+        
+        this._params['selfDeleteExpiration'] = 604800;  //7 days
+        this._params['permissionsDeleteAll'] = [PERM_MODERATOR, PERM_ADMIN];
         this._params['permissionsReplace'] = [PERM_MODERATOR, PERM_ADMIN];
+
         this._params['defaultFormat'] = 'mp3';
         this._params['allowPcm'] = false;
         this._params['allowFlac'] = false;
@@ -227,8 +233,7 @@ class ModGrabber extends Module {
         this.mod('Commands').registerCommand(this, 'grab undo', {
             description: 'Undo a single recent grab from this session.',
             args: ['offset'],
-            minArgs: 0,
-            permissions: [PERM_ADMIN, PERM_MODERATOR]
+            minArgs: 0
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (!args.offset || args.offset > -1) args.offset = -1;
@@ -242,14 +247,40 @@ class ModGrabber extends Module {
                 ep.reply('Offset not found in recent history.');
                 return true;
             }
-            
+
             let info = this._index[this._sessionGrabs[-args.offset - 1][0]];
             if (info) {
+
+                let candeleteall = this.mod('Users').testPermissions(this.param('env'), userid, channelid, this.param('permissionsDeleteAll'));
+                let partial = false;
+
                 if (info.seen.length > 1) {
                     info.seen = info.seen.filter((ts) => ts != this._sessionGrabs[-args.offset - 1][1]);
-                } else {
-                    this.removeByHash(info.hash);
+                    partial = true;
                 }
+
+                if (!candeleteall) {
+                    if (info.sharedBy.length > 1) {
+                        info.sharedBy = info.sharedBy.filter((shareid) => shareid != userid);
+                        partial = true;
+                    } else if (info.sharedBy[0] != userid) {
+                        ep.reply("You can only delete your own songs.");
+                        return true;
+                    }
+                }
+                
+                if (!partial) {
+                    if (candeleteall || moment().unix() - info.seen[0] < this.param('selfDeleteExpiration')) {
+                        if (!this.removeByHash(info.hash, candeleteall, userid)) {
+                            ep.reply('Hash not found or not removable.');
+                            return true;
+                        }
+                    } else {
+                        ep.reply('You can\'t delete this song; it was shared too long ago.');
+                        return true;
+                    }
+                }
+
                 ep.reply('Ok.');
             } else {
                 ep.reply('Historic hash not found in index! I will just remove it from the history.');
@@ -263,8 +294,7 @@ class ModGrabber extends Module {
         
         this.mod('Commands').registerCommand(this, 'grab delete', {
             description: 'Delete an indexed song by hash.',
-            args: ['hashoroffset'],
-            permissions: [PERM_ADMIN, PERM_MODERATOR]
+            args: ['hashoroffset']
         }, (env, type, userid, channelid, command, args, handle, ep) => {
                     
             let hash = this.parseHashArg(args.hashoroffset);
@@ -278,12 +308,29 @@ class ModGrabber extends Module {
                 ep.reply('Hash not found.');
                 return true;
             }
+
+            let candeleteall = this.mod('Users').testPermissions(this.param('env'), userid, channelid, this.param('permissionsDeleteAll'));
+
+            if (!candeleteall) {
+                let info = this._index[hash];
+                if (info.sharedBy.length > 1) {
+                    info.sharedBy = info.sharedBy.filter((shareid) => shareid != userid);
+                    ep.reply('Ok.');
+                    return true;
+                } else if (info.sharedBy[0] != userid) {
+                    ep.reply("You can only delete your own songs.");
+                    return true;
+                } else if (moment().unix() - info.seen[0] < this.param('selfDeleteExpiration')) {
+                    ep.reply('You can\'t delete this song; it was shared too long ago.');
+                    return true;
+                }
+            }
                     
-            if (this.removeByHash(hash)) {
+            if (this.removeByHash(hash, candeleteall, userid)) {
                 this._sessionGrabs = this._sessionGrabs.filter((item) => item[0] != hash);
                 ep.reply('Ok.');
             } else {
-                ep.reply('Hash not found.');
+                ep.reply('Hash not found or not removable.');
             }
         
             return true;
@@ -1173,7 +1220,7 @@ class ModGrabber extends Module {
                     entry = this._index[mp.info.replace];
                     if (!entry.replaced) entry.replaced = [];
                     entry.replaced.push([mp.info.replace, mp.author, now]);
-                    this.removeByHash(mp.info.replace);
+                    this.removeByHash(mp.info.replace, true);
                 }
                 
                 entry.hash = hash;
@@ -1294,7 +1341,7 @@ class ModGrabber extends Module {
         return null;
     }
     
-    removeByHash(hash) {
+    removeByHash(hash, ismoderator, removerid) {
         if (!this._index[hash]) return false;
         fs.unlink(this.param('downloadPath') + '/' + hash + '.' + (this._index[hash].format || 'mp3'), (err) => {});
         
@@ -1309,11 +1356,11 @@ class ModGrabber extends Module {
             try {
                 let r;
                 if (typeof cb == "function") {
-                    r = cb.apply(this, [hash]);
+                    r = cb.apply(this, [hash, ismoderator, removerid]);
                 } else {
-                    r = cb[0].apply(cb[1], [hash]);
+                    r = cb[0].apply(cb[1], [hash, ismoderator, removerid]);
                 }
-                if (r) break;
+                if (r) return false;
             } catch (exception) {
                 this.log('error', 'Error in callback while removing ' + hash);
             }
@@ -1596,7 +1643,7 @@ class ModGrabber extends Module {
     }
     
     
-    //Callback signature: hash
+    //Callback signature: hash, ismoderator, removerid (only hash is guaranteed to be defined)
     registerOnRemoveSong(func, self) {
         this.log('Registering remove song callback. Context: ' + self.constructor.name);
         if (!self) {

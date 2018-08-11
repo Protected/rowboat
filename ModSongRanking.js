@@ -168,9 +168,19 @@ class ModSongRanking extends Module {
             
         }, self);
         
-        this.grabber.registerOnRemoveSong((hash) => {
+        this.grabber.registerOnRemoveSong((hash, ismoderator, removerid) => {
         
             let like = this.grabber.getSongMeta(hash, 'like');
+
+            if (!ismoderator) {
+                for (let userid in like) {
+                    if (userid != removerid) {
+                        //Abort song deletion if a non-moderator tried to delete a song with votes from others
+                        return true;
+                    }
+                }
+            }
+
             for (let userid in like) {
                 
                 let likestats = this.grabber.getUserStat(userid, 'likes');
@@ -189,7 +199,7 @@ class ModSongRanking extends Module {
                     
                 }
                 
-            }        
+            }
         
         }, self);
         

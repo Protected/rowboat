@@ -53,6 +53,8 @@ class ModRajio extends Module {
         'pri.lowplays',         //Low plays priority component
         'pri.lowplays.max',     //Maximum amount of plays to receive this bonus
         'pri.mitigatedslice',   //[0-1] Position of the plays-sorted library where priority multiplier is 1
+        'pri.unanimous.meh',    //[0-1] Multiplier for priority if not all listeners hate the song, but all of them hate or dislike the song (<= -1)
+        'pri.unanimous.hate',   //[0-1] Multiplier for priority if all listeners hate the song (-2)
         'pri.queue.chance',     //[0-1] Odds that only a queued song will not have 0 priority, if there are queued songs
         'pri.novelty.chance',   //[0-1] Odds that only a novelty will not have 0 priority, if there are novelties
         'pri.novelty.duration', //(s) For how long a new song is considered a novelty
@@ -92,25 +94,27 @@ class ModRajio extends Module {
         this._params['usestatus'] = true;
 
         /*
-            SLIDE = Sum_[listener](Sum_[history](LISTENER_RANK * -1 * (maxhistory - HISTORY_POSITION) ^ pri.listen.history))/listeners
+            LISTENER_SLIDE = Sum_[history](LISTENER_RANK * -1 * (maxhistory - HISTORY_POSITION) ^ pri.listen.history)
 
             SONG_PRIORITY =
                 (
                     pri.base
                     + pri.rank * (GLOBAL_RANK / totalusers)
-                    + pri.listen * (LISTENER_RANK / listenerusers) * (SLIDE > 1 ? SLIDE ^ pri.listen.slide : 1)
+                    + pri.listen * (LISTENER_RANK / listenerusers)
+                        * (LISTENER_SLIDE > 1 ? LISTENER_SLIDE ^ pri.listen.slide : 1)
+                        * ...
                     + pri.length * OPTIMAL_LENGTH_GRADIENT[0, 1]
                     + pri.lowplays * (1 - Min(pri.lowplays.max, PLAYS) / pri.lowplays.max)
                 )
                 ^ (log(PLAYS_RANK + 1) / log(songcount * pri.mitigatedslice))
-                * (unanimous_hate ? 0 : (unanimous_dislike ? 0.5 : 1))
+                * (unanimous_hate ? pri.unanimous.hate : (unanimous_dislike ? pri.unanimous.meh : 1))
         */
 
         this._params['pri.base'] = 10.0;
         this._params['pri.rank'] = 10.0;
-        this._params['pri.listen'] = 20.0;
+        this._params['pri.listen'] = 30.0;
         this._params['pri.listen.slide'] = 0.5;
-        this._params['pri.listen.history'] = 0.3;
+        this._params['pri.listen.history'] = 0.4;
         this._params['pri.length'] = 10.0;
         this._params['pri.length.minlen'] = 180;
         this._params['pri.length.maxlen'] = 600;
@@ -118,6 +122,8 @@ class ModRajio extends Module {
         this._params['pri.lowplays'] = 30.0;
         this._params['pri.lowplays.max'] = 3;
         this._params['pri.mitigatedslice'] = 0.1;
+        this._params['pri.unanimous.meh'] = 0.65;
+        this._params['pri.unanimous.hate'] = 0.05;
 
         /*
             If there are queued songs:
@@ -137,7 +143,7 @@ class ModRajio extends Module {
 
         this._params['pri.novelty.chance'] = 0.05;
         this._params['pri.novelty.duration'] = 691200;  //8 days
-        this._params['pri.novelty.breaker'] = 0.02;
+        this._params['pri.novelty.breaker'] = 0.01;
         
         this._userdata = {};
         
@@ -747,6 +753,7 @@ class ModRajio extends Module {
                 reqby = ' ** Requested by __' + this.denv.idToDisplayName(userid) + '__';
             }
 
+            //This block is for displaying likes in the announcement channel
             let likespart = '';
             let songrank = this.songrank;
             if (songrank) {
@@ -1095,12 +1102,13 @@ class ModRajio extends Module {
         return true;
     }
 
-    calculateListenerSlide(listeners) {
+    calculateListenerSlide(listener) {
         if (!this.songrank) return 0;
         let slide = 0;
         for (let i = 0; i < this._history.length; i++) {
             let song = this._history[i];
-            let comp = (this.songrank.computeSongRank(song.hash, listeners) || 0) / listeners.length
+            let comp = (this.songrank.computeSongRank(song.hash, [listener]) || 0);
+            if (comp <= 0) comp -= 0.5;
             comp *= -1 * Math.pow(this._history.length - i, this.param('pri.listen.history'));
             slide += comp;
         }
@@ -1173,11 +1181,15 @@ class ModRajio extends Module {
             if (trace) components.rank = crank;
             
             if (listeners.length) {
-                let slide = this.calculateListenerSlide(listeners);
-                if (trace) components.slide = slide;
                 let clisten = (songrank.computeSongRank(song.hash, listeners) || 0) / listeners.length * this.param('pri.listen');
                 if (trace) components.prelisten = clisten;
-                clisten *= (slide > 1 ? Math.pow(slide, this.param('pri.listen.slide')) : 1);
+
+                for (let listener of listeners) {
+                    let slide = this.calculateListenerSlide(listener);
+                    if (trace) components["slide." + listener] = slide;
+                    clisten *= (slide > 1 ? Math.pow(slide, this.param('pri.listen.slide')) : 1);
+                }
+
                 priority += clisten;
                 if (trace) components.listen = clisten;
             }
@@ -1221,12 +1233,12 @@ class ModRajio extends Module {
         if (listeners.length) {
             let upenalty = null;
             if (this.unanimousOpinion(song.hash, listeners, -2)) {
-                upenalty = -priority;
-                priority = 0;
+                upenalty = priority * (1 - this.param('pri.unanimous.hate'));
+                priority -= upenalty;
                 if (trace) components.unanimoushate = upenalty;
             } else if (this.unanimousOpinion(song.hash, listeners, -1)) {
-                upenalty = priority / -2;
-                priority /= 2;
+                upenalty = priority * (1 - this.param('pri.unanimous.meh'));
+                priority -= upenalty;
                 if (trace) components.unanimousdislike = upenalty;
             }
         }
