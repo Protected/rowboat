@@ -354,6 +354,10 @@ class ModRajio extends Module {
             }
             return null;
         }, this);
+
+        opt.envs[this.param('env')].on('connected', () => {
+            this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.latestnovelties', []);
+        }, this);
         
 
         //Register commands
@@ -975,6 +979,8 @@ class ModRajio extends Module {
             this._queue.splice(((countbyuser[userid] || 0) + 1) * Object.keys(countbyuser).length, 0, newitem);
             this._queue = this._queue.slice(0, this.param('queuesize'));
         }
+
+        this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.queue', this._queue);
         
         return true;
     }
@@ -983,7 +989,8 @@ class ModRajio extends Module {
         let listeners = this.listeners.map((listener) => listener.id);
     
         let usequeue = (this._queue.length ? random.fraction() < this.param('pri.queue.chance') : false);
-        let usenovelty = (this.isThereANovelty() ? random.fraction() < this.param('pri.novelty.chance') : false);
+        let novelties = this.isThereANovelty();
+        let usenovelty = (novelties ? random.fraction() < this.param('pri.novelty.chance') : false);
 
         let priorities = {};
         for (let hash of this.grabber.everySong()) {
@@ -992,6 +999,7 @@ class ModRajio extends Module {
         }
 
         this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.latestpriorities', priorities);
+        this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.latestnovelties', novelties || []);
         
         let sum = 0;
         let candidates = [];
@@ -1019,6 +1027,7 @@ class ModRajio extends Module {
             userid = this._queue[index].userid;
             this._lastreq[hash] = moment().unix();
             this._queue.splice(index, 1);
+            this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.queue', this._queue);
         }
         
         if (getrequester) {
@@ -1035,6 +1044,7 @@ class ModRajio extends Module {
             result = this._queue.length - newqueue.length;
             this.log('User ' + userid + ' withdrew from the queue. Removed ' + result + ' song(s).');
             this._queue = newqueue;
+            this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.queue', this._queue);
         }
         if (!fromauto && this._pendingwithdraw[userid]) {
             clearTimeout(this._pendingwithdraw[userid]);
@@ -1169,11 +1179,13 @@ class ModRajio extends Module {
 
     isThereANovelty() {
         let everysong = this.grabber.everySong();
+        let novelties = [];
         for (let hash of everysong) {
             if (this.isNovelty(hash, everysong.length)) {
-                return true;
+                novelties.push(hash);
             }
         }
+        if (novelties.length) return novelties;
         return false;
     }
 
