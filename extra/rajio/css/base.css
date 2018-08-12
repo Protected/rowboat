@@ -1,0 +1,328 @@
+html, body, table, select, input {
+    font-size: 18px;
+}
+
+#thinklayer {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    z-index: 1500;
+    background-color: rgba(200, 200, 200, 0.25);
+    display: none;
+    top: 0;
+}
+
+table#library td {
+    font-size: 0.8em;
+}
+
+table#library th {
+    font-size: 0.8em;
+}
+
+table#library th.c_format {
+    width: 1.2em;
+}
+
+.c_format > span {
+    display: block;
+    width: 1em; height: 1em;
+    border: 0.05em solid black;
+}
+
+table#library th.c_hash {
+    width: 10em;
+}
+
+table#library th.c_length {
+    width: 6em;
+}
+
+table#library th.c_sharedby {
+    width: 10em;
+}
+
+table#library th.c_pl {
+    width: 4em;
+}
+
+table#library th.c_lastplayed {
+    width: 10em;
+}
+
+table#library th.c_kw {
+    width: 4em;
+}
+
+table#library th.c_likes {
+    width: 12em;
+}
+
+table#library th.c_pri {
+    width: 6em;
+}
+    
+
+
+body {
+    padding: 0;
+    margin: 0;
+    font-family: monospace;
+}
+a, a:visited {
+    color: #0000df;
+    text-decoration: none;
+}
+a:hover {
+    text-decoration: underline;
+}
+
+
+#header {
+    background: #ddf6e0;
+    padding: 0.1em;
+    border-bottom: 1px solid black;
+    line-height: 1.6em;
+    height: 1.6em;
+}
+
+
+table#library, input {
+    font-family: monospace;
+    border-collapse: collapse;
+    width: 100%;
+}
+
+#library_filter {
+    position: absolute;
+    top: 0;
+    right: 1em;
+    margin: 0.1em 0;
+}
+#library_info {
+    position: absolute;
+    top: 0;
+    margin: 0.2em;
+    padding: 0;
+    line-height: 1.2em;
+}
+
+#library_wrapper.dataTables_wrapper {
+    position: static;
+}
+
+
+table#library th {
+    text-align: left;
+    border-bottom: 2px solid black;
+}
+table#library th.sorting_asc {
+    text-decoration: underline;
+}
+table#library th.sorting_desc {
+    text-decoration: overline;
+}
+
+table#library tr.odd {
+    background-color: #e0e0ff;
+}
+table#library tr.even {
+    background-color: #f0f0ff;
+}
+
+table#library th, table#library td {
+    padding: 0.3em;
+}
+table#library .ra {
+    text-align: right;
+}
+table#library .fade, table#library .fade a {
+    color: #606060;
+}
+.meta, .emoji > span.meta {
+    display: none;
+}
+.emoji > a {
+    display: inline-block;
+    width: 1.2em;
+    text-align: center;
+    margin: 0 0.1em;
+}
+.emoji > a:hover {
+    text-decoration: none;
+    font-weight: bold;
+}
+.hashcell > input {
+    border: none;
+    background: none;
+    width: 100%;
+    padding: 0 2px;
+    font-family: inherit;
+    font-size: inherit;
+    text-overflow: ellipsis;
+}
+
+.c_format > span { background-size: 100% 100%; }
+.c_format > span.mp3 { background-image: url('../img/f_mp3.png'); }
+.c_format > span.flac { background-image: url('../img/f_flac.png'); }
+.c_format > span.pcm{ background-image: url('../img/f_pcm.png'); }
+
+
+#keywords {
+    display: none;
+    
+    position: absolute;
+    z-index: 100;
+    background: white;
+    border: 1px solid #001030;
+    border-radius: 5px;
+    padding: 2px;
+    
+    overflow: hidden;
+    
+    width: 15vw;
+    height: 20vh;
+}
+#keywords > .close {
+    display: block;
+    float: right;
+    font-weight: bold;
+}
+#keywords > .song {
+    border-bottom: 1px solid black;
+    margin-bottom: 2px;
+    padding: 3px;
+}
+#keywords > ul {
+    clear: both;
+    padding: 0;
+    margin: 0;
+    display: block;
+    overflow: auto;
+    position: absolute;
+    top: 2.65vh;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+#keywords > ul > li {
+    display: block;
+    padding: 3px;
+    position: relative;
+    left: 0; right: 0;
+}
+#keywords > ul > li.odd {
+    background-color: #e0ffe0;
+}
+#keywords > ul > li.even {
+    background-color: #f0fff0;
+}
+
+
+#userstats {
+    display: none;
+    
+    position: fixed;
+    z-index: 200;
+    background: white;
+    border: 1px solid #001030;
+    padding: 2px;
+    
+    overflow: hidden;
+    
+    width: 40vw;
+    height: 60vh;
+    top: 20vh;
+    left: 30vw;
+    box-shadow: 3px 3px #606060;
+}
+#userstats > .avatar {
+    float: left;
+    width: 4vw;
+    height: 4vw;
+    margin-right: 0.5vw;
+    background-size: 100% 100%;
+}
+#userstats > .close {
+    display: block;
+    float: right;
+    font-weight: bold;
+    color: yellow;
+    font-size: 1vw;
+    margin-right: 0.2vw;
+}
+#userstats > .username {
+    font-size: 1vw;
+    font-weight: bold;
+    padding: 4px;
+    background: #e04040;
+    color: white;
+}
+#userstats .statlist {
+    overflow: auto;
+    position: absolute;
+    bottom: 2px;
+    left: 2px;
+    right: 2px;
+    top: 4vw;
+}
+#userstats .statrow {
+    overflow: hidden;
+    clear: both;
+    margin-top: 0.4vw;
+}
+#userstats .statrow > .label {
+    font-size: 0.8vw;
+    background: #fff0a0;
+    width: 15vw;
+    float: left;
+    margin-right: 1vw;
+    padding: 0.3vw;
+    line-height: 0.9vw;
+}
+#userstats .statrow > .contents {
+    padding: 0.1vw 0.3vw;
+}
+#userstats .statrow > .contents > .inner {
+    padding: 0.2vw 0;
+    line-height: 0.9vw;
+    float: left;
+}
+.likeunit {
+    float: left;
+    overflow: hidden;
+    margin-right: 0.3vw;
+    padding: 0.2vw 0.4vw 0.2vw 0.2vw;
+    background: #e0e0e0;
+    width: 3vw;
+    border-radius: 1vw;
+    text-align: right;
+}
+.likeunit > span {
+    display: block;
+    float: left;
+    width: 0.9vw;
+    text-align: center;
+}
+.labelunit {
+    float: left;
+    overflow: hidden;
+    margin: 0.1vw 0.5vw;
+    padding: 0.2vw;
+    background: #ffffd0;
+    border: 1px dashed #ff6900;
+    border-radius: 0.2vw;
+    font-weight: bold;
+    font-size: 0.5vw;
+    color: #806000;
+}
+.labelunit.good {
+    background: #b0f0b0;
+    color: #004000;
+    border-color: #004000;
+}
+.labelunit.bad {
+    background: #f0b0b0;
+    color: #600000;
+    border-color: #600000;
+}
