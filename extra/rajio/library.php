@@ -65,8 +65,8 @@ $filterfields = [
         return false;
     },
     "plays" => function($pattern, $item) use ($instancename) {
-        if (!isset($item[$instancename . ".rajio.plays"])) return false;
-        return preg_match($pattern, $item[$instancename . ".rajio.plays"]);
+        if (!isset($item["rajio." . $instancename . ".plays"])) return false;
+        return preg_match($pattern, $item["rajio." . $instancename . ".plays"]);
     },
 ];
 
@@ -213,8 +213,8 @@ foreach ($list as $i => $info) {
     $info["album"] = htmlspecialchars($info["album"] ?? "");
     
     $lastplayedmeta = str_pad(0, strlen(PHP_INT_MAX), "0", STR_PAD_LEFT);
-    if (isset($info[$instancename . ".rajio.lastplayed"])) {
-        $lastplayedmeta = str_pad($info[$instancename . ".rajio.lastplayed"], strlen(PHP_INT_MAX), "0", STR_PAD_LEFT);
+    if (isset($info["rajio." . $instancename . ".lastplayed"])) {
+        $lastplayedmeta = str_pad($info["rajio." . $instancename . ".lastplayed"], strlen(PHP_INT_MAX), "0", STR_PAD_LEFT);
     }
     
     $data[] = [
@@ -230,16 +230,16 @@ foreach ($list as $i => $info) {
         "length" => minutesAndSeconds($info["length"]),
         "sharedBy" => $info["sharedBy"][0],
         "allsharers" => $allsharers,
-        "plays" => $info[$instancename . ".rajio.plays"] ?? 0,
+        "plays" => $info["rajio." . $instancename . ".plays"] ?? 0,
         "paddedlastplayed" => $lastplayedmeta,
-        "lastplayed" => ago($info[$instancename . ".rajio.lastplayed"] ?? 0),
+        "lastplayed" => ago($info["rajio." . $instancename . ".lastplayed"] ?? 0),
         "kwlist" => $info["keywords"] ?? [],
         "kw" => count($info["keywords"] ?? []),
         "likenum" => $likenum,
         "likestring" => $likestring,
         "likefilterstring" => $likefilterstring,
-        "priority" => number_format($stats[$instancename . ".rajio.latestpriorities"][$info["hash"]] ?? 0, 1, ".", ""),
-        "prioritymeta" => $stats[$instancename . ".rajio.latestpriorities"][$info["hash"]] ?? 0,
+        "priority" => number_format($stats["rajio." . $instancename . ".latestpriorities"][$info["hash"]] ?? 0, 1, ".", ""),
+        "prioritymeta" => $stats["rajio." . $instancename . ".latestpriorities"][$info["hash"]] ?? 0,
     ];
         
 }
