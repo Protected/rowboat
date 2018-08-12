@@ -980,7 +980,7 @@ class ModRajio extends Module {
             this._queue = this._queue.slice(0, this.param('queuesize'));
         }
 
-        this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.queue', this._queue);
+        this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.queue', this._queue.map((item) => ({hash: item.song.hash, userid: item.userid})));
         
         return true;
     }
