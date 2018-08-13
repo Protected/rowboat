@@ -92,6 +92,7 @@ require_once("config.inc.php");
             <tr>
                 <th class="c_format"></th>
                 <th class="c_hash">Hash</th>
+                <th class="c_q">Q</th>
                 <th>Name</th>
                 <th>Author</th>
                 <th class="c_album">Album</th>
@@ -133,73 +134,106 @@ let maxsal = null;
 let maxsaluserid = [];
 
 
+let playing;
+
 let columndefs = [
     {targets: [0], className: "c_format", render: (data, type, row, meta) => type == "display" ? '<span class="' + row.format + '" title="' + row.format + '"></span>' : row.format},
     {targets: [1], className: "c_hash hashcell", orderable: false, render: (data, type, row, meta) => type == "display" ? '<input type="text" value="' + row.hash + '" readonly>' : row.hash},
-    {targets: [2], render: (data, type, row, meta) => type == "display" ? '<a href="' + row.source + '" target="_blank">' + row.name + '</a>' : row.name},
-    {targets: [3], render: (data, type, row, meta) => type == "display" ? '<a href="https://duckduckgo.com/?q=' + row.urlauthor + '" target="_blank">' + row.author + '</a>' : row.author},
-    {targets: [4], className: "c_album", render: (data, type, row, meta) => type == "display" ? '<a href="https://duckduckgo.com/?q=' + row.urlalbum + '" target="_blank">' + row.album + '</a>' : row.album},
-    {targets: [5], className: "c_length ra", render: (data, type, row, meta) => type == "display" ? row.length : row.paddedlength},
-    {targets: [6], className: "c_sharedby", render: (data, type, row, meta) => {
+    {targets: [2], className: "c_q", orderable: false, render: (data, type, row, meta) => {
+        if (row.hash == playing) return "▶";
+        if (row.queuepos) return row.queuepos;
+        return "";
+    }},
+    {targets: [3], render: (data, type, row, meta) => type == "display" ? '<a href="' + row.source + '" target="_blank">' + row.name + '</a>' : row.name},
+    {targets: [4], render: (data, type, row, meta) => type == "display" ? '<a href="https://duckduckgo.com/?q=' + row.urlauthor + '" target="_blank">' + row.author + '</a>' : row.author},
+    {targets: [5], className: "c_album", render: (data, type, row, meta) => type == "display" ? '<a href="https://duckduckgo.com/?q=' + row.urlalbum + '" target="_blank">' + row.album + '</a>' : row.album},
+    {targets: [6], className: "c_length ra", render: (data, type, row, meta) => type == "display" ? row.length : row.paddedlength},
+    {targets: [7], className: "c_sharedby", render: (data, type, row, meta) => {
         if (type == "filter") return row.allsharers;
         let sharername = (userstats[row.sharedBy] ? userstats[row.sharedBy].displayname : row.sharedBy);
         if (type != "display") return sharername;
         return '<a href="#" onclick="openUserstats(\'' + row.sharedBy + '\'); return false;" title="' + row.allsharers + '">' + sharername + '</a>';
     }},
-    {targets: [7], className: "c_pl ra", render: (data, type, row, meta) => row.plays},
-    {targets: [8], className: "c_lastplayed ra", render: (data, type, row, meta) => type == "display" ? row.lastplayed : row.paddedlastplayed},
-    {targets: [9], className: "c_kw ra fade", render: (data, type, row, meta) => {
+    {targets: [8], className: "c_pl ra", render: (data, type, row, meta) => row.plays},
+    {targets: [9], className: "c_lastplayed ra", render: (data, type, row, meta) => type == "display" ? row.lastplayed : row.paddedlastplayed},
+    {targets: [10], className: "c_kw ra fade", render: (data, type, row, meta) => {
         if (type == "filter") return row.kwlist.join(",");
         if (type != "display") return row.kw;
         return '<a href="#" onclick=\'openKeywords("' + row.name + '", ' + JSON.stringify(row.kwlist) + ', this); return false;\'>' + row.kw + '</a>';
     }},
-    {targets: [10], className: "c_likes emoji", render: (data, type, row, meta) => {
+    {targets: [11], className: "c_likes emoji", render: (data, type, row, meta) => {
         if (type == "filter") return row.likefilterstring;
         if (type != "display") return row.likenum;
         return row.likestring;
     }},
-    {targets: [11], className: "c_pri ra fade", render: (data, type, row, meta) => type == "display" ? row.priority : row.prioritymeta},
+    {targets: [12], className: "c_pri ra fade", render: (data, type, row, meta) => type == "display" ? row.priority : row.prioritymeta},
 ];
 
 
 $(() => {
-    loadUserstats(() => {
+    let totalLength;
+    let highlights;
 
-        let totalLength;
-
-        $('#library')
-            .on("xhr.dt", (e, settings, data, xhr) => {
-                totalLength = data.totalLength;
-            })
-            .dataTable({
-                autoWidth: false,
-                paging: false,
-                dom: "ift",
-                serverSide: true,
-                ajax: "ajax.php?s=library",
-                order: [[2, "asc"]],
-                columnDefs: columndefs,
-                language: {
-                    search: '',
-                    info: 'Rajio Library - _TOTAL_ songs'
-                },
-                search: {
-                    smart: false,
-                    caseInsensitive: true
-                },
-                searchDelay: 500,
-                createdRow: (tr, row, dataIndex, cells) => {
-                    $(tr).find('.hashcell > input').click(function () {
-                        $(this).select();
-                    });
-                },
-                infoCallback: (settings, start, end, max, total, pre) => {
-                    return pre + " - " + totalLength;
+    let library = $('#library')
+        .on("preInit.dt", (e, settings) => {
+            if (location.hash) {
+                let api = new $.fn.dataTable.Api(settings);
+                let extr = location.hash.match(/^#(.*)/);
+                api.search(decodeURIComponent((extr[1] + '')));
+            }
+        })
+        .on("search.dt", (e, settings) => {
+            let api = new $.fn.dataTable.Api(settings);
+            location.hash = api.search();
+        })
+        .on("xhr.dt", (e, settings, data, xhr) => {
+            loadUserstats(data.userstats);
+            totalLength = data.totalLength;
+            playing = data.playing;
+            highlights = data.highlights;
+        })
+        .dataTable({
+            autoWidth: false,
+            paging: false,
+            dom: "ift",
+            serverSide: true,
+            ajax: "ajax.php?s=library",
+            order: [[3, "asc"]],
+            columnDefs: columndefs,
+            language: {
+                search: '',
+                info: 'Rajio Library - _TOTAL_ songs'
+            },
+            search: {
+                smart: false,
+                caseInsensitive: true
+            },
+            searchDelay: 500,
+            createdRow: (tr, row, dataIndex, cells) => {
+                $(tr).find('.hashcell > input').click(function () {
+                    $(this).select();
+                });
+                if (playing == row.hash) {
+                    $(tr).addClass('playing');
                 }
-            });
-
-    });
-
+                if (row.highlight) {
+                    $(tr).addClass('hl');
+                }
+                if (row.novelty) {
+                    $(tr).addClass('novelty');
+                    $(tr).prop('title', 'Novelty');
+                }
+            },
+            infoCallback: (settings, start, end, max, total, pre) => {
+                let compl = pre + " - " + totalLength;
+                if (highlights) {
+                    compl += " | Highlighted: ";
+                    compl += highlights.total + " songs (" + highlights.totalPct + "%)";
+                    compl += " - " + highlights.length + " (" + highlights.lengthPct + "%)";
+                }
+                return compl;
+            }
+        });
 });
 
 
@@ -253,92 +287,85 @@ function closeKeywords() {
 //User stats
 
 
-function loadUserstats(then) {
-    spaAjax('misc', {}, (data) => {
+function loadUserstats(data) {
+    userstats = data;
 
-        userstats = data.userstats;
+    for (let userid in userstats) {
 
-        for (let userid in userstats) {
-
-            let avg = 0;
-            let total = 0;
-            for (let likeability in userstats[userid].likes) {
-                avg += userstats[userid].likes[likeability] * likeability;
-                total += userstats[userid].likes[likeability];
-            }
-            userstats[userid].likesavg = (avg / total).toFixed(2);
-            userstats[userid].likesmodavg = ((avg - (userstats[userid].likeshares || 0)) / total).toFixed(2);
-            
-            avg = 0;
-            total = 0;
-            for (let likeability in userstats[userid].likesonshares) {
-                avg += userstats[userid].likesonshares[likeability] * likeability;
-                total += userstats[userid].likesonshares[likeability];
-            }
-            userstats[userid].likesonsharesavg = (avg / total).toFixed(2);
-            userstats[userid].likesonsharesmodavg = ((avg - (userstats[userid].likeshares || 0)) / total).toFixed(2);
-            
-            
-            if (!userstats[userid].shares || userstats[userid].shares < 20) continue;  //Does not count for 'tags'
-            
-            
-            if (userstats[userid].shares > maxshares) {
-                maxshares = userstats[userid].shares;
-                maxsharesuserid = [userid];
-            } else if (userstats[userid].shares == maxshares) {
-                maxsharesuserid.push(userid);
-            }
-            
-            if (userstats[userid].shareavglength > 0) {
-                if (!minsal || userstats[userid].shareavglength < minsal) {
-                    minsal = userstats[userid].shareavglength;
-                    minsaluserid = [userid];
-                } else if (userstats[userid].shareavglength == minsal) {
-                    minsaluserid.push(userid);
-                }
-                
-                if (!maxsal || userstats[userid].shareavglength > maxsal) {
-                    maxsal = userstats[userid].shareavglength;
-                    maxsaluserid = [userid];
-                } else if (userstats[userid].shareavglength == maxsal) {
-                    maxsaluserid.push(userid);
-                }
-            }
-            
-            if (userstats[userid].likesmodavg > maxlma) {
-                maxlma = userstats[userid].likesmodavg;
-                maxlmauserid = [userid];
-            } else if (userstats[userid].likesmodavg == maxlma) {
-                maxlmauserid.push(userid);
-            }
-            
-            if (userstats[userid].likesmodavg < minlma) {
-                minlma = userstats[userid].likesmodavg;
-                minlmauserid = [userid];
-            } else if (userstats[userid].likesmodavg == minlma) {
-                minlmauserid.push(userid);
-            }
-            
-            if (userstats[userid].likesonsharesmodavg > maxlosma) {
-                maxlosma = userstats[userid].likesonsharesmodavg;
-                maxlosmauserid = [userid];
-            } else if (userstats[userid].likesonsharesmodavg == maxlosma) {
-                maxlosmauserid.push(userid);
-            }
-            
-            if (userstats[userid].likesonsharesmodavg < minlosma) {
-                minlosma = userstats[userid].likesonsharesmodavg;
-                minlosmauserid = [userid];
-            } else if (userstats[userid].likesonsharesmodavg == minlosma) {
-                minlosmauserid.push(userid);
-            }
-
+        let avg = 0;
+        let total = 0;
+        for (let likeability in userstats[userid].likes) {
+            avg += userstats[userid].likes[likeability] * likeability;
+            total += userstats[userid].likes[likeability];
+        }
+        userstats[userid].likesavg = (avg / total).toFixed(2);
+        userstats[userid].likesmodavg = ((avg - (userstats[userid].likeshares || 0)) / total).toFixed(2);
+        
+        avg = 0;
+        total = 0;
+        for (let likeability in userstats[userid].likesonshares) {
+            avg += userstats[userid].likesonshares[likeability] * likeability;
+            total += userstats[userid].likesonshares[likeability];
+        }
+        userstats[userid].likesonsharesavg = (avg / total).toFixed(2);
+        userstats[userid].likesonsharesmodavg = ((avg - (userstats[userid].likeshares || 0)) / total).toFixed(2);
+        
+        
+        if (!userstats[userid].shares || userstats[userid].shares < 20) continue;  //Does not count for 'tags'
+        
+        
+        if (userstats[userid].shares > maxshares) {
+            maxshares = userstats[userid].shares;
+            maxsharesuserid = [userid];
+        } else if (userstats[userid].shares == maxshares) {
+            maxsharesuserid.push(userid);
         }
         
-        if (then) then(data);
+        if (userstats[userid].shareavglength > 0) {
+            if (!minsal || userstats[userid].shareavglength < minsal) {
+                minsal = userstats[userid].shareavglength;
+                minsaluserid = [userid];
+            } else if (userstats[userid].shareavglength == minsal) {
+                minsaluserid.push(userid);
+            }
+            
+            if (!maxsal || userstats[userid].shareavglength > maxsal) {
+                maxsal = userstats[userid].shareavglength;
+                maxsaluserid = [userid];
+            } else if (userstats[userid].shareavglength == maxsal) {
+                maxsaluserid.push(userid);
+            }
+        }
         
-    });
+        if (userstats[userid].likesmodavg > maxlma) {
+            maxlma = userstats[userid].likesmodavg;
+            maxlmauserid = [userid];
+        } else if (userstats[userid].likesmodavg == maxlma) {
+            maxlmauserid.push(userid);
+        }
+        
+        if (userstats[userid].likesmodavg < minlma) {
+            minlma = userstats[userid].likesmodavg;
+            minlmauserid = [userid];
+        } else if (userstats[userid].likesmodavg == minlma) {
+            minlmauserid.push(userid);
+        }
+        
+        if (userstats[userid].likesonsharesmodavg > maxlosma) {
+            maxlosma = userstats[userid].likesonsharesmodavg;
+            maxlosmauserid = [userid];
+        } else if (userstats[userid].likesonsharesmodavg == maxlosma) {
+            maxlosmauserid.push(userid);
+        }
+        
+        if (userstats[userid].likesonsharesmodavg < minlosma) {
+            minlosma = userstats[userid].likesonsharesmodavg;
+            minlosmauserid = [userid];
+        } else if (userstats[userid].likesonsharesmodavg == minlosma) {
+            minlosmauserid.push(userid);
+        }
 
+    }
 }
 
 function openUserstats(userid) {

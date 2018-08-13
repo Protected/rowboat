@@ -34,6 +34,10 @@ table#library th.c_hash {
     width: 10em;
 }
 
+table#library th.c_q {
+    width: 1em;
+}
+
 table#library th.c_length {
     width: 6em;
 }
@@ -55,7 +59,7 @@ table#library th.c_kw {
 }
 
 table#library th.c_likes {
-    width: 12em;
+    width: 10em;
 }
 
 table#library th.c_pri {
@@ -130,6 +134,24 @@ table#library tr.even {
     background-color: #f0f0ff;
 }
 
+table#library tr.playing td {
+    font-weight: bold;
+}
+
+table#library tr.hl.odd {
+    background-color: #f0f0d0;
+}
+table#library tr.hl.even {
+    background-color: #f0f0e0;
+}
+
+table#library tr.novelty.odd {
+    background-color: #e0ffff;
+}
+table#library tr.novelty.even {
+    background-color: #f0ffff;
+}
+
 table#library th, table#library td {
     padding: 0.3em;
 }
@@ -166,6 +188,8 @@ table#library .fade, table#library .fade a {
 .c_format > span.mp3 { background-image: url('../img/f_mp3.png'); }
 .c_format > span.flac { background-image: url('../img/f_flac.png'); }
 .c_format > span.pcm{ background-image: url('../img/f_pcm.png'); }
+
+.c_q { font-weight: bold; }
 
 
 #keywords {

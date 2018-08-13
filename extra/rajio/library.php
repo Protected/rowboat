@@ -12,16 +12,17 @@ $stats = json_decode(file_get_contents($statspath), true);
 $ordercrit = [
      0 => "format",
      1 => "hash",
-     2 => "name",
-     3 => "author",
-     4 => "album",
-     5 => "paddedlength",
-     6 => "allsharers",
-     7 => ["plays"],
-     8 => "paddedlastplayed",
-     9 => ["kw"],
-    10 => ["likenum"],
-    11 => ["prioritymeta"]
+     2 => ["queuepos"],
+     3 => "name",
+     4 => "author",
+     5 => "album",
+     6 => "paddedlength",
+     7 => "allsharers",
+     8 => ["plays"],
+     9 => "paddedlastplayed",
+    10 => ["kw"],
+    11 => ["likenum"],
+    12 => ["prioritymeta"]
 ];
 
 
@@ -68,6 +69,7 @@ $filterfields = [
         if (!isset($item["rajio." . $instancename . ".plays"])) return false;
         return preg_match($pattern, $item["rajio." . $instancename . ".plays"]);
     },
+    "novelty" => true
 ];
 
 
@@ -104,7 +106,14 @@ $index = json_decode(file_get_contents($path), true);
 $prefiltering = array_values($index);
 $list = [];
 
-$filters = extractFilterTree(array_keys($filterfields), $_REQUEST["search"]["value"]);
+$search = $_REQUEST["search"]["value"];
+$highlightonly = false;
+if (preg_match("/^@(.*)/", $search, $match)) {
+    $highlightonly = true;
+    $search = $match[1];
+}
+
+$filters = extractFilterTree(array_keys($filterfields), $search);
 foreach ($prefiltering as $i => $item) {
     $accept = false;
 
@@ -169,7 +178,12 @@ foreach ($prefiltering as $i => $item) {
     
     }
 
-    if ($accept) $list[] = $item;
+    if ($highlightonly) {
+        if ($accept) $item["highlight"] = true;
+        $list[] = $item;
+    } else if ($accept) {
+        $list[] = $item;
+    }
 }
 
 if (!count($filters)) $list = $prefiltering;
@@ -178,7 +192,9 @@ if (!count($filters)) $list = $prefiltering;
 $data = [];
 
 $totlength = 0;
-foreach ($list as $i => $info) {
+$hllength = 0;
+$hltotal = 0;
+foreach ($list as $info) {
 
     $likestring = "";
     $likefilterstring = "";
@@ -193,6 +209,10 @@ foreach ($list as $i => $info) {
     
     $plength = str_pad($info["length"], 5, "0", STR_PAD_LEFT);
     $totlength += $info["length"];
+    if (isset($info["highlight"])) {
+        $hllength += $info["length"];
+        $hltotal += 1;
+    }
     
     $allsharers = [];
     foreach ($info["sharedBy"] as $sharer) {
@@ -215,6 +235,16 @@ foreach ($list as $i => $info) {
     $lastplayedmeta = str_pad(0, strlen(PHP_INT_MAX), "0", STR_PAD_LEFT);
     if (isset($info["rajio." . $instancename . ".lastplayed"])) {
         $lastplayedmeta = str_pad($info["rajio." . $instancename . ".lastplayed"], strlen(PHP_INT_MAX), "0", STR_PAD_LEFT);
+    }
+    
+    $queuepos = null;
+    $queueuser = null;
+    foreach ($stats["rajio." . $instancename . ".queue"] as $i => $queueitem) {
+        if ($queueitem["hash"] == $info["hash"]) {
+            $queuepos = $i + 1;
+            $queueuser = $queueitem["userid"];
+            break;
+        }
     }
     
     $data[] = [
@@ -240,6 +270,10 @@ foreach ($list as $i => $info) {
         "likefilterstring" => $likefilterstring,
         "priority" => number_format($stats["rajio." . $instancename . ".latestpriorities"][$info["hash"]] ?? 0, 1, ".", ""),
         "prioritymeta" => $stats["rajio." . $instancename . ".latestpriorities"][$info["hash"]] ?? 0,
+        "highlight" => isset($info["highlight"]),
+        "novelty" => in_array($info["hash"], $stats["rajio." . $instancename . ".latestnovelties"]),
+        "queuepos" => $queuepos,
+        "queueuser" => $queueuser
     ];
         
 }
@@ -272,4 +306,17 @@ $result["draw"] = $_REQUEST["draw"] * 1;
 $result["data"] = $data;
 $result["recordsTotal"] = count($index);
 $result["recordsFiltered"] = count($data);
+
 $result["totalLength"] = hoursMinutesAndSeconds($totlength);
+
+$result["userstats"] = $stats["users"];
+$result["playing"] = $stats["rajio." . $instancename . ".playing"];
+
+if ($highlightonly) {
+    $result["highlights"] = [
+        "length" => hoursMinutesAndSeconds($hllength),
+        "lengthPct" => number_format($hllength / $totlength * 100, 1, ".", ""),
+        "total" => $hltotal,
+        "totalPct" => number_format($hltotal / count($data) * 100, 1, ".", "")
+    ];
+}
