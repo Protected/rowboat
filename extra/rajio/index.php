@@ -15,13 +15,13 @@ require_once("config.inc.php");
 <meta http-equiv="PRAGMA" CONTENT="NO-CACHE">
 
 <link rel="stylesheet" type="text/css" href="css/base.css">
-<link rel="stylesheet" type="text/css" href="css/datatables.min.css"></link>
+<link rel="stylesheet" type="text/css" href="css/datatables.css"></link>
 
 <script type="text/javascript" src="js/jquery.js"></script>
 <script type="text/javascript" src="js/mainkeys.js"></script>
 <script type="text/javascript" src="js/spin.js"></script>
 <script type="text/javascript" src="js/ajax.js"></script>
-<script type="text/javascript" src="js/datatables.min.js"></script>
+<script type="text/javascript" src="js/datatables.js"></script>
 
 </head>
 <body>
@@ -85,7 +85,11 @@ require_once("config.inc.php");
 
 <div id="wrapper">
 
-    <div id="header"></div>
+    <div id="header">
+        <div class="btns">
+            <a id="highlightselection" style="display: none;" href="#">Highlight selection</a>
+        </div>
+    </div>
 
     <table id="library">
         <thead>
@@ -134,6 +138,7 @@ let maxsal = null;
 let maxsaluserid = [];
 
 
+let library;
 let playing;
 
 let columndefs = [
@@ -162,9 +167,42 @@ let columndefs = [
         return '<a href="#" onclick=\'openKeywords("' + row.name + '", ' + JSON.stringify(row.kwlist) + ', this); return false;\'>' + row.kw + '</a>';
     }},
     {targets: [11], className: "c_likes emoji", render: (data, type, row, meta) => {
-        if (type == "filter") return row.likefilterstring;
-        if (type != "display") return row.likenum;
-        return row.likestring;
+        if (type == "filter") {
+            let csfilter = [];
+            for (let userid in row.likes) {
+                let likestr = ':' + (row.likes[userid] > 0 ? '+' : '') + row.likes[userid];
+                csfilter.push(userid + like);
+                if (userstats[userid]) {
+                    csfilter.push(userstats[userid].displayname + like);
+                }
+            }
+            return csfilter.join(' ');
+        }
+        
+        if (type != "display") {
+            return row.likenum;
+        }
+        
+        //Display
+        let result = "";
+        if (Object.keys(row.likes).length > 8) {
+            let countmap = {};
+            for (let userid in row.likes) {
+                let like = row.likes[userid];
+                if (!countmap[like]) countmap[like] = 1;
+                else countmap[like] += 1;
+            }
+            for (let like in countmap) {
+                result += likesymbols[like] + 'x' + countmap[like] + ' ';
+            }
+        } else {
+            for (let userid in row.likes) {
+                let like = row.likes[userid];
+                let likestr = (userstats[userid] ? userstats[userid].displayname : userid) + ':' + (like > 0 ? '+' : '') + like;
+                result += '<a href="#" onclick="openUserstats(\'' + userid + '\'); return false;" title="' + likestr + '">' + likesymbols[like] + '</a>';
+            }
+        }
+        return result;
     }},
     {targets: [12], className: "c_pri ra fade", render: (data, type, row, meta) => type == "display" ? row.priority : row.prioritymeta},
 ];
@@ -174,23 +212,42 @@ $(() => {
     let totalLength;
     let highlights;
 
-    let library = $('#library')
+    library = $('#library')
         .on("preInit.dt", (e, settings) => {
             if (location.hash) {
                 let api = new $.fn.dataTable.Api(settings);
                 let extr = location.hash.match(/^#(.*)/);
-                api.search(decodeURIComponent((extr[1] + '')));
+                applyClientHash(api, decodeURIComponent(extr[1] + ''));
             }
         })
         .on("search.dt", (e, settings) => {
             let api = new $.fn.dataTable.Api(settings);
-            location.hash = api.search();
+            location.hash = buildClientHash(api);
+        })
+        .on("order.dt", (e, settings) => {
+            let api = new $.fn.dataTable.Api(settings);
+            location.hash = buildClientHash(api);
         })
         .on("xhr.dt", (e, settings, data, xhr) => {
             loadUserstats(data.userstats);
             totalLength = data.totalLength;
             playing = data.playing;
             highlights = data.highlights;
+        })
+        .on("select.dt", (e, api, type, indexes) => {
+            for (cell of $(api.rows(indexes).nodes()).find('.c_q')) {
+                cell.unselected = $(cell).text();
+                $(cell).text("✓");
+            }
+            $('#highlightselection').show();
+        })
+        .on("deselect.dt", (e, api, type, indexes) => {
+            for (cell of $(api.rows(indexes).nodes()).find('.c_q')) {
+                $(cell).text(cell.unselected || "");
+            }
+            if (api.rows({selected: true}).data().length <= 1) {
+                $('#highlightselection').hide();
+            }
         })
         .dataTable({
             autoWidth: false,
@@ -200,6 +257,12 @@ $(() => {
             ajax: "ajax.php?s=library",
             order: [[3, "asc"]],
             columnDefs: columndefs,
+            select: {
+                style: 'os',
+                blurable: 'true',
+                info: 'false',
+                selector: '.c_q'
+            },
             language: {
                 search: '',
                 info: 'Rajio Library - _TOTAL_ songs'
@@ -234,6 +297,26 @@ $(() => {
                 return compl;
             }
         });
+        
+
+    $('#highlightselection').click(() => {
+        let api = library.DataTable();
+        
+        let hashes = [];
+        
+        let selectedrows = api.rows({selected: true});
+        let data = selectedrows.data();
+        for (let i = 0; i < data.length; i++) {
+            hashes.push(data[i].hash);
+            selectedrows.row(i).deselect();
+        }
+        
+        api.search('@{hash=' + hashes.join('}|{hash=') + '}');
+        api.draw();
+        
+        return false;
+    });
+        
 });
 
 
@@ -243,6 +326,27 @@ function minutesAndSeconds(seconds) {
     s = s.toFixed(0);
     if (s.length < 2) s = "0" + s;
     return m + ":" + s;
+}
+
+
+function buildClientHash(api) {
+    let parts = [];
+    for (let orderitem of api.order()) {
+        parts.push(orderitem[0] + "," + orderitem[1]);
+    }
+    return parts.join(";") + ";;" + api.search();
+}
+
+function applyClientHash(api, hash) {
+    if (!hash) return;
+    let extr = hash.match(/^(.*?);;(.*)$/);
+    let order = [];
+    for (let orderitem of extr[1].split(";")) {
+        let parts = orderitem.split(",")
+        order.push(parseInt(parts[0]), (parts[1] != "asc" && parts[1] != "desc" ? "asc" : parts[1]));
+    }
+    api.search(extr[2]);
+    api.order(order);
 }
 
 

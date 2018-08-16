@@ -83,11 +83,35 @@ a:hover {
 
 
 #header {
+    position: relative;
     background: #ddf6e0;
     padding: 0.1em;
     border-bottom: 1px solid black;
-    line-height: 1.6em;
-    height: 1.6em;
+    line-height: 1.5em;
+    height: 1.5em;
+}
+#header > .btns {
+    position: absolute;
+    right: 16.6em;
+}
+#header > .btns > a {
+    display: block;
+    padding: 0.1em 0.5em;
+    float: right;
+    margin-left: 0.1em;
+    line-height: 1.2em;
+    border: 0.05em solid #001040;
+    background: #e0e8ff;
+    font-weight: bold;
+    color: #001040;
+}
+#header > .btns > a:hover, #header > .btns > a:active {
+    text-decoration: none;
+    background: #a0b0ff;
+}
+
+#highlightselection {
+    display: none;
 }
 
 
@@ -102,6 +126,7 @@ table#library, input {
     top: 0;
     right: 1em;
     margin: 0.1em 0;
+    width: 16em;
 }
 #library_info {
     position: absolute;
@@ -187,7 +212,7 @@ table#library .fade, table#library .fade a {
 .c_format > span { background-size: 100% 100%; }
 .c_format > span.mp3 { background-image: url('../img/f_mp3.png'); }
 .c_format > span.flac { background-image: url('../img/f_flac.png'); }
-.c_format > span.pcm{ background-image: url('../img/f_pcm.png'); }
+.c_format > span.pcm { background-image: url('../img/f_pcm.png'); }
 
 .c_q { font-weight: bold; }
 

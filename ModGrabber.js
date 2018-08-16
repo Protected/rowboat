@@ -98,7 +98,7 @@ class ModGrabber extends Module {
 
         //Load index
         
-        this._index = this.loadData(this.param('downloadPath') + '/' + INDEXFILE, {}, {abspath: true, pretty: true});
+        this._index = this.loadData(this.param('downloadPath') + '/' + INDEXFILE, {}, {abspath: true, pretty: true, quiet: true});
         if (this._index === false) return false;
         
         for (let hash in this._index) {
@@ -642,7 +642,7 @@ class ModGrabber extends Module {
     }
     
     saveStats() {
-        this.saveData(this.param('downloadPath') + '/' + STATSFILE, this._stats, {abspath: true, pretty: true});
+        this.saveData(this.param('downloadPath') + '/' + STATSFILE, this._stats, {abspath: true, pretty: true, quiet: true});
     }
     
     

@@ -196,15 +196,10 @@ $hllength = 0;
 $hltotal = 0;
 foreach ($list as $info) {
 
-    $likestring = "";
-    $likefilterstring = "";
+    $likes = $info["like"] ?? [];
     $likenum = 15000;
-    if (isset($info["like"])) foreach ($info["like"] as $userid => $lik) {
-        $rawlike = $stats["users"][$userid]["displayname"] . ': ' . $lik;
-        $likestring .= '<a href="#" onclick="openUserstats(\'' . $userid . '\'); return false;" title="' . $rawlike . '">' . $likesymbols[$lik] . '</a>';
-        $likefilterstring .= $rawlike . " ";
+    foreach ($likes as $userid => $lik) {
         $likenum += $lik;
-        
     }
     
     $plength = str_pad($info["length"], 5, "0", STR_PAD_LEFT);
@@ -265,9 +260,8 @@ foreach ($list as $info) {
         "lastplayed" => ago($info["rajio." . $instancename . ".lastplayed"] ?? 0),
         "kwlist" => $info["keywords"] ?? [],
         "kw" => count($info["keywords"] ?? []),
+        "likes" => $likes,
         "likenum" => $likenum,
-        "likestring" => $likestring,
-        "likefilterstring" => $likefilterstring,
         "priority" => number_format($stats["rajio." . $instancename . ".latestpriorities"][$info["hash"]] ?? 0, 1, ".", ""),
         "prioritymeta" => $stats["rajio." . $instancename . ".latestpriorities"][$info["hash"]] ?? 0,
         "highlight" => isset($info["highlight"]),

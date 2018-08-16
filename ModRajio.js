@@ -53,12 +53,13 @@ class ModRajio extends Module {
         'pri.lowplays',         //Low plays priority component
         'pri.lowplays.max',     //Maximum amount of plays to receive this bonus
         'pri.mitigatedslice',   //[0-1] Position of the plays-sorted library where priority multiplier is 1
+        'pri.recent',           //(s) For how long after a song last played its priority is mitigated (on a linear gradient)
         'pri.unanimous.meh',    //[0-1] Multiplier for priority if not all listeners hate the song, but all of them hate or dislike the song (<= -1)
         'pri.unanimous.hate',   //[0-1] Multiplier for priority if all listeners hate the song (-2)
         'pri.queue.chance',     //[0-1] Odds that only a queued song will not have 0 priority, if there are queued songs
         'pri.novelty.chance',   //[0-1] Odds that only a novelty will not have 0 priority, if there are novelties
         'pri.novelty.duration', //(s) For how long a new song is considered a novelty
-        'pri.novelty.breaker',  //Maximum amount of plays above which a novelty is not treated as one, as a multiplier of the size of the library
+        'pri.novelty.breaker',  //Maximum amount of plays above which a novelty is not treated as one
 
     ]; }
     
@@ -107,6 +108,7 @@ class ModRajio extends Module {
                     + pri.lowplays * (1 - Min(pri.lowplays.max, PLAYS) / pri.lowplays.max)
                 )
                 ^ (log(PLAYS_RANK + 1) / log(songcount * pri.mitigatedslice))
+                * RECENT_GRADIENT[0, 1]
                 * (unanimous_hate ? pri.unanimous.hate : (unanimous_dislike ? pri.unanimous.meh : 1))
         */
 
@@ -122,6 +124,7 @@ class ModRajio extends Module {
         this._params['pri.lowplays'] = 30.0;
         this._params['pri.lowplays.max'] = 3;
         this._params['pri.mitigatedslice'] = 0.1;
+        this._params['pri.recent'] = 86400;
         this._params['pri.unanimous.meh'] = 0.65;
         this._params['pri.unanimous.hate'] = 0.05;
 
@@ -135,7 +138,7 @@ class ModRajio extends Module {
         this._params['pri.queue.chance'] = 0.9;
 
         /*
-            If there are novelties (novelty is defined as: song shared less than pri.novelty.duration seconds ago and with less than pri.novelty.breaker * songcount plays)
+            If there are novelties (novelty is defined as: song shared less than pri.novelty.duration seconds ago and with less than pri.novelty.breaker plays)
             SONG_PRIORITY = rand() < pri.novelty.chance
                 ? (isnovelty ? SONG_PRIORITY : 0)
                 : SONG_PRIORITY
@@ -143,7 +146,7 @@ class ModRajio extends Module {
 
         this._params['pri.novelty.chance'] = 0.05;
         this._params['pri.novelty.duration'] = 691200;  //8 days
-        this._params['pri.novelty.breaker'] = 0.01;
+        this._params['pri.novelty.breaker'] = 8;
         
         this._userdata = {};
         
@@ -1173,7 +1176,7 @@ class ModRajio extends Module {
         if (!songcount) songcount = this.grabber.everySong().length;
         let seen = this.grabber.getSongMeta(hash, "seen");
         if (!seen || moment().unix() - seen[0] > this.param('pri.novelty.duration')) return false;
-        if (this.grabber.getSongMeta(hash, "plays") > songcount * this.param("pri.novelty.breaker")) return false;
+        if (this.grabber.getSongMeta(hash, "plays") > this.param("pri.novelty.breaker")) return false;
         return true;
     }
 
@@ -1262,6 +1265,13 @@ class ModRajio extends Module {
         if (trace) components.playsfactor = playsfactor;
         priority = Math.pow(priority, playsfactor);
         if (trace) components.withplays = priority;
+
+
+        //Recently played song mitigation
+        
+        let recentgradient = Math.min(moment().unix() - (song[prefix + ".lastplayed"] || 0), this.param('pri.recent')) / this.param('pri.recent');
+        priority *= recentgradient;
+        if (trace) components.withrecent = priority;
 
 
         //Unanimous dislike penalties
