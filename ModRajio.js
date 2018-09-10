@@ -46,6 +46,7 @@ class ModRajio extends Module {
         'pri.listen',           //Unbiased listener rank priority component
         'pri.listen.slide',     //Weight of listener bias on rank, if applicable
         'pri.listen.history',   //Weight of history position bias on slide, if applicable
+        'pri.listen.historysc', //Multiplier for history position bias
         'pri.length',           //Ideal length priority component
         'pri.length.minlen',    //(s) Minimum ideal song length
         'pri.length.maxlen',    //(s) Maximum ideal song length
@@ -95,7 +96,7 @@ class ModRajio extends Module {
         this._params['usestatus'] = true;
 
         /*
-            LISTENER_SLIDE = Sum_[history](LISTENER_RANK * -1 * (maxhistory - HISTORY_POSITION) ^ pri.listen.history)
+            LISTENER_SLIDE = Sum_[history](LISTENER_RANK * -1 * ((maxhistory - HISTORY_POSITION) * pri.listen.historysc) ^ pri.listen.history)
 
             SONG_PRIORITY =
                 (
@@ -116,7 +117,8 @@ class ModRajio extends Module {
         this._params['pri.rank'] = 10.0;
         this._params['pri.listen'] = 30.0;
         this._params['pri.listen.slide'] = 0.5;
-        this._params['pri.listen.history'] = 0.4;
+        this._params['pri.listen.history'] = 0.3;
+        this._params['pri.listen.historysc'] = 3;
         this._params['pri.length'] = 10.0;
         this._params['pri.length.minlen'] = 180;
         this._params['pri.length.maxlen'] = 600;
@@ -163,6 +165,7 @@ class ModRajio extends Module {
         this._skipper = {};  //{userid: true, ...} Requested skipping current song
         this._undeafen = {};  //{userid: true, ...} Users to undeafen as soon as they rejoin a voice channel
         this._nopreference = {};  //{userid: true, ...} Users have disabled impact of their preferences in priority calculations
+        this._userlistened = {};  //{userid: songs, ...} Amount of songs each user has listened to in current listening session
         
         this._play = null;  //Song being played
         this._pending = null;  //Timer that will start the next song
@@ -1104,6 +1107,14 @@ class ModRajio extends Module {
         this.grabber.setSongMeta(song.hash, prefix + ".plays", plays);
         this.grabber.setSongMeta(song.hash, prefix + ".skipped", null);
         this._playscache[song.hash] = plays;
+
+        for (let listenerid of this.listeners.map((listener) => listener.id)) {
+            if (!this._userlistened[listenerid]) {
+                this._userlistened[listenerid] = 1;
+            } else {
+                this._userlistened[listenerid] += 1;
+            }
+        }
     }
     
     
@@ -1141,12 +1152,13 @@ class ModRajio extends Module {
 
     calculateListenerSlide(listener) {
         if (!this.songrank) return 0;
+        let userhistory = this._history.slice(0, this._userlistened[listener] || 0);
         let slide = 0;
-        for (let i = 0; i < this._history.length; i++) {
-            let song = this._history[i];
+        for (let i = 0; i < userhistory.length; i++) {
+            let song = userhistory[i];
             let comp = (this.songrank.computeSongRank(song.hash, [listener]) || 0);
             if (comp <= 0) comp -= 0.5;
-            comp *= -1 * Math.pow(this._history.length - i, this.param('pri.listen.history'));
+            comp *= -1 * Math.pow((userhistory.length - i) * this.param('pri.listen.historysc'), this.param('pri.listen.history'));
             slide += comp;
         }
         return slide;
@@ -1173,10 +1185,11 @@ class ModRajio extends Module {
     }
 
     isNovelty(hash, songcount) {
+        let prefix = "rajio." + this.name.toLowerCase();
         if (!songcount) songcount = this.grabber.everySong().length;
         let seen = this.grabber.getSongMeta(hash, "seen");
         if (!seen || moment().unix() - seen[0] > this.param('pri.novelty.duration')) return false;
-        if (this.grabber.getSongMeta(hash, "plays") > this.param("pri.novelty.breaker")) return false;
+        if ((this.grabber.getSongMeta(hash, prefix + ".plays") || 0) > this.param("pri.novelty.breaker")) return false;
         return true;
     }
 
