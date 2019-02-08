@@ -856,6 +856,8 @@ class ModGrabber extends Module {
                 if (typeof keywords == "string") {
                     if (keywords) keywords = keywords.split('');
                     else keywords = [];
+                } else {
+                    keywords = [];
                 }
                 for (let dkeyword of mp.info.keywords) {
                     keywords.push(dkeyword);
