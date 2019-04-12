@@ -852,12 +852,11 @@ class ModGrabber extends Module {
                     return;
                 }
                 
-                let keywords = info.keywords;
-                if (typeof keywords == "string") {
-                    if (keywords) keywords = keywords.split('');
-                    else keywords = [];
-                } else {
-                    keywords = [];
+                let keywords = [];
+                if (info.player_response && info.player_response.videoDetails && typeof info.player_response.videoDetails.keywords == "object") {
+                    for (let keyword of info.player_response.videoDetails.keywords) {
+                        keywords.push(keyword);
+                    }
                 }
                 for (let dkeyword of mp.info.keywords) {
                     keywords.push(dkeyword);
