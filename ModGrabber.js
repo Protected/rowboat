@@ -686,11 +686,11 @@ class ModGrabber extends Module {
             return ikeyword[1];
         }).filter((item) => item);
         
-        let title = message.match(/\{(title|name|song)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?_-]+)\}/iu);
+        let title = message.match(/\{(title|name|song)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?:;,_-]+)\}/iu);
         if (title) title = title[3];
-        let artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?_-]+)\}/iu);
+        let artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?:;,_-]+)\}/iu);
         if (artist) artist = artist[3];
-        let album = message.match(/\{(album)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?_-]+)\}/iu);
+        let album = message.match(/\{(album)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?:;,_-]+)\}/iu);
         if (album) album = album[3];
         
         let replace = message.match(/\{replace(=|:) ?([0-9A-Fa-f]+)\}/iu);
