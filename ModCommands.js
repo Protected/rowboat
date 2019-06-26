@@ -2,8 +2,8 @@
 
 //If ModLogger is present, will log to channel "command" using "templateCommand". Placeholders: %(MOMENT_FORMAT)% %env% %userid% %user% %channelid% %channel% %message%
 
-var Module = require('./Module.js');
-var moment = require('moment');
+const Module = require('./Module.js');
+const moment = require('moment');
 
 const PERM_ADMIN = 'administrator';
 
@@ -271,7 +271,7 @@ class ModCommands extends Module {
             permissions: [PERM_ADMIN]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var allenvs = this.mod('root').getAllEnvironments();
+            let allenvs = this.mod('root').getAllEnvironments();
             if (!allenvs || !Object.keys(allenvs).length) {
                 ep.reply ("No environments found.");
                 return true;
@@ -291,7 +291,7 @@ class ModCommands extends Module {
             permissions: [PERM_ADMIN]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var allmods = this.mod('root').getAllModules();
+            let allmods = this.mod('root').getAllModules();
             if (!allmods || !Object.keys(allmods).length) {
                 ep.reply ("No modules found.");
                 return true;
@@ -348,7 +348,7 @@ class ModCommands extends Module {
             commandtail = parts[2];
         }
         
-        if (commandid.split(" ").find((item) => item == "command")) {
+        if (commandid.split(" ").find(item => item == "command")) {
             this.log('error', 'Unable to register the command ID "' + commandid + '" because the token "command" is reserved and cannot be used here.');
             return false;
         }
@@ -498,7 +498,7 @@ class ModCommands extends Module {
     
     findFirstCommandByRoot(commandroot) {
         if (!commandroot) return null;
-        return this._commands.find((item) => item.commandroot == commandroot);
+        return this._commands.find(item => item.commandroot == commandroot);
     }
     
     findSubcommands(commandpath) {
@@ -536,17 +536,17 @@ class ModCommands extends Module {
 
     onCommandMessage(env, type, message, authorid, channelid, rawobject) {
 
-        var prefix = this.param('defaultprefix');
-        var prefixes = this.param('prefixes');
+        let prefix = this.param('defaultprefix');
+        let prefixes = this.param('prefixes');
         if (prefixes[env.name]) prefix = prefixes[env.name];
         if (!message.startsWith(prefix)) return;
         
         //Identify command being used
         
-        var command = null;
-        var cmdwords = 0;
+        let command = null;
+        let cmdwords = 0;
         
-        var cmdline = message.substr(prefix.length);
+        let cmdline = message.substr(prefix.length);
         for (let commandid in this._index) {
             if (cmdline.toLowerCase().indexOf(commandid) !== 0) continue;
             if (cmdline.length !== commandid.length && cmdline.substr(commandid.length, 1) != ' ') continue;
@@ -582,8 +582,8 @@ class ModCommands extends Module {
             return;
         }
 
-        var args = cmdline.trim().split(/ +/).slice(cmdwords);        
-        var descriptor = this._index[command];
+        let args = cmdline.trim().split(/ +/).slice(cmdwords);        
+        let descriptor = this._index[command];
         
         //Validate context against command descriptor
         
@@ -595,8 +595,8 @@ class ModCommands extends Module {
             return true;
         }
         
-        var handles = this.mod('Users').getHandlesById(env.name, authorid, true);
-        var handle = (handles.length ? handles[0] : null);
+        let handles = this.mod('Users').getHandlesById(env.name, authorid, true);
+        let handle = (handles.length ? handles[0] : null);
         
         if (descriptor.permissions) {
             if (!this.mod('Users').testPermissions(env.name, authorid, channelid, descriptor.permissions, descriptor.requireAllPermissions, handle)) {
@@ -605,13 +605,13 @@ class ModCommands extends Module {
             }
         }
         
-        var targetmod = null;
+        let targetmod = null;
         if (args[0] && args[0].match(/^\|.+\|$/)) {
             targetmod = args[0].substr(1, args[0].length - 2);
             args.splice(0, 1);
         }
 
-        var knownmods = Object.keys(descriptor.callback);
+        let knownmods = Object.keys(descriptor.callback);
         if (!targetmod && knownmods.length == 1) {
             targetmod = knownmods[0];
         }
@@ -628,14 +628,14 @@ class ModCommands extends Module {
         }
         
         
-        for (var i = 0; i < args.length - 1; i++) {
+        for (let i = 0; i < args.length - 1; i++) {
             while (i < args.length - 1 && args[i].match(/^".*[^"]$/)) {
                 args[i] = args[i] + ' ' + args[i+1];
                 args.splice(i+1, 1);
             }
         }
 
-        for (var i = 0; i < args.length; i++) {
+        for (let i = 0; i < args.length; i++) {
             let m = args[i].match(/^"(.*)"$/);
             if (m) args[i] = m[1];
         }
@@ -662,9 +662,9 @@ class ModCommands extends Module {
         
         //Prepare args map
         
-        var passargs = {};
-        for (var i = 0; i < descriptor.args.length; i++) {
-            var argname = descriptor.args[i];
+        let passargs = {};
+        for (let i = 0; i < descriptor.args.length; i++) {
+            let argname = descriptor.args[i];
             if (i == descriptor.args.length - 2 && descriptor.args[descriptor.args.length - 1] === true) {
                 passargs[argname] = args.slice(i);
                 break;
@@ -729,10 +729,10 @@ class ModCommands extends Module {
 
     buildCommandSyntax(command) {
         if (!this._index[command]) return "";
-        var descriptor = this._index[command];
-        var syntax = '**' + command + '**';
-        var optionals = false;
-        for (var i = 0; i < descriptor.args.length; i++) {
+        let descriptor = this._index[command];
+        let syntax = '**' + command + '**';
+        let optionals = false;
+        for (let i = 0; i < descriptor.args.length; i++) {
             syntax += ' ';
             if (descriptor.minArgs !== null && i == descriptor.minArgs && descriptor.args[i] !== true) {
                 syntax += '[';

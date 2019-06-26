@@ -375,7 +375,7 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find('name', args.channel);
+                let channel = env.server.channels.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
                 } else if (env.server.channels.get(args.channel)) {
@@ -426,7 +426,7 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find('name', args.channel);
+                let channel = env.server.channels.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
                 } else if (env.server.channels.get(args.channel)) {
@@ -507,7 +507,7 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find('name', args.channel);
+                let channel = env.server.channels.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
                 } else if (env.server.channels.get(args.channel)) {
@@ -572,7 +572,7 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find('name', args.channel);
+                let channel = env.server.channels.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
                 } else if (env.server.channels.get(args.channel)) {
@@ -627,7 +627,7 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find('name', args.channel);
+                let channel = env.server.channels.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
                 } else if (env.server.channels.get(args.channel)) {
@@ -684,7 +684,7 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find('name', args.channel);
+                let channel = env.server.channels.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
                 } else if (env.server.channels.get(args.channel)) {
@@ -712,7 +712,7 @@ class ModDiscordChannels extends Module {
 
             let roleid = null;
             if (args.role && args.role != "-") {
-                let role = env.server.roles.find('name', args.role);
+                let role = env.server.roles.find(r => r.name == args.role);
                 if (role) {
                     roleid = role.id;
                 } else if (env.server.roles.get(args.role)) {
@@ -776,7 +776,7 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find('name', args.channel);
+                let channel = env.server.channels.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
                 } else if (env.server.channels.get(args.channel)) {
@@ -829,7 +829,7 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find('name', args.channel);
+                let channel = env.server.channels.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
                 } else if (env.server.channels.get(args.channel)) {
@@ -875,7 +875,7 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find('name', args.channel);
+                let channel = env.server.channels.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
                 } else if (env.server.channels.get(args.channel)) {
@@ -925,7 +925,7 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find('name', args.channel);
+                let channel = env.server.channels.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
                 } else if (env.server.channels.get(args.channel)) {
@@ -981,7 +981,7 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find('name', args.channel);
+                let channel = env.server.channels.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
                 } else if (env.server.channels.get(args.channel)) {
@@ -1045,7 +1045,7 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find('name', args.channel);
+                let channel = env.server.channels.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
                 } else if (env.server.channels.get(args.channel)) {
@@ -1098,7 +1098,7 @@ class ModDiscordChannels extends Module {
                 return true;
             }
 
-            let targetchannelid, channel = env.server.channels.filter((channel) => channel.type == reqtype).find('name', args.channel);
+            let targetchannelid, channel = env.server.channels.filter(channel => channel.type == reqtype).find(c => c.name == args.channel);
             if (channel) {
                 targetchannelid = channel.id;
             } else if (env.server.channels.get(args.channel)) {
@@ -1239,7 +1239,7 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find('name', args.channel);
+                let channel = env.server.channels.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
                 } else if (env.server.channels.get(args.channel)) {
@@ -1315,7 +1315,7 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find('name', args.channel);
+                let channel = env.server.channels.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
                 } else if (env.server.channels.get(args.channel)) {
@@ -1380,7 +1380,7 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find('name', args.channel);
+                let channel = env.server.channels.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
                 } else if (env.server.channels.get(args.channel)) {

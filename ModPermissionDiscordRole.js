@@ -1,6 +1,6 @@
 /* Module: PermissionDiscordRole -- This module is a permissions provider that turns Discord role names into ModUsers permissions. */
 
-var Module = require('./Module.js');
+const Module = require('./Module.js');
 
 class ModPermissionDiscordRole extends Module {
 
@@ -24,16 +24,16 @@ class ModPermissionDiscordRole extends Module {
         //Register callbacks
         
         this.mod('Users').registerPermissionProvider((passedname, userid, channelid, permissions) => {
-            var env = opt.envs[passedname];
+            let env = opt.envs[passedname];
             if (env.envName != 'Discord') return [];
         
-            var member = env.server.members.get(userid);
+            let member = env.server.members.get(userid);
             if (!member) return [];
             
-            var result = [];
+            let result = [];
         
             for (let permission of permissions) {
-                let role = member.roles.find('name', permission);
+                let role = member.roles.find(r => r.name == permission);
                 if (role) result.push(permission);
             }
         

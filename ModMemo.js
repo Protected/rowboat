@@ -71,7 +71,7 @@ class ModMemo extends Module {
 
         //Register callbacks
         
-        for (var envname in opt.envs) {
+        for (let envname in opt.envs) {
             opt.envs[envname].on('join', this.onJoin, this);
             opt.envs[envname].on('message', this.onMessage, this);
         }
@@ -347,8 +347,8 @@ class ModMemo extends Module {
     //Miscellaneous
     
     objectValues(obj) {
-        var vals = [];
-        for (var key in obj) {
+        let vals = [];
+        for (let key in obj) {
             if (obj.propertyIsEnumerable(key)) {
                 vals.push(obj[key]);
             }
@@ -357,13 +357,13 @@ class ModMemo extends Module {
     }
     
     userFriendlyDelay(delay) {
-        var days = Math.floor(delay / 86400.0);
+        let days = Math.floor(delay / 86400.0);
         delay -= days * 86400;
-        var hours = Math.floor(delay / 3600.0);
+        let hours = Math.floor(delay / 3600.0);
         delay -= hours * 3600;
-        var minutes = Math.floor(delay / 60.0);
+        let minutes = Math.floor(delay / 60.0);
         delay -= minutes * 60;
-        var result = "";
+        let result = "";
         if (days) result += (days + "d") + " ";
         if (hours) result += (hours + "h") + " ";
         if (minutes) result += (minutes + "m") + " ";
@@ -379,7 +379,7 @@ class ModMemo extends Module {
 
         if (!this._memoFromHandle[register.from.handle]) {
             this._memoFromHandle[register.from.handle] = [];
-        } else if (this._memoFromHandle[register.from.handle].find((indexed) => (indexed.id == register.id))) {
+        } else if (this._memoFromHandle[register.from.handle].find(indexed => indexed.id == register.id)) {
             return true;
         }
         
@@ -391,12 +391,12 @@ class ModMemo extends Module {
     indexFromUserid(register) {
         if (!register || !register.id || !register.from || !register.from.env || !register.from.userid) return false;
 
-        var envindex = this._memoFromUserid[register.from.env];
+        let envindex = this._memoFromUserid[register.from.env];
         if (!envindex) envindex = this._memoFromUserid[register.from.env] = {};
         
         if (!envindex[register.from.userid]) {
             envindex[register.from.userid] = [];
-        } else if (envindex[register.from.userid].find((indexed) => (indexed.id == register.id))) {
+        } else if (envindex[register.from.userid].find(indexed => indexed.id == register.id)) {
             return true;
         }
         
@@ -408,14 +408,14 @@ class ModMemo extends Module {
     indexToHandle(register) {
         if (!register || !register.id || !register.to || !register.to.length) return false;
 
-        var succ = 0;
+        let succ = 0;
 
         for (let recipient of register.to) {
             if (!recipient.handle) continue;
         
             if (!this._memoToHandle[recipient.handle]) {
                 this._memoToHandle[recipient.handle] = [];
-            } else if (this._memoToHandle[recipient.handle].find((indexed) => (indexed.id == register.id))) {
+            } else if (this._memoToHandle[recipient.handle].find(indexed => indexed.id == register.id)) {
                 continue;
             }
         
@@ -430,11 +430,11 @@ class ModMemo extends Module {
     indexToDisplay(register) {
         if (!register || !register.id || !register.to || !register.to.length) return false;
 
-        var succ = 0;
+        let succ = 0;
 
         for (let recipient of register.to) {
         
-            var envindex = this._memoToDisplay[recipient.env];
+            let envindex = this._memoToDisplay[recipient.env];
             if (!envindex) envindex = this._memoToDisplay[recipient.env] = {};
             
             let lcdisplay = recipient.display;
@@ -443,7 +443,7 @@ class ModMemo extends Module {
             
             if (!envindex[lcdisplay]) {
                 envindex[lcdisplay] = [];
-            } else if (envindex[lcdisplay].find((indexed) => (indexed.id == register.id))) {
+            } else if (envindex[lcdisplay].find(indexed => indexed.id == register.id)) {
                 continue;
             }
             
@@ -458,16 +458,16 @@ class ModMemo extends Module {
     indexToUserid(register) {
         if (!register || !register.id || !register.to || !register.to.length) return false;
 
-        var succ = 0;
+        let succ = 0;
 
         for (let recipient of register.to) {
 
-            var envindex = this._memoToUserid[recipient.env];
+            let envindex = this._memoToUserid[recipient.env];
             if (!envindex) envindex = this._memoToUserid[recipient.env] = {};
             
             if (!envindex[recipient.userid]) {
                 envindex[recipient.userid] = [];
-            } else if (envindex[recipient.userid].find((indexed) => (indexed.id == register.id))) {
+            } else if (envindex[recipient.userid].find(indexed => indexed.id == register.id)) {
                 continue;
             }
             
@@ -520,7 +520,7 @@ class ModMemo extends Module {
     //Descriptor parser - Input is "[<delay>] [{env}] (=handle|[+]displayname|[+]id) [& ...] message ...", return {delay: seconds, to: [{env, handle, display, userid, auth}, ...], message}
     
     parseDescriptor(currentenv, descriptor) {
-        var result = {
+        let result = {
             delay: 0,
             to: [],
             message: null
@@ -528,11 +528,11 @@ class ModMemo extends Module {
         
         //<delay>
         
-        var delaydescriptor = descriptor[0].match(/^<(.*)>$/);
+        let delaydescriptor = descriptor[0].match(/^<(.*)>$/);
         if (delaydescriptor) {
             delaydescriptor = delaydescriptor[1];
             
-            var parts = delaydescriptor.match(/^((([0-9]+):)?([0-9]{1,2}):)?([0-9]+)$/);
+            let parts = delaydescriptor.match(/^((([0-9]+):)?([0-9]{1,2}):)?([0-9]+)$/);
             if (parts) {
                 result.delay = parseInt(parts[5]) + (parseInt(parts[4])||0) * 60 + (parseInt(parts[3])||0) * 3600;
             } else {
@@ -631,7 +631,7 @@ class ModMemo extends Module {
     
     createOutbox(env, userid, handle) {
     
-        var outbox = {};
+        let outbox = {};
         
         if (this._memoFromHandle[handle]) {
             for (let register of this._memoFromHandle[handle]) {
@@ -658,7 +658,7 @@ class ModMemo extends Module {
     getMatchingRecipients(register, env, userid, display, handle, isauth, notdone) {
         if (!register) return [];
 
-        var result = [];
+        let result = [];
 
         for (let recipient of register.to) {
             if (handle && recipient.handle == handle
@@ -682,9 +682,9 @@ class ModMemo extends Module {
     
     createInbox(env, userid, display, handle, isauth, tscutoff) {
     
-        var tsthreshold = moment().unix() - tscutoff;
+        let tsthreshold = moment().unix() - tscutoff;
     
-        var inbox = {};
+        let inbox = {};
         
         if (this._memoToHandle[handle]) {
             for (let register of this._memoToHandle[handle]) {
@@ -723,7 +723,7 @@ class ModMemo extends Module {
     //Event handlers
     
     markMemoAsDelivered(register, env, userid, display, handle, isauth) {
-        var changed = 0;
+        let changed = 0;
     
         for (let recipient of this.getMatchingRecipients(register, env, userid, display, handle, isauth, true)) {
             changed += 1;
@@ -734,8 +734,8 @@ class ModMemo extends Module {
     }
     
     deliverMemo(register, envobj, targetid, channelid) {
-        var targetdisplay = envobj.idToMention(targetid);
-        var delaypart = '';
+        let targetdisplay = envobj.idToMention(targetid);
+        let delaypart = '';
         if (register.delay) {
             delaypart = ' (w/ ' + this.userFriendlyDelay(register.delay) + ' delay)';
         }
@@ -752,12 +752,12 @@ class ModMemo extends Module {
     }
     
     triggerMemoDelivery(env, authorid, channelid, strong) {
-        var handles = this.mod('Users').getHandlesById(env.name, authorid, true);
-        var display = env.idToDisplayName(authorid);
-        var isauth = env.idIsAuthenticated(authorid);
-        var receive = {};
+        let handles = this.mod('Users').getHandlesById(env.name, authorid, true);
+        let display = env.idToDisplayName(authorid);
+        let isauth = env.idIsAuthenticated(authorid);
+        let receive = {};
         
-        var now = moment().unix();
+        let now = moment().unix();
         
         for (let handle of handles) {
             if (!this._memoToHandle[handle]) continue;
@@ -791,7 +791,7 @@ class ModMemo extends Module {
         }
         
         receive = this.objectValues(receive).sort((a, b) => (a.id - b.id));
-        var changed = 0;
+        let changed = 0;
         for (let register of receive) {
             let deliveries = this.markMemoAsDelivered(register, env.name, authorid, display, handles[0], isauth);
             if (deliveries) {

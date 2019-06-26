@@ -35,11 +35,11 @@ class Environment extends ModernEventEmitter {
     
     
     initialize(sharedInstances) {
-        var params = {};
+        let params = {};
         
         //Load and check parameters
         
-        var fileName = this.configfile;
+        let fileName = this.configfile;
         try {
             params = jsonfile.readFileSync(fileName);
             this.log(`Initializing environment of type ${this._envName}.`);

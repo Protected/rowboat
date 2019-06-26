@@ -1,9 +1,9 @@
 /* Module: Users -- Manage "known" user accounts and permission flags. */
 
-var Module = require('./Module.js');
+const Module = require('./Module.js');
 
-var PERM_ADMIN = 'administrator';
-var PERM_MOD = 'moderator';
+const PERM_ADMIN = 'administrator';
+const PERM_MOD = 'moderator';
 
 class ModUsers extends Module {
 
@@ -175,14 +175,14 @@ class ModUsers extends Module {
                 permissions: [PERM_ADMIN, PERM_MOD]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
             
-                var handles = this.getHandlesById(args.environment, args.id);
+                let handles = this.getHandlesById(args.environment, args.id);
                 if (!handles.length) {
                     ep.reply("No handles were found matching the given environment and id.");
                     return true;
                 }
                 
-                while(handles.length) {
-                    var outbound = handles.slice(0, 10);
+                while (handles.length) {
+                    let outbound = handles.slice(0, 10);
                     outbound = '"' + outbound.join('","') + '"';
                     ep.reply(outbound);
                     handles = handles.slice(10);
@@ -199,14 +199,14 @@ class ModUsers extends Module {
                 permissions: [PERM_ADMIN, PERM_MOD]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
 
-                var handles = this.getHandlesByPerms(args.perms);
+                let handles = this.getHandlesByPerms(args.perms);
                 if (!handles.length) {
                     ep.reply("No handles were found with the given permission" + (args.perms.length != 1 ? "s" : "") + ".");
                     return true;
                 }
 
-                while(handles.length) {
-                    var outbound = handles.slice(0, 10);
+                while (handles.length) {
+                    let outbound = handles.slice(0, 10);
                     outbound = '"' + outbound.join('","') + '"';
                     ep.reply(outbound);
                     handles = handles.slice(10);
@@ -222,7 +222,7 @@ class ModUsers extends Module {
                 permissions: [PERM_ADMIN, PERM_MOD]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
             
-                var account = this.getUser(args.handle);
+                let account = this.getUser(args.handle);
                 if (!account) {
                     ep.reply("I could not find an account identified by " + args.handle + "!");
                     return true;
@@ -232,16 +232,16 @@ class ModUsers extends Module {
                 
                 ep.reply('* ID patterns:');
                 if (account.ids) {
-                    for (var i = 0; i < account.ids.length; i++) {
+                    for (let i = 0; i < account.ids.length; i++) {
                         ep.reply('    {' + account.ids[i].env + '} `' + account.ids[i].idpattern + '`');
                     }
                 }
                 
                 ep.reply('* Permissions:');
-                var perms = account.perms;
+                let perms = account.perms;
                 if (perms) {
                     while (perms.length) {
-                        var outbound = perms.slice(0, 10);
+                        let outbound = perms.slice(0, 10);
                         outbound = outbound.join(', ');
                         ep.reply('    ' + outbound);
                         perms = perms.slice(10);
@@ -268,7 +268,7 @@ class ModUsers extends Module {
         
         if (!handle.match(/^[0-9a-zA-Z]+$/)) return false;
 
-        var newuser = {
+        let newuser = {
             handle: handle,
             ids: [],
             perms: []
@@ -285,9 +285,7 @@ class ModUsers extends Module {
     delUser(handle) {
         if (!this._userhandles[handle]) return false;
         
-        var i = this._userdata.findIndex(
-            (checkuser) => (checkuser.handle == handle)
-        );
+        let i = this._userdata.findIndex(checkuser => checkuser.handle == handle);
         
         if (i > -1) this._userdata.splice(i, 1);
         delete this._userhandles[handle];
@@ -302,7 +300,7 @@ class ModUsers extends Module {
     }
 
     renameUser(fromhandle, tohandle) {
-        var desc = this._userhandles[fromhandle];
+        let desc = this._userhandles[fromhandle];
         if (!desc) return false;
         if (this._userhandles[tohandle]) return false;
 
@@ -320,13 +318,11 @@ class ModUsers extends Module {
     addId(handle, env, idpattern) {
         if (!env || !idpattern) return false;
         
-        var changed = false;
-        var chuser = this.getUser(handle);
+        let changed = false;
+        let chuser = this.getUser(handle);
         if (!chuser) return false;
 
-        if (!chuser.ids.find(
-            (id) => (id.env == env && id.idpattern == idpattern)
-        )) {
+        if (!chuser.ids.find(id => id.env == env && id.idpattern == idpattern)) {
             chuser.ids.push({env: env, idpattern: idpattern});
             changed = true;
         }
@@ -338,11 +334,11 @@ class ModUsers extends Module {
     delId(handle, env, idpattern) {
         if (!env) return false;
         
-        var changed = false;
-        var chuser = this.getUser(handle);
+        let changed = false;
+        let chuser = this.getUser(handle);
         if (!chuser) return false;
         
-        for (var i = 0; i < chuser.ids.length; i++) {
+        for (let i = 0; i < chuser.ids.length; i++) {
             if (chuser.ids[i].env != env) continue;
             if (idpattern && chuser.ids[i].idpattern != idpattern) continue;
             chuser.ids.splice(i, 1);
@@ -355,7 +351,7 @@ class ModUsers extends Module {
     }
 
     getIds(handle, env) {
-        var chuser = this.getUser(handle);
+        let chuser = this.getUser(handle);
         if (!chuser) return [];
         
         if (!env) return chuser.ids;
@@ -374,7 +370,7 @@ class ModUsers extends Module {
             }
         }
         
-        var ids = this.getIds(handle, env);
+        let ids = this.getIds(handle, env);
         
         for (let eachid of ids) {
             if (RegExp(eachid).exec(id)) {
@@ -386,7 +382,7 @@ class ModUsers extends Module {
     }
 
     getHandlesById(env, id, strict) {
-        var result = [];
+        let result = [];
         
         for (let eachuser of this._userdata) {
             if (this.isIdHandle(eachuser.handle, env, id, strict)) {
@@ -403,13 +399,13 @@ class ModUsers extends Module {
     addPerms(handle, perms) {
         if (!perms) return false;
         
-        var changed = false;
-        var chuser = this.getUser(handle);
+        let changed = false;
+        let chuser = this.getUser(handle);
         if (!chuser) return false;
         
         for (let perm of perms) {
             perm = perm.toLowerCase();
-            if (!chuser.perms.find((checkperm) => (checkperm == perm))) {
+            if (!chuser.perms.find(checkperm => checkperm == perm)) {
                 chuser.perms.push(perm);
                 changed = true;
             }
@@ -425,13 +421,13 @@ class ModUsers extends Module {
     delPerms(handle, perms) {
         if (!perms) return false;
         
-        var changed = false;
-        var chuser = this.getUser(handle);
+        let changed = false;
+        let chuser = this.getUser(handle);
         if (!chuser) return false;
         
         for (let perm of perms) {
             perm = perm.toLowerCase();
-            var ind = chuser.perms.findIndex((checkperm) => (checkperm == perm));
+            let ind = chuser.perms.findIndex(checkperm => checkperm == perm);
             if (ind > -1) {
                 chuser.perms.splice(ind, 1);
                 changed = true;
@@ -446,17 +442,17 @@ class ModUsers extends Module {
     }
 
     getPerms(handle) {
-        var checkuser = this.getUser(handle);
+        let checkuser = this.getUser(handle);
         if (!checkuser) return [];
         return checkuser.perms;
     }
 
     hasAllPerms(handle, perms) {
-        var checkuser = this.getUser(handle);
+        let checkuser = this.getUser(handle);
         if (!checkuser) return false;
         for (let perm of perms) {
             perm = perm.toLowerCase();
-            if (!checkuser.perms.find((checkperm) => (checkperm == perm))) {
+            if (!checkuser.perms.find(checkperm => checkperm == perm)) {
                 return false;
             }
         }
@@ -464,11 +460,11 @@ class ModUsers extends Module {
     }
 
     hasAnyPerm(handle, perms) {
-        var checkuser = this.getUser(handle);
+        let checkuser = this.getUser(handle);
         if (!checkuser) return false;
         for (let perm of perms) {
             perm = perm.toLowerCase();
-            if (checkuser.perms.find((checkperm) => (checkperm == perm))) {
+            if (checkuser.perms.find(checkperm => checkperm == perm)) {
                 return true;
             }
         }
@@ -476,11 +472,11 @@ class ModUsers extends Module {
     }
 
     subsetPerms(handle, perms) {
-        var checkuser = this.getUser(handle);
+        let checkuser = this.getUser(handle);
         if (!checkuser) return false;
-        var subset = [];
+        let subset = [];
         for (let perm of perms) {
-            if (checkuser.perms.find((checkperm) => (checkperm == perm.toLowerCase()))) {
+            if (checkuser.perms.find(checkperm => checkperm == perm.toLowerCase())) {
                 subset.push(perm);
             }
         }
@@ -488,7 +484,7 @@ class ModUsers extends Module {
     }
 
     getHandlesByPerms(perms) {
-        var result = [];
+        let result = [];
 
         for (let eachuser of this._userdata) {
             if (this.hasAllPerms(eachuser.handle, perms)) {
@@ -516,12 +512,12 @@ class ModUsers extends Module {
 
     testPermissions(env, userid, channelid, permissions, requireall, handle) {  //env is an environment NAME; channelid is optional
 
-        var removeduplicates = {};
+        let removeduplicates = {};
         for (let perm of permissions) {
             removeduplicates[perm] = true;
         }
 
-        var ascertained = {};
+        let ascertained = {};
 
         //From providers
 
@@ -539,7 +535,7 @@ class ModUsers extends Module {
 
         //From account
 
-        var handles = this.getHandlesById(env, userid, true);
+        let handles = this.getHandlesById(env, userid, true);
         if (!handle) {
             handle = (handles.length ? handles[0] : null);
         } else {

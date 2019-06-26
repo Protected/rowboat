@@ -28,18 +28,18 @@ class ModAlerts extends Module {
         if (this._data === false) return false;
 
         
-        var replyEmptyList = (reply) => {
+        let replyEmptyList = (reply) => {
             reply("You have no alerts.");
         }
 
-        var replyPatternNotFound = (reply) => {
+        let replyPatternNotFound = (reply) => {
             reply("You don't have that pattern.");
         }
 
 
         //Register callbacks
         
-        for (var envname in opt.envs) {
+        for (let envname in opt.envs) {
             opt.envs[envname].on('messageSent', this.onMessageSent, this);
         }
         

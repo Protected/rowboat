@@ -60,7 +60,7 @@ class ModActivity extends Module {
 
         //Register callbacks
         
-        for (var envname in opt.envs) {
+        for (let envname in opt.envs) {
             opt.envs[envname].on('join', this.onJoin, this);
             opt.envs[envname].on('part', this.onPart, this);
             opt.envs[envname].on('message', this.onMessage, this);
@@ -74,8 +74,8 @@ class ModActivity extends Module {
             minArgs: 1
         }, (env, type, userid, channelid, command, args, handle, ep) => {
             
-            var envobj = null;
-            var envname = args.environment;
+            let envobj = null;
+            let envname = args.environment;
             if (!envname) {
                 envname = env.name;
                 envobj = env;
@@ -83,7 +83,7 @@ class ModActivity extends Module {
                 envobj = this.env(envname);
             }
                 
-            var register = null;
+            let register = null;
             
             if (args.nickname[0] == "=") {
                 //Lookup by handle
@@ -132,8 +132,8 @@ class ModActivity extends Module {
             minArgs: 1
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var envobj = null;
-            var envname = args.environment;
+            let envobj = null;
+            let envname = args.environment;
             if (!envname) {
                 envname = env.name;
                 envobj = env;
@@ -141,7 +141,7 @@ class ModActivity extends Module {
                 envobj = this.env(envname);
             }
             
-            var entries = [];
+            let entries = [];
             
             if (args.nickname[0] == "=") {
                 //Lookup by handle
@@ -185,7 +185,7 @@ class ModActivity extends Module {
             environments: ["Discord"]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
             
-            let role = env.server.roles.find('name', args.role);
+            let role = env.server.roles.find(r => r.name == args.role);
             let registers = {};
             
             for (let member of role.members.array()) {
@@ -228,10 +228,10 @@ class ModActivity extends Module {
     //Activity file manipulation
     
     getNickRegister(env, nickname) {
-        var envregister = this._activitydata[env];
+        let envregister = this._activitydata[env];
         if (!envregister) envregister = this._activitydata[env] = {};
         
-        var nickregister = envregister[nickname.toLowerCase()];
+        let nickregister = envregister[nickname.toLowerCase()];
         if (!nickregister) nickregister = envregister[nickname.toLowerCase()] = {
             nickname: nickname,
             seen: null,  //[channelid, authorid, timestamp]
@@ -249,7 +249,7 @@ class ModActivity extends Module {
         if (!register || !register.seen) return false;
         let authorid = register.seen[1];
         
-        var envindex = this._authorseen[env];
+        let envindex = this._authorseen[env];
         if (!envindex) envindex = this._authorseen[env] = {};
         
         if (!envindex[authorid] || register.seen[2] > envindex[authorid].seen[2]) {
@@ -261,7 +261,7 @@ class ModActivity extends Module {
     authorSpoke(env, register) {
         if (!register || !register.last || !register.last.length) return false;
         
-        var envindex = this._authorspoke[env];
+        let envindex = this._authorspoke[env];
         if (!envindex) envindex = this._authorspoke[env] = {};
         
         for (let entry of register.last) {
@@ -276,10 +276,10 @@ class ModActivity extends Module {
     //Event handlers
     
     onJoin(env, authorid, channelid, rawobj) {
-        if (this.param('channelblacklist').find((item) => item[0] == env.name && item[1] == channelid)) return;
+        if (this.param('channelblacklist').find(item => item[0] == env.name && item[1] == channelid)) return;
         
-        var nickname = env.idToDisplayName(authorid);
-        var register = this.getNickRegister(env.name, nickname);
+        let nickname = env.idToDisplayName(authorid);
+        let register = this.getNickRegister(env.name, nickname);
         
         register.seen = [channelid, authorid, moment().unix()];
         register.seenreason = true;
@@ -289,10 +289,10 @@ class ModActivity extends Module {
     
     
     onPart(env, authorid, channelid, rawobj) {
-        if (this.param('channelblacklist').find((item) => item[0] == env.name && item[1] == channelid)) return;
+        if (this.param('channelblacklist').find(item => item[0] == env.name && item[1] == channelid)) return;
         
-        var nickname = env.idToDisplayName(authorid);
-        var register = this.getNickRegister(env.name, nickname);
+        let nickname = env.idToDisplayName(authorid);
+        let register = this.getNickRegister(env.name, nickname);
         
         register.seen = [channelid, authorid, moment().unix()];
         register.seenreason = rawobj.reason;
@@ -302,11 +302,11 @@ class ModActivity extends Module {
     
     
     onMessage(env, type, message, authorid, channelid, rawobj) {
-        if (this.param('channelblacklist').find((item) => item[0] == env.name && item[1] == channelid)) return;
+        if (this.param('channelblacklist').find(item => item[0] == env.name && item[1] == channelid)) return;
         
-        var nickname = env.idToDisplayName(authorid);
-        var register = this.getNickRegister(env.name, nickname);
-        var ts = moment().unix();
+        let nickname = env.idToDisplayName(authorid);
+        let register = this.getNickRegister(env.name, nickname);
+        let ts = moment().unix();
         
         register.seen = [channelid, authorid, ts];
         register.seenreason = false;

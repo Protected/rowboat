@@ -2,8 +2,8 @@
 
 //Requests to the API use the POST method, have no path and contain the following JSON in the body: {module; ..., method: ..., args: {name: value, ...}}
 
-var Module = require('./Module.js');
-var http = require('http');
+const Module = require('./Module.js');
+const http = require('http');
 
 class ModAPI extends Module {
 
@@ -53,7 +53,7 @@ class ModAPI extends Module {
                     return response.end();
                 }
                 
-                let info = this._methods.find((item) => item.mod.name == json.module && item.methodname == json.method);
+                let info = this._methods.find(item => item.mod.name == json.module && item.methodname == json.method);
                 if (!info) {
                     this.log('warn', '(NOT FOUND) ' + request.headers.host + ' => ' + json.module + '.' + json.method);
                     response.statusCode = 404;

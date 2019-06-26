@@ -1,6 +1,6 @@
 /* Module: PermissionGenericRole -- This module is a permissions provider that turns roles from any environment into ModUsers permissions. */
 
-var Module = require('./Module.js');
+const Module = require('./Module.js');
 
 class ModPermissionGenericRole extends Module {
 
@@ -24,11 +24,11 @@ class ModPermissionGenericRole extends Module {
         //Register callbacks
         
         this.mod('Users').registerPermissionProvider((passedname, userid, channelid, permissions) => {
-            var env = opt.envs[passedname];
+            let env = opt.envs[passedname];
         
             let roles = env.listUserRoles(userid, channelid);
         
-            var result = [];
+            let result = [];
         
             for (let permission of permissions) {
                 if (roles.indexOf(permission) > -1) {

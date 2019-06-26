@@ -1,9 +1,9 @@
 /* Environment: IRC -- This environment connects to an IRC server. */
 
-var Environment = require('./Environment.js');
-var irc = require('irc');
+const Environment = require('./Environment.js');
+const irc = require('irc');
 
-var DISPLAY_MODES = {
+const DISPLAY_MODES = {
     o: 'operator',
     v: 'voice'
 };
@@ -40,7 +40,7 @@ class EnvIRC extends Environment {
 
         this._client = null;
         this._prefixes = [];
-        this._people = {};
+        this._people = {};  //see addPeople
         
         this._retake = null;
     }
@@ -50,7 +50,7 @@ class EnvIRC extends Environment {
         return new Promise((resolve, reject) => {
         
             var self = this;
-            var params = this.params;
+            let params = this.params;
 
             this._client = new irc.Client(params.serverhost, params.nickname, {
                 port: params.port,
@@ -85,9 +85,9 @@ class EnvIRC extends Environment {
             
         
             this._client.addListener('message', (from, to, message, messageObj) => {
-                var type = "regular";
-                var authorid = from + '!' + messageObj.user + '@' + messageObj.host;
-                var channelid = to;
+                let type = "regular";
+                let authorid = from + '!' + messageObj.user + '@' + messageObj.host;
+                let channelid = to;
                 if (to[0] != "#") {
                     type = "private";
                     channelid = authorid;
@@ -96,9 +96,9 @@ class EnvIRC extends Environment {
             });
         
             this._client.addListener('action', (from, to, message, messageObj) => {
-                var type = "action";
-                var authorid = from + '!' + messageObj.user + '@' + messageObj.host;
-                var channelid = to;
+                let type = "action";
+                let authorid = from + '!' + messageObj.user + '@' + messageObj.host;
+                let channelid = to;
                 if (to[0] != "#") {
                     type = "privateaction";
                     channelid = authorid;
@@ -166,7 +166,7 @@ class EnvIRC extends Environment {
             this._client.addListener('raw', (messageObj) => {
                 if (messageObj.rawCommand == '005') { //VERSION reply
                     for (let arg of messageObj.args) {
-                        var getprefs;
+                        let getprefs;
                         if (getprefs = arg.match(/PREFIX=\([^\)]+\)(.+)/)) {
                             this._prefixes = getprefs[1].split('');
                         }
@@ -202,7 +202,7 @@ class EnvIRC extends Environment {
     msg(targetid, msg) {
         if (!targetid) targetid = this.param('channels')[0];
         
-        var parts;
+        let parts;
         
         try {
             let sent = false;
@@ -227,7 +227,7 @@ class EnvIRC extends Environment {
     notice(targetid, msg) {
         if (!targetid) targetid = channels[0];
         
-        var parts;
+        let parts;
         
         try {
             if (parts = targetid.match(/^([^!]+)![^@]+@.+$/)) {
@@ -243,7 +243,7 @@ class EnvIRC extends Environment {
 
 
     idToDisplayName(id) {
-        var parts = id.split("!");
+        let parts = id.split("!");
         return parts[0];
     }
 
@@ -262,15 +262,15 @@ class EnvIRC extends Environment {
 
 
     idIsSecured(id) {
-        var parts = id.split("!");
-        var person = this._people[parts[0]];
+        let parts = id.split("!");
+        let person = this._people[parts[0]];
         return (person && person.secured);
     }
 
 
     idIsAuthenticated(id) {
-        var parts = id.split("!");
-        var person = this._people[parts[0]];
+        let parts = id.split("!");
+        let person = this._people[parts[0]];
         if (!person) return false;
         if (person.identified) return true;
         this._client.send('WHOIS ', parts[0]);
@@ -290,7 +290,7 @@ class EnvIRC extends Environment {
         }
         
         //#channel
-        var ids = [];
+        let ids = [];
         for (let nick in this._people) {
             let desc = this._people[nick];
             if (desc.channels.indexOf(channel) > -1) {
@@ -303,10 +303,10 @@ class EnvIRC extends Environment {
     
     listUserRoles(id, channel) {
         if (!channel) return [];
-        var parts = id.split("!");
-        var person = this._people[parts[0]];
+        let parts = id.split("!");
+        let person = this._people[parts[0]];
         if (!person) return false;
-        var result = [];
+        let result = [];
         if (person.modes[channel]) {
             result = person.modes[channel].slice();
         }
@@ -333,22 +333,22 @@ class EnvIRC extends Environment {
     
     displayNameToRoleId(displayName) {
         if (!displayName) return null;
-        for (var mode of DISPLAY_MODES) {
+        for (let mode of DISPLAY_MODES) {
             if (DISPLAY_MODES[mode] == displayName) return mode;
         }
-        var parts = displayName.split("_");
+        let parts = displayName.split("_");
         if (parts.length != 2 || parts[0] != "mode_" || parts[1].length != 1) return null;
         return parts[1];
     }
     
     
     normalizeFormatting(text) {
-        var bold = null;
-        var und = null;
-        var ita = null;
-        var order = [];
+        let bold = null;
+        let und = null;
+        let ita = null;
+        let order = [];
         text = String(text).replace(/([0-9]{1,2}(,[0-9]{1,2})?)?/g, "").replace(//g, "") + "";
-        for (var i = 0; i < text.length; i++) {
+        for (let i = 0; i < text.length; i++) {
             if (text[i] == "") {
                 if (und === null) {
                     und = i;
@@ -379,9 +379,9 @@ class EnvIRC extends Environment {
                     order.splice(order.indexOf('ita'), 1);
                 }
             } else if (text[i] == "") {
-                var insert = '';
-                var offset = 0;
-                var next = null;
+                let insert = '';
+                let offset = 0;
+                let next = null;
                 while (next = order.pop()) {
                     if (next == 'ita' && ita !== null) {
                         text = text.slice(0, ita) + "*" + text.slice(ita + 1);
@@ -456,11 +456,7 @@ class EnvIRC extends Environment {
 
     remPeople(nick, channels) {
         if (!this._people[nick]) return false;
-        var newchans = this._people[nick].channels.filter(
-            (chan) => !channels.find(
-                (remchan) => (remchan == chan)
-            )
-        );
+        let newchans = this._people[nick].channels.filter(chan => !channels.find(remchan => remchan == chan));
         if (newchans.length) {
             this._people[nick].channels = newchans;
         } else {
@@ -471,7 +467,7 @@ class EnvIRC extends Environment {
     
     
     triggerJoin(nick, channels, messageObj) {
-        var authorid = nick + '!' + messageObj.user + '@' + messageObj.host;
+        let authorid = nick + '!' + messageObj.user + '@' + messageObj.host;
         
         for (let channelid of channels) {
             this.emit('join', this, authorid, channelid, messageObj);
@@ -479,7 +475,7 @@ class EnvIRC extends Environment {
     }
     
     triggerPart(nick, reason, channels, messageObj) {
-        var authorid = nick + '!' + messageObj.user + '@' + messageObj.host;
+        let authorid = nick + '!' + messageObj.user + '@' + messageObj.host;
         messageObj.reason = reason;
         
         for (let channelid of channels) {

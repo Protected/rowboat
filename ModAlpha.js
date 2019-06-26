@@ -1,8 +1,8 @@
 /* Module: Alpha -- Adds a command, "alpha", which performs a Wolfram Alpha query. */
 
-var Module = require('./Module.js');
-var wolfram = require('wolfram-alpha');
-var discord = require('discord.js');
+const Module = require('./Module.js');
+const wolfram = require('wolfram-alpha');
+const discord = require('discord.js');
 
 
 class ModAlpha extends Module {
@@ -75,7 +75,7 @@ class ModAlpha extends Module {
                 }
                 
                 if (!foundprimary) {
-                    let primary = results.find((result) => result.primary);
+                    let primary = results.find(result => result.primary);
                     if (primary) {
                         trueresults.push(primary);
                         foundprimary = true;

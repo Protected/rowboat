@@ -1,6 +1,6 @@
 /* Module: PermissionDiscordUserID -- This module is a permissions provider that turns Discord user IDs into ModUsers permissions. */
 
-var Module = require('./Module.js');
+const Module = require('./Module.js');
 
 class ModPermissionDiscordUserID extends Module {
 
@@ -24,10 +24,10 @@ class ModPermissionDiscordUserID extends Module {
         //Register callbacks
         
         this.mod('Users').registerPermissionProvider((passedname, userid, channelid, permissions) => {
-            var env = opt.envs[passedname];
+            let env = opt.envs[passedname];
             if (env.envName != 'Discord') return [];
         
-            var result = [];
+            let result = [];
         
             for (let permission of permissions) {
                 if (permission == userid) result.push(permission);

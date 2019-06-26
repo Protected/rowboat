@@ -1,12 +1,31 @@
 /* Module: BridgeDiscordIRC -- This module was designed to bridge a multi-channel Discord server with a single IRC channel. */
 
-var Module = require('./Module.js');
-var cd = require('color-difference');
-var emoji = require('emojione');
-var diff = require('diff');
+const Module = require('./Module.js');
+const cd = require('color-difference');
+const diff = require('diff');
 
+var emoji = require('emojione');
 emoji.ascii = true;
 delete emoji.asciiList['d:'];
+
+const colormap = [
+    "#FFFFFF",
+    "#000000",
+    "#00007F",
+    "#009300",
+    "#FF0000",
+    "#7F0000",
+    "#9C009C",
+    "#FC7F00",
+    "#FFFF00",
+    "#00FC00",
+    "#009393",
+    "#00FFFF",
+    "#0000FC",
+    "#FF00FF",
+    "#7F7F7F",
+    "#D2D2D2"
+];
 
 
 class ModBridgeDiscordIRC extends Module {
@@ -86,24 +105,24 @@ class ModBridgeDiscordIRC extends Module {
     onIrcMessage(env, type, message, authorid, channelid, rawobject) {
         if (type != "action" && type != "regular") return;
 
-        var target = null;
+        let target = null;
 
-        var directedmessage = /^\[#([a-zA-Z0-9]+)\] (.+)/.exec(message);
+        let directedmessage = /^\[#([a-zA-Z0-9]+)\] (.+)/.exec(message);
         if (directedmessage) {
             target = directedmessage[1];
             message = directedmessage[2];
             
-            let targetchan = this.discord.server.channels.find('name', target);
+            let targetchan = this.discord.server.channels.find(c => c.name == target);
             if (targetchan && (
                 this.param('discordBlacklist').indexOf(targetchan.id) > -1
                 || this.param('discordOneWay').indexOf(targetchan.id) > -1)) return;
         }
 
-        var finalmsg = this.discord.applyFormatting(this.irc.normalizeFormatting(message));
+        let finalmsg = this.discord.applyFormatting(this.irc.normalizeFormatting(message));
         
-        var resolveMentions = (match, userornick) => {
-            var refid = this.irc.displayNameToId(userornick);
-            var discordid = this.translateAccountMentions(this.irc, refid, this.discord, target);
+        let resolveMentions = (match, userornick) => {
+            let refid = this.irc.displayNameToId(userornick);
+            let discordid = this.translateAccountMentions(this.irc, refid, this.discord, target);
             if (discordid) return "<@" + discordid + ">";
             refid = this.discord.displayNameToId(userornick);
             if (refid) return "<@" + refid + ">";
@@ -127,23 +146,22 @@ class ModBridgeDiscordIRC extends Module {
         if (type != "regular") return;
         if (this.param('discordBlacklist').indexOf(channelid) > -1) return;
         
-        var server = env.server;
-        var finalmsg = message;
+        let finalmsg = message;
         
-        var action = false;
+        let action = false;
         
-        var authorname = env.idToDisplayName(authorid);
+        let authorname = env.idToDisplayName(authorid);
         
-        var roles = server.roles.array().sort((a, b) => (b.position - a.position));
+        let roles = env.server.roles.array().sort((a, b) => (b.position - a.position));
         for (let role of roles) {
             if (rawobject.member.roles.get(role.id)) {
-                authorname = "" + closestTtyColor(role.hexColor) + authorname + "";
+                authorname = "" + this.closestTtyColor(role.hexColor) + authorname + "";
                 break;
             }
         }
         
         finalmsg = finalmsg.replace(/<@!?([0-9]+)>/g, (match, id) => {
-            var ircid = this.translateAccountMentions(this.discord, id, this.irc, this.param('ircchannel'));
+            let ircid = this.translateAccountMentions(this.discord, id, this.irc, this.param('ircchannel'));
             if (ircid) return "@" + this.irc.idToDisplayName(ircid);
             return match;
         });
@@ -153,7 +171,7 @@ class ModBridgeDiscordIRC extends Module {
         
         action = !!/^_[^_](.*[^_])?_$/.exec(finalmsg);
         
-        var lines = finalmsg.split("\n");
+        let lines = finalmsg.split("\n");
         
         for (let line of lines) {
             if (action) {
@@ -175,19 +193,18 @@ class ModBridgeDiscordIRC extends Module {
     
     
     onDiscordEdit(env, changes, authorid, channelid, oldMessage, newMessage) {
-        var server = env.server;
         
-        var authorname = env.idToDisplayName(authorid);
+        let authorname = env.idToDisplayName(authorid);
         
-        var roles = server.roles.array().sort((a, b) => (b.position - a.position));
+        let roles = env.server.roles.array().sort((a, b) => (b.position - a.position));
         for (let role of roles) {
             if (oldMessage.member.roles.get(role.id)) {
-                authorname = "" + closestTtyColor(role.hexColor) + authorname + "";
+                authorname = "" + this.closestTtyColor(role.hexColor) + authorname + "";
                 break;
             }
         }
         
-        var finalmsg = '';
+        let finalmsg = '';
         for (let change of changes) {
             if (change.added) {
                 finalmsg += "03" + change.value + "";
@@ -199,7 +216,7 @@ class ModBridgeDiscordIRC extends Module {
         }
 
         finalmsg = finalmsg.replace(/<@!?([0-9]+)>/g, (match, id) => {
-            var ircid = this.translateAccountMentions(this.discord, id, this.irc, this.param('ircchannel'));
+            let ircid = this.translateAccountMentions(this.discord, id, this.irc, this.param('ircchannel'));
             if (ircid) return "@" + this.irc.idToDisplayName(ircid);
             return match;
         });
@@ -207,7 +224,7 @@ class ModBridgeDiscordIRC extends Module {
         finalmsg = this.irc.applyFormatting(this.discord.normalizeFormatting(finalmsg));
         finalmsg = emoji.shortnameToAscii(emoji.toShort(finalmsg));
         
-        var lines = finalmsg.split("\n");
+        let lines = finalmsg.split("\n");
         
         for (let line of lines) {
             line = 'Edit by ' + authorname + ": " + line;
@@ -227,10 +244,10 @@ class ModBridgeDiscordIRC extends Module {
     translateAccountMentions(fromenv, fromid, toenv, tochan) { 
         if (!fromenv || !fromid || !toenv) return null;
 
-        var handles = this.mod("Users").getHandlesById(fromenv.name, fromid);
+        let handles = this.mod("Users").getHandlesById(fromenv.name, fromid);
         if (!handles.length) return null;
 
-        var toids = toenv.listUserIds(tochan);
+        let toids = toenv.listUserIds(tochan);
         if (!toids.length) return null;
 
         for (let handle of handles) {  //Accounts of users in the channel where the message was written
@@ -245,46 +262,24 @@ class ModBridgeDiscordIRC extends Module {
         
         return null;
     }
+
+    closestTtyColor(hexrgb) {
+        let distance = 101;
+        let color = 0;
+        for (let i = 0; i < colormap.length; i++) {
+            let r = cd.compare(hexrgb, colormap[i]);
+            if (r < distance) {
+                distance = r;
+                color = i;
+            }
+        }
+        color = color.toString();
+        if (color.length < 2) color = "0" + color;
+        return color;
+    }
     
     
 }
 
 
 module.exports = ModBridgeDiscordIRC;
-
-
-//Auxiliary
-
-var colormap = [
-    "#FFFFFF",
-    "#000000",
-    "#00007F",
-    "#009300",
-    "#FF0000",
-    "#7F0000",
-    "#9C009C",
-    "#FC7F00",
-    "#FFFF00",
-    "#00FC00",
-    "#009393",
-    "#00FFFF",
-    "#0000FC",
-    "#FF00FF",
-    "#7F7F7F",
-    "#D2D2D2"
-];
-
-function closestTtyColor(hexrgb) {
-    var distance = 101;
-    var color = 0;
-    for (var i = 0; i < colormap.length; i++) {
-        var r = cd.compare(hexrgb, colormap[i]);
-        if (r < distance) {
-            distance = r;
-            color = i;
-        }
-    }
-    color = color.toString();
-    if (color.length < 2) color = "0" + color;
-    return color;
-}

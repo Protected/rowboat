@@ -1,7 +1,7 @@
 /* Module: Google -- Adds a command, "google", which performs a google search. */
 
-var Module = require('./Module.js');
-var request = require('request');
+const Module = require('./Module.js');
+const request = require('request');
 
 class ModGoogle extends Module {
 
@@ -48,17 +48,17 @@ class ModGoogle extends Module {
             types: ["regular"]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var url = 'https://www.googleapis.com/customsearch/v1?key=' + this.param('apikey') + '&cx=' + this.param('cx')
+            let url = 'https://www.googleapis.com/customsearch/v1?key=' + this.param('apikey') + '&cx=' + this.param('cx')
                     + '&num=' + this.param('results')
                     + '&safe=' + (this.param('safesearch') ? 'high' : 'off')
                     + '&googlehost=google.com&hl=en';
 
             //Read extra API parameters from arguments
 
-            var extras = {};
+            let extras = {};
 
-            var words = args.string;
-            for (var i = 0; i < words.length; i++) {
+            let words = args.string;
+            for (let i = 0; i < words.length; i++) {
                 let word = words[i];
                 if (word.indexOf("--") < 0) break;
                 if (word == "--") {
@@ -83,7 +83,7 @@ class ModGoogle extends Module {
             
             //Complete URL for API request
             
-            var search = words.slice(i).join(' ');
+            let search = words.slice(i).join(' ');
             if (!search.length) return false;
             
             for (let key in extras) {

@@ -1,5 +1,7 @@
 /* Module: DictionaryGame -- Play a game for guessing translations of dictionary entries. */
 
+//Install 'node-gd' to have images through Discord RichEmbeds.
+
 const Module = require('./Module.js');
 const sqlite3 = require('sqlite3');
 const random = require('meteor-random');

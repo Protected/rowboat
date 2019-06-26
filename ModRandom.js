@@ -30,7 +30,7 @@ class ModRandom extends Module {
             minArgs: 0
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var val;
+            let val;
         
             if (args.max) {
                 if (args.max.match(/^[0-9]+$/)) {
@@ -108,7 +108,7 @@ class ModRandom extends Module {
         
             //Normalize expression
         
-            var expr = args.expr.join(" ").replace(/(\+ *-|- *\+)/g, '-').replace(/([0-9])([+-])/g, '$1 $2').replace(/([+-])([0-9])/g, '$1 $2').replace(/ +/g, " ").split(" ");
+            let expr = args.expr.join(" ").replace(/(\+ *-|- *\+)/g, '-').replace(/([0-9])([+-])/g, '$1 $2').replace(/([+-])([0-9])/g, '$1 $2').replace(/ +/g, " ").split(" ");
             for (let i = 1; i < expr.length; i += 2) {
                 if (expr[i] != "-" && expr[i] != "+") {
                     ep.reply("Invalid token '" + expr[i] + "' on position " + i + ".");
@@ -118,8 +118,8 @@ class ModRandom extends Module {
         
             //Roll all dice in expression (store expansion if needed)
         
-            var dicepos = {};
-            var resolved = expr.slice();
+            let dicepos = {};
+            let resolved = expr.slice();
             for (let i = 0; i < resolved.length; i++) {
                 let facets = resolved[i].match(/^(\*?)([1-9][0-9]?)?d([1-9][0-9]?)(\\([1-9]))?(\/([1-9]))?$/);
                 if (facets) {
@@ -153,7 +153,7 @@ class ModRandom extends Module {
             
             //Prepare intermediate output
 
-            var rep = expr.join(" ");
+            let rep = expr.join(" ");
             
             if (Object.keys(dicepos).length > 0) {
                 rep += '\n    = ' + resolved.map((val, i) => {
@@ -198,8 +198,8 @@ class ModRandom extends Module {
     standardDeck(ranks) {
         if (!ranks) ranks = "A234567890JQK";
         if (typeof ranks == "string") ranks = ranks.split("");
-        var suits = ['♠', '♥', '♦', '♣'];
-        var deck = [];
+        let suits = ['♠', '♥', '♦', '♣'];
+        let deck = [];
         for (let suit of suits) {
             for (let rank of ranks) {
                 deck.push(rank + suit);

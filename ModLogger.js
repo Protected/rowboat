@@ -1,10 +1,10 @@
 /* Module: Logger -- Event logging for environments and modules; log searches. */
 
-var Module = require('./Module.js');
-var winston = require('winston');
-var moment = require('moment');
-var fs = require('fs');
-var cp = require('child_process');
+const Module = require('./Module.js');
+const winston = require('winston');
+const moment = require('moment');
+const fs = require('fs');
+const cp = require('child_process');
 
 const PERM_ADMIN = 'administrator';
 const PERM_MODERATOR = 'moderator';
@@ -66,7 +66,7 @@ class ModLogger extends Module {
       
         //Register callbacks
         
-        for (var envname in opt.envs) {
+        for (let envname in opt.envs) {
             opt.envs[envname].on('join', this.onJoin, this);
             opt.envs[envname].on('part', this.onPart, this);
             opt.envs[envname].on('message', this.onMessage, this);
@@ -80,7 +80,7 @@ class ModLogger extends Module {
             permissions: [PERM_ADMIN, PERM_MODERATOR]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            var filepattern = null;
+            let filepattern = null;
             if (args.filepattern) {
                 filepattern = args.filepattern;
                 let m = filepattern.match(/^\/(.*)\/$/);
@@ -92,7 +92,7 @@ class ModLogger extends Module {
                 filepattern = RegExp(filepattern);
             }
             
-            var pattern = args.pattern;
+            let pattern = args.pattern;
             let m = pattern.match(/^\/(.*)\/$/);
             if (m) {
                 pattern = m[1];
@@ -100,10 +100,10 @@ class ModLogger extends Module {
                 pattern = '^.*' + pattern.replace(/ /g, '.*') + '.*$';
             }
             
-            var maxResults = this.param('maxResults');
+            let maxResults = this.param('maxResults');
             if (args.results) maxResults = Math.min(maxResults, args.results);
         
-            var results = 0;
+            let results = 0;
         
             for (let loginfo of this.getLogPaths(filepattern)) {
                 let logpath = loginfo[0];
@@ -148,7 +148,7 @@ class ModLogger extends Module {
     write(logchannel, message) {
         if (!logchannel || !this._channels[logchannel]) return 0;
         
-        var writes = 0;
+        let writes = 0;
         for (let log of this._channels[logchannel]) {
             
             if (!this.ready(log)) {
@@ -172,7 +172,7 @@ class ModLogger extends Module {
     templateWrite(logchannel, template, fields) {
         if (!fields) fields = {};
         if (!template) template = "";
-        var message = template;
+        let message = template;
         
         message = message.replace(/%\(([^)]+)\)%/g, (match, format) => {
             return moment().format(format);
@@ -192,7 +192,7 @@ class ModLogger extends Module {
     templateNameWrite(logchannel, templatename, fields) {
         if (!templatename) return false;
         
-        var param = 'template' + templatename.charAt(0).toUpperCase() + templatename.slice(1);
+        let param = 'template' + templatename.charAt(0).toUpperCase() + templatename.slice(1);
         if (!this.param(param)) return false;
         
         return this.templateWrite(logchannel, this.param(param), fields);
@@ -207,8 +207,8 @@ class ModLogger extends Module {
     
     
     onPart(env, authorid, channelid, rawobj) {
-        var reason = rawobj.reason;
-        var reasonstr = null;
+        let reason = rawobj.reason;
+        let reasonstr = null;
         if (typeof reason == "object") {
             reasonstr = reason[0];
             if (reason[2]) reasonstr += ' by ' + reason[2];
@@ -219,7 +219,7 @@ class ModLogger extends Module {
     
     
     onMessage(env, type, message, authorid, channelid, rawobj) {
-        var channel = 'default';
+        let channel = 'default';
         if (type == "regular" || type == "action") channel = 'public';
         if (type == "private" || type == "privateaction") channel = 'private';
         this.templateWrite(channel, this.param("templateMessage"), {env: env.name, userid: authorid, user: env.idToDisplayName(authorid), channelid: channelid, channel: env.channelIdToDisplayName(channelid), type: type, message: env.normalizeFormatting(message)});
@@ -231,7 +231,7 @@ class ModLogger extends Module {
     ready(log) {
         if (!log.outputFile) return false;
         
-        var desiredPath = this.param('basePath') + '/' + moment().format(log.outputFile);
+        let desiredPath = this.param('basePath') + '/' + moment().format(log.outputFile);
         if (!log.logger || log.openPath != desiredPath) {
             log.openPath = desiredPath;
             this.log('Log open: ' + desiredPath);
@@ -256,9 +256,9 @@ class ModLogger extends Module {
     //Auxiliary - List existing log files
     
     getLogPaths(filter) {
-        var result = [];
-        var paths = [this.param('basePath')];
-        var path;
+        let result = [];
+        let paths = [this.param('basePath')];
+        let path;
         while (path = paths.shift()) {
             for (let file of fs.readdirSync(path)) {
                 if (file.match(/^\./)) continue;

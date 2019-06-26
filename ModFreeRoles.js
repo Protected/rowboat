@@ -130,13 +130,13 @@ class ModFreeRoles extends Module {
 
                 role = roles[lcrole].name;
 
-                let roleobj = env.server.roles.find('name', role);
+                let roleobj = env.server.roles.find(r => r.name == role);
                 if (!roleobj) {
                     ep.reply("The role \"" + role + "\" doesn't currently exist in this environment.");
                     continue;
                 }
 
-                if (member.roles.find('name', role)) {
+                if (member.roles.find(r => r.name == role)) {
                     ep.reply('You already have the role "' + role + '".');
                     continue;
                 }
@@ -189,13 +189,13 @@ class ModFreeRoles extends Module {
 
                 role = roles[lcrole].name;
 
-                let roleobj = env.server.roles.find('name', role);
+                let roleobj = env.server.roles.find(r => r.name == role);
                 if (!roleobj) {
                     ep.reply("The role \"" + role + "\" doesn't currently exist in this environment.");
                     continue;
                 }
 
-                if (!member.roles.find('name', role)) {
+                if (!member.roles.find(r => r.name == role)) {
                     ep.reply("You don't have the role \"" + role + "\".");
                     continue;
                 }
@@ -243,7 +243,7 @@ class ModFreeRoles extends Module {
                     role = roles[lcrole].name;
                 }
 
-                let roleobj = env.server.roles.find('name', role);
+                let roleobj = env.server.roles.find(r => r.name == role);
                 if (!roleobj) {
                     ep.reply("The role \"" + role + "\" doesn't currently exist in this environment.");
                     return true;
@@ -314,7 +314,7 @@ class ModFreeRoles extends Module {
                     return true;
                 }
 
-                if (env.server.roles.find('name', role)) {
+                if (env.server.roles.find(r => r.name == role)) {
                     ep.reply("The role \"" + role + "\" already exists in this environment.");
                     return true;
                 }
@@ -388,7 +388,7 @@ class ModFreeRoles extends Module {
             return false;
         }
         
-        let roleobj = env.server.roles.find('name', role);
+        let roleobj = env.server.roles.find(r => r.name == role);
         if (!roleobj) {
             ep.reply("The role \"" + role + "\" doesn't currently exist in this environment.");
             return false;

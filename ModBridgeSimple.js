@@ -1,6 +1,6 @@
 /* Module: BridgeSimple -- This module was designed to bridge a pair of single channels in single environments without any style or mention conversions. */
 
-var Module = require('./Module.js');
+const Module = require('./Module.js');
 
 class ModBridgeSimple extends Module {
 
@@ -62,8 +62,8 @@ class ModBridgeSimple extends Module {
     onMessage(env, type, message, authorid, channelid, rawobject) {
         if (type != "action" && type != "regular") return;
         
-        var targetenv = null;
-        var targetchan = null;
+        let targetenv = null;
+        let targetchan = null;
         
         if (env.name == this.param('envA')) {
             if (!this.param('chanA') || channelid == this.param('chanA')) {
@@ -81,7 +81,7 @@ class ModBridgeSimple extends Module {
         }
         if (!targetenv) return;
         
-        var finalmsg = '<' + env.idToDisplayName(authorid) + '> ' + targetenv.applyFormatting(env.normalizeFormatting(message));
+        let finalmsg = '<' + env.idToDisplayName(authorid) + '> ' + targetenv.applyFormatting(env.normalizeFormatting(message));
         
         if (this.param('tagChannel')) finalmsg = '[' + env.channelIdToDisplayName(channelid) + '] ' + finalmsg;
         if (this.param('tagEnvironment')) finalmsg = '{' + env.name + '} ' + finalmsg;

@@ -1,44 +1,36 @@
 {
   "name": "rowboat",
   "version": "0.0.0",
-  "description": "",
+  "description": "A fully modular, multi-environment chat bot.",
   "main": "Rowboat.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": null
+    "url": "https://github.com/Protected/rowboat.git"
   },
-  "author": "",
-  "license": null,
-  "bugs": {
-    "url": null
-  },
+  "author": "Protected",
+  "license": "Apache-2.0",
   "private": true,
   "dependencies": {
     "color-difference": "^0.3.4",
     "diff": "^3.5.0",
-    "discord.js": "^11.3.2",
+    "discord.js": "^11.5.1",
     "emojione": "^3.1.4",
-    "ffmpeg": "0.0.4",
-    "ffmpeg-binaries": "^3.2.2-3",
     "fluent-ffmpeg": "^2.1.2",
-    "hawk": "^7.0.7",
     "irc": "file:./local/irc",
     "js-md5": "^0.7.3",
     "jsonfile": "^4.0.0",
-    "lodash": "^4.17.10",
     "meteor-random": "0.0.3",
     "minimist": "^1.2.0",
     "moment": "^2.22.2",
     "node-ddg-api": "^0.1.4",
     "node-feedparser": "^1.0.1",
-    "node-gd": "^1.5.4",
-    "node-opus": "^0.3.0",
+    "node-opus": "^0.3.2",
     "readline-sync": "^1.4.9",
     "request": "^2.87.0",
-    "sqlite3": "^4.0.0",
+    "sqlite3": "^4.0.9",
     "striptags": "^3.1.1",
     "tmi.js": "^1.2.1",
     "whois": "^2.6.0",

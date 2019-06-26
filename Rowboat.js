@@ -105,15 +105,15 @@ if (!loadMasterConfig()) return;
 var loadEnvironments = exports.loadEnvironments = function() {
 
     for (let name in config.environments) {
-        var envtype = requireUncached("./Env" + config.environments[name] + ".js");
+        let envtype = requireUncached("./Env" + config.environments[name] + ".js");
         if (!envtype) {
             logger.error("Could not load the environment: " + name + " . Is the environment source in Rowboat's directory?");
             return false;
         }
         
-        var env = new envtype(name);
+        let env = new envtype(name);
         
-        var sharedInstances = {};
+        let sharedInstances = {};
         for (let sharedModule of env.sharedModules) {        
             let sharedName = env.envName + '_' + sharedModule;
             
@@ -161,13 +161,13 @@ var loadModules = exports.loadModules = function() {
             type = name;
        }
         
-        var modtype = requireUncached("./Mod" + type + ".js");
+        let modtype = requireUncached("./Mod" + type + ".js");
         if (!modtype) {
             logger.error("Could not load the module: " + name + " . Is the module source in Rowboat's directory?");
             return false;
         }
         
-        var mod = new modtype(name);
+        let mod = new modtype(name);
         
         if (!mod.isMultiInstanceable && name != mod.modName) {
             logger.error("Could not load the module: " + name + " . This module is not multi-instanceable; It MUST be configuered with the name: " + mod.modName);
@@ -188,9 +188,9 @@ var loadModules = exports.loadModules = function() {
             }
         }
         
-        var passenvs = Object.assign({}, environments);
-        var passmodules = Object.assign({}, modules);
-        var passconfig = Object.assign({}, config);
+        let passenvs = Object.assign({}, environments);
+        let passmodules = Object.assign({}, modules);
+        let passconfig = Object.assign({}, config);
         
         if (mod.isRootAccess) {
             logger.info("The module: " + mod.name + " requested access to the root module.");
@@ -211,7 +211,7 @@ var loadModules = exports.loadModules = function() {
         logger.info("Successfully loaded module: " + mod.name);
         
         if (modulerequests[mod.name]) {
-            for (var j = 0; j < modulerequests[mod.name].length; j++) {
+            for (let j = 0; j < modulerequests[mod.name].length; j++) {
                 modulerequests[mod.name][j](mod);
             }
             delete modulerequests[mod.name];

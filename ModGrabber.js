@@ -115,10 +115,9 @@ class ModGrabber extends Module {
         //Queue processor
         
         var self = this;
-        
         this._scanTimer = setInterval(() => {
-                self.dequeueAndScan.apply(self, null)
-            }, this.param('scanDelay'));
+            self.dequeueAndScan.apply(self, null)
+        }, this.param('scanDelay'));
 
       
         //Register callbacks

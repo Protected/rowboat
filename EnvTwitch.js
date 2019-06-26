@@ -1,7 +1,7 @@
 /* Environment: Twitch -- This environment connects to a Twitch stream's chat. */
 
-var Environment = require('./Environment.js');
-var tmi = require('tmi.js');
+const Environment = require('./Environment.js');
+const tmi = require('tmi.js');
 
 
 class EnvTwitch extends Environment {
@@ -34,7 +34,7 @@ class EnvTwitch extends Environment {
         return new Promise(function (resolve, reject) {
 
             var self = this;
-            var params = this.params;
+            let params = this.params;
 
             this.log(`Connecting to ${params.servername}`);
 
@@ -69,7 +69,7 @@ class EnvTwitch extends Environment {
             this._client.on("message", (channel, userstate, message, self) => {
                 if (self) return;
 
-                var type = "regular";
+                let type = "regular";
                 if (userstate.message-type == "action") {
                     type = "action";
                 } else if (userstate.message-type == "whisper") {
@@ -172,7 +172,7 @@ class EnvTwitch extends Environment {
         }
         
         //#channel
-        var ids = [];
+        let ids = [];
         for (let username in this._people) {
             let desc = this._people[username];
             if (desc.channels.indexOf(channel) > -1) {
@@ -226,10 +226,10 @@ class EnvTwitch extends Environment {
     //Auxiliary methods
     
     deliverMsgs() {
-        var item = this._outbox.shift();
+        let item = this._outbox.shift();
         if (!item) return;
         
-        var parts;
+        let parts;
         try {
             let sent = false;
             if (parts = item[0].match(/^#.+$/)) {
@@ -265,11 +265,7 @@ class EnvTwitch extends Environment {
 
     remPeople(username, channels) {
         if (!this._people[username]) return false;
-        var newchans = this._people[username].channels.filter(
-            (chan) => !channels.find(
-                (remchan) => remchan == chan
-            )
-        );
+        let newchans = this._people[username].channels.filter(chan => !channels.find(remchan => remchan == chan));
         if (newchans.length) {
             this._people[username].channels = newchans;
         } else {

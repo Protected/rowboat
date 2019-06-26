@@ -418,7 +418,7 @@ class ModRajio extends Module {
             let clisteners = listeners.length;
             
             for (let skipperid in this._skipper) {
-                if (!listeners.find((item) => item.id == skipperid)) {
+                if (!listeners.find(item => item.id == skipperid)) {
                     clisteners += 1;
                 }
             }
@@ -715,7 +715,7 @@ class ModRajio extends Module {
                 ep.reply('`' + cname + ' = ' + prioritycomponents[cname] + '`');
             }
 
-            let queuepos = this._queue.findIndex((item) => item.song.hash == hash);
+            let queuepos = this._queue.findIndex(item => item.song.hash == hash);
             if (queuepos > -1) {
                 ep.reply('`Queued in position ' + queuepos + ' .`');
             }
@@ -950,7 +950,7 @@ class ModRajio extends Module {
     
     enqueue(song, userid, demand) {
         if (!song) return false;
-        if (this._queue.find((item) => item.song.hash == song.hash)) return false;
+        if (this._queue.find(item => item.song.hash == song.hash)) return false;
         
         if (demand) {
             this._queue.unshift({
@@ -1027,7 +1027,7 @@ class ModRajio extends Module {
         
         let hash = selection[0];
         
-        let index = this._queue.findIndex((item) => item.song.hash == hash);
+        let index = this._queue.findIndex(item => item.song.hash == hash);
         let userid = null;
         if (index > -1) {
             userid = this._queue[index].userid;
@@ -1306,7 +1306,7 @@ class ModRajio extends Module {
         //Queue
 
         if (usequeue && this._queue.length) {
-            let queuepos = this._queue.findIndex((item) => item.song.hash == song.hash);
+            let queuepos = this._queue.findIndex(item => item.song.hash == song.hash);
             if (queuepos > -1) {
                 priority = (this.param('queuesize') - queuepos) / this.param('queuesize');
                 if (trace) components.queuereset = priority;

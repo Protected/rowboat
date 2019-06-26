@@ -1,7 +1,7 @@
 /* Module: PingDiscord -- Tool for measuring latency between Rowboat and Discord. */
 
-var Module = require('./Module.js');
-var moment = require('moment');
+const Module = require('./Module.js');
+const moment = require('moment');
 
 const PERM_ADMIN = "administrator";
 

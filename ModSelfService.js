@@ -1,11 +1,11 @@
 /* Module: SelfService -- Commands for a user to register his own account. */
 
-var Module = require('./Module.js');
-var random = require('meteor-random');
-var moment = require('moment');
-var md5 = require('js-md5');
+const Module = require('./Module.js');
+const random = require('meteor-random');
+const moment = require('moment');
+const md5 = require('js-md5');
 
-var tokenChars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const tokenChars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 
 class ModSelfService extends Module {
@@ -64,23 +64,23 @@ class ModSelfService extends Module {
                 ep.reply("You don't have an account. Your ID in " + env.name + " is: " + userid);
             }
     
-            var account = this.mod("Users").getUser(handle);
+            let account = this.mod("Users").getUser(handle);
             if (!account) return true;
             
             ep.reply('========== __' + account.handle + '__ ==========');
             
             ep.reply('* ID patterns:');
             if (account.ids) {
-                for (var i = 0; i < account.ids.length; i++) {
+                for (let i = 0; i < account.ids.length; i++) {
                     ep.reply('    {' + account.ids[i].env + '} `' + account.ids[i].idpattern + '`');
                 }
             }
             
             ep.reply('* Permissions:');
-            var perms = account.perms;
+            let perms = account.perms;
             if (perms) {
                 while (perms.length) {
-                    var outbound = perms.slice(0, 10);
+                    let outbound = perms.slice(0, 10);
                     outbound = outbound.join(', ');
                     ep.reply('    ' + outbound);
                     perms = perms.slice(10);
@@ -107,7 +107,7 @@ class ModSelfService extends Module {
                     return true;
                 }
                 
-                var existingaccount = this.mod("Users").getUser(args.handle);
+                let existingaccount = this.mod("Users").getUser(args.handle);
                 if (existingaccount) {
                     ep.reply("There is already an account identified by the handle you provided.");
                     return true;
@@ -157,7 +157,7 @@ class ModSelfService extends Module {
                         return true;
                     }
                     
-                    var handles = this.mod("Users").getHandlesById(descriptor.env.name, descriptor.id);
+                    let handles = this.mod("Users").getHandlesById(descriptor.env.name, descriptor.id);
                     if (handles.length) {
                         this.deleteToken(args.token);
                         ep.reply("This ID has already been assigned to an account: " + handles[0]);
@@ -189,7 +189,7 @@ class ModSelfService extends Module {
                         return true;
                     }
                 
-                    var token = this.createToken(env, userid);
+                    let token = this.createToken(env, userid);
                     ep.reply("Your token: " + token);
                     ep.reply("Please authenticate with an existing account and use the 'link TOKEN' command to link your current ID to it.");
                 
@@ -208,7 +208,7 @@ class ModSelfService extends Module {
     
     
     createToken(env, id) {
-        var token = null;
+        let token = null;
         while (!token || this._tokens[token]) {
             token = '';
             for (let i = 0; i < this.param('tokenLength'); i++) {
@@ -230,7 +230,7 @@ class ModSelfService extends Module {
     
     
     clearTokens() {
-        var now = moment().unix();
+        let now = moment().unix();
         
         for (let token in this._tokens) {
             if (now - this._tokens[token].ts >= this.param('tokenExpiration')) {
