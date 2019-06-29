@@ -42,7 +42,11 @@ class ModGrabber extends Module {
         'permissionsReplace',   //List of sufficient permissions for replacing previously indexed songs
         'defaultFormat',        //Default storage format
         'allowPcm',             //Allow PCM storage
-        'allowFlac'             //Allow FLAC storage
+        'allowFlac',            //Allow FLAC storage
+        'defaultBehavior',      //How to treat messages by default. One of: 'ignore', 'quiet', 'feedback'
+        'tagIgnore',            //Tag message to be ignored (regex)
+        'tagQuiet',             //Tag message to be quietly processed (regex)
+        'tagFeedback'           //Tag message to be processed and provide feedback (regex)
     ]; }
 
     get requiredEnvironments() { return [
@@ -71,6 +75,11 @@ class ModGrabber extends Module {
         this._params['defaultFormat'] = 'mp3';
         this._params['allowPcm'] = false;
         this._params['allowFlac'] = false;
+
+        this._params['defaultBehavior'] = 'feedback';
+        this._params['tagIgnore'] = '^XX';
+        this._params['tagQuiet'] = '^$$';
+        this._params['tagFeedback'] = '^!!';
         
         this._preparing = 0;  //Used for generating temporary filenames
         
@@ -674,8 +683,21 @@ class ModGrabber extends Module {
     
     
     extractMessageInfo(message) {
-        let warnauthor = !!message.match(/^!!/);
-        let noextract = !!message.match(/^XX/);
+        let warnauthor = this.param('defaultBehavior') == 'feedback';
+        let noextract =  this.param('defaultBehavior') == 'ignore';
+
+        if (message.match(new RegExp(this.params('tagQuiet')))) {
+            noextract = false;
+            warnauthor = false;
+        }
+        if (message.match(new RegExp(this.params('tagFeedback')))) {
+            noextract = false;
+            warnauthor = true;
+        }
+        if (message.match(new RegExp(this.params('tagIgnore')))) {
+            noextract = true;
+            warnauthor = false;
+        }
     
         let dkeywords = message.match(/\[[A-Za-z0-9\u{3040}-\u{D7AF}\(\)' _-]+\]/gu);
         if (!dkeywords) dkeywords = [];

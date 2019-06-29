@@ -32,7 +32,11 @@ const LIKEABILITY_WORDS = {
     terrible: -2,
     disgust: -2,
     never: -2,
-    poop: -2
+    poop: -2,
+    remove: 0,
+    delete: 0,
+    erase: 0,
+    clear: 0
 };
 
 const LIKEABILITY_REACTIONS = {
@@ -95,7 +99,9 @@ class ModSongRanking extends Module {
     ]; }
     
     get optionalParams() { return [
-        'scaleExtremists'       //Scale down -2/2 votes of people who have more than X times as many of those votes as -1/1 votes
+        'scaleExtremists',      //Scale down -2/2 votes of people who have more than X times as many of those votes as -1/1 votes
+        'allowRemoval',         //Allow users to remove their votes from the index by voting 0
+        'preventLastRemoval'    //Prevent removal of a vote from the index if it's the last vote associated with an entry
     ]; }
     
     get requiredEnvironments() { return [
@@ -110,6 +116,8 @@ class ModSongRanking extends Module {
         super('SongRanking', name);
         
         this._params['scaleExtremists'] = 1.0;
+        this._params['allowRemoval'] = true;
+        this._params['preventLastRemoval'] = true;
         
         this._index = {};  //{USERID: {LIKEABILITY: [HASH, ...], ...}, ...}
     }
@@ -244,16 +252,22 @@ class ModSongRanking extends Module {
         this.mod('Commands').registerRootExtension(this, 'Grabber', 'song');
         
         
+        let details = [
+            "Likeability can be one of:",
+            " 2 = :ok_hand: = I especially like the song",
+            " 1 = :slight_smile: = (default) The song is ok/good",
+            "-1 = :worried: = The song is bad/don't like it much",
+            "-2 = :poop: = I hate this song"
+        ];
+
+        if (this.param('allowRemoval')) {
+            details.splice(3, 0, " 0 = Remove a previous vote" + (this.param('preventLastRemoval') ? " (if it isn't the last in the song)" : ""));
+        }
+
         this.mod('Commands').registerCommand(this, 'song like', {
             description: 'Assigns a personal like level to a song in the index.',
             args: ['hashoroffset', 'likeability'],
-            details: [
-                "Likeability can be one of:",
-                " 2 = :ok_hand: = I especially like the song",
-                " 1 = :slight_smile: = (default) The song is ok/good",
-                "-1 = :worried: = The song is bad/don't like it much",
-                "-2 = :poop: = I hate this song"
-            ],
+            details: details,
             minArgs: 1
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
@@ -281,7 +295,20 @@ class ModSongRanking extends Module {
             if (lik > 2) lik = 2;
             
             if (lik == 0) {
-                ep.reply('?');
+                //Removal
+                if (!this.param('allowRemoval')) {
+                    ep.reply("?");
+                    return true;
+                }
+                if (this.param('preventLastRemoval') && Object.keys(this.getAllSongLikes(hash)).length == 1) {
+                    ep.reply("The last vote in a song can't be removed.");
+                    return true;
+                }
+                if (this.unsetSongLikeability(hash, userid)) {
+                    ep.reply("Ok.");
+                } else {
+                    ep.reply("Song not found.");
+                }
                 return true;
             }
         
@@ -406,6 +433,41 @@ class ModSongRanking extends Module {
         
         //Actually update likeabilities of song
         likmap[userid] = likeability;        
+        return this.grabber.setSongMeta(hash, "like", likmap);
+    }
+
+
+    unsetSongLikeability(hash, userid) {
+        this.log('Removing ' + userid + ' likeability of ' + hash);
+
+        let likmap = this.grabber.getSongMeta(hash, "like");
+        if (!likmap || !likmap[userid]) return true;
+
+        let likeability = likmap[userid];
+
+        //Remove old likeability from songrank index
+        this._index[userid][likeability] = this._index[userid][likeability].filter((item) => item != hash);
+
+        //Statistics
+
+        let likestats = this.grabber.getUserStat(userid, 'likes');
+        if (likestats && likestats[likeability]) {
+            likestats[likeability] -= 1;
+            this.grabber.setUserStat(userid, 'likes', likestats);
+        }
+
+        for (let sharer of this.grabber.getSongMeta(hash, 'sharedBy')) {
+
+            let losstats = this.grabber.getUserStat(sharer, 'likesonshares');
+            if (losstats && losstats[likeability]) {
+                losstats[likeability] -= 1;
+                this.grabber.setUserStat(sharer, 'likesonshares', losstats);
+            }
+
+        }
+
+        //Actually delete likeability of song
+        delete likmap[userid];
         return this.grabber.setSongMeta(hash, "like", likmap);
     }
     

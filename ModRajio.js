@@ -44,6 +44,8 @@ class ModRajio extends Module {
         'pri.base',             //Base priority
         'pri.rank',             //Global song rank priority component
         'pri.listen',           //Unbiased listener rank priority component
+        'pri.listen.nopos',     //Attenuate listener priority for songs with no positive preference keywords associated
+        'pri.listen.yesneg',    //Attenuate listener priority for songs with negative preference keywords associated
         'pri.listen.slide',     //Weight of listener bias on rank, if applicable
         'pri.listen.history',   //Weight of history position bias on slide, if applicable
         'pri.listen.historysc', //Multiplier for history position bias
@@ -61,6 +63,9 @@ class ModRajio extends Module {
         'pri.novelty.chance',   //[0-1] Odds that only a novelty will not have 0 priority, if there are novelties
         'pri.novelty.duration', //(s) For how long a new song is considered a novelty
         'pri.novelty.breaker',  //Maximum amount of plays above which a novelty is not treated as one
+
+        'pref.maxcurators',     //Maximum amount of curators per player
+        'pref.maxkeywords',     //Maximum amount of keywords per player
 
     ]; }
     
@@ -96,13 +101,20 @@ class ModRajio extends Module {
         this._params['usestatus'] = true;
 
         /*
+            LISTENER_CURATORS_RANK = Sum_[curator](-1? * CURATOR_RANK)/curators
+
+            KWPREF_FACTOR: If "+" exist and none present, * pri.listen.nopos ; If "-" exist and present, * pri.listen.yesneg
+
             LISTENER_SLIDE = Sum_[history](LISTENER_RANK * -1 * ((maxhistory - HISTORY_POSITION) * pri.listen.historysc) ^ pri.listen.history)
 
             SONG_PRIORITY =
                 (
                     pri.base
                     + pri.rank * (GLOBAL_RANK / totalusers)
-                    + pri.listen * (LISTENER_RANK / listenerusers)
+                    + pri.listen * (
+                            LISTENER_CURATORS_RANK / listenerusers * KWPREF_FACTOR
+                            + ...
+                        )
                         * (LISTENER_SLIDE > 1 ? LISTENER_SLIDE ^ pri.listen.slide : 1)
                         * ...
                     + pri.length * OPTIMAL_LENGTH_GRADIENT[0, 1]
@@ -116,6 +128,8 @@ class ModRajio extends Module {
         this._params['pri.base'] = 10.0;
         this._params['pri.rank'] = 10.0;
         this._params['pri.listen'] = 30.0;
+        this._params['pri.listen.nopos'] = 0.75;
+        this._params['pri.listen.yesneg'] = 0.10;
         this._params['pri.listen.slide'] = 0.5;
         this._params['pri.listen.history'] = 0.3;
         this._params['pri.listen.historysc'] = 3;
@@ -149,8 +163,11 @@ class ModRajio extends Module {
         this._params['pri.novelty.chance'] = 0.05;
         this._params['pri.novelty.duration'] = 691200;  //8 days
         this._params['pri.novelty.breaker'] = 8;
+
+        this._params['pref.maxcurators'] = 3;
+        this._params['pref.maxkeywords'] = 8;
         
-        this._userdata = {};
+        this._userdata = {};  // {userid: {curators: {userid: boolean, ...}, keywords: {keyword: rating, ...}, saved: {profilename: {...}}}}
         
         this._announced = null;
         this._history = [];  //[song, song, ...]
@@ -709,7 +726,7 @@ class ModRajio extends Module {
                 return true;
             }
             
-            let prioritycomponents = this.songPriority(this.grabber.hashSong(hash), this.listeners.map((listener) => listener.id), false, false, true);
+            let prioritycomponents = this.songPriority(this.grabber.hashSong(hash), this.listeners.map(listener => listener.id), false, false, true);
             
             for (let cname in prioritycomponents) {
                 ep.reply('`' + cname + ' = ' + prioritycomponents[cname] + '`');
@@ -726,6 +743,363 @@ class ModRajio extends Module {
 
             return true;
         });
+
+
+        this.mod("Commands").registerRootDetails(this, 'rpref', {
+            description: 'Commands for modifying your personal rajio preferences.',
+            details: [
+                'These preferences determine how songs are selected for you when you are listening.',
+                'When there are multiple listeners, all listeners will have equal weight.',
+                'See the rajio command for more information on this module.'
+            ]
+        });
+
+
+        this.mod('Commands').registerCommand(this, 'rpref curator list', {
+            description: "Lists whose preferences influence songs selected for you.",
+            details: [
+                "The likes of users whose names are prefixed with a `+` have a positive influence on your selections.",
+                "On the other hand, users whose names are prefixed with a `-` have a negative (inverted) influence on your selections."
+            ]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            let curators = {};
+            if (this._userdata[userid] && this._userdata[userid].curators) {
+                curators = this._userdata[userid].curators;
+            } else {
+                curators = {};
+                curators[userid] = true;
+            }
+
+            let curatorsresolved = [];
+            for (let curatorid in curators) {
+                curatorsresolved.push([env.idToDisplayName(curatorid), curators[curatorid]]);
+            }
+
+            if (!curatorsresolved.length) {
+                ep.reply("Your curator list is currently empty (you don't affect song selection).");
+                return true;
+            }
+
+            curatorsresolved.sort((a, b) => a[0].localeCompare(b[0]));
+            ep.reply(curatorsresolved.map(curator => (curator[1] ? '+' : '-') + curator[0]).join(' ; '));
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'rpref curator +', {
+            description: "Adds someone's preferences to your curator list.",
+            args: ["targetuser", true],
+            details: [
+                "Specify the display name or ID of yourself or another user."
+            ]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (this._userdata[userid] && this._userdata[userid].curators && Object.keys(this._userdata[userid].curators).length >= this.param('pref.maxcurators')) {
+                ep.reply("You can't have more than " + this.param('pref.maxcurators') + " user" + (this.param('pref.maxcurators') > 1 ? "s" : "") + " in your curator list.");
+                return true;
+            }
+
+            let targetuser = args.targetuser.join(" ");
+            let targetid = env.displayNameToId(targetuser);
+            if (!targetid) {
+                if (env.idToDisplayName(targetuser) != targetuser) {
+                    targetid = targetuser;
+                } else {
+                    ep.reply("User not found.");
+                    return true;
+                }
+            }
+            
+            this.addCurator(userid, targetid, true);
+
+            ep.reply("The user was added to your curator list.");
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'rpref curator -', {
+            description: "Adds someone's inverse preferences to your curator list.",
+            args: ["targetuser", true],
+            details: [
+                "Specify the display name or ID of yourself or another user."
+            ]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (this._userdata[userid] && this._userdata[userid].curators && Object.keys(this._userdata[userid].curators).length >= this.param('pref.maxcurators')) {
+                ep.reply("You can't have more than " + this.param('pref.maxcurators') + " user" + (this.param('pref.maxcurators') > 1 ? "s" : "") + " in your curator list.");
+                return true;
+            }
+
+            let targetuser = args.targetuser.join(" ");
+            let targetid = env.displayNameToId(targetuser);
+            if (!targetid) {
+                if (env.idToDisplayName(targetuser) != targetuser) {
+                    targetid = targetuser;
+                } else {
+                    ep.reply("User not found.");
+                    return true;
+                }
+            }
+            
+            this.addCurator(userid, targetid, false);
+
+            ep.reply("The user was added to your curator list.");
+
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'rpref curator remove', {
+            description: "Remove someone from your curator list.",
+            args: ["targetuser", true],
+            details: [
+                "Specify the display name or ID of yourself or another user."
+            ]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            let targetuser = args.targetuser.join(" ");
+            let targetid = env.displayNameToId(targetuser);
+            if (!targetid) {
+                targetid = targetuser;
+            }
+
+            if (!this.removeCurator(userid, targetid)) {
+                ep.reply("Curator not found in your preferences.");
+                return true;
+            }
+
+            ep.reply("The user was removed from your curator list.");
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'rpref curator set', {
+            description: "Replace your entire curator list.",
+            args: ["newlist", true],
+            minArgs: 0,
+            details: [
+                "Please provide a list in the same format that is returned by rajio pref curator list (users separated by `;` ). `+` will be assumed for unprefixed names.",
+                "If you don't specify a list, it will be reset to default (you will be your own sole, positive curator).",
+                "To clear the list entirely (your presence as a listener will have no effect on song selection) use `rajio pref curator set -` or remove yourself using rajio pref curator remove."
+            ]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            let curatorlist = args.newlist.join(" ").split(/;|\n/);
+
+            if (!curatorlist.length || curatorlist.length == 1 && curatorlist[0] == "") {
+                curatorlist.push(userid);
+            } else if (curatorlist.length == 1 && curatorlist[0] == "-") {
+                curatorlist = [];
+            }
+
+            let resolvedcurators = [];
+
+            //Validate curators and convert to IDs
+            for (let curcandidate of curatorlist) {
+                let mode = true;
+                curcandidate = curcandidate.trimLeft().trimRight();
+                if (!curcandidate) continue;
+                if (curcandidate.substr(0, 1) == '-') mode = false;
+                if (curcandidate.substr(0, 1) == '-' || curcandidate.substr(0, 1) == '+') {
+                    curcandidate = curcandidate.substr(1);
+                }
+
+                let targetid = env.displayNameToId(curcandidate);
+                if (!targetid) {
+                    if (env.idToDisplayName(curcandidate) != curcandidate) {
+                        targetid = curcandidate;
+                    } else {
+                        ep.reply("User not found: " + curcandidate + ". Operation aborted.");
+                        return true;
+                    }
+                }
+
+                resolvedcurators.push([targetid, mode]);
+            }
+
+            if (this._userdata[userid] && this._userdata[userid].curators && resolvedcurators.length >= this.param('pref.maxcurators')) {
+                ep.reply("You can't have more than " + this.param('pref.maxcurators') + " user" + (this.param('pref.maxcurators') > 1 ? "s" : "") + " in your curator list.");
+                return true;
+            }
+
+            //Clear list of curators
+            this.clearCurators(userid, resolvedcurators.length == 0);
+
+            //Add curators
+            for (let curator of resolvedcurators) {
+                this.addCurator(userid, curator[0], curator[1]);
+            }
+
+            if (resolvedcurators.length == 0) {
+                this._userdata.save();
+                ep.reply("Curator list successfully cleared.");
+            } else {
+                ep.reply("Curator set to the specified user" + (resolvedcurators.length != 1 ? "s" : "") + ".");
+            }
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'rpref kw list', {
+            description: "Lists keywords that influence songs selected for you.",
+            details: [
+                "Positive influence (liked) keywords: Songs will be penalized for not having that keyword in any field when being selected for you.",
+                "Negative influence (disliked) keywords: Songs will be penalized for having that keyword in any field when being selected for you."
+            ]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            let keywords = {};
+            if (this._userdata[userid] && this._userdata[userid].keywords) {
+                keywords = this._userdata[userid].keywords;
+            }
+
+            let keywordsresolved = [];
+            for (let keyword in keywords) {
+                keywordsresolved.push([keyword, keywords[keyword]]);
+            }
+
+            if (!keywordsresolved.length) {
+                ep.reply("Your keyword list is currently empty.");
+                return true;
+            }
+
+            keywordsresolved.sort((a, b) => a[0].localeCompare(b[0]));
+            ep.reply(keywordsresolved.map(keyword => (keyword[1] >= 0 ? '+' : '-') + keyword[0]).join(' ; '));
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'rpref kw +', {
+            description: "Adds a positive influence (liked) keyword to your preferences.",
+            args: ["keyword", true]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (this._userdata[userid] && this._userdata[userid].keywords && Object.keys(this._userdata[userid].keywords).length >= this.param('pref.maxkeywords')) {
+                ep.reply("You can't have more than " + this.param('pref.maxkeywords') + " keyword" + (this.param('pref.maxkeywords') > 1 ? "s" : "") + " in your list.");
+                return true;
+            }
+
+            this.addKeyword(userid, args.keyword.join(" "), 1.0);
+
+            ep.reply("The keyword was added to your list.");
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'rpref kw -', {
+            description: "Adds a negative influence (disliked) keyword to your preferences.",
+            args: ["keyword", true]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (this._userdata[userid] && this._userdata[userid].keywords && Object.keys(this._userdata[userid].keywords).length >= this.param('pref.maxkeywords')) {
+                ep.reply("You can't have more than " + this.param('pref.maxkeywords') + " keyword" + (this.param('pref.maxkeywords') > 1 ? "s" : "") + " in your list.");
+                return true;
+            }
+
+            this.addKeyword(userid, args.keyword.join(" "), -1.0);
+
+            ep.reply("The keyword was added to your list.");
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'rpref kw remove', {
+            description: "Removes a keyword from your preferences.",
+            args: ["keyword", true]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!this.removeKeyword(userid, args.keyword.join(" "))) {
+                ep.reply("Keyword not found in your preferences.");
+                return true;
+            }
+
+            ep.reply("The keyword was removed from you list.");
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'rpref kw clear', {
+            description: "Removes every keyword from your preferences."
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            this.clearKeywords(userid, true);
+
+            ep.reply("Your keyword list was cleared.");
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'rpref profile list', {
+            description: "Lists your saved profiles."
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            let profiles = {};
+            if (this._userdata[userid] && this._userdata[userid].saved) {
+                profiles = this._userdata[userid].saved;
+            }
+
+            let profileslist = Object.keys(profiles);
+
+            if (!profileslist.length) {
+                ep.reply("You don't have any saved profiles.");
+                return true;
+            }
+
+            profileslist.sort((a, b) => a[0].localeCompare(b[0]));
+            ep.reply(profileslist.join(', '));
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'rpref profile save', {
+            description: "Creates a snapshot of your current preferences which can be restored later.",
+            args: ["name"]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            let name = args.name.toLowerCase().trimLeft().trimRight();
+
+            if (this._userdata[userid] && this._userdata[userid].saved && this._userdata[userid].saved[name]) {
+                ep.reply("There already exists a profile with this name. If you want to replace it, erase the old profile first.");
+                return true;
+            }
+
+            this.preferenceSave(userid, name);
+            ep.reply("Profile created.");
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'rpref profile load', {
+            description: "Restores a previously created snapshot of your preferences.",
+            args: ["name"]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!this.preferenceLoad(userid, args.name)) {
+                ep.reply("No such profile.");
+                return true;
+            }
+
+            ep.reply("Profile loaded.");
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'rpref profile erase', {
+            description: "Deletes a previously created snapshot of your preferences.",
+            args: ["name"]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!this.preferenceDeleteSave(userid, args.name)) {
+                ep.reply("No such profile.");
+                return true;
+            }
+
+            ep.reply("Profile removed.");
+
+            return true;
+        });
+
 
 
         return true;
@@ -1153,10 +1527,23 @@ class ModRajio extends Module {
     calculateListenerSlide(listener) {
         if (!this.songrank) return 0;
         let userhistory = this._history.slice(0, this._userlistened[listener] || 0);
+
+        let curators = {};
+        if (!this._userdata[listener] || !this._userdata[listener].curators) curators[listener] = true;
+        else curators = this._userdata[listener].curators;
+
         let slide = 0;
         for (let i = 0; i < userhistory.length; i++) {
             let song = userhistory[i];
-            let comp = (this.songrank.computeSongRank(song.hash, [listener]) || 0);
+
+            let comp = 0;
+            if (Object.keys(curators).length) {
+                for (let curator in curators) {
+                    comp += (this.songrank.computeSongRank(song.hash, [curator]) || 0) * (curators[curator] ? 1 : -1);
+                }
+                comp /= Object.keys(curators).length;
+            }
+
             if (comp <= 0) comp -= 0.5;
             comp *= -1 * Math.pow((userhistory.length - i) * this.param('pri.listen.historysc'), this.param('pri.listen.history'));
             slide += comp;
@@ -1205,6 +1592,18 @@ class ModRajio extends Module {
         return false;
     }
 
+    findKeywordsInSong(song, keywords) {
+        for (let keyword of keywords) {
+            if (song.name && song.name.toLowerCase().indexOf(keyword) > -1
+                    || song.author && song.author.toLowerCase().indexOf(keyword) > -1
+                    || song.album && song.album.toLowerCase().indexOf(keyword) > -1
+                    || song.keywords.findIndex(kw => kw.toLowerCase().indexOf(keyword) > -1) > -1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     
     songPriority(song, listeners, usequeue, usenovelty, trace) {
         let prefix = "rajio." + this.name.toLowerCase();
@@ -1225,6 +1624,7 @@ class ModRajio extends Module {
         let songrank = this.songrank;
         
         if (songrank) {
+            //Global rank
             let calcrank = songrank.computeSongRank(song.hash, null, true);
             let crank = (calcrank.rank || 0);
             if (calcrank.users.length) crank /= calcrank.users.length;
@@ -1232,10 +1632,55 @@ class ModRajio extends Module {
             priority += crank;
             if (trace) components.rank = crank;
             
+            //Listener components
             if (listeners.length) {
-                let clisten = (songrank.computeSongRank(song.hash, listeners) || 0) / listeners.length * this.param('pri.listen');
-                if (trace) components.prelisten = clisten;
+                let clisten = 0;
 
+                for (let listener of listeners) {
+                    let curated = 0;
+
+                    //Base rank for each listener (from curators)
+                    let curators = {};
+                    if (!this._userdata[listener] || !this._userdata[listener].curators) curators[listener] = true;
+                    else curators = this._userdata[listener].curators;
+                    if (!Object.keys(curators).length) continue;
+
+                    for (let curator in curators) {
+                        curated += (songrank.computeSongRank(song.hash, [curator]) || 0) * (curators[curator] ? 1 : -1);
+                    }
+                    curated /= Object.keys(curators).length;
+                    curated *= this.param('pri.listen');
+                    curated /= listeners.length;
+
+                    if (trace) components["listener." + listener] = curated;
+
+                    //Keyword attenuation
+                    let keywordspos = [];
+                    let keywordsneg = [];
+                    if (this._userdata[listener] && this._userdata[listener].keywords) {
+                        let keywords = this._userdata[listener].keywords;
+                        for (let keyword in keywords) {
+                            if (keywords[keyword] > 0) keywordspos.push(keyword);
+                            else keywordsneg.push(keyword);
+                        }
+                    }
+
+                    let posfound = this.findKeywordsInSong(song, keywordspos);
+                    let negfound = this.findKeywordsInSong(song, keywordsneg);
+
+                    if (curated > 0 && keywordspos.length && !posfound || curated < 0 && posfound) {
+                        curated *= this.param('pri.listen.nopos');
+                    }
+                    if (curated > 0 && negfound || curated < 0 && keywordsneg.length && !negfound) {
+                        curated *= this.param('pri.listen.yesneg');
+                    }
+
+                    if (trace) components["attenuated." + listener] = curated;
+
+                    clisten += curated;
+                }
+
+                //Slide
                 for (let listener of listeners) {
                     let slide = this.calculateListenerSlide(listener);
                     if (trace) components["slide." + listener] = slide;
@@ -1272,6 +1717,7 @@ class ModRajio extends Module {
 
         //Comparative plays
 
+        if (priority < 0) priority = 0;
         if (trace) components.baseabsolute = priority;
         let playsrank = this.playsRank(song.hash);
         let playsfactor = Math.log(playsrank + 1) / Math.log(1 + songcount * this.param('pri.mitigatedslice'));
@@ -1332,6 +1778,120 @@ class ModRajio extends Module {
         }
         
         return priority;
+    }
+
+
+    //Preferences
+
+    addCurator(userid, targetid, mode) {
+        if (!this._userdata[userid]) this._userdata[userid] = {};
+        if (!this._userdata[userid].curators) {
+            this._userdata[userid].curators = {};
+            this._userdata[userid].curators[userid] = true;
+        }
+
+        this._userdata[userid].curators[targetid] = !!mode;
+
+        this._userdata.save();
+        return true;
+    }
+
+    removeCurator(userid, targetid) {
+        if (!this._userdata[userid] || !this._userdata[userid].curators || this._userdata[userid].curators[targetid] === undefined) {
+            return false;
+        }
+
+        delete this._userdata[userid].curators[targetid];
+
+        this._userdata.save();
+        return true;
+    }
+
+    clearCurators(userid, save) {
+        if (!this._userdata[userid] || !this._userdata[userid].curators) {
+            return false;
+        }
+
+        this._userdata[userid].curators = {};
+        if (save) this._userdata.save();
+        return true;
+    }
+
+    addKeyword(userid, keyword, rating) {
+        keyword = keyword.toLowerCase().trimStart().trimEnd();
+
+        if (!this._userdata[userid]) this._userdata[userid] = {};
+        if (!this._userdata[userid].keywords) this._userdata[userid].keywords = {};
+        
+        this._userdata[userid].keywords[keyword] = parseFloat(rating);
+
+        this._userdata.save();
+        return true;
+    }
+
+    removeKeyword(userid, keyword) {
+        keyword = keyword.toLowerCase().trimStart().trimEnd();
+
+        if (!this._userdata[userid] || !this._userdata[userid].keywords || this._userdata[userid].keywords[keyword] === undefined) {
+            return false;
+        }
+
+        delete this._userdata[userid].keywords[keyword];
+
+        this._userdata.save();
+        return true;
+    }
+
+    clearKeywords(userid, save) {
+        if (!this._userdata[userid] || !this._userdata[userid].keywords) {
+            return false;
+        }
+
+        this._userdata[userid].keywords = {};
+        if (save) this._userdata.save();
+        return true;
+    }
+
+    preferenceSave(userid, savename) {
+        savename = savename.toLowerCase().trimStart().trimEnd();
+
+        if (!this._userdata[userid]) this._userdata[userid] = {};
+        if (!this._userdata[userid].saved) this._userdata[userid].saved = {};
+        
+        this._userdata[userid].saved[savename] = {
+            curators: Object.assign({}, this._userdata[userid].curators || {}),
+            keywords: Object.assign({}, this._userdata[userid].keywords || {})
+        };
+
+        this._userdata.save();
+        return true;
+    }
+
+    preferenceLoad(userid, savename) {
+        savename = savename.toLowerCase().trimStart().trimEnd();
+
+        if (!this._userdata[userid] || !this._userdata[userid].saved || !this._userdata[userid].saved[savename])  {
+            return false;
+        }
+
+        this._userdata[userid].curators = Object.assign({}, this._userdata[userid].saved[savename].curators);
+        this._userdata[userid].keywords = Object.assign({}, this._userdata[userid].saved[savename].keywords);
+
+        this._userdata.save();
+        return true;
+    }
+
+    preferenceDeleteSave(userid, savename) {
+        savename = savename.toLowerCase().trimStart().trimEnd();
+
+        if (!this._userdata[userid] || !this._userdata[userid].saved || !this._userdata[userid].saved[savename])  {
+            return false;
+        }
+
+        delete this._userdata[userid].saved[savename];
+
+        this._userdata.save();
+        return true;
     }
     
     
