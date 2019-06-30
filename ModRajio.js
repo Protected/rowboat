@@ -1818,7 +1818,7 @@ class ModRajio extends Module {
     }
 
     addKeyword(userid, keyword, rating) {
-        keyword = keyword.toLowerCase().trimStart().trimEnd();
+        keyword = keyword.toLowerCase().trimLeft().trimRight();
 
         if (!this._userdata[userid]) this._userdata[userid] = {};
         if (!this._userdata[userid].keywords) this._userdata[userid].keywords = {};
@@ -1830,7 +1830,7 @@ class ModRajio extends Module {
     }
 
     removeKeyword(userid, keyword) {
-        keyword = keyword.toLowerCase().trimStart().trimEnd();
+        keyword = keyword.toLowerCase().trimLeft().trimRight();
 
         if (!this._userdata[userid] || !this._userdata[userid].keywords || this._userdata[userid].keywords[keyword] === undefined) {
             return false;
@@ -1853,7 +1853,7 @@ class ModRajio extends Module {
     }
 
     preferenceSave(userid, savename) {
-        savename = savename.toLowerCase().trimStart().trimEnd();
+        savename = savename.toLowerCase().trimLeft().trimRight();
 
         if (!this._userdata[userid]) this._userdata[userid] = {};
         if (!this._userdata[userid].saved) this._userdata[userid].saved = {};
@@ -1868,7 +1868,7 @@ class ModRajio extends Module {
     }
 
     preferenceLoad(userid, savename) {
-        savename = savename.toLowerCase().trimStart().trimEnd();
+        savename = savename.toLowerCase().trimLeft().trimRight();
 
         if (!this._userdata[userid] || !this._userdata[userid].saved || !this._userdata[userid].saved[savename])  {
             return false;
@@ -1882,7 +1882,7 @@ class ModRajio extends Module {
     }
 
     preferenceDeleteSave(userid, savename) {
-        savename = savename.toLowerCase().trimStart().trimEnd();
+        savename = savename.toLowerCase().trimLeft().trimRight();
 
         if (!this._userdata[userid] || !this._userdata[userid].saved || !this._userdata[userid].saved[savename])  {
             return false;
