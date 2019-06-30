@@ -1858,8 +1858,11 @@ class ModRajio extends Module {
         if (!this._userdata[userid]) this._userdata[userid] = {};
         if (!this._userdata[userid].saved) this._userdata[userid].saved = {};
         
+        let defcurators = {};
+        defcurators[userid] = true;
+
         this._userdata[userid].saved[savename] = {
-            curators: Object.assign({}, this._userdata[userid].curators || {}),
+            curators: Object.assign({}, this._userdata[userid].curators || defcurators),
             keywords: Object.assign({}, this._userdata[userid].keywords || {})
         };
 
