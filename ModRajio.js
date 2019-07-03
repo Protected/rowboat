@@ -46,6 +46,9 @@ class ModRajio extends Module {
         'pri.listen',           //Unbiased listener rank priority component
         'pri.listen.nopos',     //Attenuate listener priority for songs with no positive preference keywords associated
         'pri.listen.yesneg',    //Attenuate listener priority for songs with negative preference keywords associated
+        'pri.listen.skiprange', //(s) For how long after a song last skipped its positive listener rank is mitigated
+        'pri.listen.skipbias',  //Exponent/bias for skip mitigation (1 will make it linear, otherwise weight towards early or late in period)
+        'pri.listen.skipfact',  //Minimum (most impactful) coefficient applied by skipping (if song was just skipped)
         'pri.listen.slide',     //Weight of listener bias on rank, if applicable
         'pri.listen.history',   //Weight of history position bias on slide, if applicable
         'pri.listen.historysc', //Multiplier for history position bias
@@ -105,6 +108,9 @@ class ModRajio extends Module {
 
             KWPREF_FACTOR: If "+" exist and none present, * pri.listen.nopos ; If "-" exist and present, * pri.listen.yesneg
 
+            SKIP_FACTOR: If listener rank is positive but listener skipped song in last pri.listen.skiprange seconds,
+                        (ELAPSED_TIME / pri.listen.skiprange) ^ pri.listen.skipbias * (1-pri.listen.skipfact) + pri.listen.skipfact, otherwise 1
+
             LISTENER_SLIDE = Sum_[history](LISTENER_RANK * -1 * ((maxhistory - HISTORY_POSITION) * pri.listen.historysc) ^ pri.listen.history)
 
             SONG_PRIORITY =
@@ -112,7 +118,7 @@ class ModRajio extends Module {
                     pri.base
                     + pri.rank * (GLOBAL_RANK / totalusers)
                     + pri.listen * (
-                            LISTENER_CURATORS_RANK / listenerusers * KWPREF_FACTOR
+                            LISTENER_CURATORS_RANK / listenerusers * KWPREF_FACTOR * SKIP_FACTOR
                             + ...
                         )
                         * (LISTENER_SLIDE > 1 ? LISTENER_SLIDE ^ pri.listen.slide : 1)
@@ -127,9 +133,12 @@ class ModRajio extends Module {
 
         this._params['pri.base'] = 10.0;
         this._params['pri.rank'] = 10.0;
-        this._params['pri.listen'] = 30.0;
+        this._params['pri.listen'] = 50.0;
         this._params['pri.listen.nopos'] = 0.75;
         this._params['pri.listen.yesneg'] = 0.10;
+        this._params['pri.listen.skiprange'] = 259200;
+        this._params['pri.listen.skipbias'] = 2;
+        this._params['pri.listen.skipfact'] = 0.1;
         this._params['pri.listen.slide'] = 0.5;
         this._params['pri.listen.history'] = 0.3;
         this._params['pri.listen.historysc'] = 3;
@@ -218,6 +227,10 @@ class ModRajio extends Module {
     
     get playing() {
         return this.denv.server.voiceConnection && this.denv.server.voiceConnection.speaking || this._pending;
+    }
+
+    get metaprefix() {
+        return 'rajio.' + this.name.toLowerCase();
     }
     
     
@@ -379,7 +392,7 @@ class ModRajio extends Module {
         }, this);
 
         opt.envs[this.param('env')].on('connected', () => {
-            this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.latestnovelties', []);
+            this.grabber.setAdditionalStats(this.metaprefix + '.latestnovelties', []);
         }, this);
         
 
@@ -422,7 +435,7 @@ class ModRajio extends Module {
             description: 'Vote to skip the current song.',
             details: [
                 "When a listener calls this command, if there are no listeners who haven't called it, the current song is skipped.",
-                "Otherwise, the listener is deafened until the end of the song and a beep is played in the channel to alert other listeners.",
+                "Otherwise, the listener is deafened until the end of the song.",
                 "If the listener leaves the channel or undeafens himself, his skip vote is revoked."
             ]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -445,13 +458,16 @@ class ModRajio extends Module {
             this._skipper[userid] = true;
             
             if (cskippers >= clisteners - 1) {
-                let prefix = "rajio." + this.name.toLowerCase();
-                let skipdata = this.grabber.getSongMeta(this._play.hash, prefix + ".skipped");
+                let skipdata = this.grabber.getSongMeta(this._play.hash, this.metaprefix + ".skipped");
                 if (!skipdata) skipdata = {};
                 
                 let now = moment().unix();
                 skipdata[now] = Object.keys(this._skipper);
-                this.grabber.setSongMeta(this._play.hash, prefix + ".skipped", skipdata);
+                this.grabber.setSongMeta(this._play.hash, this.metaprefix + ".skipped", skipdata);
+
+                let skips = this.grabber.getSongMeta(this._play.hash, this.metaprefix + ".skips");
+                if (!skips) skips = 1; else skips += 1;
+                this.grabber.setSongMeta(this._play.hash, this.metaprefix + ".skips", skips);
 
                 let song = this._play;
 
@@ -1218,7 +1234,7 @@ class ModRajio extends Module {
             seek: (seek ? Math.round(seek / 1000.0) : 0)
         };
         
-        this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.playing', song.hash);
+        this.grabber.setAdditionalStats(this.metaprefix + '.playing', song.hash);
         this._play = song;
         this._pending = setTimeout(() => {
         
@@ -1249,7 +1265,7 @@ class ModRajio extends Module {
         let vc = this.denv.server.voiceConnection;
         
         this.log('Stopping song' + (this._play ? ': ' + this._play.hash : '.'));
-        this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.playing', null);
+        this.grabber.setAdditionalStats(this.metaprefix + '.playing', null);
         
         if (this.param('usestatus')) {
             this.denv.client.realClient.user.setActivity(null).catch(() => {});
@@ -1360,7 +1376,7 @@ class ModRajio extends Module {
             this._queue = this._queue.slice(0, this.param('queuesize'));
         }
 
-        this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.queue', this._queue.map((item) => ({hash: item.song.hash, userid: item.userid})));
+        this.grabber.setAdditionalStats(this.metaprefix + '.queue', this._queue.map((item) => ({hash: item.song.hash, userid: item.userid})));
         
         return true;
     }
@@ -1378,8 +1394,8 @@ class ModRajio extends Module {
             priorities[hash] = priority;
         }
 
-        this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.latestpriorities', priorities);
-        this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.latestnovelties', novelties || []);
+        this.grabber.setAdditionalStats(this.metaprefix + '.latestpriorities', priorities);
+        this.grabber.setAdditionalStats(this.metaprefix + '.latestnovelties', novelties || []);
         
         let sum = 0;
         let candidates = [];
@@ -1407,7 +1423,7 @@ class ModRajio extends Module {
             userid = this._queue[index].userid;
             this._lastreq[hash] = moment().unix();
             this._queue.splice(index, 1);
-            this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.queue', this._queue);
+            this.grabber.setAdditionalStats(this.metaprefix + '.queue', this._queue);
         }
         
         if (getrequester) {
@@ -1424,7 +1440,7 @@ class ModRajio extends Module {
             result = this._queue.length - newqueue.length;
             this.log('User ' + userid + ' withdrew from the queue. Removed ' + result + ' song(s).');
             this._queue = newqueue;
-            this.grabber.setAdditionalStats('rajio.' + this.name.toLowerCase() + '.queue', this._queue);
+            this.grabber.setAdditionalStats(this.metaprefix + '.queue', this._queue);
         }
         if (!fromauto && this._pendingwithdraw[userid]) {
             clearTimeout(this._pendingwithdraw[userid]);
@@ -1475,11 +1491,23 @@ class ModRajio extends Module {
             this._history = this._history.slice(0, this.param('historysize'));
         }
         
-        let prefix = "rajio." + this.name.toLowerCase();
-        let plays = (this.grabber.getSongMeta(song.hash, prefix + ".plays") || 0) + 1;
-        this.grabber.setSongMeta(song.hash, prefix + ".lastplayed", moment().unix());
-        this.grabber.setSongMeta(song.hash, prefix + ".plays", plays);
-        this.grabber.setSongMeta(song.hash, prefix + ".skipped", null);
+        let plays = (this.grabber.getSongMeta(song.hash, this.metaprefix + ".plays") || 0) + 1;
+        let now = moment().unix();
+
+        this.grabber.setSongMeta(song.hash, this.metaprefix + ".lastplayed", now);
+        this.grabber.setSongMeta(song.hash, this.metaprefix + ".plays", plays);
+
+        let skipdata = this.grabber.getSongMeta(song.hash, this.metaprefix + ".skipped");
+        for (let ts in skipdata) {
+            if (now - ts > this.param('pri.listen.skiprange')) {
+                delete skipdata[ts];
+            }
+        }
+        if (Object.keys(skipdata).length < 1) {
+            skipdata = null;
+        }
+        this.grabber.setSongMeta(song.hash, this.metaprefix + ".skipped", skipdata);
+
         this._playscache[song.hash] = plays;
 
         for (let listenerid of this.listeners.map((listener) => listener.id)) {
@@ -1552,12 +1580,11 @@ class ModRajio extends Module {
     }
 
     playsRank(hash) {
-        let prefix = "rajio." + this.name.toLowerCase();
         let songs = this.grabber.everySong();
         if (Object.keys(this._playscache).length != songs.length) {
             for (let songhash of songs) {
                 if (!this._playscache[songhash]) {
-                    this._playscache[songhash] = (this.grabber.getSongMeta(songhash, prefix + ".plays") || 0);
+                    this._playscache[songhash] = (this.grabber.getSongMeta(songhash, this.metaprefix + ".plays") || 0);
                 }
             }
         }
@@ -1571,12 +1598,27 @@ class ModRajio extends Module {
         return rank;
     }
 
+    calculateSkipMitigation(hash, listener, skipdata, now) {
+        if (!skipdata) skipdata = this.grabber.getSongMeta(hash, this.metaprefix + ".skipped");
+        if (!now) now = moment().unix();
+        
+        let mostrecent = 0;
+        for (let ts in skipdata) {
+            if (ts > mostrecent && now - ts < this.param('pri.listen.skiprange') && skipdata[ts].findIndex(skipper => skipper == listener) > -1) {
+                mostrecent = ts;
+            }
+        }
+
+        if (!mostrecent) return 1;
+
+        return Math.pow((now - mostrecent) / this.param('pri.listen.skiprange'), this.param('pri.listen.skipbias')) * (1 - this.param('pri.listen.skipfact')) + this.param('pri.listen.skipfact');
+    }
+
     isNovelty(hash, songcount) {
-        let prefix = "rajio." + this.name.toLowerCase();
         if (!songcount) songcount = this.grabber.everySong().length;
         let seen = this.grabber.getSongMeta(hash, "seen");
         if (!seen || moment().unix() - seen[0] > this.param('pri.novelty.duration')) return false;
-        if ((this.grabber.getSongMeta(hash, prefix + ".plays") || 0) > this.param("pri.novelty.breaker")) return false;
+        if ((this.grabber.getSongMeta(hash, this.metaprefix + ".plays") || 0) > this.param("pri.novelty.breaker")) return false;
         return true;
     }
 
@@ -1606,10 +1648,10 @@ class ModRajio extends Module {
 
     
     songPriority(song, listeners, usequeue, usenovelty, trace) {
-        let prefix = "rajio." + this.name.toLowerCase();
         let priority = this.param('pri.base');
         let components = {base: priority};
         let songcount = this.grabber.everySong().length;
+        let now = moment().unix();
         
         let prelisteners = (listeners || []);
         listeners = [];
@@ -1617,6 +1659,8 @@ class ModRajio extends Module {
             if (this._nopreference[userid]) continue;
             listeners.push(userid);
         }
+
+        let skipdata = this.grabber.getSongMeta(song.hash, this.metaprefix + ".skipped");
         
         
         //Rank-based components
@@ -1675,7 +1719,14 @@ class ModRajio extends Module {
                         curated *= this.param('pri.listen.yesneg');
                     }
 
-                    if (trace) components["attenuated." + listener] = curated;
+                    if (trace) components["withkeywords." + listener] = curated;
+
+                    //Skip attenuation
+                    if (curated > 0) {
+                        let skipfactor = this.calculateSkipMitigation(song.hash, listener, skipdata, now);
+                        curated *= skipfactor;
+                        if (trace && skipfactor < 1) components["withskips." + listener] = curated;
+                    }
 
                     clisten += curated;
                 }
@@ -1709,7 +1760,7 @@ class ModRajio extends Module {
 
         //Low plays
         
-        let plays = song[prefix + ".plays"] || 0;
+        let plays = song[this.metaprefix + ".plays"] || 0;
         let clowplays = (1 - Math.min(this.param('pri.lowplays.max'), plays) / this.param('pri.lowplays.max')) * this.param('pri.lowplays');
         priority += clowplays;
         if (trace) components.lowplays = clowplays;
@@ -1728,7 +1779,7 @@ class ModRajio extends Module {
 
         //Recently played song mitigation
         
-        let recentgradient = Math.min(moment().unix() - (song[prefix + ".lastplayed"] || 0), this.param('pri.recent')) / this.param('pri.recent');
+        let recentgradient = Math.min(now - (song[this.metaprefix + ".lastplayed"] || 0), this.param('pri.recent')) / this.param('pri.recent');
         priority *= recentgradient;
         if (trace) components.withrecent = priority;
 
