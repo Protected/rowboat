@@ -1498,13 +1498,15 @@ class ModRajio extends Module {
         this.grabber.setSongMeta(song.hash, this.metaprefix + ".plays", plays);
 
         let skipdata = this.grabber.getSongMeta(song.hash, this.metaprefix + ".skipped");
-        for (let ts in skipdata) {
-            if (now - ts > this.param('pri.listen.skiprange')) {
-                delete skipdata[ts];
+        if (skipdata) {
+            for (let ts in skipdata) {
+                if (now - ts > this.param('pri.listen.skiprange')) {
+                    delete skipdata[ts];
+                }
             }
-        }
-        if (Object.keys(skipdata).length < 1) {
-            skipdata = null;
+            if (Object.keys(skipdata).length < 1) {
+                skipdata = null;
+            }
         }
         this.grabber.setSongMeta(song.hash, this.metaprefix + ".skipped", skipdata);
 
@@ -1599,7 +1601,7 @@ class ModRajio extends Module {
     }
 
     calculateSkipMitigation(hash, listener, skipdata, now) {
-        if (!skipdata) skipdata = this.grabber.getSongMeta(hash, this.metaprefix + ".skipped");
+        if (!skipdata) skipdata = this.grabber.getSongMeta(hash, this.metaprefix + ".skipped") || {};
         if (!now) now = moment().unix();
         
         let mostrecent = 0;
@@ -1660,7 +1662,7 @@ class ModRajio extends Module {
             listeners.push(userid);
         }
 
-        let skipdata = this.grabber.getSongMeta(song.hash, this.metaprefix + ".skipped");
+        let skipdata = this.grabber.getSongMeta(song.hash, this.metaprefix + ".skipped") || {};
         
         
         //Rank-based components
