@@ -94,7 +94,6 @@ class ModSongRanking extends Module {
     
     get requiredParams() { return [
         'env',                  //Name of the Discord environment to be used
-        'channels',             //List of IDs of the Discord channels to be used
         'grabber'               //Name of the grabber to piggyback on (required because the grabber is multi-instanceable)
     ]; }
     

@@ -64,27 +64,28 @@ class ModRandom extends Module {
             minArgs: 1
         }, (env, type, userid, channelid, command, args, handle, ep) => {
             
-            //Expand decks
-            
-            let items = args.items;
-            for (let i = 0; i < items.length; i++) {
-                let matchdeck = items[i].match(/\#deck\#(([A234567890JQK]+)#)?/i);
-                if (!matchdeck) continue;
-                let ranks = matchdeck[2];
-                if (ranks) ranks = ranks.toUpperCase();
-                let deck = this.standardDeck(ranks);
-                items = items.slice(0, i).concat(deck, items.slice(i + 1));
-                i += deck.length - 1;
-            }
-            
-            //Validate syntax and add generic syntax if needed
-            
-            items = items.map((item) => item.trim()).filter((item) => !!item || item === 0);
-            
-            //Perform shuffles and output
-            
+            let items = this.cleanupItems(args.items);
             items = this.shuffle(items);
-            ep.reply(items.join(" "));
+            ep.reply(env.idToDisplayName(userid) + ": " + items.join(" "));
+            
+            return true;
+        });
+
+
+        this.mod('Commands').registerCommand(this, 'pick', {
+            description: "Picks a random item from a set using a cryptographically secure source of randomness.",
+            args: ["items", true],
+            details: [
+                "ITEMS is the set of items to pick from separated by spaces. Special syntaxes: ",
+                "  #deck# - Expand to 52-card deck.",
+                "  #deck#RANKS# - Expand to restricted 52-card deck, where RANKS can be: A234567890JQK ."
+            ],
+            minArgs: 1
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            
+            let items = this.cleanupItems(args.items);
+            items = this.shuffle(items);
+            ep.reply(env.idToDisplayName(userid) + ": " + items[0]);
             
             return true;
         });
@@ -216,6 +217,30 @@ class ModRandom extends Module {
         }
         return list;
     }
+
+
+    cleanupItems(initems) {
+        let items = initems;
+
+        //Expand decks
+        
+        for (let i = 0; i < items.length; i++) {
+            let matchdeck = items[i].match(/\#deck\#(([A234567890JQK]+)#)?/i);
+            if (!matchdeck) continue;
+            let ranks = matchdeck[2];
+            if (ranks) ranks = ranks.toUpperCase();
+            let deck = this.standardDeck(ranks);
+            items = items.slice(0, i).concat(deck, items.slice(i + 1));
+            i += deck.length - 1;
+        }
+        
+        //Validate syntax and add generic syntax if needed
+        
+        items = items.map((item) => item.trim()).filter((item) => !!item || item === 0);
+        
+        return items;
+    }
+
 
 }
 

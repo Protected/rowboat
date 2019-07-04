@@ -74,20 +74,23 @@ class DiscordClient extends ModernEventEmitter {
                 this.emit.apply(this, args);
             });
         }
-        
+
         let self = this;
-        return this._realClient.login(this._token)
-            .then(() => {
-                this._carrier = setInterval(() => {
-                    self.deliverMsgs.apply(self, null);
-                }, this._sendDelay);
-                
-                for (let resolve of this._resolveOnLogin) {
-                    resolve(this._realClient);
-                }
-                
-                return this._realClient;
-            });
+        this._realClient.once('ready', () => {
+            this._carrier = setInterval(() => {
+                self.deliverMsgs.apply(self, null);
+            }, this._sendDelay);
+            
+            for (let resolve of this._resolveOnLogin) {
+                resolve(this._realClient);
+            }
+        });
+
+        this._realClient.login(this._token);
+
+        return new Promise((resolve) => {
+            this._resolveOnLogin.push(resolve);
+        });
     }
     
     
