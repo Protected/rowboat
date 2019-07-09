@@ -686,15 +686,15 @@ class ModGrabber extends Module {
         let warnauthor = this.param('defaultBehavior') == 'feedback';
         let noextract =  this.param('defaultBehavior') == 'ignore';
 
-        if (message.match(new RegExp(this.params('tagQuiet')))) {
+        if (message.match(new RegExp(this.param('tagQuiet')))) {
             noextract = false;
             warnauthor = false;
         }
-        if (message.match(new RegExp(this.params('tagFeedback')))) {
+        if (message.match(new RegExp(this.param('tagFeedback')))) {
             noextract = false;
             warnauthor = true;
         }
-        if (message.match(new RegExp(this.params('tagIgnore')))) {
+        if (message.match(new RegExp(this.param('tagIgnore')))) {
             noextract = true;
             warnauthor = false;
         }
