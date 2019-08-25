@@ -861,8 +861,10 @@ class ModGrabber extends Module {
                     return;
                 }
                 
-                if (!mp.interval && info.length_seconds < this.param('minDuration') || mp.interval && mp.interval[1] - mp.interval[0] < this.param('minDuration')
-                        || info.length_seconds > this.param('maxDuration') && (!mp.interval || mp.interval[1] - mp.interval[0] > this.param('maxDuration'))) {
+                let length = info.length_seconds || info.duration || 0;
+                
+                if (!mp.interval && length < this.param('minDuration') || mp.interval && mp.interval[1] - mp.interval[0] < this.param('minDuration')
+                        || length > this.param('maxDuration') && (!mp.interval || mp.interval[1] - mp.interval[0] > this.param('maxDuration'))) {
                     if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
                     return;
                 }
@@ -921,7 +923,7 @@ class ModGrabber extends Module {
                     this._downloads -= 1;
                     
                     this.persistTempDownload(temppath, url, mp, {
-                        length: parseInt(info.length_seconds),
+                        length: parseInt(length),
                         source: url,
                         sourceType: 'youtube',
                         sourceSpecificId: info.video_id,
