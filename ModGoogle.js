@@ -58,7 +58,8 @@ class ModGoogle extends Module {
             let extras = {};
 
             let words = args.string;
-            for (let i = 0; i < words.length; i++) {
+            let i;
+            for (i = 0; i < words.length; i++) {
                 let word = words[i];
                 if (word.indexOf("--") < 0) break;
                 if (word == "--") {
