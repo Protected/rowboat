@@ -192,6 +192,7 @@ class ModRajio extends Module {
         this._undeafen = {};  //{userid: true, ...} Users to undeafen as soon as they rejoin a voice channel
         this._nopreference = {};  //{userid: true, ...} Users have disabled impact of their preferences in priority calculations
         this._userlistened = {};  //{userid: songs, ...} Amount of songs each user has listened to in current listening session
+        this._userremaining = {};  //{userid: songs, ...} Amount of songs before a user will be automatically disconnected
         
         this._play = null;  //Song being played
         this._pending = null;  //Timer that will start the next song
@@ -324,6 +325,7 @@ class ModRajio extends Module {
                     }
 
                     this.autowithdraw(member.id);
+                    this.clearautoend(member.id);
                     if (this._nopreference[member.id]) delete this._nopreference[member.id];
                     if (!llisteners) {
                         //Last listener left the channel
@@ -477,7 +479,8 @@ class ModRajio extends Module {
                     this.announce('**[Skipped]** ' + '`' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`');
                 }
 
-                this.playSong();
+                //this.playSong(); No need; The ender will play the next song normally
+                    
                 return true;
             }
                         
@@ -488,6 +491,48 @@ class ModRajio extends Module {
         
             return true;
         });
+        
+        
+        this.mod('Commands').registerCommand(this, 'rajio end', {
+            description: 'Automatically end listening session.',
+            args: ['counter'],
+            minArgs: 0,
+            details: [
+                "Sets how many songs, including the current one, should play before the listener is disconnected.",
+                "Use 0 or 'cancel' to abort, and 'check' to see your current counter.",
+            ]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            if (!this.islistener(userid)) {
+                ep.reply('This command is only available to listeners.');
+                return true;
+            }
+            
+            if (!args.counter) args.counter = 1;
+            
+            if (args.counter == 'check') {
+                ep.reply(this._userremaining[userid] !== undefined ? 'Remaining songs: ' + this._userremaining[userid] : 'You have not set an end counter.');
+                return true;
+            }
+            
+            if (args.counter == 'cancel') args.counter = 0;
+            let counter = parseInt(args.counter);
+            if (isNaN(counter)) {
+                ep.reply('The argument must be a number, cancel or check.');
+                return true;
+            }
+      
+            if (counter == 0 && this._userremaining[userid] !== undefined) {
+                delete this._userremaining[userid];
+            } else if (counter > 0) {
+                this._userremaining[userid] = counter;
+            }
+            
+            ep.reply('OK.');
+        
+            return true;
+        });
+        
         
 
         this.mod('Commands').registerCommand(this, 'rajio off', {
@@ -589,8 +634,8 @@ class ModRajio extends Module {
             if (this._disabled) return true;
         
             this.stopSong();
-            this.playSong();
-        
+            //this.playSong(); No need; The ender will play the next song normally
+            
             return true;
         });
         
@@ -1239,14 +1284,23 @@ class ModRajio extends Module {
         this._pending = setTimeout(() => {
         
             this.abortskip();
-            
+        
             let ender = () => {
-                if (this._play) {
-                    this.remember(this._play);
-                }
-                if (!this._pause) {
-                    this.playSong();
-                }
+            
+                let llisteners = this.listeners.length;
+                let decreases = this.decreaseremaining();
+                Promise.all(decreases).then(() => {
+                    if (decreases.length >= llisteners) return; 
+            
+                    if (this._play) {
+                        this.remember(this._play);
+                    }
+                    if (!this._pause) {
+                        this.playSong();
+                    }
+                                
+                });
+                
             };
             
             if (song.format == 'pcm') {
@@ -1463,6 +1517,12 @@ class ModRajio extends Module {
         this._pendingwithdraw[userid] = null;
     }
     
+    clearautoend(userid) {
+        if (this._userremaining[userid]) {
+            delete this._userremaining[userid];
+        }
+    }
+    
     
     //Abort request to skip current song
     
@@ -1482,6 +1542,28 @@ class ModRajio extends Module {
         this._skipper = {};
     }
     
+    //Decrease counters for automatically ending listening sessions
+    
+    decreaseremaining(ignoredeafs) {
+        let removals = [];
+        if (this.dchan) {
+            let members = this.dchan.members;
+            for (let userid in this._userremaining) {
+                if (members.get(userid) && (ignoredeafs || !members.get(userid).deaf)) {
+                    
+                    //Request removal
+                    this._userremaining[userid] -= 1;
+                    if (this._userremaining[userid] < 1) {
+                        delete this._userremaining[userid];
+                        let promiseremoval = members.get(userid).setVoiceChannel(null);
+                        removals.push(promiseremoval);
+                    }
+                    
+                }
+            }
+        }
+        return removals;
+    }
     
     //Remember played song
     
