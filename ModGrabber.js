@@ -861,7 +861,7 @@ class ModGrabber extends Module {
                     return;
                 }
                 
-                let length = info.length_seconds || info.duration || 0;
+                let length = info.length_seconds || info.duration || info.videoDetails.length_seconds || 0;
                 
                 if (!mp.interval && length < this.param('minDuration') || mp.interval && mp.interval[1] - mp.interval[0] < this.param('minDuration')
                         || length > this.param('maxDuration') && (!mp.interval || mp.interval[1] - mp.interval[0] > this.param('maxDuration'))) {
@@ -883,6 +883,11 @@ class ModGrabber extends Module {
                 }
                 for (let dkeyword of mp.info.keywords) {
                     keywords.push(dkeyword);
+                }
+                
+                let loudness = null;
+                if (info.player_response && info.player_response.playerConfig && typeof info.player_response.playerConfig.audioConfig == "object") {
+                    loudness = parseFloat(info.player_response.playerConfig.audioConfig.perceptualLoudnessDb);
                 }
                 
                 this.log('Grabbing from youtube: ' + url);
@@ -926,9 +931,9 @@ class ModGrabber extends Module {
                         length: parseInt(length),
                         source: url,
                         sourceType: 'youtube',
-                        sourceSpecificId: info.video_id,
-                        sourceLoudness: parseFloat(info.loudness),
-                        name: info.title,
+                        sourceSpecificId: info.video_id || info.videoDetails.video_id,
+                        sourceLoudness: loudness,
+                        name: info.title || info.videoDetails.title,
                         author: '',
                         album: '',
                         keywords: keywords
