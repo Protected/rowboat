@@ -1411,11 +1411,12 @@ class ModGrabber extends Module {
         if (this._downloads >= this.param('maxSimDownloads')) return;
         let item = this._scanQueue.shift();
         if (!item) return;
-        if (!item[1]) item[1] = {};
         if (!item[2]) item[2] = false;
         if (item[0].hash) {
+            if (!item[1]) item[1] = this.param('defaultFormat');
             this.reGrab(item[0], item[1], item[2]);
         } else {
+            if (!item[1]) item[1] = {};
             this.grabInMessage(item[0], item[1], item[2]);
         }
     }
