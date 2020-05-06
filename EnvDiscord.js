@@ -49,13 +49,13 @@ class EnvDiscord extends Environment {
         return this._localClient.prepareClient(this, this.param('token'), this.param('sendDelay'))
             .then((client) => {
                 this._client = client;
-                this._server = client.guilds.find(s => s.name == params.servername);
+                this._server = client.guilds.cache.find(s => s.name == params.servername);
                 
                 if (!this._server) {
                     this.log('error', "Could not obtain server object.");
                 }
                 
-                this._channels[params.defaultchannel] = this._server.channels.filter(channel => channel.type == "text").find(channel => channel.name == params.defaultchannel);
+                this._channels[params.defaultchannel] = this._server.channels.cache.filter(channel => channel.type == "text").find(channel => channel.name == params.defaultchannel);
                 
                 this._localClient.on("message", (message) => {
                     if (message.author.username == client.user.username) return;
@@ -81,7 +81,7 @@ class EnvDiscord extends Environment {
                     if (chans.length) {
                         this.triggerJoin(member.id, chans, {reason: "add"});
                     }
-                    let roles = member.roles.array();
+                    let roles = member.roles.cache.array();
                     for (let role of roles) {
                         this.emit('gotRole', this, member.id, role.id);
                     }
@@ -96,7 +96,7 @@ class EnvDiscord extends Environment {
                     if (chans.length) {
                         this.triggerPart(member.id, chans, {reason: "remove"});
                     }
-                    let roles = member.roles.array();
+                    let roles = member.roles.cache.array();
                     for (let role of roles) {
                         this.emit('lostRole', this, member.id, role.id);
                     }
@@ -135,14 +135,14 @@ class EnvDiscord extends Environment {
                     //Roles
                     
                     had = {};
-                    for (let role of oldMember.roles) {
+                    for (let role of oldMember.roles.cache) {
                         had[role.id] = role;
                     }
                     
                     let toget = [];
                     let tolose = [];
                     
-                    for (let role of newMember.roles) {
+                    for (let role of newMember.roles.cache) {
                         if (!had[role.id]) toget.push(role);
                         else delete had[role.id];
                     }
@@ -174,7 +174,7 @@ class EnvDiscord extends Environment {
                     }
                     if (!reason) return;
                     
-                    let member = this._server.members.get(newUser.id);
+                    let member = this._server.members.cache.get(newUser.id);
                     if (!member) return;
                     let chans = this.findAccessChannels(member);
                     
@@ -223,7 +223,7 @@ class EnvDiscord extends Environment {
     
 
     idToDisplayName(id) {
-        let member = this._server.members.get(id);
+        let member = this._server.members.cache.get(id);
         if (member) return (member.nickname ? member.nickname : member.user.username);
         return id;
     }
@@ -234,14 +234,14 @@ class EnvDiscord extends Environment {
 
         let parts = displayname.split("#");
         if (parts[1]) {
-            refuser = this._server.members.filter(member => member.user.username == parts[0]).find(member => member.user.discriminator == parts[1]);
+            refuser = this._server.members.cache.filter(member => member.user.username == parts[0]).find(member => member.user.discriminator == parts[1]);
         } else {
-            let cache = this._server.members.filter(member => member.user.username == displayname).array();
+            let cache = this._server.members.cache.filter(member => member.user.username == displayname).array();
             if (cache.length == 1) {
                 refuser = cache[0];
             } else {
                 displayname = displayname.toLowerCase();
-                refuser = this._server.members.find(member => member.nickname && member.nickname.toLowerCase() == displayname);
+                refuser = this._server.members.cache.find(member => member.nickname && member.nickname.toLowerCase() == displayname);
             }
         }
 
@@ -259,11 +259,11 @@ class EnvDiscord extends Environment {
     
     
     idIsSecured(id) {
-        return !!this._server.members.get(id);
+        return !!this._server.members.cache.get(id);
     }
     
     idIsAuthenticated(id) {
-        return !!this._server.members.get(id);
+        return !!this._server.members.cache.get(id);
     }
     
     
@@ -276,11 +276,6 @@ class EnvDiscord extends Environment {
         if (targetchan.type == "dm" || !targetchan.type) return [targetchan.recipient.id];
         
         let ids = [];
-        if (targetchan.type == "group") {
-            for (let user of targetchan.recipients.array()) {
-                ids.push(user.id);
-            }
-        }
         if (targetchan.type == "text") {
             for (let member of targetchan.members.array()) {
                 ids.push(member.id);
@@ -292,10 +287,10 @@ class EnvDiscord extends Environment {
     
     
     listUserRoles(id, channel) {
-        let member = this._server.members.get(id);
+        let member = this._server.members.cache.get(id);
         if (!member) return [];
         let result = [];
-        let roles = member.roles.array().sort((a, b) => (b.position - a.position));
+        let roles = member.roles.cache.array().sort((a, b) => (b.position - a.position));
         for (let role of roles) {
             result.push(role.id);
         }
@@ -304,7 +299,7 @@ class EnvDiscord extends Environment {
     
     
     channelIdToDisplayName(channelid) {
-        let channel = this._server.channels.get(channelid);
+        let channel = this._server.channels.cache.get(channelid);
         if (channel) return channel.name;
         return channelid;
     }
@@ -318,14 +313,14 @@ class EnvDiscord extends Environment {
     
     
     roleIdToDisplayName(roleid) {
-        let role = this._server.roles.get(roleid);
+        let role = this._server.roles.cache.get(roleid);
         if (role) return role.name;
         return roleid;
     }
     
     
     displayNameToRoleId(displayName) {
-        let role = this._server.roles.find(r => r.name == displayName);
+        let role = this._server.roles.cache.find(r => r.name == displayName);
         if (role) return role.id;
         return null;
     }
@@ -333,19 +328,19 @@ class EnvDiscord extends Environment {
     
     normalizeFormatting(text) {
         text = String(text).replace(/<@&([0-9]+)>/g, (match, id) => {
-            let role = this._server.roles.get(id);
+            let role = this._server.roles.cache.get(id);
             if (!role) return "";
             return "@" + role.name;
         });
         
         text = text.replace(/<@!?([0-9]+)>/g, (match, id) => {
-            let user = this._server.members.get(id);
+            let user = this._server.members.cache.get(id);
             if (!user) return "";
             return "@" + (user.nickname ? user.nickname : user.user.username);
         });
         
         text = text.replace(/<#([0-9]+)>/g, (match, id) => {
-            let chan = this._server.channels.get(id);
+            let chan = this._server.channels.cache.get(id);
             if (!chan) return "";
             return "#" + chan.name;
         });
@@ -371,16 +366,16 @@ class EnvDiscord extends Environment {
 
         if (typeof targetid == "string") {
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.channels.filter(channel => channel.type == "text").get(targetid);
+                this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == "text").get(targetid);
             }
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.members.get(targetid);
+                this._channels[targetid] = this._server.members.cache.get(targetid);
             }
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.channels.filter(channel => channel.type == "text").find(channel => channel.name == targetid);
+                this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == "text").find(channel => channel.name == targetid);
             }
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.members.find(channel => channel.name == targetid);
+                this._channels[targetid] = this._server.members.cache.find(channel => channel.name == targetid);
             }
             if (this._channels[targetid]) {
                 targetchan = this._channels[targetid];
@@ -397,7 +392,7 @@ class EnvDiscord extends Environment {
         let channels = [];
         if (!member) return channels;
         
-        let allchannels = member.guild.channels.array();
+        let allchannels = member.guild.channels.cache.array();
         for (let channel of allchannels) {
             let pfm = channel.permissionsFor(member);
             if (!pfm || !pfm.has) continue;

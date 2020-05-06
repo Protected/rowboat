@@ -67,7 +67,7 @@ class ModPingDiscord extends Module {
             this._avg = null;
             this._max = null;
             
-            let channel = env.server.channels.get(channelid);
+            let channel = env.server.channels.cache.get(channelid);
             
             //Receive message. Update stats. Call next().
             let pinger = (message) => {

@@ -185,7 +185,7 @@ class ModActivity extends Module {
             environments: ["Discord"]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
             
-            let role = env.server.roles.find(r => r.name == args.role);
+            let role = env.server.roles.cache.find(r => r.name == args.role);
             let registers = {};
             
             for (let member of role.members.array()) {

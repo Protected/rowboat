@@ -130,7 +130,7 @@ class DiscordClient extends ModernEventEmitter {
         for (let rawchannelid in packages) {
             let pack = packages[rawchannelid];
             
-            //The message (as delivered to Discord) must end at the first RichEmbed (API only supports one per message)
+            //The message (as delivered to Discord) must end at the first MessageEmbed (API only supports one per message)
             let msgparts = [];
             let embed = null;
             for (let message of pack.messages) {
@@ -180,7 +180,7 @@ class DiscordClient extends ModernEventEmitter {
     }
     
     
-    //Outbox a string or RichEmbed
+    //Outbox a string or MessageEmbed
     outbox(discordchan, msg) {
         this._outbox.push([discordchan, msg]);
     }

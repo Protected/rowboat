@@ -1,10 +1,12 @@
-var winston = require('winston');
-var moment = require('moment');
+const winston = require('winston');
+const moment = require('moment');
 
-var pathTemplate = null;
-var path = null;
-var logger = null;
-var useConsole = false;
+const { MESSAGE } = require('triple-beam');
+
+let pathTemplate = null;
+let path = null;
+let logger = null;
+let useConsole = false;
 
 exports.setPathTemplate = function(newPathTemplate) {
     if (pathTemplate == newPathTemplate) return;
@@ -18,32 +20,33 @@ exports.enableConsole = function() {
 }
 
 
+const logFormat = winston.format((info, opts) => {
+    let result = moment().format('YYYY-MM-DD HH:mm:ss') + ' [' + info.level.toUpperCase() + '] ';
+    if (typeof info.message == "object") {
+        result += "<<<\n" + JSON.stringify(info.message) + "\n>>>";
+    } else {
+        result += info.message;
+    }
+    info[MESSAGE] = result;
+    return info;
+});
+
+
 function ready() {
     if (!pathTemplate) return false;
     
-    var desiredPath = moment().format(pathTemplate);
+    let desiredPath = moment().format(pathTemplate);
     if (!logger || path != desiredPath) {
         path = desiredPath;
         console.log('Log open: ' + path);
 
-        logger = new (winston.Logger)({
+        logger = winston.createLogger({
             transports: [
                 new (winston.transports.File)({
-                    filename: path,
-                    json: false,
-                    timestamp: () => moment().format('YYYY-MM-DD HH:mm:ss'),
-                    prettyPrint: true,
-                    formatter: (args) => {
-                        var result = moment().format('YYYY-MM-DD HH:mm:ss') + ' [' + args.level.toUpperCase() + '] ';
-                        if (typeof args.message == "object") {
-                            result += "<<<\n" + JSON.stringify(args.message) + "\n>>>";
-                        } else {
-                            result += args.message;
-                        }
-                        return result;
-                    }
+                    filename: path
                 })
-            ]
+            ],
+            format: logFormat()
         });
         
         if (useConsole) {
@@ -57,7 +60,7 @@ function ready() {
 }
 
 
-var log = exports.log = function(method, subject) {
+let log = exports.log = function(method, subject) {
     
     if (!ready()) {
         if (typeof subject != "object") {

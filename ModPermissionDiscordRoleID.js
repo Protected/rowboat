@@ -27,13 +27,13 @@ class ModPermissionDiscordRoleID extends Module {
             let env = opt.envs[passedname];
             if (env.envName != 'Discord') return [];
         
-            let member = env.server.members.get(userid);
+            let member = env.server.members.cache.get(userid);
             if (!member) return [];
             
             let result = [];
         
             for (let permission of permissions) {
-                let role = member.roles.get(permission);
+                let role = member.roles.cache.get(permission);
                 if (role) result.push(permission);
             }
         

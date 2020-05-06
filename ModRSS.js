@@ -29,7 +29,7 @@ class ModRSS extends Module {
         'timer',                //Timer interval (s)
         'timeout',              //Timeout for HTTP requests (ms)
         'timestampformat',      //Display format for timestamps
-        'richembed',            //Whether to use richembeds in Discord environments
+        'richembed',            //Whether to use messageembeds in Discord environments
         'color',                //Default color hint for feeds (Discord richembeds only)
     ]; }
 
@@ -366,7 +366,7 @@ class ModRSS extends Module {
             let msg;
 
             if (env.envName == "Discord" && this.param("richembed")) {
-                msg = new discord.RichEmbed();
+                msg = new discord.MessageEmbed();
 
                 msg.setColor(feed.color || this.param("color"));
                 msg.setTitle(feed.name);
@@ -593,7 +593,7 @@ class ModRSS extends Module {
 
         if (env.envName == "Discord" && this.param("richembed")) {
 
-            msg = new discord.RichEmbed();
+            msg = new discord.MessageEmbed();
             msg.setColor(feed.color || this.param("color"));
             msg.setTitle(entry.title);
             msg.setAuthor(feed.name);

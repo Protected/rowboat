@@ -160,7 +160,7 @@ class ModSongRanking extends Module {
 
         this.grabber.registerOnGrabscanExists((messageObj, messageAuthor, reply, hash) => {
 
-            for (let messageReaction of messageObj.reactions.array()) {
+            for (let messageReaction of messageObj.reactions.cache.array()) {
                 let emojiname = '';
                 let extr = emoji.toShort(messageReaction.emoji.name).match(/\:([^:]+)\:/);
                 if (!extr) continue;

@@ -6,8 +6,17 @@ const moment = require('moment');
 const fs = require('fs');
 const cp = require('child_process');
 
+const { MESSAGE } = require('triple-beam');
+
 const PERM_ADMIN = 'administrator';
 const PERM_MODERATOR = 'moderator';
+
+
+const logFormat = winston.format((info, opts) => {
+    info[MESSAGE] = info.message;
+    return info;
+});
+
 
 class ModLogger extends Module {
 
@@ -236,16 +245,13 @@ class ModLogger extends Module {
             log.openPath = desiredPath;
             this.log('Log open: ' + desiredPath);
 
-            log.logger = new (winston.Logger)({
+            log.logger = winston.createLogger({
                 transports: [
                     new (winston.transports.File)({
-                        filename: log.openPath,
-                        json: false,
-                        timestamp: () => "",
-                        prettyPrint: true,
-                        formatter: (args) => args.message
+                        filename: log.openPath
                     })
-                ]
+                ],
+                format: logFormat()
             });
         }
         

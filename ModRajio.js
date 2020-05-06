@@ -32,6 +32,7 @@ class ModRajio extends Module {
         'historysize',          //Maximum amount of recently played songs to remember
         'referenceloudness',    //Negative decibels; Play youtube songs with higher loudness at a lower volume to compensate
         'volume',               //Global volume multipler; Defaults to 1.0 and can be changed via command
+        'fec',                  //Forward error correction (true/false)
         
         'announcechannel',      //ID of a Discord text channel to announce rajio status information to
         'announcedelay',        //Minimum seconds between song announces
@@ -94,6 +95,7 @@ class ModRajio extends Module {
         this._params['historysize'] = 20;
         this._params['referenceloudness'] = -20;
         this._params['volume'] = 1.0;
+        this._params['fec'] = false;
         
         this._params['announcechannel'] = null;
         this._params['announcedelay'] = 0;
@@ -215,7 +217,7 @@ class ModRajio extends Module {
     }
     
     get dchan() {
-        return this.denv.server.channels.get(this._channel);
+        return this.denv.server.channels.cache.get(this._channel);
     }
     
     get listeners() {
@@ -571,14 +573,14 @@ class ModRajio extends Module {
             }
 
             if (args.channelid) {
-                let newchan = this.denv.server.channels.get(args.channelid);
+                let newchan = this.denv.server.channels.cache.get(args.channelid);
                 if (!newchan || newchan.type != "voice") {
                     ep.reply('There is no voice channel with the specified ID.');
                     return true;
                 }
                 this._channel = args.channelid;
             } else {
-                let me = this.denv.server.members.get(userid);
+                let me = this.denv.server.members.cache.get(userid);
                 if (me && me.voiceChannelID) {
                     this._channel = me.voiceChannelID;
                 }
@@ -1273,10 +1275,13 @@ class ModRajio extends Module {
                 att = Math.pow(10, (ref - song.sourceLoudness) / 20);
             }
         }
+        let volume = this._volume * att;
         
         let options = {
-            volume: this._volume * att,
-            seek: (seek ? Math.round(seek / 1000.0) : 0)
+            volume: (volume != 1 ? volume : false),
+            seek: (seek ? Math.round(seek / 1000.0) : 0),
+            highWaterMark: 64,
+            fec: this.param('fec')
         };
         
         this.grabber.setAdditionalStats(this.metaprefix + '.playing', song.hash);
@@ -1304,9 +1309,10 @@ class ModRajio extends Module {
             };
             
             if (song.format == 'pcm') {
-                vc.playConvertedStream(fs.createReadStream(this.grabber.songPathByHash(song.hash)), options).once("end", ender);
+                options.type = 'converted';
+                vc.play(fs.createReadStream(this.grabber.songPathByHash(song.hash)), options).once("finish", ender);
             } else {
-                vc.playFile(this.grabber.songPathByHash(song.hash), options).once("end", ender);
+                vc.play(this.grabber.songPathByHash(song.hash), options).once("finish", ender);
             }
             
             this._pending = null;
@@ -1338,7 +1344,7 @@ class ModRajio extends Module {
         if (vc && vc.dispatcher) {
             this._play = null;
             this._pause = true;  //Hack to stop the end event from playing next song
-            vc.dispatcher.end();
+            vc.dispatcher.destroy();
         }
         
         this._pause = null;
@@ -1360,7 +1366,7 @@ class ModRajio extends Module {
         
         this._pause = [this._play, vc.dispatcher.time];
         this._play = null;
-        vc.dispatcher.end();
+        vc.dispatcher.destroy();
         
         this._expirepause = setTimeout(() => {
             this.log('Expiring paused song: ' + this._pause[0].hash);

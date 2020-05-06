@@ -75,7 +75,7 @@ class ModDiscordChannels extends Module {
                             && this.checkSecsSinceLastUsed(env, item.channelid) > this.param("autodelvoice")) {
 
                         if (data.type == "voice") {
-                            let channel = env.server.channels.get(item.channelid);
+                            let channel = env.server.channels.cache.get(item.channelid);
                             if (channel && channel.members.array().length) continue;
                         }
                         
@@ -149,10 +149,10 @@ class ModDiscordChannels extends Module {
             for (let item of this.listAttachedChannels(env)) {
                 if (!this.isUserChannelOwner(env, item.channelid, oldmember.id)) continue;
                 let data = this.getChannelData(env, item.channelid);
-                if (oldmember.roles.get(data.opsroleid) && !newmember.roles.get(data.opsroleid)) {
-                    let role = env.server.roles.get(data.opsroleid);
+                if (oldmember.roles.cache.get(data.opsroleid) && !newmember.roles.cache.get(data.opsroleid)) {
+                    let role = env.server.roles.cache.get(data.opsroleid);
                     if (!role) continue;
-                    promises.push(newmember.addRole(role, "Restoring opsrole to attached channel owner"));
+                    promises.push(newmember.roles.add(role, "Restoring opsrole to attached channel owner"));
                 }
             }
 
@@ -181,7 +181,7 @@ class ModDiscordChannels extends Module {
                     changes = true;
                 }
                 if (data.opsroleid == role.id) {
-                    let channel = env.server.channels.get(item.channelid);
+                    let channel = env.server.channels.cache.get(item.channelid);
                     if (channel) {
                         promises.push(
                             this.doCreateOpsRole(env, item.name, channel.type)
@@ -301,12 +301,12 @@ class ModDiscordChannels extends Module {
                 return true;
             }
 
-            if (!env.server.channels.get(targetchannelid)) {
+            if (!env.server.channels.cache.get(targetchannelid)) {
                 ep.reply("A channel with this ID could not be found.");
                 return true;
             }
 
-            if (args.roleid && !env.server.roles.get(args.roleid)) {
+            if (args.roleid && !env.server.roles.cache.get(args.roleid)) {
                 ep.reply("A role with this ID could not be found.");
                 return true;
             }
@@ -375,10 +375,10 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find(c => c.name == args.channel);
+                let channel = env.server.channels.cache.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
-                } else if (env.server.channels.get(args.channel)) {
+                } else if (env.server.channels.cache.get(args.channel)) {
                     targetchannelid = args.channel;
                 } else {
                     ep.reply("Channel not found.");
@@ -397,7 +397,7 @@ class ModDiscordChannels extends Module {
             }
 
             let targetuserid = env.displayNameToId(args.user) || args.user;
-            if (!env.server.members.get(targetuserid)) {
+            if (!env.server.members.cache.get(targetuserid)) {
                 ep.reply("User not found.");
                 return true;
             }
@@ -426,10 +426,10 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find(c => c.name == args.channel);
+                let channel = env.server.channels.cache.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
-                } else if (env.server.channels.get(args.channel)) {
+                } else if (env.server.channels.cache.get(args.channel)) {
                     targetchannelid = args.channel;
                 } else {
                     ep.reply("Channel not found.");
@@ -450,7 +450,7 @@ class ModDiscordChannels extends Module {
             }
 
             let targetuserid = env.displayNameToId(args.user) || args.user;
-            if (!env.server.members.get(targetuserid)) {
+            if (!env.server.members.cache.get(targetuserid)) {
                 ep.reply("User not found.");
                 return true;
             }
@@ -507,10 +507,10 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find(c => c.name == args.channel);
+                let channel = env.server.channels.cache.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
-                } else if (env.server.channels.get(args.channel)) {
+                } else if (env.server.channels.cache.get(args.channel)) {
                     targetchannelid = args.channel;
                 } else {
                     ep.reply("Channel not found.");
@@ -572,10 +572,10 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find(c => c.name == args.channel);
+                let channel = env.server.channels.cache.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
-                } else if (env.server.channels.get(args.channel)) {
+                } else if (env.server.channels.cache.get(args.channel)) {
                     targetchannelid = args.channel;
                 } else {
                     ep.reply("Channel not found.");
@@ -627,10 +627,10 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find(c => c.name == args.channel);
+                let channel = env.server.channels.cache.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
-                } else if (env.server.channels.get(args.channel)) {
+                } else if (env.server.channels.cache.get(args.channel)) {
                     targetchannelid = args.channel;
                 } else {
                     ep.reply("Channel not found.");
@@ -684,10 +684,10 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find(c => c.name == args.channel);
+                let channel = env.server.channels.cache.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
-                } else if (env.server.channels.get(args.channel)) {
+                } else if (env.server.channels.cache.get(args.channel)) {
                     targetchannelid = args.channel;
                 } else {
                     ep.reply("Channel not found.");
@@ -712,10 +712,10 @@ class ModDiscordChannels extends Module {
 
             let roleid = null;
             if (args.role && args.role != "-") {
-                let role = env.server.roles.find(r => r.name == args.role);
+                let role = env.server.roles.cache.find(r => r.name == args.role);
                 if (role) {
                     roleid = role.id;
-                } else if (env.server.roles.get(args.role)) {
+                } else if (env.server.roles.cache.get(args.role)) {
                     roleid = args.role;
                 } else {
                     ep.reply("Role not found.");
@@ -731,8 +731,8 @@ class ModDiscordChannels extends Module {
             if (prevaccessroleid && !roleid) {
                 //Unsetting access role: Give individual access permission to role users
                 let changeusers = [];
-                let channel = env.server.channels.get(targetchannelid);
-                let accessrole = env.server.roles.get(prevaccessroleid);
+                let channel = env.server.channels.cache.get(targetchannelid);
+                let accessrole = env.server.roles.cache.get(prevaccessroleid);
                 if (channel && accessrole) {
                     for (let rolemember of accessrole.members.array()) {
                         changeusers.push(channel.overwritePermissions(rolemember, {VIEW_CHANNEL: true}, "Propagating permission to access role members on removal"));
@@ -776,10 +776,10 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find(c => c.name == args.channel);
+                let channel = env.server.channels.cache.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
-                } else if (env.server.channels.get(args.channel)) {
+                } else if (env.server.channels.cache.get(args.channel)) {
                     targetchannelid = args.channel;
                 } else {
                     ep.reply("Channel not found.");
@@ -798,7 +798,7 @@ class ModDiscordChannels extends Module {
             }
 
             let targetuserid = env.displayNameToId(args.newowner) || args.newowner;
-            if (!env.server.members.get(targetuserid)) {
+            if (!env.server.members.cache.get(targetuserid)) {
                 ep.reply("User not found.");
                 return true;
             }
@@ -829,10 +829,10 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find(c => c.name == args.channel);
+                let channel = env.server.channels.cache.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
-                } else if (env.server.channels.get(args.channel)) {
+                } else if (env.server.channels.cache.get(args.channel)) {
                     targetchannelid = args.channel;
                 } else {
                     ep.reply("Channel not found.");
@@ -875,10 +875,10 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find(c => c.name == args.channel);
+                let channel = env.server.channels.cache.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
-                } else if (env.server.channels.get(args.channel)) {
+                } else if (env.server.channels.cache.get(args.channel)) {
                     targetchannelid = args.channel;
                 } else {
                     ep.reply("Channel not found.");
@@ -925,10 +925,10 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find(c => c.name == args.channel);
+                let channel = env.server.channels.cache.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
-                } else if (env.server.channels.get(args.channel)) {
+                } else if (env.server.channels.cache.get(args.channel)) {
                     targetchannelid = args.channel;
                 } else {
                     ep.reply("Channel not found.");
@@ -981,10 +981,10 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find(c => c.name == args.channel);
+                let channel = env.server.channels.cache.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
-                } else if (env.server.channels.get(args.channel)) {
+                } else if (env.server.channels.cache.get(args.channel)) {
                     targetchannelid = args.channel;
                 } else {
                     ep.reply("Channel not found.");
@@ -1045,10 +1045,10 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find(c => c.name == args.channel);
+                let channel = env.server.channels.cache.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
-                } else if (env.server.channels.get(args.channel)) {
+                } else if (env.server.channels.cache.get(args.channel)) {
                     targetchannelid = args.channel;
                 } else {
                     ep.reply("Channel not found.");
@@ -1098,10 +1098,10 @@ class ModDiscordChannels extends Module {
                 return true;
             }
 
-            let targetchannelid, channel = env.server.channels.filter(channel => channel.type == reqtype).find(c => c.name == args.channel);
+            let targetchannelid, channel = env.server.channels.cache.filter(channel => channel.type == reqtype).find(c => c.name == args.channel);
             if (channel) {
                 targetchannelid = channel.id;
-            } else if (env.server.channels.get(args.channel)) {
+            } else if (env.server.channels.cache.get(args.channel)) {
                 targetchannelid = args.channel;
             }
 
@@ -1239,10 +1239,10 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find(c => c.name == args.channel);
+                let channel = env.server.channels.cache.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
-                } else if (env.server.channels.get(args.channel)) {
+                } else if (env.server.channels.cache.get(args.channel)) {
                     targetchannelid = args.channel;
                 } else {
                     ep.reply("Channel not found.");
@@ -1315,10 +1315,10 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find(c => c.name == args.channel);
+                let channel = env.server.channels.cache.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
-                } else if (env.server.channels.get(args.channel)) {
+                } else if (env.server.channels.cache.get(args.channel)) {
                     targetchannelid = args.channel;
                 } else {
                     ep.reply("Channel not found.");
@@ -1342,7 +1342,7 @@ class ModDiscordChannels extends Module {
             }
 
             let targetuserid = env.displayNameToId(args.user) || args.user;
-            if (!env.server.members.get(targetuserid)) {
+            if (!env.server.members.cache.get(targetuserid)) {
                 ep.reply("User not found.");
                 return true;
             }
@@ -1380,10 +1380,10 @@ class ModDiscordChannels extends Module {
             if (!args.channel || args.channel == "-") {
                 targetchannelid = channelid;
             } else {
-                let channel = env.server.channels.find(c => c.name == args.channel);
+                let channel = env.server.channels.cache.find(c => c.name == args.channel);
                 if (channel) {
                     targetchannelid = channel.id;
-                } else if (env.server.channels.get(args.channel)) {
+                } else if (env.server.channels.cache.get(args.channel)) {
                     targetchannelid = args.channel;
                 } else {
                     ep.reply("Channel not found.");
@@ -1407,7 +1407,7 @@ class ModDiscordChannels extends Module {
             }
 
             let targetuserid = env.displayNameToId(args.user) || args.user;
-            if (!env.server.members.get(targetuserid)) {
+            if (!env.server.members.cache.get(targetuserid)) {
                 ep.reply("User not found.");
                 return true;
             }
@@ -1466,21 +1466,21 @@ class ModDiscordChannels extends Module {
 
     isUserChannelOp(env, channelid, userid) {
         if (!this.isChannelAttached(env, channelid)) return false;
-        let member = env.server.members.get(userid);
+        let member = env.server.members.cache.get(userid);
         if (!member) return false;
-        return !!member.roles.get(this._data[env.name][channelid].opsroleid);
+        return !!member.roles.cache.get(this._data[env.name][channelid].opsroleid);
     }
 
     isUserChannelMember(env, channelid, userid) {
         if (!this.isChannelAttached(env, channelid)) return false;
         let data = this._data[env.name][channelid];
         if (data.accessroleid) {
-            let role = env.server.roles.get(data.accessroleid);
+            let role = env.server.roles.cache.get(data.accessroleid);
             if (!role) return false;
             return !!role.members.get(userid);
         } else {
-            let channel = env.server.channels.get(channelid);
-            let member = env.server.members.get(userid);
+            let channel = env.server.channels.cache.get(channelid);
+            let member = env.server.members.cache.get(userid);
             return !!channel.permissionOverwrites.filter((po) => po.id == member.id && po.type == 'member' && (po.allow & 0x00000400)).array().length;            
         }
     }
@@ -1490,7 +1490,7 @@ class ModDiscordChannels extends Module {
         if (!this._data[env.name]) return [];
         let result = [];
         for (let channelid in this._data[env.name]) {
-            let channel = env.server.channels.get(channelid);
+            let channel = env.server.channels.cache.get(channelid);
             result.push({channelid: channelid, name: (channel ? channel.name : channelid)});
         }
         result.sort((a, b) => a.name.localeCompare(b.name));
@@ -1500,7 +1500,7 @@ class ModDiscordChannels extends Module {
     getChannelData(env, channelid) {
         if (!this.isChannelAttached(env, channelid)) return false;
         let data = Object.assign({}, this._data[env.name][channelid]);
-        let channel = env.server.channels.get(channelid);
+        let channel = env.server.channels.cache.get(channelid);
         if (channel) data.name = channel.name;
         return data;
     }
@@ -1508,7 +1508,7 @@ class ModDiscordChannels extends Module {
     listChannelOps(env, channelid) {
         let data = this.getChannelData(env, channelid);
         if (!data) return false;
-        let role = env.server.roles.get(data.opsroleid);
+        let role = env.server.roles.cache.get(data.opsroleid);
         if (!role) return false;
         let results = [];
         for (let member of role.members.array()) {
@@ -1522,15 +1522,15 @@ class ModDiscordChannels extends Module {
         if (!data) return false;
         let results = [];
         if (data.accessroleid) {
-            let role = env.server.roles.get(data.accessroleid);
+            let role = env.server.roles.cache.get(data.accessroleid);
             if (!role) return false;
             for (let member of role.members.array()) {
                 if (member.id == env.server.me.id) continue;
                 results.push(member.id);
             }
         } else {
-            let channel = env.server.channels.get(channelid);
-            for (let member of env.server.members.array()) {
+            let channel = env.server.channels.cache.get(channelid);
+            for (let member of env.server.members.cache.array()) {
                 if (member.id == env.server.me.id) continue;
                 if (!channel.permissionOverwrites.filter((po) => po.id == member.id && po.type == 'member' && (po.allow & 0x00000400)).array().length) continue;
                 results.push(member.id);
@@ -1546,7 +1546,7 @@ class ModDiscordChannels extends Module {
             return this._data[env.name][channelid];
         }
 
-        let channel = env.server.channels.get(channelid);
+        let channel = env.server.channels.cache.get(channelid);
         if (!channel) throw "Channel not found.";
 
         let opsrole = await this.doCreateOpsRole(env, channel.name, channel.type);
@@ -1576,23 +1576,23 @@ class ModDiscordChannels extends Module {
     }
 
     channelOp(env, channelid, userid) {
-        if (!env.server.members.get(userid)) return Promise.reject("User not found.");
+        if (!env.server.members.cache.get(userid)) return Promise.reject("User not found.");
         if (!this.isChannelAttached(env, channelid)) return Promise.reject("Channel not attached.");
         let roleid = this._data[env.name][channelid].opsroleid;
-        if (env.server.members.get(userid).roles.get(roleid)) return Promise.resolve();
-        let role = env.server.roles.get(roleid);
+        if (env.server.members.cache.get(userid).roles.cache.get(roleid)) return Promise.resolve();
+        let role = env.server.roles.cache.get(roleid);
         if (!role) return Promise.reject("Role not found.");
-        return env.server.members.get(userid).addRole(role, "Turning user into channel op");
+        return env.server.members.cache.get(userid).roles.add(role, "Turning user into channel op");
     }
 
     channelDeop(env, channelid, userid) {
-        if (!env.server.members.get(userid)) return Promise.reject("User not found.");
+        if (!env.server.members.cache.get(userid)) return Promise.reject("User not found.");
         if (!this.isChannelAttached(env, channelid)) return Promise.reject("Channel not attached.");
         let roleid = this._data[env.name][channelid].opsroleid;
-        if (!env.server.members.get(userid).roles.get(roleid)) return Promise.resolve();
-        let role = env.server.roles.get(roleid);
+        if (!env.server.members.cache.get(userid).roles.cache.get(roleid)) return Promise.resolve();
+        let role = env.server.roles.cache.get(roleid);
         if (!role) return Promise.reject("Role not found.");
-        return env.server.members.get(userid).removeRole(role, "Demoting user from channel op");
+        return env.server.members.cache.get(userid).roles.remove(role, "Demoting user from channel op");
     }
 
     channelSetKey(env, channelid, key) {
@@ -1618,7 +1618,7 @@ class ModDiscordChannels extends Module {
 
     async channelSetPublic(env, channelid) {
         if (!this._data[env.name] || !this._data[env.name][channelid]) throw "Channel not attached.";
-        let channel = env.server.channels.get(channelid);
+        let channel = env.server.channels.cache.get(channelid);
         if (!channel) throw "Channel not found.";
         await channel.overwritePermissions(env.server.id, {VIEW_CHANNEL: true}, "Changing channel to public");
         this._data[env.name][channelid].public = true;
@@ -1628,7 +1628,7 @@ class ModDiscordChannels extends Module {
 
     async channelSetPrivate(env, channelid) {
         if (!this._data[env.name] || !this._data[env.name][channelid]) throw "Channel not attached.";
-        let channel = env.server.channels.get(channelid);
+        let channel = env.server.channels.cache.get(channelid);
         if (!channel) throw "Channel not found.";
         await channel.overwritePermissions(env.server.id, {VIEW_CHANNEL: false}, "Changing channel to private");
         this._data[env.name][channelid].public = false;
@@ -1638,7 +1638,7 @@ class ModDiscordChannels extends Module {
 
     channelSetAccessRole(env, channelid, roleid) {
         if (!this._data[env.name] || !this._data[env.name][channelid]) return false;
-        if (roleid && !env.server.roles.get(roleid)) return false;
+        if (roleid && !env.server.roles.cache.get(roleid)) return false;
         this._data[env.name][channelid].accessroleid = (roleid ? roleid : null);
         this._data.save();
         return true;
@@ -1646,44 +1646,44 @@ class ModDiscordChannels extends Module {
 
     channelSetOwner(env, channelid, userid) {
         if (!this._data[env.name] || !this._data[env.name][channelid]) return false;
-        if (!env.server.members.get(userid)) return false;
+        if (!env.server.members.cache.get(userid)) return false;
         this._data[env.name][channelid].creatorid = userid;
         this._data.save();
         return true;
     }
 
     userJoinChannel(env, channelid, userid) {
-        if (!env.server.members.get(userid)) return Promise.reject("User not found.");
+        if (!env.server.members.cache.get(userid)) return Promise.reject("User not found.");
         if (!this.isChannelAttached(env, channelid)) return Promise.reject("Channel not attached.");
         let channeldata = this._data[env.name][channelid];
         if (channeldata.accessroleid) {
-            if (env.server.members.get(userid).roles.get(channeldata.accessroleid)) return Promise.resolve({channeldata: channeldata, userid: userid});
-            return env.server.members.get(userid).addRole(channeldata.accessroleid, "Granting channel access to user")
+            if (env.server.members.cache.get(userid).roles.cache.get(channeldata.accessroleid)) return Promise.resolve({channeldata: channeldata, userid: userid});
+            return env.server.members.cache.get(userid).roles.add(channeldata.accessroleid, "Granting channel access to user")
                 .then(() => ({channeldata: channeldata, userid: userid}));
         } else {
-            let channel = env.server.channels.get(channelid);
+            let channel = env.server.channels.cache.get(channelid);
             if (!channel) return Promise.reject("Channel not found.");            
             if (channel.permissionOverwrites.filter((po) => po.id == userid && po.type == 'member' && (po.allow & 0x00000400)).get(userid)) {
                 return Promise.resolve({channeldata: channeldata, userid: userid});
             }
-            return channel.overwritePermissions(env.server.members.get(userid), {VIEW_CHANNEL: true}, "Granting channel access to user")
+            return channel.overwritePermissions(env.server.members.cache.get(userid), {VIEW_CHANNEL: true}, "Granting channel access to user")
                 .then(() => ({channeldata: channeldata, userid: userid}));
         }
     }
 
     async userPartChannel(env, channelid, userid) {
-        if (!env.server.members.get(userid)) throw "User not found.";
+        if (!env.server.members.cache.get(userid)) throw "User not found.";
         if (!this.isChannelAttached(env, channelid)) throw "Channel not attached.";
         let channeldata = this._data[env.name][channelid];
         if (this.isUserChannelOp(env, channelid, userid)) {
             await this.channelDeop(env, channelid, userid);
         }
         if (channeldata.accessroleid) {
-            if (!env.server.members.get(userid).roles.get(channeldata.accessroleid)) return {channeldata: channeldata, userid: userid};
-            return env.server.members.get(userid).removeRole(channeldata.accessroleid, "Revoking channel access from user")
+            if (!env.server.members.cache.get(userid).roles.cache.get(channeldata.accessroleid)) return {channeldata: channeldata, userid: userid};
+            return env.server.members.cache.get(userid).roles.remove(channeldata.accessroleid, "Revoking channel access from user")
                 .then(() => ({channeldata: channeldata, userid: userid}));
         } else {
-            let channel = env.server.channels.get(channelid);
+            let channel = env.server.channels.cache.get(channelid);
             if (!channel) throw "Channel not found.";
             let joinpermission = channel.permissionOverwrites.filter((po) => po.id == userid && po.type == 'member' && (po.allow & 0x00000400)).get(userid);
             if (joinpermission) return joinpermission.delete("Revoking channel access from user").then(() => ({channeldata: channeldata, userid: userid}));
@@ -1704,7 +1704,7 @@ class ModDiscordChannels extends Module {
         perms.push({id: role.id, allow: ['VIEW_CHANNEL', 'MANAGE_CHANNELS', 'MANAGE_MESSAGES']});
         let channel = await env.server.createChannel(name, "text", perms, "Temporary text channel");
         if (this.param("textcategory")) {
-            let category = env.server.channels.get(this.param("textcategory"));
+            let category = env.server.channels.cache.get(this.param("textcategory"));
             if (category) {
                 await channel.setParent(category, "Setting category of temporary text channel");
             }
@@ -1725,7 +1725,7 @@ class ModDiscordChannels extends Module {
         perms.push({id: role.id, allow: ['VIEW_CHANNEL', 'MANAGE_CHANNELS', 'MUTE_MEMBERS', 'DEAFEN_MEMBERS']});
         let channel = await env.server.createChannel(name, "voice", perms, "Temporary voice channel");
         if (this.param("voicecategory")) {
-            let category = env.server.channels.get(this.param("voicecategory"));
+            let category = env.server.channels.cache.get(this.param("voicecategory"));
             if (category) {
                 await channel.setParent(category, "Setting category of temporary voice channel");
             }
@@ -1739,7 +1739,7 @@ class ModDiscordChannels extends Module {
         let data = this.getChannelData(env, channelid);
         if (!data.temp) throw "Channel not temporary.";
         this._deleting[channelid] = true;
-        let channel = env.server.channels.get(channelid);
+        let channel = env.server.channels.cache.get(channelid);
         if (channel) await channel.delete("Deleting temporary channel");
         await this.doDestroyOpsRole(env, data.opsroleid);
         this.doDetachChannel(env, channelid);
@@ -1782,15 +1782,15 @@ class ModDiscordChannels extends Module {
     }
 
     doDestroyOpsRole(env, roleid) {
-        let role = env.server.roles.get(roleid);
+        let role = env.server.roles.cache.get(roleid);
         if (!role || !role.name.match(/:ops$/)) return Promise.reject("Role not found or not ops role.");
         return role.delete("Deleting ops role");
     }
 
     doAssignRoleToUser(env, roleid, userid, reason) {
-        if (!env.server.members.get(userid)) return Promise.reject("User not found.");
-        if (env.server.members.get(userid).roles.get(roleid)) return Promise.resolve();
-        return env.server.members.get(userid).addRole(roleid, reason);
+        if (!env.server.members.cache.get(userid)) return Promise.reject("User not found.");
+        if (env.server.members.cache.get(userid).roles.cache.get(roleid)) return Promise.resolve();
+        return env.server.members.cache.get(userid).roles.add(roleid, reason);
     }
 
     doTouchChannel(env, channelid) {

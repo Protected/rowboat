@@ -130,13 +130,13 @@ class ModFreeRoles extends Module {
 
                 role = roles[lcrole].name;
 
-                let roleobj = env.server.roles.find(r => r.name == role);
+                let roleobj = env.server.roles.cache.find(r => r.name == role);
                 if (!roleobj) {
                     ep.reply("The role \"" + role + "\" doesn't currently exist in this environment.");
                     continue;
                 }
 
-                if (member.roles.find(r => r.name == role)) {
+                if (member.roles.cache.find(r => r.name == role)) {
                     ep.reply('You already have the role "' + role + '".');
                     continue;
                 }
@@ -148,7 +148,7 @@ class ModFreeRoles extends Module {
                 return true;
             }
 
-            member.addRoles(rolestoadd, "Assignment requested by user.").then(() => {
+            member.roles.add(rolestoadd, "Assignment requested by user.").then(() => {
                 ep.reply("Role" + (rolestoadd.length != 1 ? "s" : "") + " \"" + rolestoadd.map(roleobj => roleobj.name).join("\", \"") + "\" successfully assigned!");
             }).catch((err) => {
                 ep.reply(err);
@@ -189,13 +189,13 @@ class ModFreeRoles extends Module {
 
                 role = roles[lcrole].name;
 
-                let roleobj = env.server.roles.find(r => r.name == role);
+                let roleobj = env.server.roles.cache.find(r => r.name == role);
                 if (!roleobj) {
                     ep.reply("The role \"" + role + "\" doesn't currently exist in this environment.");
                     continue;
                 }
 
-                if (!member.roles.find(r => r.name == role)) {
+                if (!member.roles.cache.find(r => r.name == role)) {
                     ep.reply("You don't have the role \"" + role + "\".");
                     continue;
                 }
@@ -207,7 +207,7 @@ class ModFreeRoles extends Module {
                 return true;
             }
 
-            member.removeRoles(rolestoremove, "Removal requested by user.").then(() => {
+            member.roles.remove(rolestoremove, "Removal requested by user.").then(() => {
                 ep.reply("Role" + (rolestoremove.length != 1 ? "s" : "") + " \"" + rolestoremove.map(roleobj => roleobj.name).join("\", \"") + "\" successfully unassigned!");
             }).catch((err) => {
                 ep.reply(err);
@@ -243,7 +243,7 @@ class ModFreeRoles extends Module {
                     role = roles[lcrole].name;
                 }
 
-                let roleobj = env.server.roles.find(r => r.name == role);
+                let roleobj = env.server.roles.cache.find(r => r.name == role);
                 if (!roleobj) {
                     ep.reply("The role \"" + role + "\" doesn't currently exist in this environment.");
                     return true;
@@ -314,7 +314,7 @@ class ModFreeRoles extends Module {
                     return true;
                 }
 
-                if (env.server.roles.find(r => r.name == role)) {
+                if (env.server.roles.cache.find(r => r.name == role)) {
                     ep.reply("The role \"" + role + "\" already exists in this environment.");
                     return true;
                 }
@@ -388,7 +388,7 @@ class ModFreeRoles extends Module {
             return false;
         }
         
-        let roleobj = env.server.roles.find(r => r.name == role);
+        let roleobj = env.server.roles.cache.find(r => r.name == role);
         if (!roleobj) {
             ep.reply("The role \"" + role + "\" doesn't currently exist in this environment.");
             return false;

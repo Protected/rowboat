@@ -160,7 +160,7 @@ class ModGrabber extends Module {
             permissions: [PERM_ADMIN]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            let channel = env.server.channels.get(args.channelid);
+            let channel = env.server.channels.cache.get(args.channelid);
             if (!channel) return false;
             
             let endNow = false;
@@ -170,7 +170,7 @@ class ModGrabber extends Module {
             
             let scanning = null;
             let scanner = () => {
-                channel.fetchMessages({
+                channel.messages.fetch({
                     limit: 100,
                     before: scanning
                 }).then((messages) => {
@@ -1617,7 +1617,7 @@ class ModGrabber extends Module {
     
     setUserStat(userid, field, value, nosave) {
         if (!this._stats.users[userid]) {
-            let guildmember = this.env(this.param('env')).server.members.get(userid);
+            let guildmember = this.env(this.param('env')).server.members.cache.get(userid);
             this._stats.users[userid] = {
                 displayname: this.env(this.param('env')).idToDisplayName(userid),
                 avatar: (guildmember ? guildmember.user.displayAvatarURL : null)

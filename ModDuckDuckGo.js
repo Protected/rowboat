@@ -25,7 +25,7 @@ class ModDuckDuckGo extends Module {
     constructor(name) {
         super('DuckDuckGo', name);
         
-        //Note: These values help prevent crashes on Discord due to richembed data limits, which are:
+        //Note: These values help prevent crashes on Discord due to messageembed data limits, which are:
         //2048 chars on text, 1024 chars on field value, and 6000 bytes of data
         this._params['relatedTopics'] = 6;
         this._params['relatedSubtopics'] = 3;
@@ -97,7 +97,7 @@ class ModDuckDuckGo extends Module {
                         text += "\n[" + result.Text + "](" + result.FirstURL + ")";
                     }
 
-                    let re = new discord.RichEmbed()
+                    let re = new discord.MessageEmbed()
                         .setColor(text ? [102, 204, 51] : [222, 88, 51])
                         .setImage(answ.Image)
                         .setTitle(answ.Heading)
@@ -121,7 +121,7 @@ class ModDuckDuckGo extends Module {
 
                     if (strict) return true;
 
-                    let more = new discord.RichEmbed()
+                    let more = new discord.MessageEmbed()
                         .setColor([253, 210, 10])
                         .setTitle(text ? "See also" : "Disambiguation");
 
