@@ -231,12 +231,12 @@ class ModDiscordChannels extends Module {
         };
 
 
-        let voiceStateUpdateHandler = (oldmember, newmember) => {
-            if (!newmember.voiceChannelID) return;
-            let env = findEnvFromServer(oldmember.guild);
-            if (!env || newmember.deaf) return;
-            if (!this.isChannelAttached(env, newmember.voiceChannelID)) return;
-            this.doTouchChannel(env, newmember.voiceChannelID);
+        let voiceStateUpdateHandler = (oldstate, newstate) => {
+            if (!newstate.channelID) return;
+            let env = findEnvFromServer(oldstate.guild);
+            if (!env || newstate.deaf) return;
+            if (!this.isChannelAttached(env, newstate.channelID)) return;
+            this.doTouchChannel(env, newstate.channelID);
         };
 
 

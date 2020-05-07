@@ -274,35 +274,35 @@ class ModRajio extends Module {
 
         var self = this;
         
-        this.denv.client.on("voiceStateUpdate", (oldMember, member) => {
-            if (member.guild.id != this.denv.server.id) return;
-            
+        this.denv.client.on("voiceStateUpdate", (oldState, state) => {
+            if (state.guild.id != this.denv.server.id) return;
+                   
             let myid = this.denv.server.me.id;
             let llisteners = this.listeners.length;
             let dchanid = null;
             if (this.dchan) dchanid = this.dchan.id;
             
-            if (oldMember.voiceChannelID != dchanid && member.voiceChannelID == dchanid) {
-                if (member.id == myid) {
+            if (oldState.channelID != dchanid && state.channelID == dchanid) {
+                if (state.id == myid) {
                     if (llisteners) {
                         //I joined the channel
                         this.resumeSong() || this.playSong();
                     }
                 } else {
-                    if (this._skipper[member.id] && !member.deaf) {
+                    if (this._skipper[state.id] && !state.deaf) {
                         //Skipper tried to undeafen themselves... Nah
-                        member.setDeaf(true);
+                        state.setDeaf(true);
                     } else {
 
                         if (this.param('announcejoins')) {
-                            this.announce('__Arrived__: ' + this.denv.idToDisplayName(member.id));
+                            this.announce('__Arrived__: ' + this.denv.idToDisplayName(state.id));
                         }
 
-                        if (this._undeafen[member.id]) {
-                            member.setDeaf(false);
-                            delete this._undeafen[member.id];
+                        if (this._undeafen[state.id]) {
+                            state.setDeaf(false);
+                            delete this._undeafen[state.id];
                         }
-                        if (!member.deaf) {
+                        if (!state.deaf) {
                             if (!this.playing) {
                                 //First listener joined the channel
                                 this.joinDchan()
@@ -310,25 +310,25 @@ class ModRajio extends Module {
                                         this.log('Did not join voice channel on first listener: ' + reason);
                                     })
                             }
-                            this.stayafterall(member.id);
+                            this.stayafterall(state.id);
                         }
                     }
                 }
             }
             
-            if (oldMember.voiceChannelID == dchanid && member.voiceChannelID != dchanid) {
-                if (member.id == myid) {
+            if (oldState.channelID == dchanid && state.channelID != dchanid) {
+                if (state.id == myid) {
                     //I left the channel
                     if (!this._pause) this.stopSong();
                 } else {
 
                     if (this.param('announcejoins')) {
-                        this.announce('__Departed__: ' + this.denv.idToDisplayName(member.id));
+                        this.announce('__Departed__: ' + this.denv.idToDisplayName(state.id));
                     }
 
-                    this.autowithdraw(member.id);
-                    this.clearautoend(member.id);
-                    if (this._nopreference[member.id]) delete this._nopreference[member.id];
+                    this.autowithdraw(state.id);
+                    this.clearautoend(state.id);
+                    if (this._nopreference[state.id]) delete this._nopreference[state.id];
                     if (!llisteners) {
                         //Last listener left the channel
                         this.pauseSong();
@@ -337,26 +337,26 @@ class ModRajio extends Module {
                 }
             }
             
-            if (member.id == myid) {
-                if (!oldMember.mute && member.mute) {
+            if (state.id == myid) {
+                if (!oldState.mute && state.mute) {
                     //I was muted
                     this.pauseSong();
                 }
-                if (oldMember.mute && !member.mute) {
+                if (oldState.mute && !state.mute) {
                     //I was unmuted
                     this.resumeSong() || this.playSong();
                 }
             } else {
-                if (!oldMember.deaf && member.deaf) {
+                if (!oldState.deaf && state.deaf) {
                     if (!llisteners) {
                         //Last listener was deafened
                         this.pauseSong();
                         this.dchan.leave();
                     }
-                } else if (oldMember.deaf && !member.deaf) {
-                    if (this._skipper[member.id] && member.voiceChannelID == dchanid) {
+                } else if (oldState.deaf && !state.deaf) {
+                    if (this._skipper[state.id] && state.channelID == dchanid) {
                         //Skipper tried to undeafen themselves... Nah
-                        member.setDeaf(true);
+                        state.setDeaf(true);
                     } else if (llisteners == 1) {
                         //First listener was undeafened
                         this.joinDchan()
@@ -370,16 +370,16 @@ class ModRajio extends Module {
         });
         
         
-        this.denv.client.on('presenceUpdate', (oldMember, member) => {
-            if (member.guild.id != this.denv.server.id) return;
+        this.denv.client.on('presenceUpdate', (oldPresence, presence) => {
+            if (presence.guild.id != this.denv.server.id) return;
             
-            if (oldMember.user.presence.status != "offline" && member.user.presence.status == "offline") {
-                this.withdraw(member.user.id);
+            if (oldPresence.status != "offline" && presence.status == "offline") {
+                this.withdraw(presence.userID);
             }
         });
         
         this.denv.client.on("guildMemberRemove", (member) => {
-            if (member.user.presence.status == "offline") return;
+            if (member.presence.status == "offline") return;
             if (member.guild.id != this.denv.server.id) return;
             this.withdraw(member.user.id);
         });
