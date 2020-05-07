@@ -220,6 +220,12 @@ class ModRajio extends Module {
         return this.denv.server.channels.cache.get(this._channel);
     }
     
+    get vc() {
+        let voice = this.denv.server.voice;
+        if (!voice) return null;
+        return this.denv.server.voice.connection;
+    }
+    
     get listeners() {
         let me = this.denv.server.me;
         if (me.mute) return [];
@@ -229,7 +235,11 @@ class ModRajio extends Module {
     }
     
     get playing() {
-        return this.denv.server.voiceConnection && this.denv.server.voiceConnection.speaking || this._pending;
+        return this.vc && this.denv.server.voice.speaking || this._pending;
+    }
+    
+    get strictlyPlaying() {
+        return this.vc && this.denv.server.voice.speaking;
     }
 
     get metaprefix() {
@@ -426,7 +436,7 @@ class ModRajio extends Module {
                     ep.reply('Nothing is being played right now.');
                 }
             } else {
-                let vc = this.denv.server.voiceConnection;
+                let vc = this.vc;
                 ep.reply('**[Playing]** ' + '`' + this._play.hash + ' ' + this._play.name + (this._play.author ? ' (' + this._play.author + ')' : '')
                     + ' <' + (vc && vc.dispatcher ? this.secondsToHms(Math.round(vc.dispatcher.time / 1000.0)) + ' / ' : '') + this.secondsToHms(this._play.length) + '>`');
             }
@@ -488,7 +498,7 @@ class ModRajio extends Module {
                         
             this.dchan.members.get(userid).setDeaf(true);
             
-            let vc = this.denv.server.voiceConnection;
+            let vc = this.vc;
             //vc.playFile('beep.ogg');
         
             return true;
@@ -1195,9 +1205,8 @@ class ModRajio extends Module {
     //Internal playback control
     
     playSong(song, seek) {
-        let vc = this.denv.server.voiceConnection;
-        if (!vc || vc.speaking || this._pending
-                || this.denv.server.me.mute || !this.listeners.length || this._disabled) {
+        let vc = this.vc;
+        if (!vc || this.playing || this.denv.server.me.voice.mute || !this.listeners.length || this._disabled) {
             return false;
         }
         
@@ -1210,7 +1219,7 @@ class ModRajio extends Module {
         }
         
         if (!song || !song.hash) return false;
-        
+                
         this.log('Playing song: ' + song.hash);
         
         if (this.param('announcesongs') && (!this._announced || moment().unix() > this._announced + this.param('announcedelay'))) {
@@ -1322,7 +1331,7 @@ class ModRajio extends Module {
     }
     
     stopSong() {
-        let vc = this.denv.server.voiceConnection;
+        let vc = this.vc;
         
         this.log('Stopping song' + (this._play ? ': ' + this._play.hash : '.'));
         this.grabber.setAdditionalStats(this.metaprefix + '.playing', null);
@@ -1353,8 +1362,8 @@ class ModRajio extends Module {
     }
     
     pauseSong() {
-        let vc = this.denv.server.voiceConnection;
-        if (!vc || !vc.speaking || !vc.dispatcher) {
+        let vc = this.vc;
+        if (!this.strictlyPlaying || !vc.dispatcher) {
             return this.stopSong();
         }
         
