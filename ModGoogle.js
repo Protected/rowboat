@@ -1,7 +1,6 @@
 /* Module: Google -- Adds a command, "google", which performs a google search. */
 
 const Module = require('./Module.js');
-const request = require('request');
 
 class ModGoogle extends Module {
 
@@ -95,13 +94,9 @@ class ModGoogle extends Module {
             
             //Perform API request
         
-            request(url, (error, response, body) => {
-                if (error) {
-                    this.log('warn', error);
-                    return true;
-                }
-                try {
-                    let items = JSON.parse(body)['items'];
+            this.jsonget(url)
+                .then((body) => {
+                    let items = body.items;
                     if (!items || !items.length) {
                         ep.reply("No results found!");
                     } else {
@@ -109,11 +104,10 @@ class ModGoogle extends Module {
                             ep.reply(items[j]['title'] + ' - ' + items[j]['link']);
                         }
                     }
-                } catch (err) {
-                    this.log('warn', err);
-                }
-                return true;
-            });
+                })
+                .catch((error) => {
+                    this.log('warn', error);
+                });
         
             return true;
         });

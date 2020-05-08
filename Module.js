@@ -3,6 +3,8 @@
 
 const jsonfile = require('jsonfile');
 const fs = require('fs');
+const { http, https } = require('follow-redirects');
+const stream = require('stream');
 const logger = require('./Logger.js');
 
 class Module {
@@ -240,8 +242,81 @@ class Module {
 
         jsonfile.writeFileSync(datafilepath, data, (options && options.pretty ? {spaces: 4} : {}));
     }
-
+    
+    
+    /* HTTP retrieval */
+    
+    //Returns 
+    rawget(url, options, encoding) {
+    
+    }
+    
+    //Returns Promise of URL contents
+    async urlget(url, options, encoding) {
+        if (!encoding && typeof options == "string") {
+            encoding = options;
+            options = undefined;
+        }
+        return new Promise((resolve, reject) => {
+            let req;
+            
+            let callback = (res) => {
+                if (encoding) {
+                    res.setEncoding(encoding);
+                }
+                if (res.statusCode !== 200) {
+                    reject("Request failed: " + res.statusCode);
+                } else {
+                    let body = '';
+                    res.on('data', (chunk) => body += chunk);
+                    res.on('end', () => resolve(body));
+                }
+            };
+            
+            if (url.match(/^https/i)) {
+                req = https.get(url, options, callback);
+            } else {
+                req = http.get(url, options, callback);
+            }
+            req.on('error', reject);
+        });
+    }
+    
+    //Returns Promise of object from JSON pointed at by URL
+    async jsonget(url, options) {
+        let body = await this.urlget(url, options, 'utf8');
+        return JSON.parse(body);
+    }
+    
+    //Returns stream of URL contents
+    streamget(url, options, extcallback) {
+        let mod = this;
+        let pt = new stream.PassThrough();
+        let req;
         
+        let callback = (res) => {
+            res.on('error', (e) => {
+                pt.emit('error', e);
+            });
+            res.pipe(pt);
+            if (extcallback) extcallback(res);
+            else pt.emit('response', res);
+        };
+        
+        if (url.match(/^https/i)) {
+            req = https.get(url, options, callback);
+        } else {
+            req = http.get(url, options, callback);
+        }
+        
+        req.on('error', (e) => {
+            pt.emit('error', e);
+        });
+        
+        return pt;
+    }
+
+    
 }
 
 

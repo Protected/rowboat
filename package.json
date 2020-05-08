@@ -23,6 +23,7 @@
     "discord.js": "^12.2.0",
     "emojione": "^3.1.4",
     "fluent-ffmpeg": "^2.1.2",
+    "follow-redirects": "^1.11.0",
     "irc": "file:./local/irc",
     "js-md5": "^0.7.3",
     "jsonfile": "^4.0.0",

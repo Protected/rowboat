@@ -7,7 +7,6 @@ const FFmpeg = require('fluent-ffmpeg');
 const crypto = require('crypto');
 const moment = require('moment');
 const random = require('meteor-random');
-const request = require('request');
 
 const PERM_ADMIN = 'administrator';
 const PERM_MODERATOR = 'moderator';
@@ -958,7 +957,7 @@ class ModGrabber extends Module {
             
             //Attachment -> Hard drive
             
-            let attfiledl = request(ma.url);
+            let attfiledl = this.streamget(ma.url);
             let prepath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '_a.tmp';
             let prestream = fs.createWriteStream(prepath);
             
@@ -1071,7 +1070,7 @@ class ModGrabber extends Module {
             
             //URL -> Hard drive
             
-            let filedl = request(url);
+            let filedl = this.streamget(url);
             let prepath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '_a.tmp';
             let prestream = fs.createWriteStream(prepath);
             
@@ -1174,6 +1173,7 @@ class ModGrabber extends Module {
                 });
                 
             });
+            
         } catch (exception) {
             this.log('error', exception);
         }

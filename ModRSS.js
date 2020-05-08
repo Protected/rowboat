@@ -2,7 +2,6 @@
 
 const Module = require('./Module.js');
 const moment = require('moment');
-const request = require('request');
 const FeedParser = require('feedparser');
 const striptags = require('striptags');
 
@@ -469,9 +468,8 @@ class ModRSS extends Module {
 
     urlExists(url) {
         return new Promise((resolve, reject) => {
-            request({url: url, method: 'HEAD', timeout: this.param("timeout")}, (err, res) => {
-                if (err) reject({problem: RESULT_ERROR, error: err});
-                else if (/4\d\d/.test(res.statusCode)) reject({problem: RESULT_NOTFOUND});
+            this.streamget(url, {method: 'HEAD', timeout: this.param("timeout")}, (res) => {
+                if (/4\d\d/.test(res.statusCode)) reject({problem: RESULT_NOTFOUND});
                 else if (/5\d\d/.test(res.statusCode)) reject({problem: RESULT_SERVERERR});
                 else resolve();
             });
@@ -497,7 +495,7 @@ class ModRSS extends Module {
         let env = this.env(feed.env);
 
         return new Promise((resolve, reject) => {
-            let req = request({url: feed.url, timeout: this.param("timeout")});
+            let req = this.streamget(feed.url, {timeout: this.param("timeout")});
             let parser = new FeedParser({feedurl: feed.url, addmeta: false});
 
             req.on("error", (err) => {
