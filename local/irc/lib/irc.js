@@ -604,7 +604,7 @@ function Client(server, nick, opt) {
                 break;
             case 'AUTHENTICATE':
                 if (message.args[0] === '+') self.send('AUTHENTICATE',
-                    new Buffer(
+                    Buffer.from(
                         self.opt.nick + '\0' +
                         self.opt.userName + '\0' +
                         self.opt.password
@@ -817,7 +817,7 @@ Client.prototype.connect = function(retryCount, callback) {
         self.conn.setEncoding('utf8');
     }
 
-    var buffer = new Buffer('');
+    var buffer = Buffer.from('');
 
     function handleData(chunk) {
         self.conn.cyclingPingTimer.notifyOfActivity();
@@ -835,7 +835,7 @@ Client.prototype.connect = function(retryCount, callback) {
             return;
         } else {
             // else, initialize the buffer.
-            buffer = new Buffer('');
+            buffer = Buffer.from('');
         }
 
         lines.forEach(function iterator(line) {
