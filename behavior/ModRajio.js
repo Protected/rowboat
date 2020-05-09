@@ -387,6 +387,8 @@ class ModRajio extends Module {
         this.denv.client.on('presenceUpdate', (oldPresence, presence) => {
             if (presence.guild.id != this.denv.server.id) return;
             
+            if (!oldPresence) return;
+            
             if (oldPresence.status != "offline" && presence.status == "offline") {
                 this.withdraw(presence.userID);
             }
