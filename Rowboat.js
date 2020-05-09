@@ -63,7 +63,6 @@ exports.getAllModules = function() {
 //Load master config
 
 logger.info("Welcome to Rowboat!");
-logger.enableConsole();
 
 var loadMasterConfig = exports.loadMasterConfig = function() {
     logger.info("Loading master config...");
