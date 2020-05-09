@@ -1,6 +1,6 @@
 /* Module: Memo -- Save a public message for another user to be auto-delivered on activity. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const moment = require('moment');
 
 const PERM_ADMIN = 'administrator';

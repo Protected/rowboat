@@ -1,6 +1,6 @@
 /* Module: DiscordChannels -- Advanced behavior for Discord channels. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const moment = require('moment');
 
 const PERM_ADMIN = "administrator";

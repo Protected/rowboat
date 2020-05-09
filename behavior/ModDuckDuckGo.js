@@ -1,6 +1,6 @@
 /* Module: DuckDuckGo -- Adds a command, "duck", which performs a DuckDuckGo query. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const DDG = require('node-ddg-api').DDG;
 
 try {

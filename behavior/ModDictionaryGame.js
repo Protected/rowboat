@@ -2,7 +2,7 @@
 
 //Install 'node-gd' to have images through Discord MessageEmbeds.
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const sqlite3 = require('sqlite3');
 const random = require('meteor-random');
 const moment = require('moment');

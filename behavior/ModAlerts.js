@@ -1,6 +1,6 @@
 /* Module: Alerts -- Adds a command, "alert", which allows users to specify alert patterns. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 
 class ModAlerts extends Module {
 

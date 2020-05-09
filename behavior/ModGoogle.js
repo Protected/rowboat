@@ -1,6 +1,6 @@
 /* Module: Google -- Adds a command, "google", which performs a google search. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 
 class ModGoogle extends Module {
 

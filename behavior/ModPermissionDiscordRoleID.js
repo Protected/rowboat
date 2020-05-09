@@ -1,6 +1,6 @@
 /* Module: PermissionDiscordRoleID -- This module is a permissions provider that turns Discord role IDs into ModUsers permissions. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 
 class ModPermissionDiscordRoleID extends Module {
 

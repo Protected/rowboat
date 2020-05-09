@@ -1,6 +1,6 @@
 /* Module: Activity -- Commands for checking a user's most recent activity/presence. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const moment = require('moment');
 
 class ModActivity extends Module {

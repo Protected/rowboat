@@ -1,6 +1,6 @@
 /* Module: DynamicCommands -- Dynamically create and manage simple commands. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const random = require('meteor-random');
 
 const PERM_ADMIN = 'administrator';

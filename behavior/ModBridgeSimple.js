@@ -1,6 +1,6 @@
 /* Module: BridgeSimple -- This module was designed to bridge a pair of single channels in single environments without any style or mention conversions. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 
 class ModBridgeSimple extends Module {
 

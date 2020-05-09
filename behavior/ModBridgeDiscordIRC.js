@@ -1,6 +1,6 @@
 /* Module: BridgeDiscordIRC -- This module was designed to bridge a multi-channel Discord server with a single IRC channel. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const cd = require('color-difference');
 const diff = require('diff');
 

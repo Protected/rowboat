@@ -1,6 +1,6 @@
 /* Module: Users -- Manage "known" user accounts and permission flags. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 
 const PERM_ADMIN = 'administrator';
 const PERM_MOD = 'moderator';

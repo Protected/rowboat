@@ -63,6 +63,7 @@ exports.getAllModules = function() {
 //Load master config
 
 logger.info("Welcome to Rowboat!");
+logger.enableConsole();
 
 var loadMasterConfig = exports.loadMasterConfig = function() {
     logger.info("Loading master config...");
@@ -161,7 +162,7 @@ var loadModules = exports.loadModules = function() {
             type = name;
        }
         
-        let modtype = requireUncached("./Mod" + type + ".js");
+        let modtype = requireUncached("./behavior/Mod" + type + ".js");
         if (!modtype) {
             logger.error("Could not load the module: " + name + " . Is the module source in Rowboat's directory?");
             return false;

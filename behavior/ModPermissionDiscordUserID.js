@@ -1,8 +1,8 @@
-/* Module: PermissionGenericRole -- This module is a permissions provider that turns roles from any environment into ModUsers permissions. */
+/* Module: PermissionDiscordUserID -- This module is a permissions provider that turns Discord user IDs into ModUsers permissions. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 
-class ModPermissionGenericRole extends Module {
+class ModPermissionDiscordUserID extends Module {
 
     get requiredEnvironments() { return [
         'Discord'
@@ -13,7 +13,7 @@ class ModPermissionGenericRole extends Module {
     ]; }
 
     constructor(name) {
-        super('PermissionGenericRole', name);
+        super('PermissionDiscordUserID', name);
     }
     
     
@@ -25,15 +25,12 @@ class ModPermissionGenericRole extends Module {
         
         this.mod('Users').registerPermissionProvider((passedname, userid, channelid, permissions) => {
             let env = opt.envs[passedname];
-        
-            let roles = env.listUserRoles(userid, channelid);
+            if (env.envName != 'Discord') return [];
         
             let result = [];
         
             for (let permission of permissions) {
-                if (roles.indexOf(permission) > -1) {
-                    result.push(permission);
-                }
+                if (permission == userid) result.push(permission);
             }
         
             return result;
@@ -47,4 +44,4 @@ class ModPermissionGenericRole extends Module {
 }
 
 
-module.exports = ModPermissionGenericRole;
+module.exports = ModPermissionDiscordUserID;

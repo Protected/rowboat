@@ -1,6 +1,6 @@
 /* Module: SelfService -- Commands for a user to register his own account. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const random = require('meteor-random');
 const moment = require('moment');
 const md5 = require('js-md5');

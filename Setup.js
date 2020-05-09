@@ -250,14 +250,14 @@ if (args._[0]) {
 if (args.ask) {
     console.log('Please choose whether to include each module. Type an instance name if the module is multi-instanceable.');
 
-    for (let file of fs.readdirSync('.')) {
+    for (let file of fs.readdirSync('behavior')) {
         let matchname = file.match(/^Mod([A-Z0-9].*)\.js$/);
         if (!matchname) continue;
         matchname = matchname[1];
         
         if (config.modules.indexOf(matchname) > -1) continue;
         
-        let firstline = fs.readFileSync(file).toString().match(/^(.*?)\n/);
+        let firstline = fs.readFileSync('behavior/' + file).toString().match(/^(.*?)\n/);
         if (firstline) firstline = firstline[1];
         else firstline = "";
         
@@ -321,7 +321,7 @@ for (let name of config.modules) {
         type = name;
    }
     
-    var modtype = requireUncached("./Mod" + type + ".js");
+    var modtype = requireUncached("behavior/Mod" + type + ".js");
     if (!modtype) {
         logger.error("Could not load the module: " + name + " . Is the module source in Rowboat's directory?");
         return;

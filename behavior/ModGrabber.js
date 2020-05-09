@@ -1,6 +1,6 @@
 /* Module: Grabber -- Downloads song files referenced in a Discord channel and maintains a dynamic index w/ API. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const fs = require('fs');
 const ytdl = require('ytdl-core');
 const FFmpeg = require('fluent-ffmpeg');

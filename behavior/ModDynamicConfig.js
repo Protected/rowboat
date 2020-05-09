@@ -1,6 +1,6 @@
 /* Module: DynamicConfig -- Dynamically manipulate module configuration files. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const random = require('meteor-random');
 
 const PERM_ADMIN = 'administrator';

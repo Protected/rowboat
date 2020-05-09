@@ -1,6 +1,6 @@
 /* Module: Whois -- Adds a command, "netwhois", which retrieves information on a registered internet resource. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const whois = require('whois');
 const moment = require('moment');
 

@@ -1,6 +1,6 @@
 /* Module: Rajio -- Grabber add-on for playing songs on discord audio channels. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const moment = require('moment');
 const random = require('meteor-random');
 const fs = require('fs');

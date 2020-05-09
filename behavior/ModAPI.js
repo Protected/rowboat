@@ -2,7 +2,7 @@
 
 //Requests to the API use the POST method, have no path and contain the following JSON in the body: {module; ..., method: ..., args: {name: value, ...}}
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const http = require('http');
 
 class ModAPI extends Module {

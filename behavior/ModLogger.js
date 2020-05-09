@@ -1,6 +1,6 @@
 /* Module: Logger -- Event logging for environments and modules; log searches. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const winston = require('winston');
 const moment = require('moment');
 const fs = require('fs');

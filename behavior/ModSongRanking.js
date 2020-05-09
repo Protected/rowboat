@@ -1,6 +1,6 @@
 /* Module: SongRanking -- Grabber add-on for liking/disliking songs and rating them. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const emoji = require('emojione');
 const random = require('meteor-random');
 

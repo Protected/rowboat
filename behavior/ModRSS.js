@@ -1,6 +1,6 @@
 /* Module: RSS -- Keep track of RSS feeds. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const moment = require('moment');
 const FeedParser = require('feedparser');
 const striptags = require('striptags');

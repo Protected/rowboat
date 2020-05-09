@@ -2,7 +2,7 @@
 
 //If ModLogger is present, will log to channel "command" using "templateCommand". Placeholders: %(MOMENT_FORMAT)% %env% %userid% %user% %channelid% %channel% %message%
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const moment = require('moment');
 
 const PERM_ADMIN = 'administrator';

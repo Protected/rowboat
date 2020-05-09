@@ -1,6 +1,6 @@
 /* Module: Random -- Adds randomizer, shuffle and dice roll commands. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 const random = require('meteor-random');
 
 class ModRandom extends Module {

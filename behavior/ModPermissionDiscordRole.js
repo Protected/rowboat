@@ -1,8 +1,8 @@
-/* Module: PermissionDiscordUserID -- This module is a permissions provider that turns Discord user IDs into ModUsers permissions. */
+/* Module: PermissionDiscordRole -- This module is a permissions provider that turns Discord role names into ModUsers permissions. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 
-class ModPermissionDiscordUserID extends Module {
+class ModPermissionDiscordRole extends Module {
 
     get requiredEnvironments() { return [
         'Discord'
@@ -13,7 +13,7 @@ class ModPermissionDiscordUserID extends Module {
     ]; }
 
     constructor(name) {
-        super('PermissionDiscordUserID', name);
+        super('PermissionDiscordRole', name);
     }
     
     
@@ -27,10 +27,14 @@ class ModPermissionDiscordUserID extends Module {
             let env = opt.envs[passedname];
             if (env.envName != 'Discord') return [];
         
+            let member = env.server.members.cache.get(userid);
+            if (!member) return [];
+            
             let result = [];
         
             for (let permission of permissions) {
-                if (permission == userid) result.push(permission);
+                let role = member.roles.cache.find(r => r.name == permission);
+                if (role) result.push(permission);
             }
         
             return result;
@@ -44,4 +48,4 @@ class ModPermissionDiscordUserID extends Module {
 }
 
 
-module.exports = ModPermissionDiscordUserID;
+module.exports = ModPermissionDiscordRole;

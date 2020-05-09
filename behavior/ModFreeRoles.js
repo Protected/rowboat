@@ -1,6 +1,6 @@
 /* Module: FreeRoles -- Allows user to add or remove certain Discord roles to themselves. */
 
-const Module = require('./Module.js');
+const Module = require('../Module.js');
 
 const PERM_ADMIN = 'administrator';
 
