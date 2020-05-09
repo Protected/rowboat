@@ -197,6 +197,7 @@ class ModRajio extends Module {
         this._userremaining = {};  //{userid: songs, ...} Amount of songs before a user will be automatically disconnected
         
         this._play = null;  //Song being played
+        this._seek = 0;  //Starting time of the song being played, for time calculation purposes
         this._pending = null;  //Timer that will start the next song
         this._pause = null;  //[song, seek] for resuming paused song
         this._expirepause = null;  //Timer that will expire (stop) a paused song
@@ -228,18 +229,18 @@ class ModRajio extends Module {
     
     get listeners() {
         let me = this.denv.server.me;
-        if (me.mute) return [];
+        if (me.voice.mute) return [];
         let dchan = this.dchan;
         if (!dchan) return [];
-        return dchan.members.filter((member) => member.id != me.id && !member.deaf).array();
+        return dchan.members.filter((member) => member.id != me.id && !member.voice.deaf).array();
     }
     
     get playing() {
-        return this.vc && this.denv.server.voice.speaking || this._pending;
+        return this.vc && this.vc.dispatcher || this._pending;
     }
     
     get strictlyPlaying() {
-        return this.vc && this.denv.server.voice.speaking;
+        return this.vc && this.vc.dispatcher;
     }
 
     get metaprefix() {
@@ -273,6 +274,9 @@ class ModRajio extends Module {
         
         this.denv.on("connected", () => {
             this.joinDchan()
+                .then(() => {
+                    this.playSong();
+                })
                 .catch((reason) => {
                     this.log('Did not join voice channel on connect: ' + reason);
                 })
@@ -286,7 +290,7 @@ class ModRajio extends Module {
         
         this.denv.client.on("voiceStateUpdate", (oldState, state) => {
             if (state.guild.id != this.denv.server.id) return;
-                   
+            
             let myid = this.denv.server.me.id;
             let llisteners = this.listeners.length;
             let dchanid = null;
@@ -436,9 +440,8 @@ class ModRajio extends Module {
                     ep.reply('Nothing is being played right now.');
                 }
             } else {
-                let vc = this.vc;
                 ep.reply('**[Playing]** ' + '`' + this._play.hash + ' ' + this._play.name + (this._play.author ? ' (' + this._play.author + ')' : '')
-                    + ' <' + (vc && vc.dispatcher ? this.secondsToHms(Math.round(vc.dispatcher.time / 1000.0)) + ' / ' : '') + this.secondsToHms(this._play.length) + '>`');
+                    + ' <' + (this.strictlyPlaying ? this.secondsToHms(Math.round((this._seek + this.vc.dispatcher.streamTime) / 1000.0)) + ' / ' : '') + this.secondsToHms(this._play.length) + '>`');
             }
         
             return true;
@@ -498,9 +501,6 @@ class ModRajio extends Module {
                         
             this.dchan.members.get(userid).setDeaf(true);
             
-            let vc = this.vc;
-            //vc.playFile('beep.ogg');
-        
             return true;
         });
         
@@ -1205,8 +1205,7 @@ class ModRajio extends Module {
     //Internal playback control
     
     playSong(song, seek) {
-        let vc = this.vc;
-        if (!vc || this.playing || this.denv.server.me.voice.mute || !this.listeners.length || this._disabled) {
+        if (!this.vc || this.playing || this.denv.server.me.voice.mute || !this.listeners.length || this._disabled) {
             return false;
         }
         
@@ -1295,6 +1294,7 @@ class ModRajio extends Module {
         
         this.grabber.setAdditionalStats(this.metaprefix + '.playing', song.hash);
         this._play = song;
+        this._seek = seek || 0;
         this._pending = setTimeout(() => {
         
             this.abortskip();
@@ -1319,9 +1319,9 @@ class ModRajio extends Module {
             
             if (song.format == 'pcm') {
                 options.type = 'converted';
-                vc.play(fs.createReadStream(this.grabber.songPathByHash(song.hash)), options).once("finish", ender);
+                this.vc.play(fs.createReadStream(this.grabber.songPathByHash(song.hash)), options).once("close", ender);
             } else {
-                vc.play(this.grabber.songPathByHash(song.hash), options).once("finish", ender);
+                this.vc.play(this.grabber.songPathByHash(song.hash), options).once("close", ender);
             }
             
             this._pending = null;
@@ -1331,8 +1331,6 @@ class ModRajio extends Module {
     }
     
     stopSong() {
-        let vc = this.vc;
-        
         this.log('Stopping song' + (this._play ? ': ' + this._play.hash : '.'));
         this.grabber.setAdditionalStats(this.metaprefix + '.playing', null);
         
@@ -1350,10 +1348,11 @@ class ModRajio extends Module {
             this._expirepause = null;
         }
         
-        if (vc && vc.dispatcher) {
+        if (this.strictlyPlaying) {
             this._play = null;
+            this._seek = 0;
             this._pause = true;  //Hack to stop the end event from playing next song
-            vc.dispatcher.destroy();
+            this.vc.dispatcher.destroy();
         }
         
         this._pause = null;
@@ -1362,20 +1361,22 @@ class ModRajio extends Module {
     }
     
     pauseSong() {
-        let vc = this.vc;
-        if (!this.strictlyPlaying || !vc.dispatcher) {
+        if (!this.strictlyPlaying) {
             return this.stopSong();
         }
         
-        this.log('Pausing song: ' + this._play.hash + ' at ' + vc.dispatcher.time);
+        let pausetime = this._seek + this.vc.dispatcher.streamTime;
+        
+        this.log('Pausing song: ' + this._play.hash + ' at ' + pausetime);
         
         if (this.param('usestatus')) {
             this.denv.client.realClient.user.setActivity("*Paused*", {type: 'PLAYING'}).catch(() => {});
         }
         
-        this._pause = [this._play, vc.dispatcher.time];
+        this._pause = [this._play, pausetime];
         this._play = null;
-        vc.dispatcher.destroy();
+        this._seek = 0;
+        this.vc.dispatcher.destroy();
         
         this._expirepause = setTimeout(() => {
             this.log('Expiring paused song: ' + this._pause[0].hash);
@@ -1545,7 +1546,7 @@ class ModRajio extends Module {
         if (this.dchan) {
             let members = this.dchan.members;
             for (let userid in this._skipper) {
-                if (members.get(userid) && members.get(userid).deaf) {
+                if (members.get(userid) && members.get(userid).voice.deaf) {
                     members.get(userid).setDeaf(false);
                     delete this._skipper[userid];
                 }
@@ -1564,7 +1565,7 @@ class ModRajio extends Module {
         if (this.dchan) {
             let members = this.dchan.members;
             for (let userid in this._userremaining) {
-                if (members.get(userid) && (ignoredeafs || !members.get(userid).deaf)) {
+                if (members.get(userid) && (ignoredeafs || !members.get(userid).voice.deaf)) {
                     
                     //Request removal
                     this._userremaining[userid] -= 1;
@@ -1624,7 +1625,7 @@ class ModRajio extends Module {
     islistener(userid) {
         if (!this.dchan) return false;
         let member = this.dchan.members.get(userid);
-        return member && !member.deaf;
+        return member && !member.voice.deaf;
     }
     
     
