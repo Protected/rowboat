@@ -38,7 +38,6 @@
     "striptags": "^3.1.1",
     "whois": "^2.6.0",
     "winston": "^3.2.1",
-    "wolfram-alpha": "^0.6.0",
     "ytdl-core": "^2.1.2",
     "zxcvbn": "^4.4.2"
   }
