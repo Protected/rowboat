@@ -161,28 +161,28 @@ class EnvDiscord extends Environment {
                 });
                 
                 
-                this._localClient.on("presenceUpdate", (oldUser, newUser) => {
+                this._localClient.on("presenceUpdate", (oldPresence, newPresence) => {
                     let reason = null;
 
-                    if (!oldUser.presence || !newUser.presence) return;
+                    if (!oldPresence) return;
 
-                    if (oldUser.presence.status == "offline" && newUser.presence.status != "offline") {
+                    if (oldPresence.status == "offline" && newPresence.status != "offline") {
                         reason = "join";
                     }
-                    if (oldUser.presence.status != "offline" && newUser.presence.status == "offline") {
+                    if (oldPresence.status != "offline" && newPresence.status == "offline") {
                         reason = "part";
                     }
                     if (!reason) return;
                     
-                    let member = this._server.members.cache.get(newUser.id);
+                    let member = this._server.members.cache.get(newPresence.userID);
                     if (!member) return;
                     let chans = this.findAccessChannels(member);
                     
                     if (reason == "join") {
-                        this.triggerJoin(member.id, chans, {reason: reason, status: newUser.presence.status});
+                        this.triggerJoin(member.id, chans, {reason: reason, status: newPresence.status});
                     }
                     if (reason == "part") {
-                        if (member) this.triggerPart(member.id, chans, {reason: reason, status: oldUser.presence.status});
+                        if (member) this.triggerPart(member.id, chans, {reason: reason, status: oldPresence.status});
                     }
                 });
                 
