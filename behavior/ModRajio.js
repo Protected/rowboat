@@ -1573,7 +1573,7 @@ class ModRajio extends Module {
                     this._userremaining[userid] -= 1;
                     if (this._userremaining[userid] < 1) {
                         delete this._userremaining[userid];
-                        let promiseremoval = members.get(userid).setVoiceChannel(null);
+                        let promiseremoval = members.get(userid).voice.setChannel(null);
                         removals.push(promiseremoval);
                     }
                     
