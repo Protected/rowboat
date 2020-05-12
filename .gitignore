@@ -9,3 +9,4 @@ behavior/ModCustom*.js
 *.swp
 songs/*
 package-lock.json
+youtube-dl*

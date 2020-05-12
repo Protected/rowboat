@@ -7,6 +7,7 @@ const FFmpeg = require('fluent-ffmpeg');
 const crypto = require('crypto');
 const moment = require('moment');
 const random = require('meteor-random');
+const cp = require('child_process');
 
 const PERM_ADMIN = 'administrator';
 const PERM_MODERATOR = 'moderator';
@@ -17,6 +18,8 @@ const GET_FIELDS = ['name', 'author', 'album', 'length', 'source', 'sourceSpecif
 const SET_FIELDS = ['name', 'author', 'album'];
 
 const AUDIO_FORMATS = ['pcm', 'flac', 'mp3'];
+
+const YOUTUBEDLURL = 'https://yt-dl.org/downloads/latest/youtube-dl';
 
 
 class ModGrabber extends Module {
@@ -45,7 +48,8 @@ class ModGrabber extends Module {
         'defaultBehavior',      //How to treat messages by default. One of: 'ignore', 'quiet', 'feedback'
         'tagIgnore',            //Tag message to be ignored (regex)
         'tagQuiet',             //Tag message to be quietly processed (regex)
-        'tagFeedback'           //Tag message to be processed and provide feedback (regex)
+        'tagFeedback',          //Tag message to be processed and provide feedback (regex)
+        'useYoutubedl'          //Download and use youtube-dl features. Currently: Chapters
     ]; }
 
     get requiredEnvironments() { return [
@@ -80,6 +84,8 @@ class ModGrabber extends Module {
         this._params['tagQuiet'] = '^$$';
         this._params['tagFeedback'] = '^!!';
         
+        this._params['useYoutubedl'] = false;
+        
         this._preparing = 0;  //Used for generating temporary filenames
         
         this._index = {};  //Main index (hash => info)
@@ -97,12 +103,33 @@ class ModGrabber extends Module {
         this._apiCbNewSong = [];  //List of callbacks called when new songs are added. Return true to stop processing.
         this._apiCbGrabscanExists = [];  //List of callbacks called when existing songs are detected by a grabscan call. Return true to stop processing.
         this._apiCbRemoveSong = [];  //List of callbacks called when songs are removed.
+        
+        this._path = __dirname;
     }
     
     
     initialize(opt) {
         if (!super.initialize(opt)) return false;
 
+        //Download youtube-dl
+
+        this._path = opt.rootpath;
+
+        if (this.param('useYoutubedl')) {
+            if (!fs.existsSync(this.youtubedlPath)) {
+                let url = YOUTUBEDLURL;
+                if (process.platform === 'win32') url += '.exe';
+                this.downloadget(url, this.youtubedlPath)
+                    .then(() => {
+                        this.log('Downloaded youtube-dl into current directory.');
+                    })
+                    .catch((e) => {
+                        this.log('warn', 'Failed to download youtube-dl: ' + e);
+                    });
+            } else {
+                this.log('youtube-dl found in current directory.');
+            }
+        }
 
         //Load index
         
@@ -613,6 +640,29 @@ class ModGrabber extends Module {
     // # Module code below this line #
     
     
+    //Youtube-dl
+    
+    get youtubedlPath() {
+        let path = this._path + '/youtube-dl';
+        if (process.platform === 'win32') path += '.exe';
+        return path;
+    }
+    
+    async youtubedlChapters(url) {
+        return new Promise((resolve, reject) => {
+            let inst = cp.execFile(this.youtubedlPath, ['-j', url], {windowsHide: true}, (error, stdout, stderr) => {
+                if (!inst.exitCode) {
+                    let json = JSON.parse(stdout);
+                    if (json && json.chapters) resolve(json.chapters);
+                    else resolve([]);
+                } else {
+                    reject("Failed to retrieve chapters: " + stderr);
+                }
+            });
+        });
+    }
+    
+    
     //Stats file manipulation
     
     loadStats() {
@@ -681,7 +731,7 @@ class ModGrabber extends Module {
     }
     
     
-    extractMessageInfo(message) {
+    extractMessageInfo(message, meta) {
         let warnauthor = this.param('defaultBehavior') == 'feedback';
         let noextract =  this.param('defaultBehavior') == 'ignore';
 
@@ -719,7 +769,31 @@ class ModGrabber extends Module {
         let interval = null;
         if (title) {
             interval = message.match(/<(([0-9:]+)?(,[0-9:]+)?)>/);
-            if (interval) interval = this.parseInterval(interval[1]);
+            if (interval) {
+                interval = this.parseInterval(interval[1]);
+            } 
+        }
+        if (!interval) {
+            let chapter = null;
+            let chapterno = message.match(/<C([0-9]+)>/);
+            if (chapterno && chapterno[1] <= meta.chapters.length) {
+                chapter = meta.chapters[chapterno[1] - 1];
+            } else {
+                let chaptername = message.match(/<([^>]{3,})>/);
+                if (chaptername) {
+                    chaptername = chaptername[1].toLowerCase().trim();
+                    for (let checkchapter of meta.chapters) {
+                        if (checkchapter.title.toLowerCase().trim().indexOf(chaptername) > -1) {
+                            chapter = checkchapter;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (chapter) {
+                interval = [chapter.start_time, chapter.end_time];
+                if (!title) title = chapter.title;
+            }
         }
         
         let format = this.param('defaultFormat');
@@ -745,7 +819,7 @@ class ModGrabber extends Module {
     }
     
     
-    obtainMessageParams(messageObj) {
+    async obtainMessageParams(messageObj, from, url) {
         if (messageObj.regrab) {
             //messageObj is already local song metadata
             return {
@@ -768,7 +842,16 @@ class ModGrabber extends Module {
             }
         }
     
-        let messageInfo = this.extractMessageInfo(messageObj.content, messageObj.author.id);
+        let chapters = [];
+        if (from == 'youtube' && this.param('useYoutubedl')) {
+            try {
+                chapters = await this.youtubedlChapters(url);
+            } catch (e) {
+                this.log('warn', 'Chapter extraction: ' + e);
+            }
+        }
+    
+        let messageInfo = this.extractMessageInfo(messageObj.content, {authorid: messageObj.author.id, chapters: chapters});
         let tenv = this.env(this.param('env'));
 
         if (messageInfo.replace) {
@@ -801,7 +884,8 @@ class ModGrabber extends Module {
         let yturls = messageObj.content.match(/(?:https?:\/\/|\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11}|[\w_-]{12})(?![\w_-])/g);
         if (yturls) {
             for (let url of yturls) {
-                this.grabFromYoutube(url, messageObj, callbacks, readOnly);
+                this.grabFromYoutube(url, messageObj, callbacks, readOnly)
+                    .catch((e) => this.log('warn', 'Grab from youtube: ' + e));
             }
         }
         
@@ -809,7 +893,8 @@ class ModGrabber extends Module {
         if (messageObj.attachments && messageObj.attachments.array().length) {
             for (let ma of messageObj.attachments.array()) {
                 if (!ma.name || !ma.name.match(/\.(mp3|ogg|flac|wav|pcm|wma|aac|m4a)$/) || ma.size < 20480) continue;
-                this.grabFromAttachment(ma, messageObj, callbacks, readOnly);
+                this.grabFromAttachment(ma, messageObj, callbacks, readOnly)
+                    .catch((e) => this.log('warn', 'Grab from attachment: ' + e));
             }
         }
         
@@ -817,14 +902,16 @@ class ModGrabber extends Module {
         let gdurl = messageObj.content.match(/(?:https?:\/\/|\/\/)?(?:drive|docs)\.google\.com\/(?:(?:open|uc)\?id=|file\/d\/)([\w_-]{28,})(?![\w_])/);
         if (gdurl) {
             gdurl = 'https://docs.google.com/uc?id=' + gdurl[1];
-            this.grabFromURL(gdurl, 'gdrive', gdurl[1], messageObj, callbacks, readOnly);
+            this.grabFromURL(gdurl, 'gdrive', gdurl[1], messageObj, callbacks, readOnly)
+                .catch((e) => this.log('warn', 'Grab from Google Drive URL: ' + e));
         }
         
         //Dropbox
         let dburl = messageObj.content.match(/(?:https?:\/\/|\/\/)?(?:www\.)?dropbox\.com\/s\/([\w_]{15,})(?![\w_])/);
         if (dburl) {
             dburl = 'https://www.dropbox.com/s/' + dburl[1] + '/?dl=1';
-            this.grabFromURL(dburl, 'dropbox', dburl[1], messageObj, callbacks, readOnly);
+            this.grabFromURL(dburl, 'dropbox', dburl[1], messageObj, callbacks, readOnly)
+                .catch((e) => this.log('warn', 'Grab from Dropbox URL: ' + e));
         }
         
         return true;
@@ -838,19 +925,22 @@ class ModGrabber extends Module {
         if (format) info.format = format;
         
         if (info.sourceType == 'youtube') {
-            this.grabFromYoutube(info.source, info, callbacks, readOnly);
+            this.grabFromYoutube(info.source, info, callbacks, readOnly)
+                .catch((e) => this.log('warn', 'Regrab from youtube: ' + e));
         } else if (info.sourceType == 'discord') {
-            this.grabFromAttachment({name: info.name, id: info.sourceSpecificId, url: info.source}, info, callbacks, readOnly);
+            this.grabFromAttachment({name: info.name, id: info.sourceSpecificId, url: info.source}, info, callbacks, readOnly)
+                .catch((e) => this.log('warn', 'Regrab from attachment: ' + e));
         } else if (info.source) {
-            this.grabFromURL(info.source, info.sourceType, info.sourceSpecificId, info, callbacks, readOnly);
+            this.grabFromURL(info.source, info.sourceType, info.sourceSpecificId, info, callbacks, readOnly)
+                .catch((e) => this.log('warn', 'Regrab from URL: ' + e));
         }
         
         return true;
     }
     
     
-    grabFromYoutube(url, messageObj, callbacks, readOnly) {
-        let mp = this.obtainMessageParams(messageObj);
+    async grabFromYoutube(url, messageObj, callbacks, readOnly) {
+        let mp = await this.obtainMessageParams(messageObj, 'youtube', url);
         if (mp.info.noextract) return;
         try {
             //Obtain metadata from youtube
@@ -946,8 +1036,8 @@ class ModGrabber extends Module {
     }
     
     
-    grabFromAttachment(ma, messageObj, callbacks, readOnly) {
-        let mp = this.obtainMessageParams(messageObj);
+    async grabFromAttachment(ma, messageObj, callbacks, readOnly) {
+        let mp = await this.obtainMessageParams(messageObj);
         if (mp.info.noextract) return;
         try {
             this.log('Grabbing from attachment: ' + ma.name + ' (' + ma.id + ')');
@@ -1057,8 +1147,8 @@ class ModGrabber extends Module {
     }
     
     
-    grabFromURL(url, sourceType, sourceSpecificId, messageObj, callbacks, readOnly) {
-        let mp = this.obtainMessageParams(messageObj);
+    async grabFromURL(url, sourceType, sourceSpecificId, messageObj, callbacks, readOnly) {
+        let mp = await this.obtainMessageParams(messageObj);
         if (mp.info.noextract) return;
         try {
             let filename = sourceSpecificId;

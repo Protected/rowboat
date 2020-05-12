@@ -246,11 +246,6 @@ class Module {
     
     /* HTTP retrieval */
     
-    //Returns 
-    rawget(url, options, encoding) {
-    
-    }
-    
     //Returns Promise of URL contents
     async urlget(url, options, encoding) {
         if (!encoding && typeof options == "string") {
@@ -314,6 +309,18 @@ class Module {
         });
         
         return pt;
+    }
+    
+    //Downloads URL into a local file
+    async downloadget(url, localpath) {
+        return new Promise((resolve, reject) => {
+            let stream = fs.createWriteStream(localpath);
+            let download = this.streamget(url);
+            download.pipe(stream);
+            download.on('error', (e) => reject(e));
+            stream.on('error', (e) => reject(e));
+            stream.on('finish', () => resolve(localpath));
+        });
     }
 
     
