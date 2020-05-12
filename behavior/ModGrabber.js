@@ -118,10 +118,13 @@ class ModGrabber extends Module {
         if (this.param('useYoutubedl')) {
             if (!fs.existsSync(this.youtubedlPath)) {
                 let url = YOUTUBEDLURL;
-                if (process.platform === 'win32') url += '.exe';
+                if (process.platform == 'win32') url += '.exe';
                 this.downloadget(url, this.youtubedlPath)
                     .then(() => {
                         this.log('Downloaded youtube-dl into current directory.');
+                        if (process.platform != 'win32') {
+                            cp.execSync('chmod u+x ' + this.youtubedlPath);
+                        }
                     })
                     .catch((e) => {
                         this.log('warn', 'Failed to download youtube-dl: ' + e);
