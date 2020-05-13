@@ -35,7 +35,7 @@
     "node-feedparser": "^1.0.1",
     "readline-sync": "^1.4.9",
     "request": "^2.87.0",
-    "sqlite3": "^4.0.9",
+    "sqlite3": "^4.2.0",
     "striptags": "^3.1.1",
     "whois": "^2.6.0",
     "winston": "^3.2.1",
