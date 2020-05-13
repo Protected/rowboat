@@ -1457,7 +1457,7 @@ class ModRajio extends Module {
         let listeners = this.listeners.map((listener) => listener.id);
     
         let usequeue = (this._queue.length ? random.fraction() < this.param('pri.queue.chance') : false);
-        let novelties = this.isThereANovelty();
+        let novelties = this.isThereANovelty(listeners);
         let usenovelty = (novelties ? random.fraction() < this.param('pri.novelty.chance') : false);
 
         let priorities = {};
@@ -1724,12 +1724,25 @@ class ModRajio extends Module {
         return true;
     }
 
-    isThereANovelty() {
+    isThereANovelty(listeners) {
         let everysong = this.grabber.everySong();
+        let songrank = this.songrank;
         let novelties = [];
         for (let hash of everysong) {
             if (this.isNovelty(hash, everysong.length)) {
-                novelties.push(hash);
+
+                let voted = 0;
+                if (songrank && listeners) {
+                    for (let listenerid of listeners) {
+                        if (songrank.getSongLikeability(hash, listenerid)) {
+                            voted += 1;
+                        }
+                    }
+                }
+                
+                if (!listeners || voted < listeners.length) {
+                    novelties.push(hash);
+                }
             }
         }
         if (novelties.length) return novelties;
