@@ -30,7 +30,7 @@ class ModRajio extends Module {
         'autowithdraw',         //How long in seconds before a user withdraws from the queue if they are online but not a listener
         'queuesize',            //Maximum amount of songs in the request queue
         'historysize',          //Maximum amount of recently played songs to remember
-        'referenceloudness',    //Negative decibels; Play youtube songs with higher loudness at a lower volume to compensate
+        'referenceloudness',    //Negative decibels; Play youtube songs with higher loudness at a lower volume to compensate (non-normalized entries only)
         'volume',               //Global volume multipler; Defaults to 1.0 and can be changed via command
         'fec',                  //Forward error correction (true/false)
         
@@ -1279,10 +1279,12 @@ class ModRajio extends Module {
         }
         
         let att = 1.0;
-        let ref = this.param('referenceloudness');
-        if (!isNaN(ref) && ref < 0) {
-            if (song.sourceLoudness && song.sourceLoudness > ref) {  //Both negative numbers
-                att = Math.pow(10, (ref - song.sourceLoudness) / 20);
+        if (!song.normalized) {
+            let ref = this.param('referenceloudness');
+            if (!isNaN(ref) && ref < 0) {
+                if (song.sourceLoudness && song.sourceLoudness > ref) {  //Both negative numbers
+                    att = Math.pow(10, (ref - song.sourceLoudness) / 20);
+                }
             }
         }
         let volume = this._volume * att;

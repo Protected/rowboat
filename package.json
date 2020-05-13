@@ -22,6 +22,7 @@
     "diff": "^3.5.0",
     "discord.js": "^12.2.0",
     "emojione": "^3.1.4",
+    "ffmpeg-normalize": "^1.8.0",
     "fluent-ffmpeg": "^2.1.2",
     "follow-redirects": "^1.11.0",
     "irc": "file:./local/irc",

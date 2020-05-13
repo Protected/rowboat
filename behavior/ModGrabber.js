@@ -2,12 +2,15 @@
 
 const Module = require('../Module.js');
 const fs = require('fs');
+const crypto = require('crypto');
+const cp = require('child_process');
+const util = require('util');
+
 const ytdl = require('ytdl-core');
 const FFmpeg = require('fluent-ffmpeg');
-const crypto = require('crypto');
+const normalize = require('ffmpeg-normalize');
 const moment = require('moment');
 const random = require('meteor-random');
-const cp = require('child_process');
 
 const PERM_ADMIN = 'administrator';
 const PERM_MODERATOR = 'moderator';
@@ -49,7 +52,9 @@ class ModGrabber extends Module {
         'tagIgnore',            //Tag message to be ignored (regex)
         'tagQuiet',             //Tag message to be quietly processed (regex)
         'tagFeedback',          //Tag message to be processed and provide feedback (regex)
-        'useYoutubedl'          //Download and use youtube-dl features. Currently: Chapters
+        'useYoutubedl',         //Download and use youtube-dl features. Currently: Chapters
+        'normalization',        //Normalize downloaded files. One of: false, true/'ebuR128', 'rms'
+        'normalTarget',         //Normalization target in LUFS or dB depending on the algorithm chosen above
     ]; }
 
     get requiredEnvironments() { return [
@@ -85,6 +90,8 @@ class ModGrabber extends Module {
         this._params['tagFeedback'] = '^!!';
         
         this._params['useYoutubedl'] = false;
+        this._params['normalization'] = 'ebuR128';
+        this._params['normalTarget'] = -20;
         
         this._preparing = 0;  //Used for generating temporary filenames
         
@@ -1330,11 +1337,28 @@ class ModGrabber extends Module {
                 return;
             }
             
-            this._usage += fs.statSync(temppath).size;
+            let finalstep;
+            if (this.param('normalization')) {
+                let mode = this.param('normalization');
+                if (!(['ebuR128', 'rms'].find(m => m == mode))) mode = 'ebuR128';
+                finalstep = normalize({
+                    input: temppath,
+                    output: realpath,
+                    loudness: {
+                        normalization: mode,
+                        target: {
+                            input_i: this.param('normalTarget')
+                        }
+                    }
+                });
+            } else {
+                finalstep = util.promisify(fs.rename)(temppath, realpath);
+            }
             
-            fs.rename(temppath, realpath, (err) => {
-                if (err) throw err;
-            
+            finalstep.then((normalized) => {
+
+                this._usage += fs.statSync(realpath).size;
+                
                 let entry = (mp.regrab ? mp.regrab : {});
                 
                 if (mp.info.replace) {
@@ -1347,6 +1371,13 @@ class ModGrabber extends Module {
                 
                 entry.hash = hash;
                 entry.format = mp.info.format;
+                
+                if (normalized) {
+                    entry.normalized = {
+                        from: normalized.info.measured,
+                        to: normalized.info.loudness
+                    };
+                }
                 
                 if (!mp.regrab) {
                     if (typeof info == "object") {
@@ -1400,8 +1431,9 @@ class ModGrabber extends Module {
                 if (!mp.regrab) {
                     this.processOnNewSong(messageObj, mp.authorName, mp.reply, hash);
                 }
+                
             });
-            
+
         });
     }
     
