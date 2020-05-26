@@ -1,3 +1,5 @@
+//Provides internal logging
+
 const winston = require('winston');
 const moment = require('moment');
 

@@ -1,5 +1,6 @@
 const jsonfile = require('jsonfile');
 const logger = require('./Logger.js');
+const api = require('./API.js');
 
 var config;
 var environments = {};

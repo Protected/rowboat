@@ -12,6 +12,7 @@ class Module {
     get name() { return this._name; }
     get modName() { return this._modName; }
     
+    get expose() { return this._expose; }
     
     /* Settings to override in your module */
 
@@ -46,6 +47,8 @@ class Module {
     
         this._modName = modName;
         this._name = (name ? name : modName);
+        
+        this._expose = false;
         
         this._params = {};
         
