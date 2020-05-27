@@ -225,7 +225,7 @@ class ModSongRanking extends Module {
                 emojiname = extr[1];
                 if (LIKEABILITY_REACTIONS[emojiname] === undefined) return;
                 
-                this.grabber.scanMessage(messageReaction.message, {
+                this.grabber.queueScanMessage(messageReaction.message, {
                     exists: (messageObj, messageAuthor, reply, hash) => {
                         this.setSongLikeability(hash, user.id, LIKEABILITY_REACTIONS[emojiname]);
                     }

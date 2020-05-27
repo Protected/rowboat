@@ -143,7 +143,7 @@ let playing;
 
 let columndefs = [
     {targets: [0], className: "c_format", render: (data, type, row, meta) => type == "display" ? '<span class="' + row.format + '" title="' + row.format + '"></span>' : row.format},
-    {targets: [1], className: "c_hash hashcell", orderable: false, render: (data, type, row, meta) => type == "display" ? '<input type="text" value="' + row.hash + '" readonly>' : row.hash},
+    {targets: [1], className: "c_hash hashcell", orderable: false, render: (data, type, row, meta) => type == "display" ? '<input type="text" value="#' + row.hash + '" readonly>' : row.hash},
     {targets: [2], className: "c_q", orderable: false, render: (data, type, row, meta) => {
         if (row.hash == playing) return "▶";
         if (row.queuepos) return row.queuepos;

@@ -4,7 +4,7 @@ const Module = require('../Module.js');
 const fs = require('fs');
 const crypto = require('crypto');
 const cp = require('child_process');
-const util = require('util');
+const { promisify } = require('util');
 
 const ytdl = require('ytdl-core');
 const FFmpeg = require('fluent-ffmpeg');
@@ -40,7 +40,7 @@ class ModGrabber extends Module {
         'minDuration',          //Minimum duration of the audio file (seconds)
         'maxDuration',          //Maximum duration of the audio file (seconds)
         'maxDiskUsage',         //Amount of disk space grabber is allowed to use in the downloadPath excluding index (bytes)
-        'maxSimDownloads',      //Maximum simultaneous downloads
+        'maxSimDownloads',      //Maximum simultaneous actions (downloads or fixes)
         'scanDelay',            //Delay between attempts to process messages (pending messages are queued) (ms)
         'selfDeleteExpiration', //Deadline for sharer to delete a song (counted from song's first share) (s)
         'permissionsDeleteAll', //List of sufficient permissions for deleting songs not shared by the user
@@ -91,7 +91,7 @@ class ModGrabber extends Module {
         
         this._params['useYoutubedl'] = false;
         this._params['normalization'] = 'ebuR128';
-        this._params['normalTarget'] = -20;
+        this._params['normalTarget'] = -12;
         
         this._preparing = 0;  //Used for generating temporary filenames
         
@@ -103,7 +103,7 @@ class ModGrabber extends Module {
         this._sessionGrabs = [];  //History of hashes grabbed in this session
         this._parserFilters = [];  //[[regex, callback(string)], ...] to apply to hashoroffset arguments (see API)
         
-        this._scanQueue = [];  //Rate-limit song downloads. Each item is: [authorid, messageToScan]
+        this._scanQueue = [];  //Rate-limit song downloads and other heavy actions. Each item is an anonymous function that performs the action.
         this._scanTimer = null;
         this._downloads = 0;
         
@@ -214,11 +214,11 @@ class ModGrabber extends Module {
                     if (messagesarr.length < 100) endNow = true;
                     for (let message of messagesarr) {
                         if (message.createdTimestamp <= cutoff) endNow = true;
-                        this._scanQueue.push([message, {
+                        this.queueScanMessage(message, {
                             exists: (messageObj, messageAuthor, reply, hash) => {
                                 this.processOnGrabscanExists(messageObj, messageAuthor, reply, hash);
                             }
-                        }]);
+                        });
                     }
                     if (endNow) {
                         ep.reply("Scan complete.");
@@ -236,30 +236,43 @@ class ModGrabber extends Module {
         
         this.mod('Commands').registerCommand(this, 'grab regrab', {
             description: 'Fix the library by attempting to redownload songs from source (if not missing).',
-            args: ['hash', 'format', 'onlyreformat'],
+            args: ['hashoroffset', 'format', 'onlyreformat'],
             minArgs: 0,
             permissions: [PERM_ADMIN]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            if (args.hash && args.hash != "-") {
-                this._scanQueue.push([this._index[args.hash], args.format, {
+            if (args.hashoroffset) {
+            
+                let hash = this.parseHashArg(args.hashoroffset);
+                if (hash === false) {
+                    ep.reply('Offset not found in recent history.');
+                    return true;
+                } else if (hash === true) {
+                    ep.reply('Reference matches more than one song; Please be more specific.');
+                    return true;
+                } else if (!hash) {
+                    ep.reply('Hash not found.');
+                    return true;
+                }
+            
+                this.queueRegrab(this._index[hash], args.format, {
                     accepted: (messageObj, a, b, hash) => ep.reply(hash + ": Got it."),
                     errorDuration: (messageObj) => ep.reply(messageObj.hash + ": I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds."),
                     errorNotFound: (messageObj) => ep.reply(messageObj.hash + ": the song you tried to replace could not be found."),
                     errorEncoding: (messageObj) => ep.reply(messageObj.hash + ": the song could not be obtained or converted.")
-                }]);
+                });
                 ep.reply("Regrab requested.");
                 return true;
             }
         
-            ep.reply("Sit tight, this will take a long time...");
+            ep.reply("Sit tight, this may take a long time...");
         
             let i = 0;
         
             for (let hash in this._index) {
-                let curformat = this._index[hash].format || 'mp3';
+                let curformat = this._index[hash].format || this.param('defaultFormat');
                 if (args.format && args.onlyreformat && curformat == args.format) continue;
-                this._scanQueue.push([this._index[hash], args.format, {
+                this.queueRegrab(this._index[hash], args.format, {
                     accepted: (messageObj, a, b, hash) => {
                         i += 1;
                         if (!(i % 100)) ep.reply(i + " accepted so far.");
@@ -267,7 +280,7 @@ class ModGrabber extends Module {
                     errorDuration: (messageObj) => ep.reply(messageObj.hash + ": I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds."),
                     errorNotFound: (messageObj) => ep.reply(messageObj.hash + ": the song you tried to replace could not be found."),
                     errorEncoding: (messageObj) => ep.reply(messageObj.hash + ": the song could not be obtained or converted.")
-                }]);
+                });
             }
             
             return true;
@@ -399,7 +412,58 @@ class ModGrabber extends Module {
                 return true;
             }
             
-            ep.reply('`' + hash + '`');
+            ep.reply('`#' + hash + '`');
+            
+            return true;
+        });
+        
+        
+        this.mod('Commands').registerCommand(this, 'grab fixloudness', {
+            description: 'Adjust the loudness of a song to match the instance target.',
+            details: [
+                'This operation is lossy if the song is cached in a lossy format.'
+            ],
+            args: ['hashoroffset'],
+            minArgs: 0,
+            permissions: [PERM_ADMIN]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            if (args.hashoroffset) {
+            
+                let hash = this.parseHashArg(args.hashoroffset);
+                if (hash === false) {
+                    ep.reply('Offset not found in recent history.');
+                    return true;
+                } else if (hash === true) {
+                    ep.reply('Reference matches more than one song; Please be more specific.');
+                    return true;
+                } else if (!hash) {
+                    ep.reply('Hash not found.');
+                    return true;
+                }
+            
+                this.queueFixLoudness(this._index[hash], {
+                    success: (newsong) => ep.reply(newsong.hash + ": Loudness fixed from " + hash + "."),
+                    error: (oldsong, err) => ep.reply(oldsong.hash + ": Failed loudness fix: " + err)
+                });
+
+                ep.reply("Loudness fix requested.");
+                return true;
+            }
+        
+            ep.reply("Sit tight, this may take a long time...");
+        
+            let i = 0;
+        
+            for (let hash in this._index) {
+                this.queueFixLoudness(this._index[hash], {
+                    success: (newsong) => {
+                        i += 1;
+                        if (!(i % 100)) ep.reply(i + " fixed so far.");
+                    },
+                    error: (oldsong, err) => ep.reply(oldsong.hash + ": Failed loudness fix: " + err)
+                });
+            }
             
             return true;
         });
@@ -440,7 +504,7 @@ class ModGrabber extends Module {
             } else {
                 ep.reply('Result' + (results.length != 1 ? 's' : '') + ' ' + (page * 10 + 1) + ' to ' + (page * 10 + results.length) + ' of ' + ltotal + '.');
                 for (let info of results) {
-                    ep.reply('`' + info.hash + ' ' + info.name + (info.author ? ' (' + info.author + ')' : '') + '`');
+                    ep.reply('`#' + info.hash + ' ' + info.name + (info.author ? ' (' + info.author + ')' : '') + '`');
                 }
             }
         
@@ -672,6 +736,10 @@ class ModGrabber extends Module {
         });
     }
     
+    youtubedlDownload(url, localpath) {
+        return cp.execFile(this.youtubedlPath, ['-q', '-o', localpath, url]);
+    }
+    
     
     //Stats file manipulation
     
@@ -718,7 +786,7 @@ class ModGrabber extends Module {
     onMessage(env, type, message, authorid, channelid, rawobj) {
         if (env.name != this.param('env')) return false;
         if (this.param('channels').indexOf(channelid) < 0) return false;
-        this._scanQueue.push([rawobj, {
+        this.queueScanMessage(rawobj, {
             accepted: (messageObj, messageAuthor, reply, hash) => {
                 if (reply) reply("Got it, " + messageAuthor + ".");
             },
@@ -737,7 +805,7 @@ class ModGrabber extends Module {
             errorEncoding: (messageObj, messageAuthor, reply) => {
                 if (reply) reply(messageAuthor + ", the song could not be obtained or converted.");
             }
-        }]);
+        });
     }
     
     
@@ -895,7 +963,7 @@ class ModGrabber extends Module {
         if (yturls) {
             for (let url of yturls) {
                 this.grabFromYoutube(url, messageObj, callbacks, readOnly)
-                    .catch((e) => this.log('warn', 'Grab from youtube: ' + e));
+                    .catch((e) => this.log('warn', 'Grab from YouTube: ' + e));
             }
         }
         
@@ -924,6 +992,15 @@ class ModGrabber extends Module {
                 .catch((e) => this.log('warn', 'Grab from Dropbox URL: ' + e));
         }
         
+        if (this.param("useYoutubedl")) {
+            //Bandcamp
+            let bcurl = messageObj.content.match(/(?:https?:\/\/|\/\/)?([a-z0-9-]+)\.bandcamp\.com\/track\/([\w_-]+)(?![\w_-])/);
+            if (bcurl) {
+                this.grabFromYoutubedl(bcurl[0], 'bandcamp', bcurl[1] + '__' + bcurl[2], messageObj, callbacks, readOnly)
+                    .catch((e) => this.log('warn', 'Grab from Bandcamp: ' + e));
+            }
+        }
+        
         return true;
     }
     
@@ -936,10 +1013,13 @@ class ModGrabber extends Module {
         
         if (info.sourceType == 'youtube') {
             this.grabFromYoutube(info.source, info, callbacks, readOnly)
-                .catch((e) => this.log('warn', 'Regrab from youtube: ' + e));
+                .catch((e) => this.log('warn', 'Regrab from YouTube: ' + e));
         } else if (info.sourceType == 'discord') {
             this.grabFromAttachment({name: info.name, id: info.sourceSpecificId, url: info.source}, info, callbacks, readOnly)
                 .catch((e) => this.log('warn', 'Regrab from attachment: ' + e));
+        } else if (info.sourceType == 'bandcamp') {
+            this.grabFromYoutubedl(info.source, info.sourceType, info.sourceSpecificId, info, callbacks, readOnly)
+                .catch((e) => this.log('warn', 'Regrab from Youtube-dl: ' + e));
         } else if (info.source) {
             this.grabFromURL(info.source, info.sourceType, info.sourceSpecificId, info, callbacks, readOnly)
                 .catch((e) => this.log('warn', 'Regrab from URL: ' + e));
@@ -952,56 +1032,144 @@ class ModGrabber extends Module {
     async grabFromYoutube(url, messageObj, callbacks, readOnly) {
         let mp = await this.obtainMessageParams(messageObj, 'youtube', url);
         if (mp.info.noextract) return;
-        try {
-            //Obtain metadata from youtube
-            ytdl.getInfo(url, (err, info) => {
+
+        //Obtain metadata from youtube
+        ytdl.getInfo(url, (err, info) => {
+            if (err) {
+                this.log('warn', err);
+                return;
+            }
+            
+            let length = info.length_seconds || info.duration || info.videoDetails.length_seconds || 0;
+            
+            if (!mp.interval && length < this.param('minDuration') || mp.interval && mp.interval[1] - mp.interval[0] < this.param('minDuration')
+                    || length > this.param('maxDuration') && (!mp.interval || mp.interval[1] - mp.interval[0] > this.param('maxDuration'))) {
+                if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
+                return;
+            }
+                    
+            if (!mp.regrab && this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]
+                    && !this._indexSourceTypeAndId['youtube'][info.video_id].sourcePartial && !mp.interval) {
+                if (callbacks.exists) callbacks.exists(messageObj, mp.authorName, mp.reply, this._indexSourceTypeAndId['youtube'][info.video_id].hash);
+                return;
+            }
+            
+            let keywords = [];
+            if (info.player_response && info.player_response.videoDetails && typeof info.player_response.videoDetails.keywords == "object") {
+                for (let keyword of info.player_response.videoDetails.keywords) {
+                    keywords.push(keyword);
+                }
+            }
+            for (let dkeyword of mp.info.keywords) {
+                keywords.push(dkeyword);
+            }
+            
+            let loudness = null;
+            if (info.player_response && info.player_response.playerConfig && typeof info.player_response.playerConfig.audioConfig == "object") {
+                loudness = parseFloat(info.player_response.playerConfig.audioConfig.perceptualLoudnessDb);
+            }
+            
+            this.log('Grabbing from youtube: ' + url);
+            this._downloads += 1;
+        
+            //Youtube -> FFmpeg -> Hard drive
+            
+            let video = ytdl(url, {filter: 'audioonly'});
+            
+            let ffmpeg = new FFmpeg(video);
+            if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
+            
+            let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
+            let stream = fs.createWriteStream(temppath);
+
+            if (mp.info.format == 'pcm') {
+                ffmpeg.format('s16le').audioBitrate('48k').audioChannels(2);
+            } else if (mp.info.format == 'flac') {
+                ffmpeg.format('flac');
+            } else {
+                ffmpeg.format('mp3');
+            }
+            let audio = ffmpeg.pipe(stream);
+            
+            ffmpeg.on('error', (error) => {
+                this.log('error', '[Youtube, FFmpeg] ' + error);
+                audio.destroy();
+                this._downloads -= 1;
+            });
+            
+            stream.on('error', (error) => {
+                this.log('error', '[Youtube, Write] ' + error);
+                audio.destroy();
+                this._downloads -= 1;
+            });
+        
+            stream.on('finish', () => {
+                this._downloads -= 1;
+                
+                this.persistTempDownload(temppath, url, mp, {
+                    length: parseInt(length),
+                    source: url,
+                    sourceType: 'youtube',
+                    sourceSpecificId: info.video_id || info.videoDetails.video_id,
+                    sourceLoudness: loudness,
+                    name: info.title || info.videoDetails.title,
+                    author: '',
+                    album: '',
+                    keywords: keywords
+                }, messageObj, callbacks, readOnly);
+            });
+            
+        });
+
+    }
+        
+    
+    async grabFromAttachment(ma, messageObj, callbacks, readOnly) {
+        let mp = await this.obtainMessageParams(messageObj);
+        if (mp.info.noextract) return;
+
+        this.log('Grabbing from attachment: ' + ma.name + ' (' + ma.id + ')');
+        this._downloads += 1;
+        
+        let prepnum = this._preparing++;
+        
+        //Attachment -> Hard drive
+        
+        let attfiledl = this.streamget(ma.url);
+        let prepath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '_a.tmp';
+        let prestream = fs.createWriteStream(prepath);
+        
+        attfiledl.on('error', (error) => {
+            this.log('error', '[Attachment, Download] ' + error);
+            attfiledl.destroy();
+            this._downloads -= 1;
+        });
+        
+        prestream.on('error', (error) => {
+            this.log('error', '[Attachment, Write] ' + error);
+            attfiledl.destroy();
+            this._downloads -= 1;
+        });
+        
+        attfiledl.pipe(prestream);
+        
+        prestream.on('finish', () => {
+        
+            //Get song info
+            FFmpeg(prepath).ffprobe((err, info) => {
                 if (err) {
                     this.log('warn', err);
                     return;
                 }
-                
-                let length = info.length_seconds || info.duration || info.videoDetails.length_seconds || 0;
-                
-                if (!mp.interval && length < this.param('minDuration') || mp.interval && mp.interval[1] - mp.interval[0] < this.param('minDuration')
-                        || length > this.param('maxDuration') && (!mp.interval || mp.interval[1] - mp.interval[0] > this.param('maxDuration'))) {
-                    if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
-                    return;
-                }
-                        
-                if (!mp.regrab && this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]
-                        && !this._indexSourceTypeAndId['youtube'][info.video_id].sourcePartial && !mp.interval) {
-                    if (callbacks.exists) callbacks.exists(messageObj, mp.authorName, mp.reply, this._indexSourceTypeAndId['youtube'][info.video_id].hash);
-                    return;
-                }
-                
-                let keywords = [];
-                if (info.player_response && info.player_response.videoDetails && typeof info.player_response.videoDetails.keywords == "object") {
-                    for (let keyword of info.player_response.videoDetails.keywords) {
-                        keywords.push(keyword);
-                    }
-                }
-                for (let dkeyword of mp.info.keywords) {
-                    keywords.push(dkeyword);
-                }
-                
-                let loudness = null;
-                if (info.player_response && info.player_response.playerConfig && typeof info.player_response.playerConfig.audioConfig == "object") {
-                    loudness = parseFloat(info.player_response.playerConfig.audioConfig.perceptualLoudnessDb);
-                }
-                
-                this.log('Grabbing from youtube: ' + url);
-                this._downloads += 1;
-            
-                //Youtube -> FFmpeg -> Hard drive
-                
-                let video = ytdl(url, {filter: 'audioonly'});
-                
-                let ffmpeg = new FFmpeg(video);
+        
+                //Hard drive -> FFmpeg -> Hard drive
+        
+                let ffmpeg = new FFmpeg(prepath);
                 if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
                 
-                let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
+                let temppath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '.tmp';
                 let stream = fs.createWriteStream(temppath);
-
+                
                 if (mp.info.format == 'pcm') {
                     ffmpeg.format('s16le').audioBitrate('48k').audioChannels(2);
                 } else if (mp.info.format == 'flac') {
@@ -1012,80 +1180,107 @@ class ModGrabber extends Module {
                 let audio = ffmpeg.pipe(stream);
                 
                 ffmpeg.on('error', (error) => {
-                    this.log('error', '[Youtube, FFmpeg] ' + error);
+                    this.log('error', '[Attachment, FFmpeg] ' + error);
                     audio.destroy();
                     this._downloads -= 1;
                 });
                 
                 stream.on('error', (error) => {
-                    this.log('error', '[Youtube, Write] ' + error);
+                    this.log('error', '[Attachment, Rewrite] ' + error);
                     audio.destroy();
                     this._downloads -= 1;
                 });
-            
+
                 stream.on('finish', () => {
                     this._downloads -= 1;
                     
-                    this.persistTempDownload(temppath, url, mp, {
-                        length: parseInt(length),
-                        source: url,
-                        sourceType: 'youtube',
-                        sourceSpecificId: info.video_id || info.videoDetails.video_id,
-                        sourceLoudness: loudness,
-                        name: info.title || info.videoDetails.title,
-                        author: '',
-                        album: '',
+                    fs.unlink(prepath, (err) => {});
+    
+                    let duration = parseFloat(info.format.duration || info.streams[0].duration);
+                    if (duration < this.param('minDuration') || duration > this.param('maxDuration')) {
+                        if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
+                        return;
+                    }
+                    
+                    let title = ma.name;
+                    let artist = '';
+                    let album = '';
+                    if (info.format && info.format.tags) {
+                        if (info.format.tags.title) title = info.format.tags.title;
+                        if (info.format.tags.artist) artist = info.format.tags.artist;
+                        if (info.format.tags.album) album = info.format.tags.album;
+                    }
+                    
+                    let keywords = (mp.info.dkeywords || []);
+                    
+                    this.persistTempDownload(temppath, ma.name, mp, {
+                        length: Math.floor(duration),
+                        source: ma.url,
+                        sourceType: 'discord',
+                        sourceSpecificId: ma.id,
+                        sourceLoudness: null,
+                        name: title,
+                        author: artist,
+                        album: album,
                         keywords: keywords
                     }, messageObj, callbacks, readOnly);
                 });
                 
             });
-        } catch (exception) {
-            this.log('error', exception);
-        }
+            
+        });
     }
     
     
-    async grabFromAttachment(ma, messageObj, callbacks, readOnly) {
+    async grabFromURL(url, sourceType, sourceSpecificId, messageObj, callbacks, readOnly) {
         let mp = await this.obtainMessageParams(messageObj);
         if (mp.info.noextract) return;
-        try {
-            this.log('Grabbing from attachment: ' + ma.name + ' (' + ma.id + ')');
-            this._downloads += 1;
-            
-            let prepnum = this._preparing++;
-            
-            //Attachment -> Hard drive
-            
-            let attfiledl = this.streamget(ma.url);
-            let prepath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '_a.tmp';
-            let prestream = fs.createWriteStream(prepath);
-            
-            attfiledl.on('error', (error) => {
-                this.log('error', '[Attachment, Download] ' + error);
-                attfiledl.destroy();
-                this._downloads -= 1;
-            });
-            
-            prestream.on('error', (error) => {
-                this.log('error', '[Attachment, Write] ' + error);
-                attfiledl.destroy();
-                this._downloads -= 1;
-            });
-            
-            attfiledl.pipe(prestream);
-            
+
+        let filename = sourceSpecificId;
+    
+        this.log('Grabbing from ' + sourceType + ' URL: ' + url + ' (' + sourceSpecificId + ')');
+        this._downloads += 1;
+        
+        let prepnum = this._preparing++;
+        
+        //URL -> Hard drive
+        
+        let filedl = this.streamget(url);
+        let prepath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '_a.tmp';
+        let prestream = fs.createWriteStream(prepath);
+        
+        filedl.on('error', (error) => {
+            this.log('error', '[URL, Download] ' + error);
+            filedl.destroy();
+            this._downloads -= 1;
+        });
+        
+        prestream.on('error', (error) => {
+            this.log('error', '[URL, Write] ' + error);
+            filedl.destroy();
+            this._downloads -= 1;
+        });
+        
+        filedl.pipe(prestream);
+        
+        filedl.on('response', (response) => {
+        
+            if (response.headers['content-disposition']) {
+                let getfilename = response.headers['content-disposition'].match(/filename="([^"]+)"/);
+                if (getfilename) filename = getfilename[1];
+            }
+        
             prestream.on('finish', () => {
-            
+        
                 //Get song info
                 FFmpeg(prepath).ffprobe((err, info) => {
                     if (err) {
                         this.log('warn', err);
                         return;
                     }
-            
+                    
                     //Hard drive -> FFmpeg -> Hard drive
-            
+                    
                     let ffmpeg = new FFmpeg(prepath);
                     if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
                     
@@ -1102,29 +1297,29 @@ class ModGrabber extends Module {
                     let audio = ffmpeg.pipe(stream);
                     
                     ffmpeg.on('error', (error) => {
-                        this.log('error', '[Attachment, FFmpeg] ' + error);
+                        this.log('error', '[URL, FFmpeg] ' + error);
                         audio.destroy();
                         this._downloads -= 1;
                     });
                     
                     stream.on('error', (error) => {
-                        this.log('error', '[Attachment, Rewrite] ' + error);
+                        this.log('error', '[URL, Rewrite] ' + error);
                         audio.destroy();
                         this._downloads -= 1;
                     });
-
+                    
                     stream.on('finish', () => {
                         this._downloads -= 1;
                         
                         fs.unlink(prepath, (err) => {});
-        
+
                         let duration = parseFloat(info.format.duration || info.streams[0].duration);
                         if (duration < this.param('minDuration') || duration > this.param('maxDuration')) {
                             if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
                             return;
                         }
                         
-                        let title = ma.name;
+                        let title = filename;
                         let artist = '';
                         let album = '';
                         if (info.format && info.format.tags) {
@@ -1135,11 +1330,11 @@ class ModGrabber extends Module {
                         
                         let keywords = (mp.info.dkeywords || []);
                         
-                        this.persistTempDownload(temppath, ma.name, mp, {
+                        this.persistTempDownload(temppath, url, mp, {
                             length: Math.floor(duration),
-                            source: ma.url,
-                            sourceType: 'discord',
-                            sourceSpecificId: ma.id,
+                            source: url,
+                            sourceType: sourceType,
+                            sourceSpecificId: sourceSpecificId,
                             sourceLoudness: null,
                             name: title,
                             author: artist,
@@ -1149,134 +1344,118 @@ class ModGrabber extends Module {
                     });
                     
                 });
-                
+            
             });
-        } catch (exception) {
-            this.log('error', exception);
-        }
+            
+        });
+            
     }
     
     
-    async grabFromURL(url, sourceType, sourceSpecificId, messageObj, callbacks, readOnly) {
+    async grabFromYoutubedl(url, sourceType, sourceSpecificId, messageObj, callbacks, readOnly) {
         let mp = await this.obtainMessageParams(messageObj);
         if (mp.info.noextract) return;
-        try {
-            let filename = sourceSpecificId;
-        
-            this.log('Grabbing from ' + sourceType + ' URL: ' + url + ' (' + sourceSpecificId + ')');
-            this._downloads += 1;
-            
-            let prepnum = this._preparing++;
-            
-            //URL -> Hard drive
-            
-            let filedl = this.streamget(url);
-            let prepath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '_a.tmp';
-            let prestream = fs.createWriteStream(prepath);
-            
-            filedl.on('error', (error) => {
-                this.log('error', '[URL, Download] ' + error);
-                filedl.destroy();
-                this._downloads -= 1;
-            });
-            
-            prestream.on('error', (error) => {
-                this.log('error', '[URL, Write] ' + error);
-                filedl.destroy();
-                this._downloads -= 1;
-            });
-            
-            filedl.pipe(prestream);
-            
-            filedl.on('response', (response) => {
-            
-                if (response.headers['content-disposition']) {
-                    let getfilename = response.headers['content-disposition'].match(/filename="([^"]+)"/);
-                    if (getfilename) filename = getfilename[1];
-                }
-            
-                prestream.on('finish', () => {
-            
-                    //Get song info
-                    FFmpeg(prepath).ffprobe((err, info) => {
-                        if (err) {
-                            this.log('warn', err);
-                            return;
-                        }
-                        
-                        //Hard drive -> FFmpeg -> Hard drive
-                        
-                        let ffmpeg = new FFmpeg(prepath);
-                        if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
-                        
-                        let temppath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '.tmp';
-                        let stream = fs.createWriteStream(temppath);
-                        
-                        if (mp.info.format == 'pcm') {
-                            ffmpeg.format('s16le').audioBitrate('48k').audioChannels(2);
-                        } else if (mp.info.format == 'flac') {
-                            ffmpeg.format('flac');
-                        } else {
-                            ffmpeg.format('mp3');
-                        }
-                        let audio = ffmpeg.pipe(stream);
-                        
-                        ffmpeg.on('error', (error) => {
-                            this.log('error', '[URL, FFmpeg] ' + error);
-                            audio.destroy();
-                            this._downloads -= 1;
-                        });
-                        
-                        stream.on('error', (error) => {
-                            this.log('error', '[URL, Rewrite] ' + error);
-                            audio.destroy();
-                            this._downloads -= 1;
-                        });
-                        
-                        stream.on('finish', () => {
-                            this._downloads -= 1;
-                            
-                            fs.unlink(prepath, (err) => {});
 
-                            let duration = parseFloat(info.format.duration || info.streams[0].duration);
-                            if (duration < this.param('minDuration') || duration > this.param('maxDuration')) {
-                                if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
-                                return;
-                            }
-                            
-                            let title = filename;
-                            let artist = '';
-                            let album = '';
-                            if (info.format && info.format.tags) {
-                                if (info.format.tags.title) title = info.format.tags.title;
-                                if (info.format.tags.artist) artist = info.format.tags.artist;
-                                if (info.format.tags.album) album = info.format.tags.album;
-                            }
-                            
-                            let keywords = (mp.info.dkeywords || []);
-                            
-                            this.persistTempDownload(temppath, url, mp, {
-                                length: Math.floor(duration),
-                                source: url,
-                                sourceType: sourceType,
-                                sourceSpecificId: sourceSpecificId,
-                                sourceLoudness: null,
-                                name: title,
-                                author: artist,
-                                album: album,
-                                keywords: keywords
-                            }, messageObj, callbacks, readOnly);
-                        });
-                        
-                    });
+        let filename = sourceSpecificId;
+    
+        this.log('Grabbing from ' + sourceType + ' using youtube-dl: ' + url + ' (' + sourceSpecificId + ')');
+        this._downloads += 1;
+        
+        let prepnum = this._preparing++;
+        
+        //URL -> Hard drive
+        
+        let prepath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '_a.tmp';
+        let youtubedl = this.youtubedlDownload(url, prepath);
+
+        youtubedl.on('error', (err) => {
+            this.log('error', '[Youtube-dl, Process] ' + error);
+            this._downloads -= 1;
+        });
+        
+        youtubedl.on('exit', (code) => {
+            if (code) {
+                this.log('error', '[Youtube-dl, Exit code] ' + code);
+                this._downloads -= 1;
+
+                return;
+            }
+            
+            //Get song info
+            FFmpeg(prepath).ffprobe((err, info) => {
+                if (err) {
+                    this.log('warn', err);
+                    return;
+                }
                 
+                //Hard drive -> FFmpeg -> Hard drive
+                
+                let ffmpeg = new FFmpeg(prepath);
+                if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
+                
+                let temppath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '.tmp';
+                let stream = fs.createWriteStream(temppath);
+                
+                if (mp.info.format == 'pcm') {
+                    ffmpeg.format('s16le').audioBitrate('48k').audioChannels(2);
+                } else if (mp.info.format == 'flac') {
+                    ffmpeg.format('flac');
+                } else {
+                    ffmpeg.format('mp3');
+                }
+                let audio = ffmpeg.pipe(stream);
+                
+                ffmpeg.on('error', (error) => {
+                    this.log('error', '[URL, FFmpeg] ' + error);
+                    audio.destroy();
+                    this._downloads -= 1;
+                });
+                
+                stream.on('error', (error) => {
+                    this.log('error', '[URL, Rewrite] ' + error);
+                    audio.destroy();
+                    this._downloads -= 1;
+                });
+                
+                stream.on('finish', () => {
+                    this._downloads -= 1;
+                    
+                    fs.unlink(prepath, (err) => {});
+
+                    let duration = parseFloat(info.format.duration || info.streams[0].duration);
+                    if (duration < this.param('minDuration') || duration > this.param('maxDuration')) {
+                        if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
+                        return;
+                    }
+                    
+                    let title = filename;
+                    let artist = '';
+                    let album = '';
+                    if (info.format && info.format.tags) {
+                        if (info.format.tags.title) title = info.format.tags.title;
+                        if (info.format.tags.artist) artist = info.format.tags.artist;
+                        if (info.format.tags.album) album = info.format.tags.album;
+                    }
+                    
+                    let keywords = (mp.info.dkeywords || []);
+                    
+                    this.persistTempDownload(temppath, url, mp, {
+                        length: Math.floor(duration),
+                        source: url,
+                        sourceType: sourceType,
+                        sourceSpecificId: sourceSpecificId,
+                        sourceLoudness: null,
+                        name: title,
+                        author: artist,
+                        album: album,
+                        keywords: keywords
+                    }, messageObj, callbacks, readOnly);
                 });
                 
             });
+        
+        });
             
-        } catch (exception) {
-            this.log('error', exception);
-        }
     }
     
     
@@ -1287,154 +1466,143 @@ class ModGrabber extends Module {
         info: Source-specific information for bootstrapping index fields. Must contain at least {source, sourceType, sourceSpecificId}
         messageObj, callbacks, readOnly: As passed to grabInMessage.
     */
-    persistTempDownload(temppath, originalname, mp, info, messageObj, callbacks, readOnly) {
-        //After the file is fully written, compute hash, rename file and add to index
-        fs.readFile(temppath, (err, data) => {
-            if (err) throw err;
+    async persistTempDownload(temppath, originalname, mp, info, messageObj, callbacks, readOnly) {
+        
+        //Compute hash
+        let data = await promisify(fs.readFile)(temppath);
             
-            let hash = crypto.createHash('md5').update(data).digest('hex');
-            let realpath = this.param('downloadPath') + '/' + hash + '.' + mp.info.format;
-            
-            let now = moment().unix();
-            
-            if (fs.existsSync(realpath)) {
-                fs.unlink(temppath, (err) => {});
-                this.log('  Already existed: ' + originalname + '  (as ' + hash + ')');
-                if (!readOnly && !mp.regrab) {
-                    this._index[hash].seen.push(now);
-                    if (this._index[hash].sharedBy.indexOf(mp.author) < 0) {
-                        this._index[hash].sharedBy.push(mp.author);
-                        
-                        let shares = this.getUserStat(mp.author, "shares");
-                        this.setUserStat(mp.author, "shareavglength", (this.getUserStat(mp.author, "shareavglength") * shares + info.length) / (shares + 1));
-                        this.setUserStat(mp.author, "shareminlength", Math.min(this.getUserStat(mp.author, "shareminlength") || 0, info.length));
-                        this.setUserStat(mp.author, "sharemaxlength", Math.max(this.getUserStat(mp.author, "sharemaxlength") || Number.MAX_VALUE, info.length));
-                        this.incrUserStat(mp.author, "shares");
-                    }
-                    this._index.save();
-                }
-                if (callbacks.exists) callbacks.exists(messageObj, mp.authorName, mp.reply, hash);
-                return;
-            } else if (data.toString().trim() == "") {
-                this.log('  Temp file is empty: ' + hash);
-                if (callbacks.errorEncoding) callbacks.errorEncoding(messageObj, mp.authorName, mp.reply);
-                fs.unlink(temppath, (err) => {});
-                return;
-            } else if (mp.info.replace === false) {
-                this.log('  No permission to commit replacement: ' + hash);
-                if (callbacks.errorPermission) callbacks.errorPermission(messageObj, mp.authorName, mp.reply);
-                fs.unlink(temppath, (err) => {});
-                return;
-            } else if (mp.info.replace && !this._index[mp.info.replace]) {
-                this.log('  Target of replacement (' + mp.info.replace + ') not found for: ' + hash);
-                if (callbacks.errorNotFound) callbacks.errorNotFound(messageObj, mp.authorName, mp.reply);
-                fs.unlink(temppath, (err) => {});
-                return;
-            }
-            
-            if (readOnly) {
-                fs.unlink(temppath, (err) => {});
-                return;
-            }
-            
-            let finalstep;
-            if (this.param('normalization')) {
-                let mode = this.param('normalization');
-                if (!(['ebuR128', 'rms'].find(m => m == mode))) mode = 'ebuR128';
-                finalstep = normalize({
-                    input: temppath,
-                    output: realpath,
-                    loudness: {
-                        normalization: mode,
-                        target: {
-                            input_i: this.param('normalTarget')
-                        }
-                    }
-                });
-            } else {
-                finalstep = util.promisify(fs.rename)(temppath, realpath);
-            }
-            
-            finalstep.then((normalized) => {
-
-                this._usage += fs.statSync(realpath).size;
-                
-                let entry = (mp.regrab ? mp.regrab : {});
-                
-                if (mp.info.replace) {
-                    //Replacement
-                    entry = this._index[mp.info.replace];
-                    if (!entry.replaced) entry.replaced = [];
-                    entry.replaced.push([mp.info.replace, mp.author, now]);
-                    this.removeByHash(mp.info.replace, true);
-                }
-                
-                entry.hash = hash;
-                entry.format = mp.info.format;
-                
-                if (normalized) {
-                    entry.normalized = {
-                        from: normalized.info.measured,
-                        to: normalized.info.loudness
-                    };
-                }
-                
-                if (!mp.regrab) {
-                    if (typeof info == "object") {
-                        let kw = entry.keywords;
-                        
-                        for (let key in info) {
-                            if (info[key] || entry[key] === undefined) {
-                                entry[key] = info[key];
-                            }
-                        }
-                        
-                        //Recover keywords if entry already contained them (from mp.info.replace)
-                        if (kw && info.keywords) {
-                            for (let keyword of kw) {
-                                entry.keywords.push(keyword);
-                            }
-                        }
-                    }
+        let hash = crypto.createHash('md5').update(data).digest('hex');
+        let realpath = this.param('downloadPath') + '/' + hash + '.' + mp.info.format;
+        
+        let now = moment().unix();
+        
+        //Bunch of failure conditions
+        if (fs.existsSync(realpath)) {
+            fs.unlink(temppath, (err) => {});
+            this.log('  Already existed: ' + originalname + '  (as ' + hash + ')');
+            if (!readOnly && !mp.regrab) {
+                this._index[hash].seen.push(now);
+                if (this._index[hash].sharedBy.indexOf(mp.author) < 0) {
+                    this._index[hash].sharedBy.push(mp.author);
                     
-                    entry.seen = [now];
-                    entry.sharedBy = [mp.author];
-                    if (mp.interval) entry.length = mp.interval[1] - mp.interval[0];
-                    entry.sourcePartial = mp.interval;
-                    if (mp.info.title) entry.name = mp.info.title;
-                    if (mp.info.artist) entry.author = mp.info.artist;
-                    if (mp.info.album) entry.album = mp.info.album;
-                    if (!entry.keywords) entry.keywords = [];
-                }
-
-                this._index[hash] = entry;
-                this._index.save();
-                
-                if (!this._indexSourceTypeAndId[entry.sourceType]) {
-                    this._indexSourceTypeAndId[entry.sourceType] = {};
-                }
-                this._indexSourceTypeAndId[entry.sourceType][entry.sourceSpecificId] = this._index[hash];
-                
-                if (!mp.regrab) {
                     let shares = this.getUserStat(mp.author, "shares");
-                    this.setUserStat(mp.author, "shareavglength", (this.getUserStat(mp.author, "shareavglength") * shares + entry.length) / (shares + 1));
-                    this.setUserStat(mp.author, "shareminlength", Math.min(this.getUserStat(mp.author, "shareminlength") || 0, entry.length));
-                    this.setUserStat(mp.author, "sharemaxlength", Math.max(this.getUserStat(mp.author, "sharemaxlength") || Number.MAX_VALUE, entry.length));
+                    this.setUserStat(mp.author, "shareavglength", (this.getUserStat(mp.author, "shareavglength") * shares + info.length) / (shares + 1));
+                    this.setUserStat(mp.author, "shareminlength", Math.min(this.getUserStat(mp.author, "shareminlength") || 0, info.length));
+                    this.setUserStat(mp.author, "sharemaxlength", Math.max(this.getUserStat(mp.author, "sharemaxlength") || Number.MAX_VALUE, info.length));
                     this.incrUserStat(mp.author, "shares");
-                    
-                    this._sessionGrabs.unshift([hash, now]);
                 }
-                
-                this.log('  Successfully grabbed from ' + entry.sourceType + ': ' + originalname + '  (as ' + hash + ')');
-                if (callbacks.accepted) callbacks.accepted(messageObj, mp.authorName, mp.reply, hash);
-                
-                if (!mp.regrab) {
-                    this.processOnNewSong(messageObj, mp.authorName, mp.reply, hash);
-                }
-                
-            });
+                this._index.save();
+            }
+            if (callbacks.exists) callbacks.exists(messageObj, mp.authorName, mp.reply, hash);
+            return;
+        } else if (data.toString().trim() == "") {
+            this.log('  Temp file is empty: ' + hash);
+            if (callbacks.errorEncoding) callbacks.errorEncoding(messageObj, mp.authorName, mp.reply);
+            fs.unlink(temppath, (err) => {});
+            return;
+        } else if (mp.info.replace === false) {
+            this.log('  No permission to commit replacement: ' + hash);
+            if (callbacks.errorPermission) callbacks.errorPermission(messageObj, mp.authorName, mp.reply);
+            fs.unlink(temppath, (err) => {});
+            return;
+        } else if (mp.info.replace && !this._index[mp.info.replace]) {
+            this.log('  Target of replacement (' + mp.info.replace + ') not found for: ' + hash);
+            if (callbacks.errorNotFound) callbacks.errorNotFound(messageObj, mp.authorName, mp.reply);
+            fs.unlink(temppath, (err) => {});
+            return;
+        }
+        
+        //Simulations end here
+        if (readOnly) {
+            fs.unlink(temppath, (err) => {});
+            return;
+        }
+        
+        //Start index entry, disk space usage update and rename
+        this._usage += fs.statSync(temppath).size;
+        
+        let entry = (mp.regrab ? mp.regrab : {});
+        
+        if (mp.info.replace) {
+            //Replacement
+            entry = this._index[mp.info.replace];
+            if (!entry.replaced) entry.replaced = [];
+            entry.replaced.push([mp.info.replace, mp.author, now]);
+            this.removeByHash(mp.info.replace, true);
+        }
+        
+        entry.hash = hash;
+        entry.format = mp.info.format;
+        
+        await promisify(fs.rename)(temppath, realpath);
+        
+        //Normalize loudness. Returns a new index entry if successful.
+        let normalized;
+        if (this.param('normalization')) {
+            normalized = await this.fixNormalization(entry);
+        } 
+        
+        if (normalized && normalized.hash != entry.hash) {
+            entry = normalized;
+            hash = entry.hash;
+        }
 
-        });
+        //If this was a regrab, recover previous metadata
+        if (!mp.regrab) {
+            if (typeof info == "object") {
+                let kw = entry.keywords;
+                
+                for (let key in info) {
+                    if (info[key] || entry[key] === undefined) {
+                        entry[key] = info[key];
+                    }
+                }
+                
+                //Recover keywords if entry already contained them (from mp.info.replace)
+                if (kw && info.keywords) {
+                    for (let keyword of kw) {
+                        entry.keywords.push(keyword);
+                    }
+                }
+            }
+            
+            entry.seen = [now];
+            entry.sharedBy = [mp.author];
+            if (mp.interval) entry.length = mp.interval[1] - mp.interval[0];
+            entry.sourcePartial = mp.interval;
+            if (mp.info.title) entry.name = mp.info.title;
+            if (mp.info.artist) entry.author = mp.info.artist;
+            if (mp.info.album) entry.album = mp.info.album;
+            if (!entry.keywords) entry.keywords = [];
+        }
+
+        //Save indices and update stats
+        
+        this._index[hash] = entry;
+        this._index.save();
+        
+        if (!this._indexSourceTypeAndId[entry.sourceType]) {
+            this._indexSourceTypeAndId[entry.sourceType] = {};
+        }
+        this._indexSourceTypeAndId[entry.sourceType][entry.sourceSpecificId] = this._index[hash];
+        
+        if (!mp.regrab) {
+            let shares = this.getUserStat(mp.author, "shares");
+            this.setUserStat(mp.author, "shareavglength", (this.getUserStat(mp.author, "shareavglength") * shares + entry.length) / (shares + 1));
+            this.setUserStat(mp.author, "shareminlength", Math.min(this.getUserStat(mp.author, "shareminlength") || 0, entry.length));
+            this.setUserStat(mp.author, "sharemaxlength", Math.max(this.getUserStat(mp.author, "sharemaxlength") || Number.MAX_VALUE, entry.length));
+            this.incrUserStat(mp.author, "shares");
+            
+            this._sessionGrabs.unshift([hash, now]);
+        }
+        
+        this.log('  Successfully grabbed from ' + entry.sourceType + ': ' + originalname + '  (as ' + hash + ')');
+        if (callbacks.accepted) callbacks.accepted(messageObj, mp.authorName, mp.reply, hash);
+        
+        if (!mp.regrab) {
+            this.processOnNewSong(messageObj, mp.authorName, mp.reply, hash);
+        }
+
     }
     
     
@@ -1465,39 +1633,44 @@ class ModGrabber extends Module {
     */
     parseHashArg(hashoroffset, userid) {
         if (!hashoroffset) hashoroffset = "";
-        let searchResult = this.parseSearchInMixedParam(hashoroffset);
-        if (searchResult === true) return true;
-        if (searchResult !== null) return searchResult.hash;
-        
-        if (!hashoroffset) hashoroffset = "-";
-        else if (typeof hashoroffset != "string") return null;
+        if (typeof hashoroffset != "string") return null;
         
         hashoroffset = hashoroffset.trim();
-        let offset = hashoroffset.match(/^-([0-2]?[0-9])?/);
-        if (offset) {
-            if (offset[1] == 0) return null;
-            if (!offset[1]) offset[1] = 1;
-            offset = offset[1];
+        
+        //Hash
+        let ishash = hashoroffset.match(/^#([0-9a-f]{32})$/i);
+        if (ishash) return ishash[1];
+        
+        //Offset (recently shared song)
+        let isoffset = hashoroffset.match(/^-([0-2]?[0-9])?/);
+        if (isoffset) {
+            let offset = isoffset[1];
+            if (offset == 0) return null;
+            if (!offset) offset = 1;
             if (offset > this._sessionGrabs.length) {
                 return false;
             }
             return this._sessionGrabs[offset - 1][0];
-        } else if (hashoroffset.length == 32) {
-            return hashoroffset;
         }
         
+        //Custom filters registered by other modules
         for (let item of this._parserFilters) {
             let mr = hashoroffset.match(item[0]);
             if (!mr) continue;
             return item[1](hashoroffset, mr, userid);
         }
         
+        //Plain search string
+        let searchResult = this.parseSearchInMixedParam(hashoroffset);
+        if (searchResult === true) return true;
+        if (searchResult !== null) return searchResult.hash;
+
         return null;
     }
     
     removeByHash(hash, ismoderator, removerid) {
         if (!this._index[hash]) return false;
-        fs.unlink(this.param('downloadPath') + '/' + hash + '.' + (this._index[hash].format || 'mp3'), (err) => {});
+        fs.unlink(this.param('downloadPath') + '/' + hash + '.' + (this._index[hash].format || this.param('defaultFormat')), (err) => {});
         
         let info = this._index[hash];
         for (let sharer of info.sharedBy) {            
@@ -1536,14 +1709,7 @@ class ModGrabber extends Module {
         if (this._downloads >= this.param('maxSimDownloads')) return;
         let item = this._scanQueue.shift();
         if (!item) return;
-        if (!item[2]) item[2] = false;
-        if (item[0].hash) {
-            if (!item[1]) item[1] = this.param('defaultFormat');
-            this.reGrab(item[0], item[1], item[2]);
-        } else {
-            if (!item[1]) item[1] = {};
-            this.grabInMessage(item[0], item[1], item[2]);
-        }
+        item();
     }
     
     
@@ -1557,7 +1723,7 @@ class ModGrabber extends Module {
         for (let filter of filters) {
             let regexfilter = new RegExp(filter.replace(/[-\/\\^$*+?.()|[\]{}]/gu, '\\$&').replace(' ', '.*'), 'i');
             results = results.filter(
-                (info) => info.hash.match(regexfilter) || info.sharedBy.find((e, i, a) => e.match(regexfilter)) || info.source.match(regexfilter) || info.name.match(regexfilter) || info.author.match(regexfilter) || info.keywords.find((e, i, a) => e.match(regexfilter))
+                (info) => info.sharedBy.find((e, i, a) => e.match(regexfilter)) || info.source.match(regexfilter) || info.name.match(regexfilter) || info.author.match(regexfilter) || info.album && info.album.match(regexfilter) || info.keywords.find((e, i, a) => e.match(regexfilter))
             );
         }
         
@@ -1565,7 +1731,7 @@ class ModGrabber extends Module {
     }
     
     parseSearchInMixedParam(str) {
-        let extract = str.match(/^\((\??)([^)]+)\)$/);
+        let extract = str.match(/^(\??)(.+)$/);
         if (!extract) return null;
         let songs = this.filterSongsBySearchString(extract[2]);
         if (songs.length > 1) {
@@ -1627,6 +1793,57 @@ class ModGrabber extends Module {
                 this.log('error', 'Error in callback after detecting existing ' + hash);
             }
         }
+    }
+    
+    
+    async fixNormalization(song) {
+        
+        let oldpath = this.param('downloadPath') + '/' + song.hash + '.' + (song.format || this.param('defaultFormat'));
+        let temppath = this.param('downloadPath') + '/' + 'nor_' + (this._preparing++) + '.' + (song.format || this.param('defaultFormat'));
+
+        let mode = this.param('normalization');
+        if (!(['ebuR128', 'rms'].find(m => m == mode))) mode = 'ebuR128';
+        
+        let normalized = await normalize({
+            input: oldpath,
+            output: temppath,
+            loudness: {
+                normalization: mode,
+                target: {
+                    input_i: this.param('normalTarget'),
+                    input_tp: 0
+                }
+            }
+        });
+        
+        if (!normalized) {
+            return song;
+        }
+        
+        let newsong = Object.assign({}, song);
+        
+        newsong.normalized = {
+            from: normalized.info.measured,
+            to: normalized.info.loudness
+        };
+        
+        let data = await promisify(fs.readFile)(temppath);
+        if (!data) throw "Normalized file is empty.";
+            
+        let hash = crypto.createHash('md5').update(data).digest('hex');
+        let newpath = this.param('downloadPath') + '/' + hash + '.' + (newsong.format || this.param('defaultFormat'));
+        
+        await promisify(fs.rename)(temppath, newpath);
+        this._usage += fs.statSync(newpath).size;
+        
+        this._usage -= fs.statSync(oldpath).size;
+        if (oldpath != newpath) {
+            await promisify(fs.unlink)(oldpath);
+        }
+            
+        newsong.hash = hash;
+        
+        return newsong;
     }
     
     
@@ -1816,11 +2033,39 @@ class ModGrabber extends Module {
     }
     
     
-    scanMessage(messageObj, callbacks, readOnly) {
-        this._scanQueue.push([messageObj, callbacks, readOnly]);
+    //Add stuff to the scan queue
+
+    queueScanMessage(messageObj, callbacks, readOnly) {
+        this._scanQueue.push(function() {
+            this.grabInMessage(messageObj, callbacks, readOnly || false);
+        }.bind(this));
     }
     
-
+    queueRegrab(song, format, callbacks, readOnly) {
+        this._scanQueue.push(function() {
+            this.reGrab(song, format || this.param('defaultFormat'), callbacks, readOnly || false);
+        }.bind(this));
+    }
+    
+    queueFixLoudness(song, callbacks) {
+        this._scanQueue.push(function() {
+            this._downloads += 1;
+            this.log('Fixing loudness of ' + song.hash);
+            this.fixNormalization(song)
+                .then((newsong) => {
+                    this._downloads -= 1;
+                    if (song.hash == newsong.hash) return;
+                    if (this._index[song.hash]) delete this._index[song.hash];
+                    this._index[newsong.hash] = newsong;
+                    this._index.save();
+                    if (callbacks.success) callbacks.success(newsong);
+                })
+                .catch((err) => {
+                    if (callbacks.error) callbacks.error(song, err.error || err);
+                });
+        }.bind(this));
+    }
+    
 }
 
 

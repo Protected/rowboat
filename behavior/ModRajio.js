@@ -93,7 +93,7 @@ class ModRajio extends Module {
         this._params['autowithdraw'] = 120;
         this._params['queuesize'] = 10;
         this._params['historysize'] = 20;
-        this._params['referenceloudness'] = -20;
+        this._params['referenceloudness'] = -12;
         this._params['volume'] = 1.0;
         this._params['fec'] = false;
         
@@ -733,7 +733,7 @@ class ModRajio extends Module {
                 let song = this._queue[i].song;
                 let width = String(this.param('queuesize')).length;        //
                 let pos = ('0'.repeat(width) + String(i+1)).slice(-width); //0-padded i
-                ep.reply('`[' + pos + '] ' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`');
+                ep.reply('`[' + pos + '] #' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`');
             }
         
             return true;
@@ -754,7 +754,7 @@ class ModRajio extends Module {
                 if (!song) continue;
                 let width = String(this.param('historysize')).length;        //
                 let pos = ('0'.repeat(width) + String(i+1)).slice(-width);   //0-padded i
-                ep.reply('`[$' + pos + '] ' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`');
+                ep.reply('`[$' + pos + '] #' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`');
             }
         
             return true;
@@ -1269,7 +1269,7 @@ class ModRajio extends Module {
                 }
             }
 
-            this.announce('**[' + (seek ? 'Resuming' : 'Now Playing') + ']** ' + '`' + song.hash
+            this.announce('**[' + (seek ? 'Resuming' : 'Now Playing') + ']** ' + '`#' + song.hash
                     + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + ' <' + this.secondsToHms(song.length) + '>`' + likespart + reqby);
             this._announced = moment().unix();
         }
@@ -1398,6 +1398,11 @@ class ModRajio extends Module {
         let seek = this._pause[1];
         
         this._pause = null;
+        
+        if (!this.grabber.hashSong(song.hash)) {
+            this.log('The song no longer exists.');
+            return this.stopSong();
+        }
         
         this.playSong(song, seek);
         
