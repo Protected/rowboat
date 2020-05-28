@@ -841,11 +841,11 @@ class ModGrabber extends Module {
         let album = message.match(/\{(album)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?:;,_-]+)\}/iu);
         if (album) album = album[3];
         
-        let replace = message.match(/\{replace(=|:) ?([0-9A-Fa-f]+)\}/iu);
+        let replace = message.match(/\{replace(=|:) ?#?([0-9A-Fa-f]+)\}/iu);
         if (replace) replace = replace[2];
         
         let interval = null;
-        if (title) {
+        if (title || replace) {
             interval = message.match(/<(([0-9:]+)?(,[0-9:]+)?)>/);
             if (interval) {
                 interval = this.parseInterval(interval[1]);
@@ -1561,7 +1561,9 @@ class ModGrabber extends Module {
                 //Recover keywords if entry already contained them (from mp.info.replace)
                 if (kw && info.keywords) {
                     for (let keyword of kw) {
-                        entry.keywords.push(keyword);
+                        if (entry.keywords.findIndex(x => x.toLowerCase() == keyword.toLowerCase()) < 0) {
+                            entry.keywords.push(keyword);
+                        }
                     }
                 }
             }
