@@ -1042,8 +1042,8 @@ class ModGrabber extends Module {
             
             let length = info.length_seconds || info.duration || info.videoDetails.length_seconds || 0;
             
-            if (mp.interval && mp.interval[1] - mp.interval[0] > length) {
-                mp.interval[1] = mp.interval[0] + length;
+            if (mp.interval && mp.interval[1] > length) {
+                mp.interval[1] = length;
             }
             
             if (!mp.interval && length < this.param('minDuration') || mp.interval && mp.interval[1] - mp.interval[0] < this.param('minDuration')
@@ -1166,8 +1166,8 @@ class ModGrabber extends Module {
                     return;
                 }
         
-                if (mp.interval && mp.interval[1] - mp.interval[0] > info.format.duration) {
-                    mp.interval[1] = mp.interval[0] + info.format.duration;
+                if (mp.interval && mp.interval[1] > info.format.duration) {
+                    mp.interval[1] = info.format.duration;
                 }
         
                 //Hard drive -> FFmpeg -> Hard drive
@@ -1287,8 +1287,8 @@ class ModGrabber extends Module {
                         return;
                     }
                     
-                    if (mp.interval && mp.interval[1] - mp.interval[0] > info.format.duration) {
-                        mp.interval[1] = mp.interval[0] + info.format.duration;
+                    if (mp.interval && mp.interval[1] > info.format.duration) {
+                        mp.interval[1] = info.format.duration;
                     }
                     
                     //Hard drive -> FFmpeg -> Hard drive
@@ -1400,8 +1400,8 @@ class ModGrabber extends Module {
                     return;
                 }
                 
-                if (mp.interval && mp.interval[1] - mp.interval[0] > info.format.duration) {
-                    mp.interval[1] = mp.interval[0] + info.format.duration;
+                if (mp.interval && mp.interval[1] > info.format.duration) {
+                    mp.interval[1] = info.format.duration;
                 }
                 
                 //Hard drive -> FFmpeg -> Hard drive
