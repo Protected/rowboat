@@ -1042,6 +1042,10 @@ class ModGrabber extends Module {
             
             let length = info.length_seconds || info.duration || info.videoDetails.length_seconds || 0;
             
+            if (mp.interval && mp.interval[1] - mp.interval[0] > length) {
+                mp.interval[1] = mp.interval[0] + length;
+            }
+            
             if (!mp.interval && length < this.param('minDuration') || mp.interval && mp.interval[1] - mp.interval[0] < this.param('minDuration')
                     || length > this.param('maxDuration') && (!mp.interval || mp.interval[1] - mp.interval[0] > this.param('maxDuration'))) {
                 if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
@@ -1162,6 +1166,10 @@ class ModGrabber extends Module {
                     return;
                 }
         
+                if (mp.interval && mp.interval[1] - mp.interval[0] > info.format.duration) {
+                    mp.interval[1] = mp.interval[0] + info.format.duration;
+                }
+        
                 //Hard drive -> FFmpeg -> Hard drive
         
                 let ffmpeg = new FFmpeg(prepath);
@@ -1279,6 +1287,10 @@ class ModGrabber extends Module {
                         return;
                     }
                     
+                    if (mp.interval && mp.interval[1] - mp.interval[0] > info.format.duration) {
+                        mp.interval[1] = mp.interval[0] + info.format.duration;
+                    }
+                    
                     //Hard drive -> FFmpeg -> Hard drive
                     
                     let ffmpeg = new FFmpeg(prepath);
@@ -1386,6 +1398,10 @@ class ModGrabber extends Module {
                 if (err) {
                     this.log('warn', err);
                     return;
+                }
+                
+                if (mp.interval && mp.interval[1] - mp.interval[0] > info.format.duration) {
+                    mp.interval[1] = mp.interval[0] + info.format.duration;
                 }
                 
                 //Hard drive -> FFmpeg -> Hard drive
