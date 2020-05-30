@@ -469,6 +469,42 @@ class ModGrabber extends Module {
         });
         
         
+        this.mod('Commands').registerCommand(this, 'grab reformat', {
+            description: 'Convert a cached song to a different format.',
+            details: [
+                'This operation is lossy if the song is converted to a lossy format.'
+            ],
+            args: ['hashoroffset', 'format'],
+            permissions: [PERM_ADMIN]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            
+            let hash = this.parseHashArg(args.hashoroffset);
+            if (hash === false) {
+                ep.reply('Offset not found in recent history.');
+                return true;
+            } else if (hash === true) {
+                ep.reply('Reference matches more than one song; Please be more specific.');
+                return true;
+            } else if (!hash) {
+                ep.reply('Hash not found.');
+                return true;
+            }
+            
+            if (AUDIO_FORMATS.indexOf(args.format) < 0) {
+                ep.reply('Format not found.');
+                return true;
+            }
+        
+            this.queueReformat(this._index[hash], args.format, {
+                success: (newsong) => ep.reply(newsong.hash + ": Reformat from " + hash + "."),
+                error: (oldsong, err) => ep.reply(oldsong.hash + ": Failed reformat: " + err)
+            });
+
+            ep.reply("Reformat requested.");
+            return true;
+        });
+        
+        
         this.mod('Commands').registerCommand(this, 'song find', {
             description: 'Find an indexed song.',
             details: [
@@ -1865,6 +1901,60 @@ class ModGrabber extends Module {
     }
     
     
+    async reformat(song, format) {
+        if (!format || AUDIO_FORMATS.indexOf(format) < 0) format = this.param('defaultFormat');
+        if (format == song.format) return song;
+    
+        let oldpath = this.param('downloadPath') + '/' + song.hash + '.' + (song.format || this.param('defaultFormat'));
+        let temppath = this.param('downloadPath') + '/' + 'ref_' + (this._preparing++) + '.' + format;
+        
+        return new Promise((resolve, reject) => {
+
+            let ffmpeg = new FFmpeg(oldpath);
+            let stream = fs.createWriteStream(temppath);
+            
+            if (format == 'pcm') {
+                ffmpeg.format('s16le').audioBitrate('48k').audioChannels(2);
+            } else if (format == 'flac') {
+                ffmpeg.format('flac');
+            } else {
+                ffmpeg.format('mp3');
+            }
+            let audio = ffmpeg.pipe(stream);
+            
+            ffmpeg.on('error', (error) => {
+                reject(error);
+                audio.destroy();
+            });
+            
+            stream.on('error', (error) => {
+                reject(error);
+                audio.destroy();
+            });
+            
+            stream.on('finish', async () => {
+                let data = await promisify(fs.readFile)(temppath);
+                if (!data) throw "Converted file is empty.";
+                    
+                let hash = crypto.createHash('md5').update(data).digest('hex');
+                let newpath = this.param('downloadPath') + '/' + hash + '.' + format;
+
+                await promisify(fs.rename)(temppath, newpath);
+                this._usage += fs.statSync(newpath).size;
+
+                this._usage -= fs.statSync(oldpath).size;
+                await promisify(fs.unlink)(oldpath);
+                
+                let newsong = Object.assign({}, song);
+                newsong.format = format;
+                newsong.hash = hash;
+                resolve(newsong);
+            });
+            
+        });
+    }
+    
+    
     
     // # API #
     
@@ -2079,7 +2169,27 @@ class ModGrabber extends Module {
                     if (callbacks.success) callbacks.success(newsong);
                 })
                 .catch((err) => {
+                    this._downloads -= 1;
                     if (callbacks.error) callbacks.error(song, err.error || err);
+                });
+        }.bind(this));
+    }
+    
+    queueReformat(song, format, callbacks) {
+        this._scanQueue.push(function() {
+            this._downloads += 1;
+            this.log('Reformatting ' + song.hash);
+            this.reformat(song, format)
+                .then((newsong) => {
+                    this._downloads -= 1;
+                    if (this._index[song.hash]) delete this._index[song.hash];
+                    this._index[newsong.hash] = newsong;
+                    this._index.save();
+                    if (callbacks.success) callbacks.success(newsong);
+                })
+                .catch((err) => {
+                    this._downloads -= 1;
+                    if (callbacks.error) callbacks.error(err);
                 });
         }.bind(this));
     }
