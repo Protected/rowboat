@@ -2189,7 +2189,7 @@ class ModGrabber extends Module {
                 })
                 .catch((err) => {
                     this._downloads -= 1;
-                    if (callbacks.error) callbacks.error(err);
+                    if (callbacks.error) callbacks.error(song, err);
                 });
         }.bind(this));
     }
