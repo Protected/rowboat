@@ -1852,7 +1852,7 @@ class ModGrabber extends Module {
     
     async fixNormalization(song) {
         
-        let oldpath = this.param('downloadPath') + '/' + song.hash + '.' + (song.format || this.param('defaultFormat'));
+        let oldpath = this.param('downloadPath') + '/' + song.hash + '.' + (song.format || 'mp3');
         let temppath = this.param('downloadPath') + '/' + 'nor_' + (this._preparing++) + '.' + (song.format || this.param('defaultFormat'));
 
         let mode = this.param('normalization');
@@ -1905,7 +1905,7 @@ class ModGrabber extends Module {
         if (!format || AUDIO_FORMATS.indexOf(format) < 0) format = this.param('defaultFormat');
         if (format == song.format) return song;
     
-        let oldpath = this.param('downloadPath') + '/' + song.hash + '.' + (song.format || this.param('defaultFormat'));
+        let oldpath = this.param('downloadPath') + '/' + song.hash + '.' + (song.format || 'mp3');
         let temppath = this.param('downloadPath') + '/' + 'ref_' + (this._preparing++) + '.' + format;
         
         return new Promise((resolve, reject) => {
