@@ -17,7 +17,7 @@ const PERM_MODERATOR = 'moderator';
 const INDEXFILE = 'index.json';
 const STATSFILE = 'stats.json';
 
-const GET_FIELDS = ['name', 'author', 'album', 'track', 'length', 'source', 'sourceSpecificId', 'sharedBy', 'hash'];
+const GET_FIELDS = ['name', 'author', 'album', 'track', 'length', 'source', 'sourceSpecificId', 'sourceLoudness', 'sharedBy', 'hash'];
 const SET_FIELDS = ['name', 'author', 'album', 'track'];
 const NUMBER_FIELDS = ['track'];
 
