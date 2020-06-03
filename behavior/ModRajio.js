@@ -93,7 +93,7 @@ class ModRajio extends Module {
         this._params['autowithdraw'] = 120;
         this._params['queuesize'] = 10;
         this._params['historysize'] = 20;
-        this._params['referenceloudness'] = -12;
+        this._params['referenceloudness'] = -20;
         this._params['volume'] = 1.0;
         this._params['fec'] = false;
         

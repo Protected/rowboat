@@ -17,8 +17,9 @@ const PERM_MODERATOR = 'moderator';
 const INDEXFILE = 'index.json';
 const STATSFILE = 'stats.json';
 
-const GET_FIELDS = ['name', 'author', 'album', 'length', 'source', 'sourceSpecificId', 'sharedBy', 'hash'];
-const SET_FIELDS = ['name', 'author', 'album'];
+const GET_FIELDS = ['name', 'author', 'album', 'track', 'length', 'source', 'sourceSpecificId', 'sharedBy', 'hash'];
+const SET_FIELDS = ['name', 'author', 'album', 'track'];
+const NUMBER_FIELDS = ['track'];
 
 const AUDIO_FORMATS = ['pcm', 'flac', 'mp3'];
 
@@ -90,8 +91,8 @@ class ModGrabber extends Module {
         this._params['tagFeedback'] = '^!!';
         
         this._params['useYoutubedl'] = false;
-        this._params['normalization'] = 'ebuR128';
-        this._params['normalTarget'] = -12;
+        this._params['normalization'] = 'rms';
+        this._params['normalTarget'] = -20;
         
         this._preparing = 0;  //Used for generating temporary filenames
         
@@ -579,8 +580,17 @@ class ModGrabber extends Module {
                 return true;
             }
             
-            this._index[hash][args.field] = args.value.join(' ');
+            let newvalue = args.value.join(' ');
             
+            if (NUMBER_FIELDS.indexOf(args.field) > -1) {
+                newvalue = parseInt(newvalue);
+                if (isNaN(newvalue)) {
+                    ep.reply("This field must be numeric.");
+                    return true;
+                }
+            }
+            
+            this._index[hash][args.field] = newvalue;
             this._index.save();
             
             ep.reply("Ok.");
@@ -870,12 +880,14 @@ class ModGrabber extends Module {
             return ikeyword[1];
         }).filter((item) => item);
         
-        let title = message.match(/\{(title|name|song)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?:;,_-]+)\}/iu);
+        let title = message.match(/\{(title|name|song|n)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?:;,_-]+)\}/iu);
         if (title) title = title[3];
-        let artist = message.match(/\{(author|artist|band)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?:;,_-]+)\}/iu);
+        let artist = message.match(/\{(author|artist|band|creator|c)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?:;,_-]+)\}/iu);
         if (artist) artist = artist[3];
-        let album = message.match(/\{(album)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?:;,_-]+)\}/iu);
+        let album = message.match(/\{(album|a)(=|:) ?([A-Za-z0-9\u{3040}-\u{D7AF}\(\)' .!?:;,_-]+)\}/iu);
         if (album) album = album[3];
+        let track = message.match(/\{(track|t)(=|:) ?([0-9]{1,3})\}/iu);
+        if (track) track = parseInt(track[3]);
         
         let replace = message.match(/\{replace(=|:) ?#?([0-9A-Fa-f]+)\}/iu);
         if (replace) replace = replace[2];
@@ -892,15 +904,19 @@ class ModGrabber extends Module {
             let chapterno = message.match(/<C([0-9]+)>/);
             if (chapterno && chapterno[1] <= meta.chapters.length) {
                 chapter = meta.chapters[chapterno[1] - 1];
+                if (!track) track = parseInt(chapterno[1]);
             } else {
                 let chaptername = message.match(/<([^>]{3,})>/);
                 if (chaptername) {
                     chaptername = chaptername[1].toLowerCase().trim();
+                    let i = 1;
                     for (let checkchapter of meta.chapters) {
                         if (checkchapter.title.toLowerCase().trim().indexOf(chaptername) > -1) {
                             chapter = checkchapter;
+                            if (!track) track = i;
                             break;
                         }
+                        i += 1;
                     }
                 }
             }
@@ -926,6 +942,7 @@ class ModGrabber extends Module {
             title: title,
             artist: artist,
             album: album,
+            track: track,
             replace: replace,
             interval: interval,
             format: format
@@ -947,6 +964,7 @@ class ModGrabber extends Module {
                     title: null,
                     artist: null,
                     album: null,
+                    track: null,
                     replace: messageObj.hash,
                     interval: messageObj.sourcePartial,
                     format: messageObj.format
@@ -1249,10 +1267,12 @@ class ModGrabber extends Module {
                     let title = ma.name;
                     let artist = '';
                     let album = '';
+                    let track = null;
                     if (info.format && info.format.tags) {
                         if (info.format.tags.title) title = info.format.tags.title;
                         if (info.format.tags.artist) artist = info.format.tags.artist;
                         if (info.format.tags.album) album = info.format.tags.album;
+                        if (info.format.tags.track) track = parseInt(info.format.tags.track);
                     }
                     
                     let keywords = (mp.info.dkeywords || []);
@@ -1266,6 +1286,7 @@ class ModGrabber extends Module {
                         name: title,
                         author: artist,
                         album: album,
+                        track: track,
                         keywords: keywords
                     }, messageObj, callbacks, readOnly);
                 });
@@ -1370,10 +1391,12 @@ class ModGrabber extends Module {
                         let title = filename;
                         let artist = '';
                         let album = '';
+                        let track = null;
                         if (info.format && info.format.tags) {
                             if (info.format.tags.title) title = info.format.tags.title;
                             if (info.format.tags.artist) artist = info.format.tags.artist;
                             if (info.format.tags.album) album = info.format.tags.album;
+                            if (info.format.tags.track) track = parseInt(info.format.tags.track);
                         }
                         
                         let keywords = (mp.info.dkeywords || []);
@@ -1387,6 +1410,7 @@ class ModGrabber extends Module {
                             name: title,
                             author: artist,
                             album: album,
+                            track: track,
                             keywords: keywords
                         }, messageObj, callbacks, readOnly);
                     });
@@ -1483,10 +1507,12 @@ class ModGrabber extends Module {
                     let title = filename;
                     let artist = '';
                     let album = '';
+                    let track = null;
                     if (info.format && info.format.tags) {
                         if (info.format.tags.title) title = info.format.tags.title;
                         if (info.format.tags.artist) artist = info.format.tags.artist;
                         if (info.format.tags.album) album = info.format.tags.album;
+                        if (info.format.tags.track) track = parseInt(info.format.tags.track);
                     }
                     
                     let keywords = (mp.info.dkeywords || []);
@@ -1500,6 +1526,7 @@ class ModGrabber extends Module {
                         name: title,
                         author: artist,
                         album: album,
+                        track: track,
                         keywords: keywords
                     }, messageObj, callbacks, readOnly);
                 });
@@ -1599,7 +1626,7 @@ class ModGrabber extends Module {
             hash = entry.hash;
         }
 
-        //If this was a regrab, recover previous metadata
+        //If this was a regrab, recover previous metadata, otherwise...
         if (!mp.regrab) {
             if (typeof info == "object") {
                 let kw = entry.keywords;
@@ -1624,9 +1651,10 @@ class ModGrabber extends Module {
             entry.sharedBy = [mp.author];
             if (mp.interval) entry.length = mp.interval[1] - mp.interval[0];
             entry.sourcePartial = mp.interval;
-            if (mp.info.title) entry.name = mp.info.title;
-            if (mp.info.artist) entry.author = mp.info.artist;
-            if (mp.info.album) entry.album = mp.info.album;
+            entry.name = mp.info.title || info.name;
+            entry.author = mp.info.artist || info.author || "";
+            entry.album = mp.info.album || info.album || "";
+            entry.track = mp.info.track || info.track || null;
             if (!entry.keywords) entry.keywords = [];
         }
 
@@ -1877,6 +1905,7 @@ class ModGrabber extends Module {
         let newsong = Object.assign({}, song);
         
         newsong.normalized = {
+            method: mode,
             from: normalized.info.measured,
             to: normalized.info.loudness
         };
