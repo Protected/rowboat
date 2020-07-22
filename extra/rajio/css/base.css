@@ -38,6 +38,10 @@ table#library th.c_q {
     width: 1em;
 }
 
+table#library th.c_track {
+    width: 2.4em;
+}
+
 table#library th.c_length {
     width: 6em;
 }

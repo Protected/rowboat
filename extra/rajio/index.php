@@ -100,6 +100,7 @@ require_once("config.inc.php");
                 <th>Name</th>
                 <th>Author</th>
                 <th class="c_album">Album</th>
+                <th class="c_track">T</th>
                 <th class="c_length">Length</th>
                 <th class="c_sharedby">Shared by</th>
                 <th class="c_pl">PL</th>
@@ -152,21 +153,22 @@ let columndefs = [
     {targets: [3], render: (data, type, row, meta) => type == "display" ? '<a href="' + row.source + '" target="_blank">' + row.name + '</a>' : row.name},
     {targets: [4], render: (data, type, row, meta) => type == "display" ? '<a href="https://duckduckgo.com/?q=' + row.urlauthor + '" target="_blank">' + row.author + '</a>' : row.author},
     {targets: [5], className: "c_album", render: (data, type, row, meta) => type == "display" ? '<a href="https://duckduckgo.com/?q=' + row.urlalbum + '" target="_blank">' + row.album + '</a>' : row.album},
-    {targets: [6], className: "c_length ra", render: (data, type, row, meta) => type == "display" ? row.length : row.paddedlength},
-    {targets: [7], className: "c_sharedby", render: (data, type, row, meta) => {
+    {targets: [6], className: "c_track ra", render: (data, type, row, meta) => type == "display" ? row.track : row.paddedtrack},
+    {targets: [7], className: "c_length ra", render: (data, type, row, meta) => type == "display" ? row.length : row.paddedlength},
+    {targets: [8], className: "c_sharedby", render: (data, type, row, meta) => {
         if (type == "filter") return row.allsharers;
         let sharername = (userstats[row.sharedBy] ? userstats[row.sharedBy].displayname : row.sharedBy);
         if (type != "display") return sharername;
         return '<a href="#" onclick="openUserstats(\'' + row.sharedBy + '\'); return false;" title="' + row.allsharers + '">' + sharername + '</a>';
     }},
-    {targets: [8], className: "c_pl ra", render: (data, type, row, meta) => row.plays},
-    {targets: [9], className: "c_lastplayed ra", render: (data, type, row, meta) => type == "display" ? row.lastplayed : row.paddedlastplayed},
-    {targets: [10], className: "c_kw ra fade", render: (data, type, row, meta) => {
+    {targets: [9], className: "c_pl ra", render: (data, type, row, meta) => row.plays},
+    {targets: [10], className: "c_lastplayed ra", render: (data, type, row, meta) => type == "display" ? row.lastplayed : row.paddedlastplayed},
+    {targets: [11], className: "c_kw ra fade", render: (data, type, row, meta) => {
         if (type == "filter") return row.kwlist.join(",");
         if (type != "display") return row.kw;
         return '<a href="#" onclick=\'openKeywords("' + row.name + '", ' + JSON.stringify(row.kwlist) + ', this); return false;\'>' + row.kw + '</a>';
     }},
-    {targets: [11], className: "c_likes emoji", render: (data, type, row, meta) => {
+    {targets: [12], className: "c_likes emoji", render: (data, type, row, meta) => {
         if (type == "filter") {
             let csfilter = [];
             for (let userid in row.likes) {
@@ -204,7 +206,7 @@ let columndefs = [
         }
         return result;
     }},
-    {targets: [12], className: "c_pri ra fade", render: (data, type, row, meta) => type == "display" ? row.priority : row.prioritymeta},
+    {targets: [13], className: "c_pri ra fade", render: (data, type, row, meta) => type == "display" ? row.priority : row.prioritymeta},
 ];
 
 

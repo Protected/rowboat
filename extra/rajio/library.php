@@ -16,13 +16,14 @@ $ordercrit = [
      3 => "name",
      4 => "author",
      5 => "album",
-     6 => "paddedlength",
-     7 => "allsharers",
-     8 => ["plays"],
-     9 => "paddedlastplayed",
-    10 => ["kw"],
-    11 => ["likenum"],
-    12 => ["prioritymeta"]
+     6 => "paddedtrack",
+     7 => "paddedlength",
+     8 => "allsharers",
+     9 => ["plays"],
+    10 => "paddedlastplayed",
+    11 => ["kw"],
+    12 => ["likenum"],
+    13 => ["prioritymeta"]
 ];
 
 
@@ -43,6 +44,7 @@ $filterfields = [
     "name" => true,
     "author" => true,
     "album" => true,
+    "track" => true,
     "keywords" => function($pattern, $item) {
         foreach ($item["keywords"] as $kw) {
             if (preg_match($pattern, $kw)) return true;
@@ -209,6 +211,8 @@ foreach ($list as $info) {
         $hltotal += 1;
     }
     
+    $ptrack = str_pad($info["track"] ?? 0, 3, "0", STR_PAD_LEFT);
+    
     $allsharers = [];
     foreach ($info["sharedBy"] as $sharer) {
         $allsharers[] = $stats["users"][$sharer]["displayname"];
@@ -250,6 +254,8 @@ foreach ($list as $info) {
         "author" => $info["author"],
         "urlauthor" => urlencode($info["author"]),
         "album" => $info["album"],
+        "paddedtrack" => $ptrack,
+        "track" => $info["track"] ?? "",
         "urlalbum" => urlencode($info["author"] . " " . $info["album"]),
         "paddedlength" => $plength,
         "length" => minutesAndSeconds($info["length"]),
