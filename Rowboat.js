@@ -106,7 +106,7 @@ if (!loadMasterConfig()) return;
 var loadEnvironments = exports.loadEnvironments = function() {
 
     for (let name in config.environments) {
-        let envtype = requireUncached("./Env" + config.environments[name] + ".js");
+        let envtype = requireUncached("./environment/Env" + config.environments[name] + ".js");
         if (!envtype) {
             logger.error("Could not load the environment: " + name + " . Is the environment source in Rowboat's directory?");
             return false;
@@ -119,7 +119,7 @@ var loadEnvironments = exports.loadEnvironments = function() {
             let sharedName = env.envName + '_' + sharedModule;
             
             if (!shared[sharedName]) {
-                shared[sharedName] = requireUncached("./" + sharedModule + ".js");
+                shared[sharedName] = requireUncached("./environment/" + sharedModule + ".js");
                 if (!shared[sharedName]) {
                     logger.error("Could not initialize the environment: " + name + " . The shared module " + sharedModule + " could not be found.");
                     return false;

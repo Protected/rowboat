@@ -189,12 +189,12 @@ if (args.env) {
             
             console.log('Please enter instance names for all desired Environment instances (leave blank to continue).');
             
-            for (let file of fs.readdirSync('.')) {
+            for (let file of fs.readdirSync('environment')) {
                 let matchname = file.match(/^Env([A-Z0-9].*)\.js$/);
                 if (!matchname) continue;
                 matchname = matchname[1];
                 
-                let firstline = fs.readFileSync(file).toString().match(/^(.*?)\n/);
+                let firstline = fs.readFileSync('./environment/' + file).toString().match(/^(.*?)\n/);
                 if (firstline) firstline = firstline[1];
                 else firstline = "";
                 
@@ -257,7 +257,7 @@ if (args.ask) {
         
         if (config.modules.indexOf(matchname) > -1) continue;
         
-        let firstline = fs.readFileSync('behavior/' + file).toString().match(/^(.*?)\n/);
+        let firstline = fs.readFileSync('./behavior/' + file).toString().match(/^(.*?)\n/);
         if (firstline) firstline = firstline[1];
         else firstline = "";
         
@@ -293,7 +293,7 @@ if (!config.modules || config.modules.length < 1) {
 //Load environments
 
 for (let name in config.environments) {
-    var envtype = requireUncached("./Env" + config.environments[name] + ".js");
+    var envtype = requireUncached("./environment/Env" + config.environments[name] + ".js");
     if (!envtype) {
         logger.error("Could not load the environment: " + name + " . Is the environment source in Rowboat's directory?");
         return;

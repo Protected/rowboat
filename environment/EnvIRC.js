@@ -1,6 +1,6 @@
 /* Environment: IRC -- This environment connects to an IRC server. */
 
-const Environment = require('./Environment.js');
+const Environment = require('../Environment.js');
 const irc = require('irc');
 
 const DISPLAY_MODES = {

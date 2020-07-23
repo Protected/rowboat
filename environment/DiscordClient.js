@@ -1,7 +1,7 @@
 /* Wrapper that allows multiple environments to use a discord.js client. */
 
 const discord = require('discord.js');
-const ModernEventEmitter = require('./ModernEventEmitter.js');
+const ModernEventEmitter = require('../ModernEventEmitter.js');
 
 const BRIDGE_EVENTS = [
     "message",
