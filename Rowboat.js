@@ -162,7 +162,7 @@ var loadModules = exports.loadModules = function() {
             type = name;
        }
         
-        let modtype = requireUncached("./behavior/Mod" + type + ".js");
+        let modtype = requireUncached("./behavior/" + type + ".js");
         if (!modtype) {
             logger.error("Could not load the module: " + name + " . Is the module source in Rowboat's directory?");
             return false;

@@ -321,7 +321,7 @@ for (let name of config.modules) {
         type = name;
    }
     
-    var modtype = requireUncached("./behavior/Mod" + type + ".js");
+    var modtype = requireUncached("./behavior/" + type + ".js");
     if (!modtype) {
         logger.error("Could not load the module: " + name + " . Is the module source in Rowboat's directory?");
         return;

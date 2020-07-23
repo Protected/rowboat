@@ -4,7 +4,7 @@ config/*.env.json
 config/*.mod.json
 data/*
 test.js
-behavior/ModCustom*.js
+behavior/Custom*.js
 *.log
 *.swp
 songs/*
