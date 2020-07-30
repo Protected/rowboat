@@ -320,7 +320,8 @@ class EnvDiscord extends Environment {
     
     
     displayNameToRoleId(displayName) {
-        let role = this._server.roles.cache.find(r => r.name == displayName);
+        if (!displayName) return null;
+        let role = this._server.roles.cache.find(r => r.name.toLowerCase() == displayName.toLowerCase());
         if (role) return role.id;
         return null;
     }
