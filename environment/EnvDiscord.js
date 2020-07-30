@@ -225,6 +225,8 @@ class EnvDiscord extends Environment {
     idToDisplayName(id) {
         let member = this._server.members.cache.get(id);
         if (member) return (member.nickname ? member.nickname : member.user.username);
+        let user = this._client.users.cache.get(id);
+        if (user) return user.username;
         return id;
     }
     
@@ -233,6 +235,7 @@ class EnvDiscord extends Environment {
         let refuser = null;
 
         let parts = displayname.split("#");
+        
         if (parts[1]) {
             refuser = this._server.members.cache.filter(member => member.user.username == parts[0]).find(member => member.user.discriminator == parts[1]);
         } else {
@@ -248,7 +251,7 @@ class EnvDiscord extends Environment {
         if (refuser) {
             return refuser.id;
         }
-
+        
         return null;
     }
     
