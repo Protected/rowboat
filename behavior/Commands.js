@@ -560,6 +560,7 @@ class ModCommands extends Module {
         if (!command) {
             //Not a known comand; Try to find subcommands
             let subcommands = this.findSubcommands(cmdline);
+            if (!subcommands) return;
             for (let subcommand of subcommands) {
             
                 if (subcommand.environments && subcommand.environments.indexOf(env.envName) < 0) {

@@ -6,6 +6,7 @@ const ModernEventEmitter = require('../ModernEventEmitter.js');
 const BRIDGE_EVENTS = [
     "message",
     "messageUpdate",
+    "messageDelete",
     "guildMemberAdd",
     "guildMemberRemove",
     "guildMemberUpdate",
@@ -18,7 +19,8 @@ const BRIDGE_EVENTS = [
     "messageReactionAdd",
     "channelCreate",
     "channelDelete",
-    "channelUpdate"
+    "channelUpdate",
+    "channelPinsUpdate"
 ];
 
 class DiscordClient extends ModernEventEmitter {
