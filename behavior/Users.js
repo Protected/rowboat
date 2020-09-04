@@ -45,6 +45,7 @@ class ModUsers extends Module {
             commands.registerRootDetails(this, 'user', {description: "View and manipulate user accounts."});
             commands.registerRootDetails(this, 'id', {description: "Manipulate identification patterns associated with user accounts."});
             commands.registerRootDetails(this, 'perm', {description: "View and manipulate permissions associated with user accounts."});
+            commands.registerRootDetails(this, 'meta', {description: "View and manipulate metadata associated with user accounts."});
         
         
             commands.registerCommand(this, 'user add', {
@@ -58,6 +59,67 @@ class ModUsers extends Module {
                 } else {
                     ep.reply("There already exists an account identified by " + args.handle + "!");
                 }
+                
+                return true;
+            });
+            
+            
+            commands.registerCommand(this, 'user create', {
+                args: ["user", "handle"],
+                minArgs: 1,
+                description: "Create a user account for the given user in the current environment with the given handle.",
+                permissions: [PERM_ADMIN]
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
+            
+                let targetid = env.displayNameToId(args.user);
+                if (!targetid) {
+                    ep.reply("There is no such user.");
+                    return true;
+                }
+            
+                let handles = this.getHandlesById(env.name, targetid);
+                let checkhandle = (handles.length ? handles[0] : null);
+                if (checkhandle) {
+                    ep.reply("This user already has an account: " + checkhandle + ".");
+                    return true;
+                }
+                
+                let wanthandle = args.handle;
+                if (!wanthandle) {
+                    wanthandle = env.idToDisplayName(targetid);
+                    if (wanthandle) {
+                        wanthandle = wanthandle
+                            .replace(/\[[^\]]*\]/g, "")
+                            .replace(/\([^)]*\)/g, "")
+                            .replace(/\{[^}]*\}/g, "")
+                            .replace(/[^0-9a-zA-Z]/g, "")
+                            ;
+                    }
+                }
+                
+                if (!wanthandle || !wanthandle.match(/^[0-9a-zA-Z]+$/)) {
+                    ep.reply("The handle '" + wanthandle + "' is invalid. Please provide a handle with only alphanumeric characters in it.");
+                    return true;
+                }
+                
+                let existingaccount = this.getUser(wanthandle);
+                if (existingaccount) {
+                    ep.reply("There is already an account identified by the handle '" + wanthandle + "'.");
+                    return true;
+                }
+                
+                if (!this.addUser(wanthandle)) {
+                    ep.reply("Failed to create user account '" + wanthandle + "'.");
+                    return true;
+                }
+                
+                if (!this.addId(wanthandle, env.name, "^" + targetid + "$")) {
+                    this.delUser(wanthandle);
+                    ep.reply("Failed to initialize the new account with the user's " + env.name + " ID.");
+                    return true;
+                }
+                
+                ep.reply("The account '" + wanthandle + "' was successfully created!");
                 
                 return true;
             });
@@ -89,6 +151,53 @@ class ModUsers extends Module {
                     ep.reply("The account " + args.fromhandle + " was successfuly renamed to " + args.tohandle + ".");
                 } else{
                     ep.reply("The account " + args.fromhandle + " could not be renamed.");
+                }
+
+                return true;
+            });
+            
+            
+            commands.registerCommand(this, 'user find', {
+                args: ["environment", "id"],
+                description: "List the handles of the user accounts that match the given id and environment.",
+                permissions: [PERM_ADMIN, PERM_MOD]
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
+            
+                let handles = this.getHandlesById(args.environment, args.id);
+                if (!handles.length) {
+                    ep.reply("No handles were found matching the given environment and id.");
+                    return true;
+                }
+                
+                while (handles.length) {
+                    let outbound = handles.slice(0, 10);
+                    outbound = '"' + outbound.join('","') + '"';
+                    ep.reply(outbound);
+                    handles = handles.slice(10);
+                }
+            
+                return true;
+            });
+            
+            
+            commands.registerCommand(this, 'user list', {
+                args: ["perms", true],
+                minArgs: 0,
+                description: "Lists the handles of the user accounts that have the given permissions.",
+                permissions: [PERM_ADMIN, PERM_MOD]
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+                let handles = this.getHandlesByPerms(args.perms);
+                if (!handles.length) {
+                    ep.reply("No handles were found with the given permission" + (args.perms.length != 1 ? "s" : "") + ".");
+                    return true;
+                }
+
+                while (handles.length) {
+                    let outbound = handles.slice(0, 10);
+                    outbound = '"' + outbound.join('","') + '"';
+                    ep.reply(outbound);
+                    handles = handles.slice(10);
                 }
 
                 return true;
@@ -169,55 +278,64 @@ class ModUsers extends Module {
             });
             
             
-            commands.registerCommand(this, 'user find', {
-                args: ["environment", "id"],
-                description: "List the handles of the user accounts that match the given id and environment.",
-                permissions: [PERM_ADMIN, PERM_MOD]
+            commands.registerCommand(this, 'meta set', {
+                args: ["handle", "key", "value", true],
+                minArgs: 2,
+                description: "Set a metadata key in the user account identified by the handle.",
+                permissions: [PERM_ADMIN]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
             
-                let handles = this.getHandlesById(args.environment, args.id);
-                if (!handles.length) {
-                    ep.reply("No handles were found matching the given environment and id.");
-                    return true;
-                }
-                
-                while (handles.length) {
-                    let outbound = handles.slice(0, 10);
-                    outbound = '"' + outbound.join('","') + '"';
-                    ep.reply(outbound);
-                    handles = handles.slice(10);
+                let value = args.value.join(" ");
+            
+                if (this.setMeta(args.handle, args.key, value)) {
+                    ep.reply("Metadata key set in the account identified by " + args.handle + ".");
+                } else {
+                    ep.reply("I could not find an account identified by " + args.handle + " or erroneous arguments.");
                 }
             
                 return true;
             });
             
             
-            commands.registerCommand(this, 'user list', {
-                args: ["perms", true],
-                minArgs: 0,
-                description: "Lists the handles of the user accounts that have the given permissions.",
-                permissions: [PERM_ADMIN, PERM_MOD]
+            commands.registerCommand(this, 'meta del', {
+                args: ["handle", "key"],
+                description: "Unset a metadata key in the user account identified by the handle.",
+                details: [
+                    "Note that removing keys created by modules may impact module functionality."
+                ],
+                permissions: [PERM_ADMIN]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
-
-                let handles = this.getHandlesByPerms(args.perms);
-                if (!handles.length) {
-                    ep.reply("No handles were found with the given permission" + (args.perms.length != 1 ? "s" : "") + ".");
-                    return true;
+            
+                if (this.delMeta(args.handle, args.key)) {
+                    ep.reply("Metadata key removed from the account identified by " + args.handle + ".");
+                } else {
+                    ep.reply("I could not find an account identified by " + args.handle + " or erroneous key.");
                 }
-
-                while (handles.length) {
-                    let outbound = handles.slice(0, 10);
-                    outbound = '"' + outbound.join('","') + '"';
-                    ep.reply(outbound);
-                    handles = handles.slice(10);
+            
+                return true;
+            });
+            
+            
+            commands.registerCommand(this, 'meta get', {
+                args: ["handle", "key"],
+                description: "Read a metadata key from the user account identified by the handle.",
+                permissions: [PERM_ADMIN]
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
+            
+                let value = this.getMeta(args.handle, args.key);
+                if (value === undefined) {
+                    ep.reply("Key not found in the account identified by " + args.handle + ".");
+                } else {
+                    ep.reply(args.key + " = '" + value + "'");
                 }
-
+            
                 return true;
             });
 
 
             commands.registerCommand(this, 'whois', {
-                args: ["handle"],
+                args: ["handle", "full"],
+                minArgs: 1,
                 description: "Describe the user account identified by the handle.",
                 permissions: [PERM_ADMIN, PERM_MOD]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -247,6 +365,14 @@ class ModUsers extends Module {
                         perms = perms.slice(10);
                     }
                 }
+                
+                if (args.full && account.meta) {
+                    ep.reply('* Metadata:');
+                    let keys = Object.keys(account.meta);
+                    for (let key of keys) {
+                        ep.reply('    ' + key + " = '" + account.meta[key] + "'");
+                    }
+                }
             
                 return true;
             });
@@ -271,7 +397,8 @@ class ModUsers extends Module {
         let newuser = {
             handle: handle,
             ids: [],
-            perms: []
+            perms: [],
+            meta: {}
         };
         this._userdata.push(newuser);
         this._userhandles[handle] = newuser;
@@ -494,7 +621,66 @@ class ModUsers extends Module {
 
         return result;
     }
-
+    
+    
+    //Metadata manipulation - Data associated with user accounts. Metadata is meaningless unless used by other modules.
+    
+    setMeta(handle, key, value) {
+        if (!key) return false;
+        
+        let changed = false;
+        let chuser = this.getUser(handle);
+        if (!chuser) return false;
+        
+        if (!chuser.meta) {
+            chuser.meta = {};
+        }
+        
+        if (chuser.meta[key] !== value) {
+            chuser.meta[key] = value;
+            changed = true;
+        }
+        
+        if (changed) {
+            this._userdata.save();
+            this.log(`Successfuly set ${key} = '${value}' in user ${handle}`);
+        }
+        return true;        
+    }
+    
+    delMeta(handle, key) {
+        if (!key) return false;
+    
+        let changed = false;
+        let chuser = this.getUser(handle);
+        if (!chuser) return false;
+        
+        if (!chuser.meta) return true;
+        
+        if (chuser.meta[key] !== undefined) {
+            delete chuser.meta[key];
+            changed = true;
+        }
+        
+        if (changed) {
+            this.log(`Successfuly deleted ${key} from user ${handle}`);
+            this._userdata.save();
+        }
+        return true;
+    }
+    
+    getMeta(handle, key) {
+        let checkuser = this.getUser(handle);
+        if (!key || !checkuser || !checkuser.meta) return undefined;
+        return checkuser.meta[key];
+    }
+    
+    listMetaKeys(handle) {
+        let checkuser = this.getUser(handle);
+        if (!checkuser || checkuser.meta) return [];
+        return Object.keys(checkuser.meta);
+    }
+    
 
     //Programmatic permission providers (not persisted)
     //callback(env, userid, channelid, permissions) -- Return a subset of permissions that the user has (empty for none).

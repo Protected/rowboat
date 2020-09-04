@@ -114,7 +114,7 @@ class ModSelfService extends Module {
                 }
                 
                 if (!this.mod("Users").addUser(args.handle)) {
-                    ep.reply("Failed to create user account " + args.handle + ".");
+                    ep.reply("Failed to create user account '" + args.handle + "'.");
                     return true;
                 }
                 
