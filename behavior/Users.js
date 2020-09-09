@@ -85,17 +85,7 @@ class ModUsers extends Module {
                 }
                 
                 let wanthandle = args.handle;
-                if (!wanthandle) {
-                    wanthandle = env.idToDisplayName(targetid);
-                    if (wanthandle) {
-                        wanthandle = wanthandle
-                            .replace(/\[[^\]]*\]/g, "")
-                            .replace(/\([^)]*\)/g, "")
-                            .replace(/\{[^}]*\}/g, "")
-                            .replace(/[^0-9a-zA-Z]/g, "")
-                            ;
-                    }
-                }
+                if (!wanthandle) wanthandle = this.handleSuggestion(env, targetid);
                 
                 if (!wanthandle || !wanthandle.match(/^[0-9a-zA-Z]+$/)) {
                     ep.reply("The handle '" + wanthandle + "' is invalid. Please provide a handle with only alphanumeric characters in it.");
@@ -388,6 +378,19 @@ class ModUsers extends Module {
 
 
     //User account manipulation (new accounts only have a handle)
+
+    handleSuggestion(env, userid) {
+        let wanthandle = env.idToDisplayName(userid);
+        if (wanthandle) {
+            wanthandle = wanthandle
+                .replace(/\[[^\]]*\]/g, "")
+                .replace(/\([^)]*\)/g, "")
+                .replace(/\{[^}]*\}/g, "")
+                .replace(/[^0-9a-zA-Z]/g, "")
+                ;
+        }
+        return wanthandle;
+    }
 
     addUser(handle) {
         if (this._userhandles[handle]) return false;
