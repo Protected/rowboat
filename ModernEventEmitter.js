@@ -106,7 +106,7 @@ class ModernEventEmitter {
             var listeners = arrayClone(handler, len);
             for (var i = 0; i < len; ++i) {
                 if (listeners[i].ctx) self = listeners[i].ctx;
-                if (listeners[i].call(self)) break;
+                if (listeners[i].call(self) === true) break;
             }
         }
     }
@@ -119,7 +119,7 @@ class ModernEventEmitter {
             var listeners = arrayClone(handler, len);
             for (var i = 0; i < len; ++i) {
                 if (listeners[i].ctx) self = listeners[i].ctx;
-                if (listeners[i].call(self, arg1)) break;
+                if (listeners[i].call(self, arg1) === true) break;
             }
         }
     }
@@ -132,7 +132,7 @@ class ModernEventEmitter {
             var listeners = arrayClone(handler, len);
             for (var i = 0; i < len; ++i) {
                 if (listeners[i].ctx) self = listeners[i].ctx;
-                if (listeners[i].call(self, arg1, arg2)) break;
+                if (listeners[i].call(self, arg1, arg2) === true) break;
             }
         }
     }
@@ -145,7 +145,7 @@ class ModernEventEmitter {
             var listeners = arrayClone(handler, len);
             for (var i = 0; i < len; ++i) {
                 if (listeners[i].ctx) self = listeners[i].ctx;
-                if (listeners[i].call(self, arg1, arg2, arg3)) break;
+                if (listeners[i].call(self, arg1, arg2, arg3) === true) break;
             }
         }
     }
@@ -158,7 +158,7 @@ class ModernEventEmitter {
             var listeners = arrayClone(handler, len);
             for (var i = 0; i < len; ++i) {
                 if (listeners[i].ctx) self = listeners[i].ctx;
-                if (listeners[i].apply(self, args)) break;
+                if (listeners[i].apply(self, args) === true) break;
             }
         }
     }
