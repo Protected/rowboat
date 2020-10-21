@@ -5,6 +5,7 @@ config/*.mod.json
 data/*
 test.js
 behavior/Custom*.js
+extra/custom/*
 *.log
 *.swp
 songs/*

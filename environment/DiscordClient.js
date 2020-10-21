@@ -61,7 +61,8 @@ class DiscordClient extends ModernEventEmitter {
         
         this._realClient = new discord.Client({
             apiRequestMethod: 'sequential',
-            fetchAllMembers: true
+            fetchAllMembers: true,
+            partials: Object.values(discord.Constants.PartialTypes)
         });
         
         this._realClient.on('error', (error) => {
@@ -150,13 +151,13 @@ class DiscordClient extends ModernEventEmitter {
             let deliveropts = {
                 disable_everyone: true,
                 split: {char: "\n"},
-                embed: embed
+                embed: (embed && !embed.name ? embed : null)
             };
             if (todeliver.trim().match(/```$/)) {
                 deliveropts.split.prepend = '```';
                 deliveropts.split.append = '```';
             }
-            pack.targetchan.send(todeliver, deliveropts).catch();
+            pack.targetchan.send(todeliver, embed && embed.name ? embed : deliveropts).catch();  //embed.name being present means it's a MessageAttachment
             
             //List environments that target the server the package was delivered to
             let notifyEnvironments = [];
