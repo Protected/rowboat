@@ -42,7 +42,7 @@
     "striptags": "^3.1.1",
     "whois": "^2.6.0",
     "winston": "^3.2.1",
-    "ytdl-core": "^2.1.7",
+    "ytdl-core": "^4.0.3",
     "zxcvbn": "^4.4.2"
   }
 }

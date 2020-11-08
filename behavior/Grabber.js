@@ -23,7 +23,7 @@ const NUMBER_FIELDS = ['track'];
 
 const AUDIO_FORMATS = ['pcm', 'flac', 'mp3'];
 
-const YOUTUBEDLURL = 'https://yt-dl.org/downloads/latest/youtube-dl';
+const YOUTUBEDLURL = 'https://youtube-dl.org/downloads/latest/youtube-dl';
 
 
 class ModGrabber extends Module {
