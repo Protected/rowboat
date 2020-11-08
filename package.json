@@ -20,7 +20,7 @@
     "@discordjs/opus": "^0.3.2",
     "color-difference": "^0.3.4",
     "diff": "^3.5.0",
-    "discord.js": "12.2.0",
+    "discord.js": "^12.4.1",
     "emojione": "^3.1.4",
     "express": "^4.17.1",
     "ffmpeg-normalize": "^1.8.0",
