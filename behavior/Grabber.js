@@ -1091,7 +1091,7 @@ class ModGrabber extends Module {
         ytdl.getInfo(url)
             .then((info) => {
             
-                let length = info.length_seconds || info.duration || info.videoDetails.length_seconds || 0;
+                let length = info.length_seconds || info.duration || info.videoDetails.lengthSeconds || info.player_response.videoDetails.lengthSeconds || 0;
                 
                 if (mp.interval && mp.interval[1] > length) {
                     mp.interval[1] = length;
@@ -1165,7 +1165,7 @@ class ModGrabber extends Module {
                         length: parseInt(length),
                         source: url,
                         sourceType: 'youtube',
-                        sourceSpecificId: info.video_id || info.videoDetails.video_id,
+                        sourceSpecificId: info.video_id || info.videoDetails.video_id || info.videoDetails.videoId,
                         sourceLoudness: loudness,
                         name: info.title || info.videoDetails.title,
                         author: '',
