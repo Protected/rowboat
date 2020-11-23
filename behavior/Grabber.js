@@ -1088,97 +1088,96 @@ class ModGrabber extends Module {
         if (mp.info.noextract) return;
 
         //Obtain metadata from youtube
-        ytdl.getInfo(url, (err, info) => {
-            if (err) {
-                this.log('warn', err);
-                return;
-            }
+        ytdl.getInfo(url)
+            .then((info) => {
             
-            let length = info.length_seconds || info.duration || info.videoDetails.length_seconds || 0;
-            
-            if (mp.interval && mp.interval[1] > length) {
-                mp.interval[1] = length;
-            }
-            
-            if (!mp.interval && length < this.param('minDuration') || mp.interval && mp.interval[1] - mp.interval[0] < this.param('minDuration')
-                    || length > this.param('maxDuration') && (!mp.interval || mp.interval[1] - mp.interval[0] > this.param('maxDuration'))) {
-                if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
-                return;
-            }
-                    
-            if (!mp.regrab && this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]
-                    && !this._indexSourceTypeAndId['youtube'][info.video_id].sourcePartial && !mp.interval) {
-                if (callbacks.exists) callbacks.exists(messageObj, mp.authorName, mp.reply, this._indexSourceTypeAndId['youtube'][info.video_id].hash);
-                return;
-            }
-            
-            let keywords = [];
-            if (info.player_response && info.player_response.videoDetails && typeof info.player_response.videoDetails.keywords == "object") {
-                for (let keyword of info.player_response.videoDetails.keywords) {
-                    keywords.push(keyword);
-                }
-            }
-            for (let dkeyword of mp.info.keywords) {
-                keywords.push(dkeyword);
-            }
-            
-            let loudness = null;
-            if (info.player_response && info.player_response.playerConfig && typeof info.player_response.playerConfig.audioConfig == "object") {
-                loudness = parseFloat(info.player_response.playerConfig.audioConfig.perceptualLoudnessDb);
-            }
-            
-            this.log('Grabbing from youtube: ' + url);
-            this._downloads += 1;
-        
-            //Youtube -> FFmpeg -> Hard drive
-            
-            let video = ytdl(url, {filter: 'audioonly'});
-            
-            let ffmpeg = new FFmpeg(video);
-            if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
-            
-            let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
-            let stream = fs.createWriteStream(temppath);
-
-            if (mp.info.format == 'pcm') {
-                ffmpeg.format('s16le').audioBitrate('48k').audioChannels(2);
-            } else if (mp.info.format == 'flac') {
-                ffmpeg.format('flac');
-            } else {
-                ffmpeg.format('mp3');
-            }
-            let audio = ffmpeg.pipe(stream);
-            
-            ffmpeg.on('error', (error) => {
-                this.log('error', '[Youtube, FFmpeg] ' + error);
-                audio.destroy();
-                this._downloads -= 1;
-            });
-            
-            stream.on('error', (error) => {
-                this.log('error', '[Youtube, Write] ' + error);
-                audio.destroy();
-                this._downloads -= 1;
-            });
-        
-            stream.on('finish', () => {
-                this._downloads -= 1;
+                let length = info.length_seconds || info.duration || info.videoDetails.length_seconds || 0;
                 
-                this.persistTempDownload(temppath, url, mp, {
-                    length: parseInt(length),
-                    source: url,
-                    sourceType: 'youtube',
-                    sourceSpecificId: info.video_id || info.videoDetails.video_id,
-                    sourceLoudness: loudness,
-                    name: info.title || info.videoDetails.title,
-                    author: '',
-                    album: '',
-                    keywords: keywords
-                }, messageObj, callbacks, readOnly);
-            });
+                if (mp.interval && mp.interval[1] > length) {
+                    mp.interval[1] = length;
+                }
+                
+                if (!mp.interval && length < this.param('minDuration') || mp.interval && mp.interval[1] - mp.interval[0] < this.param('minDuration')
+                        || length > this.param('maxDuration') && (!mp.interval || mp.interval[1] - mp.interval[0] > this.param('maxDuration'))) {
+                    if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
+                    return;
+                }
+                        
+                if (!mp.regrab && this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]
+                        && !this._indexSourceTypeAndId['youtube'][info.video_id].sourcePartial && !mp.interval) {
+                    if (callbacks.exists) callbacks.exists(messageObj, mp.authorName, mp.reply, this._indexSourceTypeAndId['youtube'][info.video_id].hash);
+                    return;
+                }
+                
+                let keywords = [];
+                if (info.player_response && info.player_response.videoDetails && typeof info.player_response.videoDetails.keywords == "object") {
+                    for (let keyword of info.player_response.videoDetails.keywords) {
+                        keywords.push(keyword);
+                    }
+                }
+                for (let dkeyword of mp.info.keywords) {
+                    keywords.push(dkeyword);
+                }
+                
+                let loudness = null;
+                if (info.player_response && info.player_response.playerConfig && typeof info.player_response.playerConfig.audioConfig == "object") {
+                    loudness = parseFloat(info.player_response.playerConfig.audioConfig.perceptualLoudnessDb);
+                }
+                
+                this.log('Grabbing from youtube: ' + url);
+                this._downloads += 1;
             
-        });
+                //Youtube -> FFmpeg -> Hard drive
+                
+                let video = ytdl(url, {filter: 'audioonly'});
+                
+                let ffmpeg = new FFmpeg(video);
+                if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
+                
+                let temppath = this.param('downloadPath') + '/' + 'dl_' + (this._preparing++) + '.tmp';
+                let stream = fs.createWriteStream(temppath);
 
+                if (mp.info.format == 'pcm') {
+                    ffmpeg.format('s16le').audioBitrate('48k').audioChannels(2);
+                } else if (mp.info.format == 'flac') {
+                    ffmpeg.format('flac');
+                } else {
+                    ffmpeg.format('mp3');
+                }
+                let audio = ffmpeg.pipe(stream);
+                
+                ffmpeg.on('error', (error) => {
+                    this.log('error', '[Youtube, FFmpeg] ' + error);
+                    audio.destroy();
+                    this._downloads -= 1;
+                });
+                
+                stream.on('error', (error) => {
+                    this.log('error', '[Youtube, Write] ' + error);
+                    audio.destroy();
+                    this._downloads -= 1;
+                });
+            
+                stream.on('finish', () => {
+                    this._downloads -= 1;
+                    
+                    this.persistTempDownload(temppath, url, mp, {
+                        length: parseInt(length),
+                        source: url,
+                        sourceType: 'youtube',
+                        sourceSpecificId: info.video_id || info.videoDetails.video_id,
+                        sourceLoudness: loudness,
+                        name: info.title || info.videoDetails.title,
+                        author: '',
+                        album: '',
+                        keywords: keywords
+                    }, messageObj, callbacks, readOnly);
+                });
+                
+            })
+            .catch((err) => {
+                this.log('warn', err);
+            });
     }
         
     
