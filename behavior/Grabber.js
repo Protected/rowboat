@@ -5,12 +5,14 @@ const fs = require('fs');
 const crypto = require('crypto');
 const cp = require('child_process');
 const { promisify } = require('util');
+const { Readable } = require('stream');
 
 const ytdl = require('ytdl-core');
 const FFmpeg = require('fluent-ffmpeg');
 const normalize = require('ffmpeg-normalize');
 const moment = require('moment');
 const random = require('meteor-random');
+const { stream } = require('winston');
 
 const PERM_ADMIN = 'administrator';
 const PERM_MODERATOR = 'moderator';
@@ -97,20 +99,24 @@ class ModGrabber extends Module {
         this._preparing = 0;  //Used for generating temporary filenames
         
         this._index = {};  //Main index (hash => info)
-        this._indexSourceTypeAndId = {};  //{sourceType: {sourceId: ...}}
+        this._indexSourceTypeAndId = {};  //{sourceType: {sourceId: ..., ...}}
+        this._indexAlbumAndTrack = {};  //{albumCompacted: {track: ..., ...}}
         this._stats = null;  //{users: {userid: {displayname, shares, shareavglength, ...}, ...}}
         
         this._usage = 0;  //Cache disk usage (by mp3s only)
         this._sessionGrabs = [];  //History of hashes grabbed in this session
         this._parserFilters = [];  //[[regex, callback(string)], ...] to apply to hashoroffset arguments (see API)
         
-        this._scanQueue = [];  //Rate-limit song downloads and other heavy actions. Each item is an anonymous function that performs the action.
+        this._scanQueue = [];  //Rate-limit song downloads and other heavy actions. Each item is: ["description", anonymous function that performs the action, cacheurl]
+                                //  where cacheurl is an optional cache key used to delay dequeueing while cache is under construction.
         this._scanTimer = null;
         this._downloads = 0;
         
         this._apiCbNewSong = [];  //List of callbacks called when new songs are added. Return true to stop processing.
         this._apiCbGrabscanExists = [];  //List of callbacks called when existing songs are detected by a grabscan call. Return true to stop processing.
         this._apiCbRemoveSong = [];  //List of callbacks called when songs are removed.
+
+        this._cache = {};  //{url: {ongoinginfo: boolean, info, ongoing: boolean, data}} Temporary cache
         
         this._path = __dirname;
     }
@@ -153,6 +159,14 @@ class ModGrabber extends Module {
                 this._indexSourceTypeAndId[info.sourceType] = {};
             }
             this._indexSourceTypeAndId[info.sourceType][info.sourceSpecificId] = info;
+
+            if (info.album && info.track) {
+                let albumCompacted = info.album.replace(/ /g, "").toLowerCase();
+                if (!this._indexAlbumAndTrack[albumCompacted]) {
+                    this._indexAlbumAndTrack[albumCompacted] = {};
+                }
+                this._indexAlbumAndTrack[albumCompacted][info.track] = info;
+            }
         }
 
         this.calculateDownloadPathUsage();
@@ -417,6 +431,27 @@ class ModGrabber extends Module {
             
             return true;
         });
+
+
+        this.mod('Commands').registerCommand(this, 'grab tasks', {
+            description: 'Lists the contents of the scan queue.'
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            if (!this._scanQueue.length) {
+                ep.reply('The queue is empty.');
+                return true;
+            }
+
+            ep.reply("```");
+            for (let i = 0; i < this._scanQueue.length; i++) {
+                let width = String(this._scanQueue.length).length;
+                let pos = ('0'.repeat(width) + String(i+1)).slice(-width);
+                ep.reply('[' + pos + '] ' + this._scanQueue[i][0]);
+            }
+            ep.reply("```");
+            
+            return true;
+        });
         
         
         this.mod('Commands').registerCommand(this, 'grab fixloudness', {
@@ -589,6 +624,27 @@ class ModGrabber extends Module {
                     return true;
                 }
             }
+
+            //-----Logic for indexByAlbumAndTrack
+            let entry = this._index[hash];
+
+            if (entry.album && args.field == "track") {
+                let albumCompacted = entry.album.replace(/ /g, "").toLowerCase();
+                if (entry.track !== undefined) {
+                    delete this._indexAlbumAndTrack[albumCompacted][entry.track];
+                }
+                this._indexAlbumAndTrack[albumCompacted][newvalue] = entry;
+            }
+
+            if (entry.track !== undefined && args.field == "album") {
+                let albumCompacted = entry.album.replace(/ /g, "").toLowerCase();
+                delete this._indexAlbumAndTrack[albumCompacted][entry.track];
+                if (newvalue) {
+                    let newAlbumCompacted = newvalue.replace(/ /g, "").toLowerCase();
+                    this._indexAlbumAndTrack[newAlbumCompacted][newvalue] = entry;
+                }
+            }
+            //-----
             
             this._index[hash][args.field] = newvalue;
             this._index.save();
@@ -636,6 +692,26 @@ class ModGrabber extends Module {
             }
             
             ep.reply(result);
+            
+            return true;
+        });
+
+
+        this.mod('Commands').registerCommand(this, 'song album', {
+            description: 'Retrieve tracks by album.',
+            args: ['album', true]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            let albumCompacted = args.album.join("").toLowerCase();
+            if (!this._indexAlbumAndTrack[albumCompacted] || Object.keys(this._indexAlbumAndTrack[albumCompacted]).length == 0) {
+                ep.reply("Album not found or not indexed.");
+                return true;
+            }
+
+            for (let track in this._indexAlbumAndTrack[albumCompacted]) {
+                let entry = this._indexAlbumAndTrack[albumCompacted][track];
+                ep.reply("`#" + entry.hash + " " + track + ": " + entry.name + (entry.author ? ' (' + entry.author + ')' : '') + "`");
+            }
             
             return true;
         });
@@ -834,13 +910,13 @@ class ModGrabber extends Module {
         if (this.param('channels').indexOf(channelid) < 0) return false;
         this.queueScanMessage(rawobj, {
             accepted: (messageObj, messageAuthor, reply, hash) => {
-                if (reply) reply("Got it, " + messageAuthor + ".");
+                if (reply) reply("Got it, " + messageAuthor + " (" + hash + ").");
             },
             exists: (messageObj, messageAuthor, reply, hash) => {
                 if (reply) reply(messageAuthor + ", the song was already known (" + hash + ").");
             },
             errorDuration: (messageObj, messageAuthor, reply, label) => {
-                if (reply) reply(messageAuthor + ", I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds.");
+                if (reply) reply(messageAuthor + ", I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds" + (label ? " (" + label + ")" : "") + ".");
             },
             errorPermission: (messageObj, messageAuthor, reply) => {
                 if (reply) reply(messageAuthor + ", you don't have permission to do that!");
@@ -850,6 +926,9 @@ class ModGrabber extends Module {
             },
             errorEncoding: (messageObj, messageAuthor, reply) => {
                 if (reply) reply(messageAuthor + ", the song could not be obtained or converted.");
+            },
+            errorNormalizedCollision: (messageObj, messageAuthor, reply) => {
+                if (reply) reply(messageAuthor + ", the hash of the normalized version of the song collided with an existing hash.");
             }
         });
     }
@@ -907,7 +986,7 @@ class ModGrabber extends Module {
                 if (!track) track = parseInt(chapterno[1]);
             } else {
                 let chaptername = message.match(/<([^>]{3,})>/);
-                if (chaptername) {
+                if (chaptername && chaptername[1] != "ALL" && chaptername[1] != "FILL") {
                     chaptername = chaptername[1].toLowerCase().trim();
                     let i = 1;
                     for (let checkchapter of meta.chapters) {
@@ -924,6 +1003,12 @@ class ModGrabber extends Module {
                 interval = [chapter.start_time, chapter.end_time];
                 if (!title) title = chapter.title;
             }
+        }
+        
+        let all = !interval && meta.chapters.length && message.match(/<ALL>/);
+        let fill = !interval && meta.chapters.length && message.match(/<FILL>/);
+        if ((all || fill) && replace) {
+            replace = null;
         }
         
         let format = this.param('defaultFormat');
@@ -945,12 +1030,14 @@ class ModGrabber extends Module {
             track: track,
             replace: replace,
             interval: interval,
-            format: format
+            format: format,
+            all: all,
+            fill: fill
         };
     }
     
     
-    async obtainMessageParams(messageObj, from, url) {
+    async obtainMessageParams(messageObj, fragment, from, url) {
         if (messageObj.regrab) {
             //messageObj is already local song metadata
             return {
@@ -983,7 +1070,7 @@ class ModGrabber extends Module {
             }
         }
     
-        let messageInfo = this.extractMessageInfo(messageObj.content, {authorid: messageObj.author.id, chapters: chapters});
+        let messageInfo = this.extractMessageInfo(fragment, {authorid: messageObj.author.id, chapters: chapters});
         let tenv = this.env(this.param('env'));
 
         if (messageInfo.replace) {
@@ -997,8 +1084,15 @@ class ModGrabber extends Module {
             authorName: tenv.idToDisplayName(messageObj.author.id),
             info: messageInfo,
             interval: messageInfo.interval,
-            reply: (messageInfo.warnauthor ? (out) => tenv.msg(messageObj.channel.id, out) : null)
+            reply: (messageInfo.warnauthor ? (out) => tenv.msg(messageObj.channel.id, out) : null),
+            chapters: chapters
         };
+    }
+
+    duplicateMessageParams(mp) {
+        let copy = Object.assign({}, mp);
+        copy.info = Object.assign({}, copy.info);
+        return copy;
     }
     
     /* Callbacks:
@@ -1007,51 +1101,118 @@ class ModGrabber extends Module {
         errorDuration(messageObj, messageAuthor, reply, label) - A song fails a duration check
         errorPermission(messageObj, messageAuthor, reply) - The song could not be collected because its metadata violated a permission check
         errorNotFound(messageObj, messageAuthor, reply) - The targeted song was not found in the index
-        reply is either a function for replying to the environent (if the message is tagged for feedback) or null
+        reply is either a function for replying to the environment (if the message is tagged for feedback) or null
     */
     grabInMessage(messageObj, callbacks, readOnly) {
+        let fragments = messageObj.content.split(/\{\+\}/iu);
+        if (fragments.length == 1) {
+            this.grabInFragment(messageObj, fragments[0], callbacks, readOnly, true);
+        } else {
+            for (let fragment of fragments) {
+                this._scanQueue.push(["Scan fragment", function() {
+                    this.grabInFragment(messageObj, fragment, callbacks, readOnly, false);
+                }.bind(this)]);
+            }
+        }
+    }
+
+    async grabInFragment(messageObj, fragment, callbacks, readOnly, single) {
         if (this.isDownloadPathFull() || !messageObj) return false;
-        
+
         //Youtube
-        let yturls = messageObj.content.match(/(?:https?:\/\/|\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11}|[\w_-]{12})(?![\w_-])/g);
+        let yturls = fragment.match(/(?:https?:\/\/|\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11}|[\w_-]{12})(?![\w_-])/g);
         if (yturls) {
             for (let url of yturls) {
-                this.grabFromYoutube(url, messageObj, callbacks, readOnly)
-                    .catch((e) => this.log('warn', 'Grab from YouTube: ' + e));
+                let mp = await this.obtainMessageParams(messageObj, fragment, 'youtube', url);
+                if (mp.info.all || mp.info.fill) {
+                    //All chapters
+                    for (let i = 0; i < mp.chapters.length; i++) {
+                        let chapter = mp.chapters[i];
+                        
+                        let cmp = this.duplicateMessageParams(mp);
+                        cmp.info.title = chapter.title;
+                        let fixtitle = cmp.info.title.match(/^[0-9]+[:.-] ?(.+)/);
+                        if (fixtitle) cmp.info.title = fixtitle[1];
+                        cmp.info.track = i + 1;
+                        cmp.info.interval = [chapter.start_time, chapter.end_time]; //TODO
+                        cmp.interval = cmp.info.interval;
+                        delete cmp.chapters;
+
+                        if (cmp.info.album) {
+                            let albumCompacted = cmp.info.album.replace(/ /g, "").toLowerCase();
+                            if (this._indexAlbumAndTrack[albumCompacted] && this._indexAlbumAndTrack[albumCompacted][cmp.info.track]) {
+                                if (cmp.info.fill) {
+                                    continue;
+                                }
+                                if (cmp.info.all) {
+                                    cmp.info.replace = this._indexAlbumAndTrack[albumCompacted][cmp.info.track].hash;
+                                }
+                            }
+                        }
+
+                        this._scanQueue.push(["Grab from Youtube", function() {
+                            this.grabFromYoutube(cmp, url, messageObj, callbacks, readOnly)
+                                .catch((e) => this.log('warn', 'Grab from YouTube: ' + e));
+                        }.bind(this), url]);
+                    }
+                    this._scanQueue.push(["Clear cache", function() {
+                        this.clearCache();
+                    }.bind(this)]);
+                } else {
+                    this._scanQueue.push(["Grab from Youtube", function() {
+                        this.grabFromYoutube(mp, url, messageObj, callbacks, readOnly)
+                            .catch((e) => this.log('warn', 'Grab from YouTube: ' + e));
+                    }.bind(this), url]);
+                    this._scanQueue.push(["Clear cache", function() {
+                        this.clearCache();
+                    }.bind(this)]);
+                }
             }
         }
         
         //Attachment
-        if (messageObj.attachments && messageObj.attachments.array().length) {
+        if (single && messageObj.attachments && messageObj.attachments.array().length) {
             for (let ma of messageObj.attachments.array()) {
                 if (!ma.name || !ma.name.match(/\.(mp3|ogg|flac|wav|pcm|wma|aac|m4a)$/) || ma.size < 20480) continue;
-                this.grabFromAttachment(ma, messageObj, callbacks, readOnly)
-                    .catch((e) => this.log('warn', 'Grab from attachment: ' + e));
+                let mp = await this.obtainMessageParams(messageObj, fragment);
+                this._scanQueue.push(["Grab from Attachment", function() {
+                    this.grabFromAttachment(mp, ma, messageObj, callbacks, readOnly)
+                        .catch((e) => this.log('warn', 'Grab from attachment: ' + e));
+                }.bind(this)]);
             }
         }
         
         //Google Drive
-        let gdurl = messageObj.content.match(/(?:https?:\/\/|\/\/)?(?:drive|docs)\.google\.com\/(?:(?:open|uc)\?id=|file\/d\/)([\w_-]{28,})(?![\w_])/);
+        let gdurl = fragment.match(/(?:https?:\/\/|\/\/)?(?:drive|docs)\.google\.com\/(?:(?:open|uc)\?id=|file\/d\/)([\w_-]{28,})(?![\w_])/);
         if (gdurl) {
+            let mp = await this.obtainMessageParams(messageObj, fragment);
             gdurl = 'https://docs.google.com/uc?id=' + gdurl[1];
-            this.grabFromURL(gdurl, 'gdrive', gdurl[1], messageObj, callbacks, readOnly)
-                .catch((e) => this.log('warn', 'Grab from Google Drive URL: ' + e));
+            this._scanQueue.push(["Grab from URL", function() {
+                this.grabFromURL(mp, gdurl, 'gdrive', gdurl[1], messageObj, callbacks, readOnly)
+                    .catch((e) => this.log('warn', 'Grab from Google Drive URL: ' + e));
+            }.bind(this)]);
         }
         
         //Dropbox
-        let dburl = messageObj.content.match(/(?:https?:\/\/|\/\/)?(?:www\.)?dropbox\.com\/s\/([\w_]{15,})(?![\w_])/);
+        let dburl = fragment.match(/(?:https?:\/\/|\/\/)?(?:www\.)?dropbox\.com\/s\/([\w_]{15,})(?![\w_])/);
         if (dburl) {
+            let mp = await this.obtainMessageParams(messageObj, fragment);
             dburl = 'https://www.dropbox.com/s/' + dburl[1] + '/?dl=1';
-            this.grabFromURL(dburl, 'dropbox', dburl[1], messageObj, callbacks, readOnly)
-                .catch((e) => this.log('warn', 'Grab from Dropbox URL: ' + e));
+            this._scanQueue.push(["Grab from URL", function() {
+                this.grabFromURL(mp, dburl, 'dropbox', dburl[1], messageObj, callbacks, readOnly)
+                    .catch((e) => this.log('warn', 'Grab from Dropbox URL: ' + e));
+            }.bind(this)]);
         }
         
         if (this.param("useYoutubedl")) {
             //Bandcamp
-            let bcurl = messageObj.content.match(/(?:https?:\/\/|\/\/)?([a-z0-9-]+)\.bandcamp\.com\/track\/([\w_-]+)(?![\w_-])/);
+            let bcurl = fragment.match(/(?:https?:\/\/|\/\/)?([a-z0-9-]+)\.bandcamp\.com\/track\/([\w_-]+)(?![\w_-])/);
             if (bcurl) {
-                this.grabFromYoutubedl(bcurl[0], 'bandcamp', bcurl[1] + '__' + bcurl[2], messageObj, callbacks, readOnly)
-                    .catch((e) => this.log('warn', 'Grab from Bandcamp: ' + e));
+                let mp = await this.obtainMessageParams(messageObj, fragment);
+                this._scanQueue.push(["Grab using youtube-dl", function() {
+                    this.grabFromYoutubedl(mp, bcurl[0], 'bandcamp', bcurl[1] + '__' + bcurl[2], messageObj, callbacks, readOnly)
+                        .catch((e) => this.log('warn', 'Grab from Bandcamp: ' + e));
+                }.bind(this)]);
             }
         }
         
@@ -1081,14 +1242,70 @@ class ModGrabber extends Module {
         
         return true;
     }
+
+
+    clearCache(url) {
+        if (this._cache[url]) {
+            delete this._cache[url];
+        }
+    }
+
+    youtubeInfo(url) {
+        if (!this._cache[url]) {
+            this._cache[url] = {
+                ongoinginfo: false,
+                info: null,
+                ongoing: false,
+                data: null
+            };
+        }
+        if (this._cache[url].info) {
+            return Promise.resolve(this._cache[url].info);
+        } else {
+            this._cache[url].ongoinginfo = true;
+            return ytdl.getInfo(url)
+                .then((info) => {
+                    this._cache[url].info = info;
+                    this._cache[url].ongoinginfo = false;
+                    return info;
+                });
+        }
+    }
+
+    youtubeDownload(url) {
+        if (!this._cache[url]) {
+            this._cache[url] = {
+                ongoinginfo: false,
+                info: null,
+                ongoing: false,
+                data: null
+            };
+        }
+        if (this._cache[url].data) {
+            let stream = new Readable({});
+            stream.push(this._cache[url].data);
+            stream.push(null);
+            return stream;
+        } else if (!this._cache[url].ongoing) {
+            this._cache[url].ongoing = true;
+            this._cache[url].data = [];
+            let stream = ytdl(url, {filter: 'audioonly'});
+            stream.on("data", (data) => {
+                this._cache[url].data.push(data);
+            });
+            stream.on("end", () => {
+                this._cache[url].data = Buffer.concat(this._cache[url].data);
+                this._cache[url].ongoing = false;
+            });
+            return stream;
+        }
+    }
     
-    
-    async grabFromYoutube(url, messageObj, callbacks, readOnly) {
-        let mp = await this.obtainMessageParams(messageObj, 'youtube', url);
+    async grabFromYoutube(mp, url, messageObj, callbacks, readOnly) {
         if (mp.info.noextract) return;
 
         //Obtain metadata from youtube
-        ytdl.getInfo(url)
+        this.youtubeInfo(url)
             .then((info) => {
             
                 let length = info.length_seconds || info.duration || info.videoDetails.lengthSeconds || info.player_response.videoDetails.lengthSeconds || 0;
@@ -1129,7 +1346,7 @@ class ModGrabber extends Module {
             
                 //Youtube -> FFmpeg -> Hard drive
                 
-                let video = ytdl(url, {filter: 'audioonly'});
+                let video = this.youtubeDownload(url);
                 
                 let ffmpeg = new FFmpeg(video);
                 if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
@@ -1160,6 +1377,7 @@ class ModGrabber extends Module {
             
                 stream.on('finish', () => {
                     this._downloads -= 1;
+                    video.resume();
                     
                     this.persistTempDownload(temppath, url, mp, {
                         length: parseInt(length),
@@ -1181,8 +1399,7 @@ class ModGrabber extends Module {
     }
         
     
-    async grabFromAttachment(ma, messageObj, callbacks, readOnly) {
-        let mp = await this.obtainMessageParams(messageObj);
+    async grabFromAttachment(mp, ma, messageObj, callbacks, readOnly) {
         if (mp.info.noextract) return;
 
         this.log('Grabbing from attachment: ' + ma.name + ' (' + ma.id + ')');
@@ -1296,8 +1513,7 @@ class ModGrabber extends Module {
     }
     
     
-    async grabFromURL(url, sourceType, sourceSpecificId, messageObj, callbacks, readOnly) {
-        let mp = await this.obtainMessageParams(messageObj);
+    async grabFromURL(mp, url, sourceType, sourceSpecificId, messageObj, callbacks, readOnly) {
         if (mp.info.noextract) return;
 
         let filename = sourceSpecificId;
@@ -1423,8 +1639,7 @@ class ModGrabber extends Module {
     }
     
     
-    async grabFromYoutubedl(url, sourceType, sourceSpecificId, messageObj, callbacks, readOnly) {
-        let mp = await this.obtainMessageParams(messageObj);
+    async grabFromYoutubedl(mp, url, sourceType, sourceSpecificId, messageObj, callbacks, readOnly) {
         if (mp.info.noextract) return;
 
         let filename = sourceSpecificId;
@@ -1617,7 +1832,14 @@ class ModGrabber extends Module {
         //Normalize loudness. Returns a new index entry if successful.
         let normalized;
         if (this.param('normalization')) {
-            normalized = await this.fixNormalization(entry);
+            try {
+                normalized = await this.fixNormalization(entry);
+            } catch (e) {
+                this.log('  Normalized hash collision.');
+                if (callbacks.errorNormalizedCollision) callbacks.errorNormalizedCollision(messageObj, mp.authorName, mp.reply);
+                fs.unlink(realpath, (err) => {});
+                return;
+            }
         } 
         
         if (normalized && normalized.hash != entry.hash) {
@@ -1666,6 +1888,14 @@ class ModGrabber extends Module {
             this._indexSourceTypeAndId[entry.sourceType] = {};
         }
         this._indexSourceTypeAndId[entry.sourceType][entry.sourceSpecificId] = this._index[hash];
+
+        if (entry.album && entry.track) {
+            let albumCompacted = entry.album.replace(/ /g, "").toLowerCase();
+            if (!this._indexAlbumAndTrack[albumCompacted]) {
+                this._indexAlbumAndTrack[albumCompacted] = {};
+            }
+            this._indexAlbumAndTrack[albumCompacted][entry.track] = this._index[hash];
+        }
         
         if (!mp.regrab) {
             let shares = this.getUserStat(mp.author, "shares");
@@ -1778,6 +2008,13 @@ class ModGrabber extends Module {
         if (this._indexSourceTypeAndId[info.sourceType] && this._indexSourceTypeAndId[info.sourceType][info.sourceSpecificId]) {
             delete this._indexSourceTypeAndId[info.sourceType][info.sourceSpecificId];
         }
+
+        if (info.album && info.track) {
+            let albumCompacted = info.album.replace(/ /g, "").toLowerCase();
+            if (this._indexAlbumAndTrack[albumCompacted] && this._indexAlbumAndTrack[albumCompacted][info.track]) {
+                delete this._indexAlbumAndTrack[albumCompacted][info.track];
+            }
+        }
         
         delete this._index[hash];
         this._index.save();
@@ -1790,7 +2027,11 @@ class ModGrabber extends Module {
         if (this._downloads >= this.param('maxSimDownloads')) return;
         let item = this._scanQueue.shift();
         if (!item) return;
-        item();
+        if (item[2] && this._cache[item[2]] && (this._cache[item[2]].ongoing || this._cache[item[2]].ongoinginfo)) {
+            this._scanQueue.unshift(item);
+            return;
+        }
+        item[1]();
     }
     
     
@@ -1914,6 +2155,11 @@ class ModGrabber extends Module {
             
         let hash = crypto.createHash('md5').update(data).digest('hex');
         let newpath = this.param('downloadPath') + '/' + hash + '.' + (newsong.format || this.param('defaultFormat'));
+
+        if (fs.existsSync(newpath)) {
+            promisify(fs.unlink)(temppath);
+            throw "Normalized hash already exists.";
+        }
         
         await promisify(fs.rename)(temppath, newpath);
         this._usage += fs.statSync(newpath).size;
@@ -2172,19 +2418,19 @@ class ModGrabber extends Module {
     //Add stuff to the scan queue
 
     queueScanMessage(messageObj, callbacks, readOnly) {
-        this._scanQueue.push(function() {
+        this._scanQueue.push(["Scan message", function() {
             this.grabInMessage(messageObj, callbacks, readOnly || false);
-        }.bind(this));
+        }.bind(this)]);
     }
     
     queueRegrab(song, format, callbacks, readOnly) {
-        this._scanQueue.push(function() {
+        this._scanQueue.push(["Regrab", function() {
             this.reGrab(song, format || this.param('defaultFormat'), callbacks, readOnly || false);
-        }.bind(this));
+        }.bind(this)]);
     }
     
     queueFixLoudness(song, callbacks) {
-        this._scanQueue.push(function() {
+        this._scanQueue.push(["Fix loudness", function() {
             this._downloads += 1;
             this.log('Fixing loudness of ' + song.hash);
             this.fixNormalization(song)
@@ -2200,11 +2446,11 @@ class ModGrabber extends Module {
                     this._downloads -= 1;
                     if (callbacks.error) callbacks.error(song, err.error || err);
                 });
-        }.bind(this));
+        }.bind(this)]);
     }
     
     queueReformat(song, format, callbacks) {
-        this._scanQueue.push(function() {
+        this._scanQueue.push(["Reformat", function() {
             this._downloads += 1;
             this.log('Reformatting ' + song.hash);
             this.reformat(song, format)
@@ -2219,7 +2465,7 @@ class ModGrabber extends Module {
                     this._downloads -= 1;
                     if (callbacks.error) callbacks.error(song, err);
                 });
-        }.bind(this));
+        }.bind(this)]);
     }
     
 }
