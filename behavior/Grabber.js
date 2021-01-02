@@ -641,6 +641,9 @@ class ModGrabber extends Module {
                 delete this._indexAlbumAndTrack[albumCompacted][entry.track];
                 if (newvalue) {
                     let newAlbumCompacted = newvalue.replace(/ /g, "").toLowerCase();
+                    if (!this._indexAlbumAndTrack[newAlbumCompacted]) {
+                        this._indexAlbumAndTrack[newAlbumCompacted] = {};
+                    }
                     this._indexAlbumAndTrack[newAlbumCompacted][newvalue] = entry;
                 }
             }
