@@ -245,8 +245,6 @@ class ModVRChat extends Module {
         
         let asscall = async (env, userid, discorduser, vrchatuser, ep) => {
 
-            if (!this.testEnv(env)) return true;
-        
             let targetid = userid;
         
             if (discorduser) {
@@ -315,8 +313,6 @@ class ModVRChat extends Module {
 
         let unasscall = (env, userid, discorduser, ep) => {
 
-            if (!this.testEnv(env)) return true;
-
             let targetid = userid;
         
             if (discorduser) {
@@ -366,8 +362,6 @@ class ModVRChat extends Module {
             minArgs: 0
         },  (env, type, userid, channelid, command, args, handle, ep) => {
 
-            if (!this.testEnv(env)) return true;
-
             let person = this.getPerson(userid);
             if (!person) {
                 ep.reply("This user doesn't have a known VRChat account.");
@@ -402,8 +396,6 @@ class ModVRChat extends Module {
             args: ["state"],
             minArgs: 0
         },  (env, type, userid, channelid, command, args, handle, ep) => {
-
-            if (!this.testEnv(env)) return true;
 
             let person = this.getPerson(userid);
             if (!person) {
