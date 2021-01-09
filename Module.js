@@ -4,8 +4,10 @@
 const jsonfile = require('jsonfile');
 const fs = require('fs');
 const { http, https } = require('follow-redirects');
+const querystring = require('querystring');
 const stream = require('stream');
 const logger = require('./Logger.js');
+const { EWOULDBLOCK } = require('constants');
 
 class Module {
 
@@ -263,11 +265,17 @@ class Module {
                     res.setEncoding(encoding);
                 }
                 if (res.statusCode !== 200) {
-                    reject("Request failed: " + res.statusCode);
+                    reject({error: "Request failed: " + res.statusCode, statusCode: res.statusCode});
                 } else {
                     let body = '';
                     res.on('data', (chunk) => body += chunk);
-                    res.on('end', () => resolve(body));
+                    res.on('end', () => {
+                        if (options && options.returnFull) {
+                            resolve({body: body, cookies: res.headers["set-cookie"], statusCode: 200});
+                        } else {
+                            resolve(body);
+                        }
+                    });
                 }
             };
             
@@ -276,14 +284,79 @@ class Module {
             } else {
                 req = http.get(url, options, callback);
             }
-            req.on('error', reject);
+            req.on('error', options.returnFull ? (e) => reject({error: e}) : reject);
+        });
+    }
+
+    async urlpost(url, content, options, encoding) {
+        if (!encoding && typeof options == "string") {
+            encoding = options;
+            options = undefined;
+        }
+        if (!options) options = {};
+
+        let headers = {};
+        if (!content) {
+            content = "";
+        } else if (typeof content == "object") {
+            content = querystring.stringify(content);
+            headers["Content-type"] = "application/x-www-form-urlencoded";
+            headers["Content-length"] = Buffer.byteLength(content);
+        }
+
+        options = Object.assign({
+            method: 'POST',
+            headers: Object.assign(headers, options.headers)
+        }, options);
+
+        return new Promise((resolve, reject) => {
+            let req;
+            
+            let callback = (res) => {
+                if (encoding) {
+                    res.setEncoding(encoding);
+                }
+                if (res.statusCode !== 200) {
+                    reject({error: "Request failed: " + res.statusCode, statusCode: res.statusCode});
+                } else {
+                    let body = '';
+                    res.on('data', (chunk) => body += chunk);
+                    res.on('end', () => {
+                        if (options && options.returnFull) {
+                            resolve({body: body, cookies: res.headers["set-cookie"], statusCode: 200});
+                        } else {
+                            resolve(body);
+                        }
+                    });
+                }
+            };
+            
+            if (url.match(/^https/i)) {
+                req = https.request(url, options, callback);
+            } else {
+                req = http.request(url, options, callback);
+            }
+            req.on('error', options.returnFull ? (e) => reject({error: e}) : reject);
+            req.write(content);
+            req.end();
         });
     }
     
     //Returns Promise of object from JSON pointed at by URL
     async jsonget(url, options) {
         let body = await this.urlget(url, options, 'utf8');
-        return JSON.parse(body);
+        if (typeof body == "object") body.body = JSON.parse(body.body);
+        else body = JSON.parse(body);
+        return body;
+    }
+
+    async jsonpost(url, content, options) {
+        let body = await this.urlpost(url, content ? JSON.stringify(content) : null, Object.assign({
+            headers: {"Content-type": "application/json"}
+        }, options), 'utf8');
+        if (typeof body == "object") body.body = JSON.parse(body.body);
+        else body = JSON.parse(body);
+        return body;
     }
     
     //Returns stream of URL contents
