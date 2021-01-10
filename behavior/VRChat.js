@@ -230,7 +230,7 @@ class ModVRChat extends Module {
                 //Update saved status and announce changes
                 this.updateStatus(userid, friends[person.vrc].status);
                 if (person.pendingflip && now - person.latestflip >= this.param("offlinetolerance")) {
-                    this.announce("**" + this.denv.idToDisplayName(userid) + "** is offline.");
+                    this.finishStatusUpdate(userid);
                 }
 
                 //Bake status embed
@@ -550,6 +550,12 @@ class ModVRChat extends Module {
         return true;
     }
 
+    finishStatusUpdate(userid) {
+        this.announce("**" + this.denv.idToDisplayName(userid) + "** is offline.");
+        this._people[userid].pendingflip = false;
+        this._people.save();
+    }
+
     unregisterPerson(userid) {
         if (!this._people[userid]) return false;
         delete this._people[userid];
@@ -604,8 +610,12 @@ class ModVRChat extends Module {
 
         emb.setDescription(body);
 
-        if (vrcdata.last_login && vrcdata.status == "offline") {
-            emb.setFooter("Last seen " + moment(vrcdata.last_login).from(now));
+        if (vrcdata.last_login && vrcdata.status == "offline" && !person.pendingflip) {
+            if (person.latestflip) {
+                emb.setFooter("Last seen " + moment.unix(person.latestflip).from(now));
+            } else if (vrcdata.last_login) {
+                emb.setFooter("Last logged in " + moment(vrcdata.last_login).from(now));
+            }
         } else {
             emb.setFooter("");
         }
