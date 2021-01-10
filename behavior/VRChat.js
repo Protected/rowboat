@@ -22,11 +22,12 @@ class ModVRChat extends Module {
     ]; }
     
     get optionalParams() { return [
-        "updatefreq",           //How often to request user states (s)
+        "updatefreq",           //How often to request user states and perform updates (s)
         "statuschan",           //ID of text channel for status messages
         "announcechan",         //ID of text channel for announcements
         "expiration",           //How long to stay unfriended before unassigning (h)
-        "ddelay"                //Delay between queued actions (ms)
+        "ddelay",               //Delay between queued actions (ms)
+        "offlinetolerance"      //How long to wait before offline announcement (s)
     ]; }
 
     get requiredModules() { return [
@@ -51,6 +52,7 @@ class ModVRChat extends Module {
         this._params["updatefreq"] = 120;
         this._params["expiration"] = 48;
         this._params["ddelay"] = 250;
+        this._params["offlinetolerance"] = 119;
 
         this._people = null;  //{USERID: {see registerPerson}, ...}
 
@@ -65,8 +67,8 @@ class ModVRChat extends Module {
     
 
     /*
-        Delete message if user unassigned
         Worlds/locations
+        Timezones
     */
 
     
@@ -227,6 +229,9 @@ class ModVRChat extends Module {
 
                 //Update saved status and announce changes
                 this.updateStatus(userid, friends[person.vrc].status);
+                if (person.pendingflip && now - person.latestflip >= this.param("offlinetolerance")) {
+                    this.announce("**" + this.denv.idToDisplayName(userid) + "** is offline.");
+                }
 
                 //Bake status embed
                 if (hasStatuschan) {
@@ -244,6 +249,8 @@ class ModVRChat extends Module {
         //# Register commands
         
         let asscall = async (env, userid, discorduser, vrchatuser, ep) => {
+
+            if (!this.testEnv(env)) return true;
 
             let targetid = userid;
         
@@ -313,6 +320,8 @@ class ModVRChat extends Module {
 
         let unasscall = (env, userid, discorduser, ep) => {
 
+            if (!this.testEnv(env)) return true;
+
             let targetid = userid;
         
             if (discorduser) {
@@ -362,13 +371,15 @@ class ModVRChat extends Module {
             minArgs: 0
         },  (env, type, userid, channelid, command, args, handle, ep) => {
 
+            if (!this.testEnv(env)) return true;
+
             let person = this.getPerson(userid);
             if (!person) {
                 ep.reply("This user doesn't have a known VRChat account.");
                 return true;
             }
 
-            let state = this.processBooleanArg(state);
+            let state = this.processBooleanArg(args.state);
             if (state === undefined) {
                 if (person.syncnick) {
                     ep.reply("Nickname synchronization is on.");
@@ -397,13 +408,15 @@ class ModVRChat extends Module {
             minArgs: 0
         },  (env, type, userid, channelid, command, args, handle, ep) => {
 
+            if (!this.testEnv(env)) return true;
+
             let person = this.getPerson(userid);
             if (!person) {
                 ep.reply("This user doesn't have a known VRChat account.");
                 return true;
             }
 
-            let state = this.processBooleanArg(state);
+            let state = this.processBooleanArg(args.state);
             if (state === undefined) {
                 if (person.stickypic) {
                     ep.reply("Sticky avatar picture is on.");
@@ -451,15 +464,17 @@ class ModVRChat extends Module {
 
     registerPerson(userid, fields, keep) {
         let person = {
-            vrc: null,
-            msg: null,
-            confirmed: false,
-            syncnick: true,
-            latestpic: null,
-            stickypic: false,
-            lateststatus: null,
-            creation: moment().unix(),
-            waiting: moment().unix()
+            vrc: null,                      //VRChat user ID
+            msg: null,                      //Status message ID
+            confirmed: false,               //Whether the user is confirmed (friended)
+            syncnick: true,                 //Whether to automatically change user's nickname to VRChat username
+            latestpic: null,                //Latest synced avatar picture
+            stickypic: false,               //Whether NOT to sync avatar pictures (keep current)
+            lateststatus: null,             //Latest VRChat status (used to detect changes)
+            latestflip: null,               //Timestamp of latest flip between online/offline
+            pendingflip: false,             //Whether there's a pending unannounced flip
+            creation: moment().unix(),      //Timestamp of the creation of the person entry (unchanging)
+            waiting: moment().unix()        //Timestamp of the start of the current waiting period for friending
         };
         if (keep && this._people[userid]) {
             person = this._people[userid];
@@ -504,9 +519,9 @@ class ModVRChat extends Module {
         return true;
     }
 
-    updatePic(userid, url) {
+    updatePic(userid, imageurl) {
         if (!this._people[userid]) return false;
-        this._people[userid].latestpic = url;
+        this._people[userid].latestpic = imageurl;
         this._people.save();
         return true;
     }
@@ -514,16 +529,24 @@ class ModVRChat extends Module {
     updateStatus(userid, status) {
         if (!this._people[userid] || !status) return false;
         let prev = this._people[userid].lateststatus;
+        if (prev == status) return false;
         this._people[userid].lateststatus = status;
-        this._people.save();
         if (prev) {
             if (STATUS_ONLINE.indexOf(prev) < 0 && STATUS_ONLINE.indexOf(status) > -1) {
-                this.announce("**" + this.denv.idToDisplayName(userid) + "** is online!");
+                this._people[userid].latestflip = moment().unix();
+                if (this._people[userid].pendingflip) {
+                    this._people[userid].pendingflip = false;
+                } else {
+                    this.announce("**" + this.denv.idToDisplayName(userid) + "** is online!");
+                }
             }
             if (STATUS_ONLINE.indexOf(prev) > -1 && STATUS_ONLINE.indexOf(status) < 0) {
-                this.announce("**" + this.denv.idToDisplayName(userid) + "** is offline.");
+                this._people[userid].latestflip = moment().unix();
+                this._people[userid].pendingflip = true;
+                //Delayed announcement is in timer
             }
         }
+        this._people.save();
         return true;
     }
 
@@ -563,26 +586,23 @@ class ModVRChat extends Module {
         }
 
         emb.setTitle(vrcdata.displayName);
-        emb.setImage(person.latestpic);
+        emb.setThumbnail(person.latestpic);
         emb.setColor(this.trustLevelColor(vrcdata.tags));
         emb.fields = [];
         emb.addField("Trust", this.trustLevelLabel(vrcdata.tags), true);
-        emb.addField("Status", this.statusLabel(vrcdata.status, vrcdata.statusDescription), true);
+        emb.addField("Status", this.statusLabel(vrcdata.status), true);
         emb.addField("Location", "(Coming soon)", true);
 
-        let body = vrcdata.bio.trim();
-        if (body) body += "\n\n";
-
-        body += this.tagLabels(vrcdata.tags).join("\n");
-        if (body) body += "\n\n";
-
+        let body = "";
+        
+        if (vrcdata.statusDescription) body += "*" + vrcdata.statusDescription.trim() + "*\n\n";
+        if (vrcdata.bio) body += vrcdata.bio.trim() + "\n\n";
         body += "[Profile](https://vrchat.com/home/user/" + vrcdata.id + ")";
 
-        emb.setDescription(body);
+        let taglabels = this.tagLabels(vrcdata.tags).join("\n");
+        if (taglabels) body += "\n\n" + taglabels;
 
-        if (vrcdata.userIcon) {
-            emb.setThumbnail(vrcdata.userIcon);
-        }
+        emb.setDescription(body);
 
         if (vrcdata.last_login && vrcdata.status == "offline") {
             emb.setFooter("Last seen " + moment(vrcdata.last_login).from(now));
@@ -750,11 +770,9 @@ class ModVRChat extends Module {
     }
 
     processBooleanArg(arg) {
-        if (arg.match(/(on|y|yes|enable|true|1)/i)) {
-            return true;
-        } else if (arg.match(/(off|n|no|disable|false|0)/i)) {
-            return false;
-        }
+        if (!arg) return undefined;
+        if (arg.match(/(on|y|yes|enable|true|1)/i)) return true;
+        if (arg.match(/(off|n|no|disable|false|0)/i)) return false;
     }
 
     trustLevelColor(tags) {
@@ -786,16 +804,21 @@ class ModVRChat extends Module {
         return labels;
     }
 
-    statusLabel(status, statusDescription) {
+    statusLabel(status) {
         let icon = "";
-        if (status == "active") icon = "🟢";  //Will show "Active" instead of "In-world" by defawult
+        if (status == "active") icon = "🟢";
         if (status == "join me") icon = "🔵";
         if (status == "ask me") icon ="🟠";
         if (status == "busy") icon = "🔴";
         if (status == "website") icon = "🟣";  //Nonstandard, displays as a green "Active" on the website
         if (status == "offline") icon = "⚪";
         if (icon) icon += " ";
-        return icon + (statusDescription || status[0].toUpperCase() + status.slice(1));
+
+        let label = status;
+        if (label == "active") label = "in-world";
+        label = label[0].toUpperCase() + label.slice(1);
+
+        return icon + label;
     }
 
 }
