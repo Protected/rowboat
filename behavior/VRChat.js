@@ -360,7 +360,7 @@ class ModVRChat extends Module {
 
             for (let worldid in this._worlds) {
                 let world = this.getCachedWorld(worldid);
-                if (world.emptysince && now - world.emptysince > this.param("worldexpiration")) {
+                if (world.emptysince && now - world.emptysince > this.param("worldexpiration") * 3600) {
                     this.clearWorld(worldid);
                 }
             }
@@ -906,10 +906,10 @@ class ModVRChat extends Module {
         emb.fields = [];
         emb.addField("Players", world.publicOccupants, true);
         emb.addField("Private", world.privateOccupants, true);
-        emb.addField("Heat", "🔥".repeat(world.heat || 0), true);
+        emb.addField("Heat", "🔥".repeat(world.heat || 0) || "-", true);
         emb.addField("Visits", world.visits, true);
         emb.addField("Favorites", world.favorites, true);
-        emb.addField("Popularity", "🚶".repeat(world.popularity || 0), true);
+        emb.addField("Popularity", "🚶".repeat(world.popularity || 0) || "-", true);
         
         let body = [];
 
