@@ -25,7 +25,10 @@ class ModVRChat extends Module {
         "updatefreq",           //How often to request user states and perform updates (s)
         "statuschan",           //ID of text channel for status messages
         "announcechan",         //ID of text channel for announcements
+        "worldchan",            //ID of text channel for worlds (warning: all contents will be deleted)
         "expiration",           //How long to stay unfriended before unassigning (h)
+        "worldstale",           //How long after retrieval until an entry in the world cache goes stale (s)
+        "worldexpiration",      //How long after emptying until an entry in the world cache is removed (h)
         "ddelay",               //Delay between queued actions (ms)
         "offlinetolerance"      //How long to wait before offline announcement (s)
     ]; }
@@ -46,28 +49,38 @@ class ModVRChat extends Module {
         return this.denv.server.channels.cache.get(this.param("announcechan"));
     }
 
+    get worldchan() {
+        return this.denv.server.channels.cache.get(this.param("worldchan"));
+    }
+
     constructor(name) {
         super('VRChat', name);
      
         this._params["updatefreq"] = 120;
         this._params["expiration"] = 48;
-        this._params["ddelay"] = 250;
+        this._params["worldstale"] = 3600;
+        this._params["worldexpiration"] = 48;
+        this._params["ddelay"] = 500;
         this._params["offlinetolerance"] = 119;
 
         this._people = null;  //{USERID: {see registerPerson}, ...}
 
         this._config = null;  //The full object returned by the "config" API. This API must be called before any other request.
         this._auth = null;  //The auth cookie
+        this._worlds = null;  //The worlds cache {WORLDID: {..., see getWorld}, ...}
 
         this._timer = null;  //Action timer
 
         this._dqueue = [];  //Discord update queue
         this._dtimer = null;  //Discord update queue timer
+
+        this._mtimer = null;  //Maintenance timer
     }
     
 
     /*
-        Worlds/locations
+        Favorite worlds index and channel
+        More logging
         Timezones
     */
 
@@ -79,6 +92,10 @@ class ModVRChat extends Module {
 
         this._people = this.loadData(undefined, undefined, {quiet: true});
         if (this._people === false) return false;
+
+        this._worlds = this.loadData(this.name.toLowerCase() + ".worlds.json", {}, {quiet: true});
+
+        this.resetAllLocations();
 
 
         //# Initialize VRChat
@@ -93,10 +110,12 @@ class ModVRChat extends Module {
             if (this._auth) {
                 this.vrcpost("logout", null, "PUT").then(() => {
                     console.log("Logged out from VRChat.");
-                    process.exit();
+                    this.emptyWorlds();
+                    this._dqueue.push(process.exit);
                 });
             } else {
-                process.exit();
+                this.emptyWorlds();
+                this._dqueue.push(process.exit);
             }
         });
 
@@ -105,7 +124,7 @@ class ModVRChat extends Module {
 
         let guildMemberRemoveHandler = async (member) => {
 
-            let person = this.getPerson(userid);
+            let person = this.getPerson(member.id);
             if (this.statuschan && person.msg) {
                 let message = this.statuschan.messages.cache.get(person.msg);
                 if (message) message.delete({reason: "User has departed the server."});
@@ -122,6 +141,14 @@ class ModVRChat extends Module {
                 if (person.msg == message.id) {
                    this.clearPersonMsg(userid);
                    break; 
+                }
+            }
+
+            for (let worldid in this._worlds) {
+                let world = this.getCachedWorld(worldid);
+                if (world.msg == message.id) {
+                    this.clearWorldMsg(worldid);
+                    break;
                 }
             }
             
@@ -143,13 +170,50 @@ class ModVRChat extends Module {
                 } else {
 
                     if (this.statuschan && person.msg) {
-                        this.statuschan.messages.fetch(person.msg)
-                            .then(message => message.delete({reason: "User has departed the server."}));
+                        this._dqueue.push(function() {
+                            this.statuschan.messages.fetch(person.msg)
+                                .then(message => message.delete({reason: "User has departed the server."}));
+                        }.bind(this));
                     }
 
                     this.unregisterPerson(userid);
 
                 }
+            }
+
+            if (this.worldchan) {
+
+                let index = {};
+                for (let worldid in this._worlds) {
+                    if (this._worlds[worldid].msg) {
+                        index[this._worlds[worldid].msg] = true;
+                    }
+                }
+
+                let scanning = null;
+                let scanner = () => {
+                    this.worldchan.messages.fetch({
+                        limit: 100,
+                        before: scanning
+                    }).then((messages) => {
+                        let endNow = false;
+                        let messagesarr = messages.array();
+                        if (messagesarr.length < 100) endNow = true;
+                        for (let message of messagesarr) {
+                            if (!index[message.id]) {
+                                this._dqueue.push(function() {
+                                    message.delete({reason: "World not found in cache."});
+                                }.bind(this));
+                            }
+                        }
+                        if (!endNow) {
+                            scanning = messagesarr[messagesarr.length - 1].id;
+                            setTimeout(scanner, 250);
+                        }
+                    });
+                };
+                scanner();
+
             }
 
             this.denv.client.on("guildMemberRemove", guildMemberRemoveHandler);
@@ -169,7 +233,7 @@ class ModVRChat extends Module {
         }.bind(this), this.param("ddelay"));
 
 
-        this._timer = setInterval(async function () {
+        let maintimer = async function () {
 
             let now = moment().unix();
 
@@ -178,6 +242,8 @@ class ModVRChat extends Module {
             for (let friend of friendlist) {
                 friends[friend.id] = friend;
             }
+
+            //Do things to people
 
             let hasStatuschan = !!this.statuschan;
 
@@ -218,6 +284,20 @@ class ModVRChat extends Module {
                     this.updatePic(userid, friends[person.vrc].currentAvatarImageUrl);
                 }
 
+                //Update latest location (used in world embeds)
+                let location = friends[person.vrc].location;
+                if (person.latestlocation != location) {
+                    let oldworldid = this.worldFromLocation(person.latestlocation);
+                    if (oldworldid) {
+                        this.removeWorldMember(oldworldid, userid);
+                    }
+                    this.updateLocation(userid, location);
+                    let worldid = this.worldFromLocation(location);
+                    if (worldid) {
+                        this.addWorldMember(worldid, userid);
+                    }
+                }
+
                 //Synchronize nickname with vrchat username
                 if (person.syncnick) {
                     let member = this.denv.server.members.cache.get(userid);
@@ -242,8 +322,52 @@ class ModVRChat extends Module {
 
             }
 
+            //Do things to worlds
 
-        }.bind(this), this.param("updatefreq") * 1000);
+            let hasWorldchan = !!this.worldchan;
+
+            for (let worldid in this._worlds) {
+
+                let world = await this.getWorld(worldid);
+
+                //Bake world embed
+                if (hasWorldchan) {
+                    this._dqueue.push(function() {
+                        this.bakeWorld(worldid, now)
+                            .then(worldmsg => {
+                                for (let userid in world.members) {
+                                    this._dqueue.push(function() {
+                                        this.setWorldLink(userid, world.name, worldmsg);
+                                    }.bind(this));
+                                }
+                            })
+                    }.bind(this));
+                }
+
+            }
+
+        }.bind(this);
+
+        this._timer = setInterval(maintimer, this.param("updatefreq") * 1000);
+        if (this.param("updatefreq") > 20) setTimeout(maintimer, 10000);  //Run faster at startup
+
+
+        this._mtimer = setInterval(function () {
+
+            let now = moment().unix();
+
+            //Remove old worlds from the cache
+
+            for (let worldid in this._worlds) {
+                let world = this.getCachedWorld(worldid);
+                if (world.emptysince && now - world.emptysince > this.param("worldexpiration")) {
+                    this.clearWorld(worldid);
+                }
+            }
+
+            this._worlds.save();
+
+        }.bind(this), 1800000);
 
 
         //# Register commands
@@ -471,6 +595,7 @@ class ModVRChat extends Module {
             latestpic: null,                //Latest synced avatar picture
             stickypic: false,               //Whether NOT to sync avatar pictures (keep current)
             lateststatus: null,             //Latest VRChat status (used to detect changes)
+            latestlocation: null,           //Latest VRChat location (used for links)
             latestflip: null,               //Timestamp of latest flip between online/offline
             pendingflip: false,             //Whether there's a pending unannounced flip
             creation: moment().unix(),      //Timestamp of the creation of the person entry (unchanging)
@@ -556,11 +681,128 @@ class ModVRChat extends Module {
         this._people.save();
     }
 
-    unregisterPerson(userid) {
-        if (!this._people[userid]) return false;
-        delete this._people[userid];
+    resetAllLocations() {
+        for (let userid in this._people) {
+            if (!this._people[userid].latestlocation) continue;
+            this._people[userid].latestlocation = null;
+        }
+        this._people.save();
+    }
+
+    updateLocation(userid, location) {
+        if (location && (location == "offline" || location == "private")) location = "";
+        if (!this._people[userid] || location && !this.isValidLocation(location)) return false;
+        this._people[userid].latestlocation = location;
         this._people.save();
         return true;
+    }
+
+    unregisterPerson(userid) {
+        if (!this._people[userid]) return false;
+
+        delete this._people[userid];
+        this._people.save();
+
+        for (let worldid in this._worlds) {
+            this.removeWorldMember(worldid, userid);
+        }
+
+        return true;
+    }
+
+
+    //World cache
+
+    async getWorld(worldid) {
+        let msg = null, members = {}, emptysince = null;
+        if (this._worlds[worldid]) {
+            if (moment().unix() - this._worlds[worldid].retrieved < this.param("worldstale")) {
+                return this._worlds[worldid];
+            }
+            msg = this._worlds[worldid].msg;
+            members = this._worlds[worldid].members;
+            emptysince = this._worlds[worldid].emptysince;
+        }
+        return this.vrcWorld(worldid)
+            .then(data => {
+                data.retrieved = moment().unix();   //Time retrieved/refreshed
+                data.msg = msg;                     //Status message ID
+                data.members = members;             //Set of members known to be in-world (discord userids)
+                data.emptysince = emptysince;       //Time of departure of last member
+                this._worlds[worldid] = data;
+                return data;
+            });
+    }
+
+    getCachedWorld(worldid) {
+        return this._worlds[worldid];
+    }
+
+    async addWorldMember(worldid, userid) {
+        let world = await this.getWorld(worldid);
+        world.members[userid] = true;
+        world.emptysince = null;
+    }
+
+    async removeWorldMember(worldid, userid) {
+        if (!this._worlds[worldid]) return;
+        if (this._worlds[worldid].members[userid]) {
+            delete this._worlds[worldid].members[userid];
+        }
+        if (!this.worldMemberCount(worldid)) {
+            this._worlds[worldid].emptysince = moment().unix();
+        }
+    }
+
+    worldMemberCount(worldid) {
+        if (!this._worlds[worldid]) return 0;
+        return Object.keys(this._worlds[worldid].members).length;
+    }
+
+    setWorldMsg(worldid, message) {
+        if (!this._worlds[worldid] || !message) return false;
+        this._worlds[worldid].msg = message.id;
+        return true;
+    }
+
+    clearWorldMsg(worldid) {
+        if (!this._worlds[worldid]) return false;
+        this._worlds[worldid].msg = null;
+        return true;
+    }
+
+    clearWorld(worldid) {
+        if (!this._worlds[worldid]) return true;
+        if (this._worlds[worldid].msg && this.worldchan) {
+            this._dqueue.push(function() {
+                this.worldchan.messages.fetch(this._worlds[worldid].msg)
+                    .then(message => message.delete({reason: "World cleared from cache ."}))
+                    .then(() => delete this._worlds[worldid]);
+            }.bind(this));
+        } else {
+            delete this._worlds[worldid];
+        }
+        return true;
+    }
+
+    emptyWorlds() {
+        let now = moment().unix();
+
+        for (let userid in this._people) {
+            if (!this._people.latestlocation) continue;
+            this._people[userid].latestlocation = null;
+        }
+        this._people.save();
+
+        for (let worldid in this._worlds) {
+            if (!this.worldMemberCount(worldid)) continue;
+            this._worlds[worldid].members = {};
+            this._worlds[worldid].emptysince = now;
+            this._dqueue.push(function() {
+                this.bakeWorld(worldid, now)
+            }.bind(this));
+        }
+        this._worlds.save();
     }
 
 
@@ -594,21 +836,23 @@ class ModVRChat extends Module {
         emb.setTitle(vrcdata.displayName);
         emb.setThumbnail(person.latestpic);
         emb.setColor(this.trustLevelColor(vrcdata.tags));
+        emb.setURL("https://vrchat.com/home/user/" + vrcdata.id);
         emb.fields = [];
         emb.addField("Trust", this.trustLevelLabel(vrcdata.tags), true);
         emb.addField("Status", this.statusLabel(vrcdata.status), true);
-        emb.addField("Location", "(Coming soon)", true);
+        if (vrcdata.location) {
+            emb.addField("Location", this.placeholderLocation(vrcdata.location), true);
+        }
 
-        let body = "";
+        let body = [];
         
-        if (vrcdata.statusDescription) body += "*" + vrcdata.statusDescription.trim() + "*\n\n";
-        if (vrcdata.bio) body += vrcdata.bio.trim() + "\n\n";
-        body += "[Profile](https://vrchat.com/home/user/" + vrcdata.id + ")";
+        if (vrcdata.statusDescription) body.push("*" + this.stripNormalizedFormatting(vrcdata.statusDescription.trim()) + "*");
+        if (vrcdata.bio) body.push(this.stripNormalizedFormatting(vrcdata.bio.trim()));
 
         let taglabels = this.tagLabels(vrcdata.tags).join("\n");
-        if (taglabels) body += "\n\n" + taglabels;
+        if (taglabels) body.push(taglabels);
 
-        emb.setDescription(body);
+        emb.setDescription(body.join("\n\n"));
 
         if (vrcdata.last_login && vrcdata.status == "offline" && !person.pendingflip) {
             if (person.latestflip) {
@@ -627,6 +871,99 @@ class ModVRChat extends Module {
                 .then(newmessage => this.setPersonMsg(userid, newmessage));
         }
 
+    }
+
+
+    async bakeWorld(worldid, now) {
+        let world = await this.getWorld(worldid);
+        if (!world) return;
+
+        if (now) now = moment.unix(now);
+        else now = moment();
+
+        let message = null, emb = null;
+        if (world.msg) {
+            message = this.worldchan.messages.cache.get(world.msg);
+        }
+
+        if (message) {
+            for (let checkembed of message.embeds) {
+                if (checkembed.type == "rich") {
+                    emb = checkembed;
+                    break;
+                }
+            }
+        }
+
+        if (!emb) {
+            emb = new MessageEmbed();
+        }
+
+        emb.setTitle(world.name);
+        emb.setThumbnail(world.imageUrl);
+        emb.setColor(this.worldMemberCount(worldid) ? [40, 255, 40] : [200, 200, 200]);
+        emb.setURL("https://vrchat.com/home/world/" + worldid);
+        emb.fields = [];
+        emb.addField("Players", world.publicOccupants, true);
+        emb.addField("Private", world.privateOccupants, true);
+        emb.addField("Heat", "🔥".repeat(world.heat || 0), true);
+        emb.addField("Visits", world.visits, true);
+        emb.addField("Favorites", world.favorites, true);
+        emb.addField("Popularity", "🚶".repeat(world.popularity || 0), true);
+        
+        let body = [];
+
+        body.push(world.description);
+        
+        let members = [];
+        for (let userid in world.members) {
+            let person = this.getPerson(userid);
+            members.push(this.denv.idToDisplayName(userid) + " | [Join](https://www.myshelter.net/vrc/?" + person.latestlocation + ") | [Instance](" + this.linkFromLocation(person.latestlocation) + ")");
+        }
+        if (members.length) {
+            body.push("**In-world**\n" + members.join("\n"));
+        }
+
+        emb.setDescription(body.join("\n\n"));
+
+        emb.setFooter("Retrieved " + moment.unix(world.retrieved).from(now));
+
+        if (message) {
+            return message.edit(emb);
+        } else {
+            return this.worldchan.send({embed: emb, disableMentions: 'all'})
+                .then(newmessage => {
+                    this.setWorldMsg(worldid, newmessage);
+                    return newmessage;
+                });
+        }
+
+    }
+
+    
+    setWorldLink(userid, worldname, worldmsg) {
+        if (!userid || !worldname) return false;
+        let person = this.getPerson(userid);
+        if (!person) return false;
+        let message = this.statuschan.messages.cache.get(person.msg);
+        if (!message) return false;
+        let emb = null;
+        for (let checkembed of message.embeds) {
+            if (checkembed.type == "rich") {
+                emb = checkembed;
+                break;
+            }
+        }
+        if (!emb) return false;
+        let field = emb.fields.find(field => field.name == "Location");
+        if (!field) return false;
+        if (worldmsg) {
+            field.value = "[" + worldname + "](https://discord.com/channels/" + this.denv.server.id + "/" + this.worldchan.id + "/" + worldmsg.id + ")";
+        } else {
+            field.value = worldname;
+        }
+        message.edit(emb)
+        return true;
     }
 
 
@@ -685,7 +1022,7 @@ class ModVRChat extends Module {
     }
 
     async vrcWorld(worldid, instanceid) {
-        if (!isValidWorld(worldid)) throw {error: "Invalid world ID."};
+        if (!this.isValidWorld(worldid)) throw {error: "Invalid world ID."};
         return this.vrcget("worlds/" + worldid + (instanceid ? "/" + instanceid : ""));
     }
 
@@ -721,7 +1058,7 @@ class ModVRChat extends Module {
         } catch (e) {
             if (!e.statusCode) {
                 //Unexpected error
-                this.log("error", e);
+                this.log("error", JSON.stringify(e));
             }
             throw e;
         }
@@ -748,7 +1085,7 @@ class ModVRChat extends Module {
         } catch (e) {
             if (!e.statusCode) {
                 //Unexpected error
-                this.log("error", e);
+                this.log("error", JSON.stringify(e));
             }
             throw e;
         }
@@ -772,11 +1109,37 @@ class ModVRChat extends Module {
     }
 
     isValidWorld(worldid) {
-        return worldid && worldid.match(/^wlrd_[0-9a-f-]+$/);
+        return worldid && worldid.match(/^wrld_[0-9a-f-]+$/);
     }
 
     isValidAvatar(avatarid) {
         return avatarid && avatarid.match(/^avtr_[0-9a-f-]+$/);
+    }
+
+    worldFromLocation(location) {
+        if (!location) return null;
+        let parts = location.split(":");
+        if (!this.isValidWorld(parts[0])) return null;
+        return parts[0];
+    }
+
+    linkFromLocation(location) {
+        if (!location) return null;
+        let parts = location.split(":");
+        let link = "https://vrchat.com/home/launch?worldId=" + parts[0];
+        if (parts[1]) link += "&instanceId=" + parts[1];
+        return link;
+    }
+
+    isValidLocation(location) {
+        if (!location) return false;
+        let parts = location.split(":");
+        if (!this.isValidWorld(parts[0])) return false;
+        if (parts[1]) {
+            let instparts = parts[1].split("~");
+            if (!instparts[0].match(/^[0-9]+$/)) return false;
+        }
+        return true;
     }
 
     processBooleanArg(arg) {
@@ -829,6 +1192,12 @@ class ModVRChat extends Module {
         label = label[0].toUpperCase() + label.slice(1);
 
         return icon + label;
+    }
+
+    placeholderLocation(location) {
+        if (location == "offline") return "Offline";
+        if (location == "private") return "In private world";
+        return "Processing...";
     }
 
 }
