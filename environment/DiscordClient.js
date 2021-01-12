@@ -17,6 +17,7 @@ const BRIDGE_EVENTS = [
     "roleUpdate",
     "voiceStateUpdate", 
     "messageReactionAdd",
+    "messageReactionRemove",
     "channelCreate",
     "channelDelete",
     "channelUpdate",

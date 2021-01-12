@@ -5,6 +5,7 @@ const { MessageEmbed } = require('discord.js');
 
 const Module = require('../Module.js');
 const { enableConsole } = require('../Logger.js');
+const { relativeTimeThreshold } = require('moment');
 
 const PERM_ADMIN = 'administrator';
 
@@ -23,14 +24,18 @@ class ModVRChat extends Module {
     
     get optionalParams() { return [
         "updatefreq",           //How often to request user states and perform updates (s)
-        "statuschan",           //ID of text channel for status messages
+        "statuschan",           //ID of text channel for user status messages
         "announcechan",         //ID of text channel for announcements
         "worldchan",            //ID of text channel for worlds (warning: all contents will be deleted)
+        "pinnedchan",           //ID of text channel for pinned worlds
+        "knownrole",            //ID of a role that will be automatically assigned to known people and unassigned from unknown people
         "expiration",           //How long to stay unfriended before unassigning (h)
         "worldstale",           //How long after retrieval until an entry in the world cache goes stale (s)
         "worldexpiration",      //How long after emptying until an entry in the world cache is removed (h)
         "ddelay",               //Delay between queued actions (ms)
-        "offlinetolerance"      //How long to wait before offline announcement (s)
+        "offlinetolerance",     //How long to wait before offline announcement (s)
+        "pinnedemoji",          //Emoji used for pinning worlds
+        "pinokayemoji",         //Emoji used for okaying pins
     ]; }
 
     get requiredModules() { return [
@@ -53,21 +58,28 @@ class ModVRChat extends Module {
         return this.denv.server.channels.cache.get(this.param("worldchan"));
     }
 
+    get pinnedchan() {
+        return this.denv.server.channels.cache.get(this.param("pinnedchan"));
+    }
+
     constructor(name) {
         super('VRChat', name);
      
         this._params["updatefreq"] = 120;
         this._params["expiration"] = 48;
         this._params["worldstale"] = 3600;
-        this._params["worldexpiration"] = 48;
+        this._params["worldexpiration"] = 25;
         this._params["ddelay"] = 500;
         this._params["offlinetolerance"] = 119;
+        this._params["pinnedemoji"] = "📌";
+        this._params["pinokayemoji"] = "👍";
 
         this._people = null;  //{USERID: {see registerPerson}, ...}
+        this._worlds = null;  //The worlds cache {WORLDID: {..., see getWorld}, ...}
 
         this._config = null;  //The full object returned by the "config" API. This API must be called before any other request.
         this._auth = null;  //The auth cookie
-        this._worlds = null;  //The worlds cache {WORLDID: {..., see getWorld}, ...}
+        this._pins = {};  //Map of pinned worlds (transient) {WORLDID: Message_in_pinnedchan, ...}
 
         this._timer = null;  //Action timer
 
@@ -78,10 +90,12 @@ class ModVRChat extends Module {
     }
     
 
-    /*
-        Favorite worlds index and channel
+    /* Tasks:
+        Command to retrieve random favorite world
+        Links to create instances?
         More logging
         Timezones
+        Move sigint intercept to kernel
     */
 
     
@@ -124,6 +138,8 @@ class ModVRChat extends Module {
 
         let guildMemberRemoveHandler = async (member) => {
 
+            //Unlearn departing person
+
             let person = this.getPerson(member.id);
             if (this.statuschan && person.msg) {
                 let message = this.statuschan.messages.cache.get(person.msg);
@@ -136,6 +152,8 @@ class ModVRChat extends Module {
 
         let messageDeleteHandler = (message) => {
         
+            //Clear deleted message references
+
             for (let userid in this._people) {
                 let person = this.getPerson(userid);
                 if (person.msg == message.id) {
@@ -151,7 +169,33 @@ class ModVRChat extends Module {
                     break;
                 }
             }
+
+            for (let worldid in this._pins) {
+                if (this._pins[worldid].id == message.id) {
+                    delete this._pins[worldid];
+                }
+            }
             
+        }
+
+        let messageReactionAddHandler = async (messageReaction, user) => {
+            if (user.id == this.denv.server.me.id) return;
+
+            if (this.worldchan && this.pinnedchan && messageReaction.message.channel.id == this.worldchan.id) {
+                if (messageReaction.emoji.name == this.param("pinnedemoji")) {
+                    this.potentialWorldPin(messageReaction.message)
+                        .then(result => {
+                            if (result) {
+                                messageReaction.message.react(this.param("pinokayemoji"));
+                            }
+                        });
+                    messageReaction.users.remove(user.id);
+                }
+                if (messageReaction.emoji.name == this.param("pinokayemoji")) {
+                    messageReaction.users.remove(user.id);
+                }
+            }
+
         }
 
         this.denv.on("connected", async () => {
@@ -163,11 +207,15 @@ class ModVRChat extends Module {
                 
                 if (member) {
 
+                    //Prefetch person status messages
+
                     if (this.statuschan && person.msg) {
                         this.statuschan.messages.fetch(person.msg);
                     }
 
                 } else {
+
+                    //Unlearn missing persons
 
                     if (this.statuschan && person.msg) {
                         this._dqueue.push(function() {
@@ -183,6 +231,8 @@ class ModVRChat extends Module {
 
             if (this.worldchan) {
 
+                //Prefetch and check world messages
+
                 let index = {};
                 for (let worldid in this._worlds) {
                     if (this._worlds[worldid].msg) {
@@ -190,34 +240,32 @@ class ModVRChat extends Module {
                     }
                 }
 
-                let scanning = null;
-                let scanner = () => {
-                    this.worldchan.messages.fetch({
-                        limit: 100,
-                        before: scanning
-                    }).then((messages) => {
-                        let endNow = false;
-                        let messagesarr = messages.array();
-                        if (messagesarr.length < 100) endNow = true;
-                        for (let message of messagesarr) {
-                            if (!index[message.id]) {
-                                this._dqueue.push(function() {
-                                    message.delete({reason: "World not found in cache."});
-                                }.bind(this));
-                            }
-                        }
-                        if (!endNow) {
-                            scanning = messagesarr[messagesarr.length - 1].id;
-                            setTimeout(scanner, 250);
-                        }
-                    });
-                };
-                scanner();
+                this.scanEveryMessage(this.worldchan, (message) => {
+                    if (!index[message.id]) {
+                        this._dqueue.push(function() {
+                            message.delete({reason: "World not found in cache."});
+                        }.bind(this));
+                    }
+                });
+
+            }
+
+            if (this.pinnedchan) {
+
+                //Prefetch and index favorites
+
+                this.scanEveryMessage(this.pinnedchan, (message) => {
+                    let worldid = this.extractWorldFromMessage(message);
+                    if (worldid) {
+                        this._pins[worldid] = message;
+                    }
+                });
 
             }
 
             this.denv.client.on("guildMemberRemove", guildMemberRemoveHandler);
             this.denv.client.on("messageDelete", messageDeleteHandler);
+            this.denv.client.on("messageReactionAdd", messageReactionAddHandler);
         });
 
 
@@ -251,10 +299,13 @@ class ModVRChat extends Module {
                 
                 let person = this.getPerson(userid);
 
+                this.setPersonName(userid, friends[person.vrc].displayName);
+
                 //Change local person confirmation state
                 if (!person.confirmed) {
                     if (friends[person.vrc]) {
                         this.confirmPerson(userid);
+                        this.assignKnownRole(userid, "User is now confirmed.");
                         this.announce("I see you, " + this.denv.idToDisplayName(userid) + "! You're my VRChat friend.");
                     } else {
                         if (now - person.waiting > this.param("expiration") * 3600) {
@@ -274,6 +325,7 @@ class ModVRChat extends Module {
                     }
                     if (!friends[person.vrc]) {
                         this.unconfirmPerson(userid);
+                        this.unassignKnownRole(userid, "User is no longer confirmed.");
                         this.announce("Uh oh... " + this.denv.idToDisplayName(userid) + " is no longer my friend.");
                         continue;
                     }
@@ -346,6 +398,15 @@ class ModVRChat extends Module {
 
             }
 
+            //Update previous world member counts.
+            //We add this to the queue so it's only executed after all worlds have been baked.
+
+            this._dqueue.push(function() {
+                for (let worldid in this._worlds) {
+                    this.updatePrevMemberCount(worldid);
+                }
+            }.bind(this));
+
         }.bind(this);
 
         this._timer = setInterval(maintimer, this.param("updatefreq") * 1000);
@@ -407,6 +468,7 @@ class ModVRChat extends Module {
                     }
                 } else {
                     this.confirmPerson(userid);
+                    this.assignKnownRole(userid, "User is now confirmed.");
                     ep.reply("VRChat account learned.");
                 }
 
@@ -466,6 +528,8 @@ class ModVRChat extends Module {
                 let message = this.statuschan.messages.cache.get(person.msg);
                 if (message) message.delete({reason: "User was unassigned."});
             }
+
+            this.unassignKnownRole(targetid, "User is no longer confirmed.");
 
             this.unregisterPerson(targetid);
             ep.reply("VRChat account unlearned.");
@@ -570,7 +634,7 @@ class ModVRChat extends Module {
     // # Module code below this line #
 
 
-    //Manipulate index of known users
+    //Manipulate index of known users (people)
 
     getPerson(userid) {
         if (!userid) return undefined;
@@ -590,6 +654,7 @@ class ModVRChat extends Module {
         let person = {
             vrc: null,                      //VRChat user ID
             msg: null,                      //Status message ID
+            name: null,                     //Cached VRChat display name
             confirmed: false,               //Whether the user is confirmed (friended)
             syncnick: true,                 //Whether to automatically change user's nickname to VRChat username
             latestpic: null,                //Latest synced avatar picture
@@ -630,6 +695,13 @@ class ModVRChat extends Module {
         return true;
     }
 
+    setPersonName(userid, name) {
+        if (!this._people[userid]) return false;
+        this._people[userid].name = name;
+        this._people.save();
+        return true;
+    }
+
     setPersonMsg(userid, message) {
         if (!this._people[userid] || !message) return false;
         this._people[userid].msg = message.id;
@@ -642,6 +714,11 @@ class ModVRChat extends Module {
         this._people[userid].msg = null;
         this._people.save();
         return true;
+    }
+
+    getPersonMsgURL(userid) {
+        if (!this._people[userid] || !this._people[userid].msg || !this.statuschan) return "";
+        return "https://discord.com/channels/" + this.denv.server.id + "/" + this.statuschan.id + "/" + this._people[userid].msg;
     }
 
     updatePic(userid, imageurl) {
@@ -711,24 +788,54 @@ class ModVRChat extends Module {
     }
 
 
-    //World cache
+    //Manipulate known users role
+
+    async assignKnownRole(userid, reason) {
+        if (!this.param("knownrole") || !userid) return false;
+        let member = this.denv.server.members.cache.get(userid);
+        if (!member) return false;
+        try {
+            await member.roles.add(this.param("knownrole"), reason);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    async unassignKnownRole(userid, reason) {
+        if (!this.param("knownrole") || !userid) return false;
+        let member = this.denv.server.members.cache.get(userid);
+        if (!member) return false;
+        try {
+            await member.roles.remove(this.param("knownrole"), reason);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+
+    //Manipulate world cache
 
     async getWorld(worldid) {
-        let msg = null, members = {}, emptysince = null;
-        if (this._worlds[worldid]) {
-            if (moment().unix() - this._worlds[worldid].retrieved < this.param("worldstale")) {
-                return this._worlds[worldid];
+        let msg = null, members = {}, emptysince = null, prevmembercount = 0;
+        let cachedWorld = this.getCachedWorld(worldid);
+        if (cachedWorld) {
+            if (moment().unix() - cachedWorld.retrieved < this.param("worldstale")) {
+                return cachedWorld;
             }
-            msg = this._worlds[worldid].msg;
-            members = this._worlds[worldid].members;
-            emptysince = this._worlds[worldid].emptysince;
+            msg = cachedWorld.msg;
+            members = cachedWorld.members;
+            emptysince = cachedWorld.emptysince;
+            prevmembercount = cachedWorld.prevmembercount;
         }
         return this.vrcWorld(worldid)
             .then(data => {
-                data.retrieved = moment().unix();   //Time retrieved/refreshed
-                data.msg = msg;                     //Status message ID
-                data.members = members;             //Set of members known to be in-world (discord userids)
-                data.emptysince = emptysince;       //Time of departure of last member
+                data.retrieved = moment().unix();       //Time retrieved/refreshed
+                data.msg = msg;                         //Status message ID
+                data.members = members;                 //Set of members known to be in-world (discord userids)
+                data.emptysince = emptysince;           //Time of departure of last member
+                data.prevmembercount = prevmembercount; //Member count on the previous iteration
                 this._worlds[worldid] = data;
                 return data;
             });
@@ -757,6 +864,12 @@ class ModVRChat extends Module {
     worldMemberCount(worldid) {
         if (!this._worlds[worldid]) return 0;
         return Object.keys(this._worlds[worldid].members).length;
+    }
+
+    updatePrevMemberCount(worldid) {
+        if (!this._worlds[worldid]) return undefined;
+        this._worlds[worldid].prevmembercount = this.worldMemberCount(worldid);
+        return this._worlds[worldid].prevmembercount;
     }
 
     setWorldMsg(worldid, message) {
@@ -878,12 +991,20 @@ class ModVRChat extends Module {
         let world = await this.getWorld(worldid);
         if (!world) return;
 
+        let membercount = this.worldMemberCount(worldid);
+
         if (now) now = moment.unix(now);
         else now = moment();
 
         let message = null, emb = null;
         if (world.msg) {
-            message = this.worldchan.messages.cache.get(world.msg);
+            if (world.prevmembercount || !membercount) {
+                message = this.worldchan.messages.cache.get(world.msg);
+            } else {
+                //Force reset if transition is no members -> members
+                this.worldchan.messages.fetch(world.msg)
+                    .then(oldmsg => oldmsg.delete({reason: "Bumping down world"}));
+            }
         }
 
         if (message) {
@@ -901,15 +1022,15 @@ class ModVRChat extends Module {
 
         emb.setTitle(world.name);
         emb.setThumbnail(world.imageUrl);
-        emb.setColor(this.worldMemberCount(worldid) ? [40, 255, 40] : [200, 200, 200]);
+        emb.setColor(membercount ? [40, 255, 40] : [200, 200, 200]);
         emb.setURL("https://vrchat.com/home/world/" + worldid);
         emb.fields = [];
         emb.addField("Players", world.publicOccupants, true);
         emb.addField("Private", world.privateOccupants, true);
-        emb.addField("Heat", "🔥".repeat(world.heat || 0) || "-", true);
+        emb.addField("Heat", "`" + ("!".repeat(world.heat || 0) || "-") + "`", true);
         emb.addField("Visits", world.visits, true);
         emb.addField("Favorites", world.favorites, true);
-        emb.addField("Popularity", "🚶".repeat(world.popularity || 0) || "-", true);
+        emb.addField("Popularity",  "`" + ("#".repeat(world.popularity || 0) || "-") +  "`", true);
         
         let body = [];
 
@@ -918,7 +1039,9 @@ class ModVRChat extends Module {
         let members = [];
         for (let userid in world.members) {
             let person = this.getPerson(userid);
-            members.push(this.denv.idToDisplayName(userid) + " | [Join](https://www.myshelter.net/vrc/?" + person.latestlocation + ") | [Instance](" + this.linkFromLocation(person.latestlocation) + ")");
+            members.push("[" + (person.name || this.denv.idToDisplayName(userid)) + "](" + this.getPersonMsgURL(userid) + ")"
+                + " [[Join](" + this.joinFromLocation(person.latestlocation).replace(/\)/g, "\\)") + ")]"
+                + " [[Instance](" + this.linkFromLocation(person.latestlocation).replace(/\)/g, "\\)") + ")]");
         }
         if (members.length) {
             body.push("**In-world**\n" + members.join("\n"));
@@ -934,6 +1057,10 @@ class ModVRChat extends Module {
             return this.worldchan.send({embed: emb, disableMentions: 'all'})
                 .then(newmessage => {
                     this.setWorldMsg(worldid, newmessage);
+                    newmessage.react(this.param("pinnedemoji"));
+                    if (this._pins[worldid]) {
+                        newmessage.react(this.param("pinokayemoji"));
+                    }
                     return newmessage;
                 });
         }
@@ -962,7 +1089,7 @@ class ModVRChat extends Module {
         } else {
             field.value = worldname;
         }
-        message.edit(emb)
+        message.edit(emb);
         return true;
     }
 
@@ -972,6 +1099,51 @@ class ModVRChat extends Module {
         if (!achan || !msg) return false;
         this.denv.msg(achan.id, msg);
         return true;
+    }
+
+
+    //Pin favorites
+
+    async potentialWorldPin(message) {
+        let worldid = this.extractWorldFromMessage(message);
+        if (!worldid) return false;
+        if (this._pins[worldid]) return false;
+
+        let world = this._worlds[worldid];
+        if (!world) return false;
+
+        let emb = new MessageEmbed();
+
+        emb.setTitle(world.name);
+        emb.setImage(world.imageUrl);
+        emb.setURL("https://vrchat.com/home/world/" + worldid);
+
+        let body = [];
+
+        body.push(world.description);
+
+        emb.setDescription(body.join("\n\n"));
+
+        this._pins[worldid] = true;
+        return this.pinnedchan.send({embed: emb, disableMentions: 'all'})
+            .then(newmessage => {
+                this._pins[worldid] = newmessage;
+                return true;
+            });
+    }
+
+    extractWorldFromMessage(message) {
+        if (!message) return null;
+        let emb = null;
+        for (let checkembed of message.embeds) {
+            if (checkembed.type == "rich") {
+                emb = checkembed;
+                break;
+            }
+        }
+        if (!emb || !emb.url) return null;
+        let match = emb.url.match(/wrld_[0-9a-f-]+/);
+        if (match) return match[0];
     }
 
 
@@ -1057,8 +1229,12 @@ class ModVRChat extends Module {
             result = await this.jsonget(ENDPOINT + path, options)
         } catch (e) {
             if (!e.statusCode) {
-                //Unexpected error
-                this.log("error", JSON.stringify(e));
+                if (e.error && e.error.code == "ENOTFOUND") {
+                    this.log("warn", "DNS lookup failure: " + e.error.hostname);
+                } else {
+                    //Unexpected error
+                    this.log("error", JSON.stringify(e));
+                }
             }
             throw e;
         }
@@ -1079,13 +1255,17 @@ class ModVRChat extends Module {
         if (this._auth) options.headers.Cookie.push("auth=" + this._auth);
         else options.auth = this.param("username") + ':' + this.param("password");
 
-        let result
+        let result;
         try {
             result = await this.jsonpost(ENDPOINT + path, fields, options)
         } catch (e) {
             if (!e.statusCode) {
-                //Unexpected error
-                this.log("error", JSON.stringify(e));
+                if (e.error && e.error.code == "ENOTFOUND") {
+                    this.log("warn", "DNS lookup failure: " + e.error.hostname);
+                } else {
+                    //Unexpected error
+                    this.log("error", JSON.stringify(e));
+                }
             }
             throw e;
         }
@@ -1131,6 +1311,11 @@ class ModVRChat extends Module {
         return link;
     }
 
+    joinFromLocation(location) {
+        if (!location) return null;
+        return "https://www.myshelter.net/vrc/?" + location;
+    }
+
     isValidLocation(location) {
         if (!location) return false;
         let parts = location.split(":");
@@ -1140,6 +1325,31 @@ class ModVRChat extends Module {
             if (!instparts[0].match(/^[0-9]+$/)) return false;
         }
         return true;
+    }
+
+    scanEveryMessage(channel, onMessage, onEnd) {
+        if (!channel || !onMessage) return;
+        let scanning = null;
+        let scanner = () => {
+            channel.messages.fetch({
+                limit: 100,
+                before: scanning
+            }).then((messages) => {
+                let endNow = false;
+                let messagesarr = messages.array();
+                if (messagesarr.length < 100) endNow = true;
+                for (let message of messagesarr) {
+                    onMessage(message);
+                }
+                if (!endNow) {
+                    scanning = messagesarr[messagesarr.length - 1].id;
+                    setTimeout(scanner, 250);
+                } else if (onEnd) {
+                    onEnd(channel);
+                }
+            });
+        };
+        scanner();
     }
 
     processBooleanArg(arg) {
