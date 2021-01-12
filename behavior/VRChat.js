@@ -1304,7 +1304,7 @@ class ModVRChat extends Module {
     }
 
     linkFromLocation(location) {
-        if (!location) return null;
+        if (!location) return "";
         let parts = location.split(":");
         let link = "https://vrchat.com/home/launch?worldId=" + parts[0];
         if (parts[1]) link += "&instanceId=" + parts[1];
@@ -1312,7 +1312,7 @@ class ModVRChat extends Module {
     }
 
     joinFromLocation(location) {
-        if (!location) return null;
+        if (!location) return "";
         return "https://www.myshelter.net/vrc/" + location;
     }
 
