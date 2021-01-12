@@ -1313,7 +1313,7 @@ class ModVRChat extends Module {
 
     joinFromLocation(location) {
         if (!location) return null;
-        return "https://www.myshelter.net/vrc/?" + location;
+        return "https://www.myshelter.net/vrc/" + location;
     }
 
     isValidLocation(location) {
