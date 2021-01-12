@@ -299,9 +299,7 @@ class ModVRChat extends Module {
                 
                 let person = this.getPerson(userid);
 
-                this.setPersonName(userid, friends[person.vrc].displayName);
-
-                //Change local person confirmation state
+                //Change local person confirmation state (keep on top)
                 if (!person.confirmed) {
                     if (friends[person.vrc]) {
                         this.confirmPerson(userid);
@@ -330,6 +328,8 @@ class ModVRChat extends Module {
                         continue;
                     }
                 }
+
+                this.setPersonName(userid, friends[person.vrc].displayName);
 
                 //Update stored avatar picture location
                 if (!person.stickypic) {
