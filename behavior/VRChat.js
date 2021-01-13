@@ -1,11 +1,11 @@
 /* Module: VRChat -- Show information about VRChat users on Discord. */
 
 const moment = require('moment');
+const ct = require('countries-and-timezones');
 const { MessageEmbed } = require('discord.js');
 
 const Module = require('../Module.js');
 const { enableConsole } = require('../Logger.js');
-const { relativeTimeThreshold } = require('moment');
 
 const PERM_ADMIN = 'administrator';
 
@@ -32,6 +32,7 @@ class ModVRChat extends Module {
         "expiration",           //How long to stay unfriended before unassigning (h)
         "worldstale",           //How long after retrieval until an entry in the world cache goes stale (s)
         "worldexpiration",      //How long after emptying until an entry in the world cache is removed (h)
+        "staleupdatesperitr",   //How many stale worlds are updated per timer iteration
         "ddelay",               //Delay between queued actions (ms)
         "offlinetolerance",     //How long to wait before offline announcement (s)
         "pinnedemoji",          //Emoji used for pinning worlds
@@ -69,7 +70,8 @@ class ModVRChat extends Module {
         this._params["expiration"] = 48;
         this._params["worldstale"] = 3600;
         this._params["worldexpiration"] = 25;
-        this._params["ddelay"] = 500;
+        this._params["staleupdatesperitr"] = 10;
+        this._params["ddelay"] = 250;
         this._params["offlinetolerance"] = 119;
         this._params["pinnedemoji"] = "📌";
         this._params["pinokayemoji"] = "👍";
@@ -378,9 +380,18 @@ class ModVRChat extends Module {
 
             let hasWorldchan = !!this.worldchan;
 
-            for (let worldid in this._worlds) {
+            let worldidsbyretrieval = Object.keys(this._worlds).sort((a, b) => this.getCachedWorld(a).retrieved < this.getCachedWorld(b).retrieved ? -1 : 1);
+            let refreshed = 0;
 
-                let world = await this.getWorld(worldid);
+            for (let worldid of worldidsbyretrieval) {
+
+                let world = this.getCachedWorld(worldid);
+
+                if (refreshed < this.param("staleupdatesperitr")) {
+                    let retrieved = world.retrieved;
+                    world = await this.getWorld(worldid);
+                    if (world.retrieved != retrieved) refreshed += 1;
+                }
 
                 //Bake world embed
                 if (hasWorldchan) {
