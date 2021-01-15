@@ -99,7 +99,6 @@ class ModVRChat extends Module {
         Links to create instances?
         More logging
         Timezones
-        Move sigint intercept to kernel
     */
 
     
@@ -124,16 +123,22 @@ class ModVRChat extends Module {
 
         //Log out on shut down
 
-        process.on("SIGINT", () => {
+        opt.pushCleanupHandler((next) => {
             if (this._auth) {
-                this.vrcpost("logout", null, "PUT").then(() => {
-                    console.log("Logged out from VRChat.");
-                    this.emptyWorlds();
-                    this._dqueue.push(process.exit);
-                });
+                this.vrcpost("logout", null, "PUT")
+                    .then(() => {
+                        this.log("Logged out from VRChat.");
+                    })
+                    .catch((e) => {
+                        this.log("error", "Unable to log out from VRChat.");
+                    })
+                    .finally(() => {
+                        this.emptyWorlds();
+                        this._dqueue.push(next);
+                    });
             } else {
                 this.emptyWorlds();
-                this._dqueue.push(process.exit);
+                this._dqueue.push(next);
             }
         });
 
@@ -1260,6 +1265,16 @@ class ModVRChat extends Module {
     async vrcAvatar(avatarid) {
         if (!this.isValidAvatar(avatarid)) throw {error: "Invalid avatar ID."};
         return this.vrcget("avatars/" + avatarid);
+    }
+
+    async vrcInvite(vrcuserid, worldid, instanceid, message) {
+        if (!this.isValidUser(vrcuserid)) throw {error: "Invalid user ID."};
+        if (!this.isValidWorld(worldid)) throw {error: "Invalid world ID."};
+        return this.vrcpost("user/" + vrcuserid + "/notification", {
+            type: "invite",
+            message: message || "Here's your invitation.",
+            details: {worldId: worldId + (instanceid ? ":" + instanceid : "")}
+        });
     }
 
 

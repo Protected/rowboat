@@ -8,7 +8,7 @@ class EnvDiscord extends Environment {
 
     get requiredParams() { return [
         'token',                //Discord application token
-        'servername',           //Server name to operate on (application must have been previously added to server)
+        'server',               //Server ID to operate on (application must have been previously added to server)
         'defaultchannel',       //Default channel to operate on (must be a channel in the above server)
         'privatemessages'       //Environment will receive private messages to the bot
     ]; }
@@ -28,7 +28,7 @@ class EnvDiscord extends Environment {
         
         this._localClient = null;  //DiscordClient (manages shared discord.js Client object)
         this._client = null;  //Actual discord.js Client object
-        this._server = null;  //discord.js Guild object (formerly Server) for the server identified by this environment's 'servername'.
+        this._server = null;  //discord.js Guild object (formerly Server) for the server identified by this environment's 'server' ID.
         this._channels = {};
     }
     
@@ -44,12 +44,12 @@ class EnvDiscord extends Environment {
 
         let params = this.params;
 
-        this.log(`Connecting to ${params.servername}`);
+        this.log(`Connecting to ${params.server}`);
 
         return this._localClient.prepareClient(this, this.param('token'), this.param('sendDelay'))
             .then((client) => {
                 this._client = client;
-                this._server = client.guilds.cache.find(s => s.name == params.servername);
+                this._server = client.guilds.cache.get(params.server);
                 
                 if (!this._server) {
                     this.log('error', "Could not obtain server object.");

@@ -9,6 +9,10 @@ var modules = {};
 var modulerequests = {};
 var shared = {};
 
+var cleanup = [];
+var cleaningUp = [];
+var exitCode = 0;
+
 var self = this;
 
 
@@ -46,6 +50,12 @@ function modNameLoaded(modname) {
         }
     }
     return false;
+}
+
+function pushCleanupHandler(func) {
+    if (typeof func != "function") return false;
+    cleanup.push(func);
+    return true;
 }
 
 
@@ -99,6 +109,24 @@ var resetContext = exports.resetContext = function() {
 }
 
 if (!loadMasterConfig()) return;
+
+
+//Process event handlers
+
+process.on('unhandledRejection', (reason, promise) => {
+    logger.warn('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+function nextCleanup() {
+    let onecleanup = cleaningUp.shift();
+    if (onecleanup) exitCode = onecleanup(nextCleanup) || 0;
+    else process.exit(exitCode);
+}
+
+process.on("SIGINT", () => {
+    cleaningUp = cleanup.slice();
+    nextCleanup();
+});
 
 
 //Load and initialize environments
@@ -203,6 +231,7 @@ var loadModules = exports.loadModules = function() {
             mods: passmodules,
             config: passconfig,
             moduleRequest: moduleRequest,
+            pushCleanupHandler: pushCleanupHandler,
             rootpath: __dirname
         })) {
             logger.error("Could not initialize the module: " + mod.name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
