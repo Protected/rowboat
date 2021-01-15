@@ -925,7 +925,12 @@ class ModVRChat extends Module {
         this._people.save();
 
         for (let worldid in this._worlds) {
-            if (!this.worldMemberCount(worldid)) continue;
+            if (!this.worldMemberCount(worldid)) {
+                if (!this._worlds[worldid].emptysince) {
+                        this._worlds[worldid].emptysince = now;
+                }
+                continue;
+            }
             this._worlds[worldid].members = {};
             this._worlds[worldid].emptysince = now;
             this._dqueue.push(function() {
