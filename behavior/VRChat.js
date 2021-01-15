@@ -14,6 +14,8 @@ const NO_AUTH = ["config", "time", "visits"];
 
 const STATUS_ONLINE = ["active", "join me", "ask me"];
 
+const MAX_FIELDLEN = 1024;
+
 class ModVRChat extends Module {
 
     get requiredParams() { return [
@@ -857,9 +859,13 @@ class ModVRChat extends Module {
     }
 
     async addWorldMember(worldid, userid) {
-        let world = await this.getWorld(worldid);
-        world.members[userid] = true;
-        world.emptysince = null;
+        try {
+            let world = await this.getWorld(worldid);
+            world.members[userid] = true;
+            world.emptysince = null;
+        } catch (e) {
+            this.log('warn', "Failed to add world member " + userid + " to " + worldid + ": " + JSON.stringify(e));
+        }
     }
 
     async removeWorldMember(worldid, userid) {
@@ -998,7 +1004,9 @@ class ModVRChat extends Module {
     }
 
 
-    async bakeWorld(worldid, now) {
+    /* Modes: "normal" (default) | "stark" (reduced content) | "text" (no links) */
+    async bakeWorld(worldid, now, mode) {
+        if (!mode) mode = "normal";
         let world = await this.getWorld(worldid);
         if (!world) return;
 
@@ -1035,46 +1043,81 @@ class ModVRChat extends Module {
         emb.setThumbnail(world.imageUrl);
         emb.setColor(membercount ? [40, 255, 40] : [200, 200, 200]);
         emb.setURL("https://vrchat.com/home/world/" + worldid);
+        
         emb.fields = [];
-        emb.addField("Players", world.publicOccupants, true);
-        emb.addField("Private", world.privateOccupants, true);
-        emb.addField("Heat", "`" + ("!".repeat(world.heat || 0) || "-") + "`", true);
-        emb.addField("Visits", world.visits, true);
-        emb.addField("Favorites", world.favorites, true);
-        emb.addField("Popularity",  "`" + ("#".repeat(world.popularity || 0) || "-") +  "`", true);
+        if (mode == "normal") {
+            emb.addField("Players", world.publicOccupants, true);
+            emb.addField("Private", world.privateOccupants, true);
+            emb.addField("Heat", "`" + ("!".repeat(world.heat || 0) || "-") + "`", true);
+            emb.addField("Visits", world.visits, true);
+            emb.addField("Favorites", world.favorites, true);
+            emb.addField("Popularity",  "`" + ("#".repeat(world.popularity || 0) || "-") +  "`", true);
+        }
         
         let body = [];
 
-        body.push(world.description);
-        
-        let members = [];
-        for (let userid in world.members) {
-            let person = this.getPerson(userid);
-            members.push("[" + (person.name || this.denv.idToDisplayName(userid)) + "](" + this.getPersonMsgURL(userid) + ")"
-                + " [[Join](" + this.joinFromLocation(person.latestlocation).replace(/\)/g, "\\)") + ")]"
-                + " [[Instance](" + this.linkFromLocation(person.latestlocation).replace(/\)/g, "\\)") + ")]");
+        if (mode == "normal") {
+            body.push(world.description);
         }
-        if (members.length) {
-            body.push("**In-world**\n" + members.join("\n"));
+        
+        if (body.length) {
+            emb.setDescription(body.join("\n\n"));
         }
 
-        emb.setDescription(body.join("\n\n"));
+        let members = [];
+        for (let userid in world.members) {
+            let line, person = this.getPerson(userid);
+            if (mode == "text") {
+                line = (person.name || this.denv.idToDisplayName(userid)) + " (" + this.instanceIdFromLocation(person.latestlocation) + ")";
+            } else {
+                line = "[" + (person.name || this.denv.idToDisplayName(userid)) + "](" + this.getPersonMsgURL(userid) + ")"
+                    + " ([" + this.instanceIdFromLocation(person.latestlocation) + "](" + this.linkFromLocation(person.latestlocation).replace(/\)/g, "\\)") + "))"
+                    + " [[Go](" + this.joinFromLocation(person.latestlocation).replace(/\)/g, "\\)") + ")]"
+                    ;
+            }
+            members.push(line);
+        }
+
+        if (members.length) {
+            //Pack members into embed fields whose contents are safely <MAX_FIELDLEN long
+            let fieldcount = 0;
+            let val = members.shift();
+            while (members) {
+                let line = members.shift();
+                if (!line) break;
+                let newval = val + "\n" + line;
+                if (newval.length < MAX_FIELDLEN) {
+                    val = newval;
+                    continue;
+                }
+                emb.addField(fieldcount ? "\u200b" : "In-world", val);
+                fieldcount += 1;
+                val = line;
+            }
+            if (val) emb.addField(fieldcount ? "\u200b" : "In-world", val);
+        }
 
         emb.setFooter("Retrieved " + moment.unix(world.retrieved).from(now));
 
-        if (message) {
-            return message.edit(emb);
-        } else {
-            return this.worldchan.send({embed: emb, disableMentions: 'all'})
-                .then(newmessage => {
-                    this.setWorldMsg(worldid, newmessage);
-                    newmessage.react(this.param("pinnedemoji"));
-                    if (this._pins[worldid]) {
-                        newmessage.react(this.param("pinokayemoji"));
-                    }
-                    return newmessage;
-                });
-        }
+        try {
+            if (message) {
+                return message.edit(emb);
+            } else {
+                return this.worldchan.send({embed: emb, disableMentions: 'all'})
+                    .then(newmessage => {
+                        this.setWorldMsg(worldid, newmessage);
+                        newmessage.react(this.param("pinnedemoji"));
+                        if (this._pins[worldid]) {
+                            newmessage.react(this.param("pinokayemoji"));
+                        }
+                        return newmessage;
+                    });
+            }
+        } catch (e) {
+            if (mode == "normal") return this.bakeWorld(worldid, now, "stark");
+            if (mode == "stark") return this.bakeWorld(worldid, now, "text");
+            this.log("warn", "Failed to bake " + worldid + " in text mode: " + JSON.stringify(e));
+        };
 
     }
 
@@ -1325,6 +1368,15 @@ class ModVRChat extends Module {
     joinFromLocation(location) {
         if (!location) return "";
         return "https://www.myshelter.net/vrc/" + location;
+    }
+
+    instanceIdFromLocation(location) {
+        if (!location) return "";
+        let parts = location.split(":");
+        if (!parts[1]) return "";
+        let instparts = parts[1].split("~");
+        if (!instparts[0].match(/^[0-9]+$/)) return "";
+        return instparts[0];
     }
 
     isValidLocation(location) {
