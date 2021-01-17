@@ -39,6 +39,10 @@ class ModVRChat extends Module {
         "offlinetolerance",     //How long to wait before offline announcement (s)
         "pinnedemoji",          //Emoji used for pinning worlds
         "pinokayemoji",         //Emoji used for okaying pins
+        "inviteemoji",          //Emoji used for requesting an invitation
+        "publicemoji",          //Emoji that represents a public instance
+        "friendsplusemoji",     //Emoji that represents a friends+ instance ("hidden")
+        "friendsemoji",         //Emoji that represents a friends instance
     ]; }
 
     get requiredModules() { return [
@@ -77,6 +81,10 @@ class ModVRChat extends Module {
         this._params["offlinetolerance"] = 119;
         this._params["pinnedemoji"] = "📌";
         this._params["pinokayemoji"] = "👍";
+        this._params["inviteemoji"] = "✉️";
+        this._params["publicemoji"] = "🌍";
+        this._params["friendsplusemoji"] = "🥳";
+        this._params["friendsemoji"] = "🧑‍🤝‍🧑";
 
         this._people = null;  //{USERID: {see registerPerson}, ...}
         this._worlds = null;  //The worlds cache {WORLDID: {..., see getWorld}, ...}
@@ -95,9 +103,8 @@ class ModVRChat extends Module {
     
 
     /* Tasks:
-        Command to retrieve random favorite world
-        Links to create instances?
-        More logging
+        *Links to create instances?
+        *More logging
         Timezones
     */
 
@@ -190,19 +197,45 @@ class ModVRChat extends Module {
         let messageReactionAddHandler = async (messageReaction, user) => {
             if (user.id == this.denv.server.me.id) return;
 
+            //Pin worlds to favorites by reacting to them with pinnedemoji
+
             if (this.worldchan && this.pinnedchan && messageReaction.message.channel.id == this.worldchan.id) {
                 if (messageReaction.emoji.name == this.param("pinnedemoji")) {
                     this.potentialWorldPin(messageReaction.message)
                         .then(result => {
                             if (result) {
+                                let pinnedreaction = messageReaction.message.reactions.cache.find(r => r.emoji.name == this.param("pinnedemoji"));
+                                if (pinnedreaction) pinnedreaction.remove();
                                 messageReaction.message.react(this.param("pinokayemoji"));
                             }
                         });
-                    messageReaction.users.remove(user.id);
                 }
-                if (messageReaction.emoji.name == this.param("pinokayemoji")) {
-                    messageReaction.users.remove(user.id);
+                if (messageReaction.emoji.name == this.param("publicemoji")) {
+                    let worldid = this.extractWorldFromMessage(messageReaction.message);
+                    let person = this.getPerson(user.id);
+                    if (person && person.vrc && worldid) {
+                        this.vrcInvite(person.vrc, this._worlds[worldid].worldId, "0")
+                            .catch(e => this.log("error", "Failed to invite " + user.id + " to " + worldid + ": " + JSON.stringify(e)));
+                    }
                 }
+                messageReaction.users.remove(user.id);
+            }
+
+            //Obtain public/friends location invite by reacting to user with inviteemoji
+
+            if (this.statuschan && messageReaction.message.channel.id == this.statuschan.id) {
+                if (messageReaction.emoji.name == this.param("inviteemoji")) {
+                    let targetid = this.findPersonByMsg(messageReaction.message.id);
+                    if (targetid) {
+                        let target = this.getPerson(targetid);
+                        let person = this.getPerson(user.id);
+                        if (person && person.vrc && target.latestlocation) {
+                            this.vrcInvite(person.vrc, this.worldFromLocation(target.latestlocation), this.instanceFromLocation(target.latestlocation))
+                                .catch(e => this.log("error", "Failed to invite " + user.id + " to " + target.latestlocation + ": " + JSON.stringify(e)));
+                        }
+                    }
+                }
+                messageReaction.users.remove(user.id);
             }
 
         }
@@ -739,6 +772,15 @@ class ModVRChat extends Module {
         return "https://discord.com/channels/" + this.denv.server.id + "/" + this.statuschan.id + "/" + this._people[userid].msg;
     }
 
+    findPersonByMsg(msgid) {
+        for (let userid in this._people) {
+            if (this._people[userid].msg == msgid) {
+                return userid;
+            }
+        }
+        return null;
+    }
+
     updatePic(userid, imageurl) {
         if (!this._people[userid]) return false;
         this._people[userid].latestpic = imageurl;
@@ -924,8 +966,14 @@ class ModVRChat extends Module {
         let now = moment().unix();
 
         for (let userid in this._people) {
-            if (!this._people.latestlocation) continue;
+            if (!this._people[userid].latestlocation) continue;
             this._people[userid].latestlocation = null;
+            this._dqueue.push(function() {
+                this.clearStatus(userid);
+            }.bind(this));
+            this._dqueue.push(function() {
+                this.clearInviteButton(userid);
+            }.bind(this));
         }
         this._people.save();
 
@@ -1004,13 +1052,61 @@ class ModVRChat extends Module {
             emb.setFooter("");
         }
 
+        let pr;
         if (message) {
-            message.edit(emb);
+            pr = message.edit(emb);
         } else {
-            this.statuschan.send({embed: emb, disableMentions: 'all'})
-                .then(newmessage => this.setPersonMsg(userid, newmessage));
+            pr = this.statuschan.send({embed: emb, disableMentions: 'all'})
+                    .then(newmessage => this.setPersonMsg(userid, newmessage));
         }
 
+        pr.then((msg) => {
+            let invite = msg.reactions.cache.find(r => r.emoji.name == this.param("inviteemoji"));
+            if (person.latestlocation && !invite) {
+                msg.react(this.param("inviteemoji"));
+            }
+            if (!person.latestlocation && invite) {
+                invite.remove();
+            }
+        });
+
+    }
+
+    clearStatus(userid) {
+        let person = this.getPerson(userid);
+        if (!person) return false;
+        let message = null, emb = null;
+        if (person.msg) {
+            message = this.statuschan.messages.cache.get(person.msg);
+        }
+        if (message) {
+            for (let checkembed of message.embeds) {
+                if (checkembed.type == "rich") {
+                    emb = checkembed;
+                    break;
+                }
+            }
+        }
+        if (!emb) return false;
+        for (let field of emb.fields) {
+            if (field.name == "Status") {
+                field.value = this.statusLabel("offline");
+            }
+            if (field.name == "Location") {
+                field.value = "-";
+            }
+        }
+        message.edit(emb);
+        return true;
+    }
+
+    clearInviteButton(userid) {
+        let person = this.getPerson(userid);
+        if (!person || !person.msg) return false;
+        let message = this.statuschan.messages.cache.get(person.msg);
+        if (!message) return false;
+        let invite = message.reactions.cache.find(r => r.emoji.name == this.param("inviteemoji"));
+        if (invite) invite.remove();
     }
 
 
@@ -1116,10 +1212,12 @@ class ModVRChat extends Module {
                 return this.worldchan.send({embed: emb, disableMentions: 'all'})
                     .then(newmessage => {
                         this.setWorldMsg(worldid, newmessage);
-                        newmessage.react(this.param("pinnedemoji"));
                         if (this._pins[worldid]) {
                             newmessage.react(this.param("pinokayemoji"));
+                        } else {
+                            newmessage.react(this.param("pinnedemoji"));
                         }
+                        //newmessage.react(this.param("publicemoji"));
                         return newmessage;
                     });
             }
@@ -1159,6 +1257,7 @@ class ModVRChat extends Module {
 
 
     announce(msg) {
+        this.log("Announcement:", msg);
         let achan = this.announcechan;
         if (!achan || !msg) return false;
         this.denv.msg(achan.id, msg);
@@ -1273,7 +1372,7 @@ class ModVRChat extends Module {
         return this.vrcpost("user/" + vrcuserid + "/notification", {
             type: "invite",
             message: message || "Here's your invitation.",
-            details: {worldId: worldId + (instanceid ? ":" + instanceid : "")}
+            details: {worldId: worldid + (instanceid ? ":" + instanceid : "")}
         });
     }
 
@@ -1290,6 +1389,22 @@ class ModVRChat extends Module {
         return result.body;
     }
 
+    handleVrcApiError(e) {
+        if (!e.statusCode) {
+            if (e.error && e.error.code == "ENOTFOUND") {
+                this.log("warn", "DNS lookup failure: " + e.error.hostname);
+            } else {
+                //Unexpected error
+                this.log("error", JSON.stringify(e));
+                throw e;
+            }
+        } else if (e.statusCode == 502) {
+            this.log("warn", "Oh no, 502 bad gateway...");
+        } else if (e.statusCode != 401) {
+            throw e;
+        }
+    }
+
     async vrcget(path) {
         if (!path || NO_AUTH.indexOf(path) < 0 && !this._config) return null;
         let options = {headers: {Cookie: []}, returnFull: true};
@@ -1302,15 +1417,7 @@ class ModVRChat extends Module {
         try {
             result = await this.jsonget(ENDPOINT + path, options)
         } catch (e) {
-            if (!e.statusCode) {
-                if (e.error && e.error.code == "ENOTFOUND") {
-                    this.log("warn", "DNS lookup failure: " + e.error.hostname);
-                } else {
-                    //Unexpected error
-                    this.log("error", JSON.stringify(e));
-                }
-            }
-            throw e;
+            this.handleVrcApiError(e);
         }
         if (result.statusCode == 401 && this._auth) {
             //Expired session
@@ -1331,17 +1438,9 @@ class ModVRChat extends Module {
 
         let result;
         try {
-            result = await this.jsonpost(ENDPOINT + path, fields, options)
+            result = await this.jsonpost(ENDPOINT + path, fields, options);
         } catch (e) {
-            if (!e.statusCode) {
-                if (e.error && e.error.code == "ENOTFOUND") {
-                    this.log("warn", "DNS lookup failure: " + e.error.hostname);
-                } else {
-                    //Unexpected error
-                    this.log("error", JSON.stringify(e));
-                }
-            }
-            throw e;
+            this.handleVrcApiError(e);
         }
         if (result.statusCode == 401 && this._auth) {
             //Expired session
@@ -1397,6 +1496,19 @@ class ModVRChat extends Module {
         let instparts = parts[1].split("~");
         if (!instparts[0].match(/^[0-9]+$/)) return "";
         return instparts[0];
+    }
+
+    instanceFromLocation(location) {
+        if (!location) return "";
+        let parts = location.split(":");
+        if (!parts[1]) return "";
+        return parts[1];
+    }
+
+    locationFromWorldAndInstance(worldid, instanceid) {
+        let loc = worldid;
+        if (instanceid) loc += ":" + instanceid;
+        return loc;
     }
 
     isValidLocation(location) {

@@ -114,7 +114,7 @@ if (!loadMasterConfig()) return;
 //Process event handlers
 
 process.on('unhandledRejection', (reason, promise) => {
-    logger.warn('Unhandled Rejection at:', promise, 'reason:', reason);
+    logger.warn('Unhandled Rejection at: ' + JSON.stringify(promise) + ' Reason: ' + JSON.stringify(reason));
 });
 
 function nextCleanup() {

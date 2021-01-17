@@ -298,26 +298,27 @@ class Module {
         let headers = {};
         if (!content) {
             content = "";
-        } else if (typeof content == "object") {
-            content = querystring.stringify(content);
-            headers["Content-type"] = "application/x-www-form-urlencoded";
-            headers["Content-length"] = Buffer.byteLength(content);
+        } else {
+            if (typeof content == "object") {
+                content = querystring.stringify(content);
+                headers["Content-Type"] = "application/x-www-form-urlencoded";
+            }
+            headers["Content-Length"] = Buffer.byteLength(content);
         }
 
-        options = Object.assign({
-            method: 'POST',
-            headers: Object.assign(headers, options.headers)
-        }, options);
+        headers = Object.assign(headers, options.headers);
+        options = Object.assign({method: 'POST'}, options);
+        options.headers = headers;
 
         return new Promise((resolve, reject) => {
             let req;
-            
+
             let callback = (res) => {
                 if (encoding) {
                     res.setEncoding(encoding);
                 }
                 if (res.statusCode !== 200) {
-                    reject({error: "Request failed: " + res.statusCode, statusCode: res.statusCode});
+                    reject({error: "Request failed: " + res.statusCode, statusCode: res.statusCode, content: content, headers: headers});
                 } else {
                     let body = '';
                     res.on('data', (chunk) => body += chunk);
@@ -351,9 +352,10 @@ class Module {
     }
 
     async jsonpost(url, content, options) {
-        let body = await this.urlpost(url, content ? JSON.stringify(content) : null, Object.assign({
-            headers: {"Content-type": "application/json"}
-        }, options), 'utf8');
+        let headers = {"Content-type": "application/json"};
+        headers = Object.assign(headers, options.headers);
+        options.headers = headers;
+        let body = await this.urlpost(url, content ? JSON.stringify(content) : null, options, 'utf8');
         if (typeof body == "object") body.body = JSON.parse(body.body);
         else body = JSON.parse(body);
         return body;
