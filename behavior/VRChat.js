@@ -2,6 +2,7 @@
 
 const moment = require('moment');
 const ct = require('countries-and-timezones');
+const random = require('meteor-random');
 const { MessageEmbed } = require('discord.js');
 
 const Module = require('../Module.js');
@@ -40,6 +41,7 @@ class ModVRChat extends Module {
         "pinnedemoji",          //Emoji used for pinning worlds
         "pinokayemoji",         //Emoji used for okaying pins
         "inviteemoji",          //Emoji used for requesting an invitation
+        "anyemoji",             //Emoji that represents any visible instance
         "publicemoji",          //Emoji that represents a public instance
         "friendsplusemoji",     //Emoji that represents a friends+ instance ("hidden")
         "friendsemoji",         //Emoji that represents a friends instance
@@ -82,6 +84,7 @@ class ModVRChat extends Module {
         this._params["pinnedemoji"] = "📌";
         this._params["pinokayemoji"] = "👍";
         this._params["inviteemoji"] = "✉️";
+        this._params["anyemoji"] = "🚪";
         this._params["publicemoji"] = "🌍";
         this._params["friendsplusemoji"] = "🥳";
         this._params["friendsemoji"] = "🧑‍🤝‍🧑";
@@ -197,10 +200,10 @@ class ModVRChat extends Module {
         let messageReactionAddHandler = async (messageReaction, user) => {
             if (user.id == this.denv.server.me.id) return;
 
-            //Pin worlds to favorites by reacting to them with pinnedemoji
+            if (this.worldchan && messageReaction.message.channel.id == this.worldchan.id) {
 
-            if (this.worldchan && this.pinnedchan && messageReaction.message.channel.id == this.worldchan.id) {
-                if (messageReaction.emoji.name == this.param("pinnedemoji")) {
+                //Pin worlds to favorites by reacting to them with pinnedemoji
+                if (this.pinnedchan && messageReaction.emoji.name == this.param("pinnedemoji")) {
                     this.potentialWorldPin(messageReaction.message)
                         .then(result => {
                             if (result) {
@@ -210,14 +213,35 @@ class ModVRChat extends Module {
                             }
                         });
                 }
-                if (messageReaction.emoji.name == this.param("publicemoji")) {
+
+                //Invite to new world instances
+                if ([this.param("anyemoji"), this.param("publicemoji"), this.param("friendsplusemoji"), this.param("friendsemoji")].indexOf(messageReaction.emoji.name) > -1) {
                     let worldid = this.extractWorldFromMessage(messageReaction.message);
                     let person = this.getPerson(user.id);
+
                     if (person && person.vrc && worldid) {
-                        this.vrcInvite(person.vrc, this._worlds[worldid].worldId, "0")
-                            .catch(e => this.log("error", "Failed to invite " + user.id + " to " + worldid + ": " + JSON.stringify(e)));
+                        if (messageReaction.emoji.name == this.param("publicemoji") || messageReaction.emoji.name == this.param("anyemoji")) {
+                            this.getWorld(worldid, true)
+                                .then((world) => {
+                                    let instances = world.instances.filter(ci => !ci[1] || ci[1] < world.capacity).map(ci => ci[0]);
+                                    let instance;
+                                    if (messageReaction.emoji.name == this.param("anyemoji")) {
+                                        instance = this.generateInstanceFor(person.vrc, "public", instances);
+                                    } else {
+                                        instance = this.generateInstanceFor(person.vrc, "public", null, instances.map(ci => ci.split("~")[0]));
+                                    }
+                                    this.vrcInvite(person.vrc, this._worlds[worldid].id, instance)
+                                        .catch(e => this.log("error", "Failed to invite " + user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
+                                });
+                        } else {
+                            let instance = this.generateInstanceFor(person.vrc, messageReaction.emoji.name == this.param("friendsplusemoji") ? "friends+" : "friends");
+                            this.vrcInvite(person.vrc, this._worlds[worldid].id, instance)
+                                .catch(e => this.log("error", "Failed to invite " + user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
+                        }
+
                     }
                 }
+
                 messageReaction.users.remove(user.id);
             }
 
@@ -877,11 +901,11 @@ class ModVRChat extends Module {
 
     //Manipulate world cache
 
-    async getWorld(worldid) {
+    async getWorld(worldid, refresh) {
         let msg = null, members = {}, emptysince = null, prevmembercount = 0;
         let cachedWorld = this.getCachedWorld(worldid);
         if (cachedWorld) {
-            if (moment().unix() - cachedWorld.retrieved < this.param("worldstale")) {
+            if (!refresh && moment().unix() - cachedWorld.retrieved < this.param("worldstale")) {
                 return cachedWorld;
             }
             msg = cachedWorld.msg;
@@ -1217,7 +1241,10 @@ class ModVRChat extends Module {
                         } else {
                             newmessage.react(this.param("pinnedemoji"));
                         }
-                        //newmessage.react(this.param("publicemoji"));
+                        newmessage.react(this.param("anyemoji"));
+                        newmessage.react(this.param("publicemoji"));
+                        newmessage.react(this.param("friendsplusemoji"));
+                        newmessage.react(this.param("friendsemoji"));
                         return newmessage;
                     });
             }
@@ -1603,6 +1630,44 @@ class ModVRChat extends Module {
         if (location == "offline") return "Offline";
         if (location == "private") return "In private world";
         return "Processing...";
+    }
+
+    generateNonce() {
+        return random.hexString(64).toUpperCase();
+    }
+
+    generateInstanceId(include, exclude) {
+        //The include list can contain type/nonce, but the exclude list shouldn't
+        let result;
+        if (!exclude) exclude = [];
+        do {
+            if (include && include.length) {
+                let i = Math.floor(random.fraction() * include.length);
+                result = include[i];
+                include.splice(i, 1); //Prevent infinite loop
+            } else {
+                result = Math.floor(random.fraction() * 99998) + 1;
+            }
+        } while (exclude.indexOf(result) > -1)
+        return result;
+    }
+
+    generateInstanceFor(vrcuserid, type, include, exclude) {
+        if (vrcuserid) {
+            if (type == "private" || type == "invite") {
+                return this.generateInstanceId(include, exclude) + "~private(" + vrcuserid + ")~nonce(" + this.generateNonce() + ")";
+            }
+            if (type == "invite+") {
+                return this.generateInstanceId(include, exclude) + "~private(" + vrcuserid + ")~canRequestInvite~nonce(" + this.generateNonce() + ")";
+            }
+            if (type == "friends") {
+                return this.generateInstanceId(include, exclude) + "~friends(" + vrcuserid + ")~nonce(" + this.generateNonce() + ")";
+            }
+            if (type == "hidden" || type == "friends+") {
+                return this.generateInstanceId(include, exclude) + "~hidden(" + vrcuserid + ")~nonce(" + this.generateNonce() + ")";
+            }
+        }
+        return this.generateInstanceId(include, exclude);
     }
 
 }
