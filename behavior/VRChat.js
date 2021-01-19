@@ -71,6 +71,15 @@ class ModVRChat extends Module {
         return this.denv.server.channels.cache.get(this.param("pinnedchan"));
     }
 
+    get worldInviteButtons() {
+        return [
+            this.param("anyemoji"),
+            this.param("publicemoji"),
+            this.param("friendsplusemoji"),
+            this.param("friendsemoji")
+        ];
+    }
+
     constructor(name) {
         super('VRChat', name);
      
@@ -106,7 +115,7 @@ class ModVRChat extends Module {
     
 
     /* Tasks:
-        *Links to create instances?
+        Commands: Get random favorite world, random online user
         *More logging
         Timezones
     */
@@ -200,9 +209,9 @@ class ModVRChat extends Module {
         let messageReactionAddHandler = async (messageReaction, user) => {
             if (user.id == this.denv.server.me.id) return;
 
+            //Pin worlds to favorites by reacting to them with pinnedemoji
             if (this.worldchan && messageReaction.message.channel.id == this.worldchan.id) {
 
-                //Pin worlds to favorites by reacting to them with pinnedemoji
                 if (this.pinnedchan && messageReaction.emoji.name == this.param("pinnedemoji")) {
                     this.potentialWorldPin(messageReaction.message)
                         .then(result => {
@@ -214,8 +223,12 @@ class ModVRChat extends Module {
                         });
                 }
 
-                //Invite to new world instances
-                if ([this.param("anyemoji"), this.param("publicemoji"), this.param("friendsplusemoji"), this.param("friendsemoji")].indexOf(messageReaction.emoji.name) > -1) {
+            }
+
+            //Invite to new world instances
+            if (this.worldchan && messageReaction.message.channel.id == this.worldchan.id || this.pinnedchan && messageReaction.message.channel.id == this.pinnedchan.id) {
+                
+                if (this.worldInviteButtons.indexOf(messageReaction.emoji.name) > -1) {
                     let worldid = this.extractWorldFromMessage(messageReaction.message);
                     let person = this.getPerson(user.id);
 
@@ -240,14 +253,22 @@ class ModVRChat extends Module {
                         }
 
                     }
+
+                    if (this.pinnedchan && messageReaction.message.channel.id == this.pinnedchan.id) {
+                        messageReaction.users.remove(user.id);
+                    }
                 }
 
+            }
+
+            //Removed all reactions from worlds channel (keep below worlds actions)
+            if (this.worldchan && messageReaction.message.channel.id == this.worldchan.id) {
                 messageReaction.users.remove(user.id);
             }
 
             //Obtain public/friends location invite by reacting to user with inviteemoji
-
             if (this.statuschan && messageReaction.message.channel.id == this.statuschan.id) {
+
                 if (messageReaction.emoji.name == this.param("inviteemoji")) {
                     let targetid = this.findPersonByMsg(messageReaction.message.id);
                     if (targetid) {
@@ -259,6 +280,8 @@ class ModVRChat extends Module {
                         }
                     }
                 }
+
+                //Remove all reactions from status channel
                 messageReaction.users.remove(user.id);
             }
 
@@ -318,12 +341,24 @@ class ModVRChat extends Module {
 
             if (this.pinnedchan) {
 
-                //Prefetch and index favorites
+                //Prefetch, index and fix favorites
 
                 this.scanEveryMessage(this.pinnedchan, (message) => {
                     let worldid = this.extractWorldFromMessage(message);
-                    if (worldid) {
-                        this._pins[worldid] = message;
+                    if (!worldid) return;
+                    this._pins[worldid] = message;
+                    
+                    let todo = [];
+                    for (let emoji of this.worldInviteButtons) {
+                        let r = message.reactions.cache.find(r => r.emoji.name == emoji);
+                        if (!r || !r.me) todo.push(function() { message.react(emoji) });
+                    }
+                    if (todo.length) {
+                        this._dqueue.push(function() {
+                            for (let act of todo) {
+                                act();
+                            }
+                        }.bind(this));
                     }
                 });
 
@@ -1241,10 +1276,9 @@ class ModVRChat extends Module {
                         } else {
                             newmessage.react(this.param("pinnedemoji"));
                         }
-                        newmessage.react(this.param("anyemoji"));
-                        newmessage.react(this.param("publicemoji"));
-                        newmessage.react(this.param("friendsplusemoji"));
-                        newmessage.react(this.param("friendsemoji"));
+                        for (let emoji of this.worldInviteButtons) {
+                            newmessage.react(emoji);
+                        }
                         return newmessage;
                     });
             }
@@ -1318,6 +1352,9 @@ class ModVRChat extends Module {
         return this.pinnedchan.send({embed: emb, disableMentions: 'all'})
             .then(newmessage => {
                 this._pins[worldid] = newmessage;
+                for (let emoji of this.worldInviteButtons) {
+                    newmessage.react(emoji);
+                }
                 return true;
             });
     }
