@@ -380,7 +380,9 @@ class ModUsers extends Module {
     //User account manipulation (new accounts only have a handle)
 
     handleSuggestion(env, userid) {
-        let wanthandle = env.idToDisplayName(userid);
+        let getenv = this.env(env);
+        if (!getenv) return null;
+        let wanthandle = getenv.idToDisplayName(userid);
         if (wanthandle) {
             wanthandle = wanthandle
                 .replace(/\[[^\]]*\]/g, "")
