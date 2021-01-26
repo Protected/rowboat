@@ -36,6 +36,7 @@
     "meteor-random": "file:./local/meteor-random",
     "minimist": "^1.2.0",
     "moment": "^2.22.2",
+    "moment-timezone": "^0.5.32",
     "node-ddg-api": "^0.1.4",
     "node-feedparser": "^1.0.1",
     "readline-sync": "^1.4.9",

@@ -3,7 +3,6 @@
 //If ModLogger is present, will log to channel "command" using "templateCommand". Placeholders: %(MOMENT_FORMAT)% %env% %userid% %user% %channelid% %channel% %message%
 
 const Module = require('../Module.js');
-const moment = require('moment');
 
 const PERM_ADMIN = 'administrator';
 
@@ -214,16 +213,6 @@ class ModCommands extends Module {
                     delete groups[descriptor.commandroot];
                 }
             }
-        
-            return true;
-        });
-        
-        
-        this.registerCommand(this, 'time', {
-            description: "Retrieve the current server time."
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
-        
-            ep.reply(moment().format('dddd YYYY-MM-DD HH:mm:ss'));
         
             return true;
         });

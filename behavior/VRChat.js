@@ -1,7 +1,6 @@
 /* Module: VRChat -- Show information about VRChat users on Discord. */
 
 const moment = require('moment');
-const ct = require('countries-and-timezones');
 const random = require('meteor-random');
 const { MessageEmbed } = require('discord.js');
 
@@ -115,9 +114,8 @@ class ModVRChat extends Module {
     
 
     /* Tasks:
-        Commands: Get random favorite world, random online user
+        Commands: Get random favorite world, random online user, random photo
         *More logging
-        Timezones
     */
 
     

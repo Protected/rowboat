@@ -392,6 +392,27 @@ class ModUsers extends Module {
         return wanthandle;
     }
 
+    getEnvUser(env, userid) {  //Implicit registration
+        let handles = this.getHandlesById(env, userid, true);
+        if (handles.length) return this.getUser(handles[0]);
+
+        let handle = this.handleSuggestion(env, userid);
+        if (!handle) return null;
+
+        let user = this.getUser(handle);
+        if (user) return null;
+
+        if (!this.addUser(handle)) return null;
+        user = this.getUser(handle);
+
+        if (!this.addId(handle, env.name, "^" + userid + "$")) {
+            this.delUser(handle);
+            return null;
+        }
+
+        return user;
+    }
+
     addUser(handle) {
         if (this._userhandles[handle]) return false;
         
