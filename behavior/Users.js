@@ -407,7 +407,7 @@ class ModUsers extends Module {
         if (!this.addUser(handle)) return null;
         user = this.getUser(handle);
 
-        if (!this.addId(handle, env.name, "^" + userid + "$")) {
+        if (!this.addId(handle, env, "^" + userid + "$")) {
             this.delUser(handle);
             return null;
         }
