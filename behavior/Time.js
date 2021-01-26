@@ -6,8 +6,13 @@ const moment = require('moment-timezone');
 const ct = require('countries-and-timezones');
 
 const MAX_SAME_USERS = 20;
+const DEFAULT_FORMAT = "dddd Y-MM-DD HH:mm:ss (Z)";
 
 class ModTime extends Module {
+
+    get optionalParams() { return [
+        'formats'               //Map of usable format string prefixes {NAME: FORMAT, ...}
+    ]; }
 
     get requiredModules() { return [
         'Users',
@@ -16,6 +21,15 @@ class ModTime extends Module {
 
     constructor(name) {
         super('Time', name);
+
+        this._params["formats"] = {  //No spaces in keys
+            sane: "dddd Y-MM-DD HH:mm:ss (Z)",
+            american: "dddd MMM D, Y hh:mm a (Z)",
+            short: "ddd HH:mm:ss (Z)",
+            iso8601: "Y-MM-DDTHH:mm:ssZ"
+        }
+
+        this._tzCallbacks = [];
     }
     
     initialize(opt) {
@@ -80,8 +94,49 @@ class ModTime extends Module {
             }
 
             this.mod("Users").setMeta(handle, "timezone", info.name);
-            ep.reply("Timezone set to " + info.name + " (" + info.utcOffsetStr + ").");
+
+            for (let func of this._tzCallbacks) {
+                func(handle, info);
+            }
+
+            ep.reply("Your timezone is now set to " + info.name + " (" + info.utcOffsetStr + ").");
         
+            return true;
+        });
+
+
+        this.mod("Commands").registerCommand(this, 'tf', {
+            description: "Change your clock format.",
+            details: [
+                "This will affect the output of !time when used by you only. The argument must be one of: " + Object.keys(this.param("formats")).join(", ") + ".",
+                "Use '-' to unset your format override and return to the default."
+            ],
+            args: ["format"]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!handle) {
+                let user = this.mod("Users").getEnvUser(env.name, userid);
+                if (!user) {
+                    ep.reply("Unfortunately I couldn't create or retrieve your account. Please ask an administrator for manual assistance.");
+                    return true;
+                }
+                handle = user.handle;
+            }
+
+            if (args.format == "-") {
+                this.mod("Users").delMeta(handle, "timeformat");
+                ep.reply("Clock format unset.");
+                return true;
+            }
+
+            if (!this.param("formats")[args.format]) {
+                ep.reply("Invalid format name. Please specify one of: " + Object.keys(this.param("formats")).join(", "));
+                return true;
+            }
+
+            this.mod("Users").setMeta(handle, "timeformat", this.param("formats")[args.format]);
+            ep.reply("Your clock format was changed.");
+
             return true;
         });
 
@@ -91,10 +146,11 @@ class ModTime extends Module {
             details: [
                 "By default displays time in your timezone (if set) or in the server timezone.",
                 "The argument can be:",
-                "'-' / 'default' / 'server': Force server time.",
-                "Any IANA (tz) timezone denomination: Use the given timezone.",
-                "Offset: Use the given offset in relation to UTC.",
-                "USERNAME or =HANDLE: Use the timezone associated with a username or handle."
+                "  '-' / 'default' / 'server': Force server time.",
+                "  Any IANA (tz) timezone denomination: Use the given timezone (ex. Europe/London).",
+                "  Offset: Use the given offset in relation to UTC (ex. -02:00).",
+                "  USERNAME or =HANDLE: Use the timezone associated with a username or handle.",
+                "Append <FORMAT to the end to change the format of the response (see `help tf` for more information)."
             ],
             args: ["timezone", true],
             minArgs: 0
@@ -102,6 +158,21 @@ class ModTime extends Module {
         
             let timezone = null;
             let offset = null;
+            let format = this.mod("Users").getMeta(handle, "timeformat") || DEFAULT_FORMAT;
+
+            if (args.timezone.length) {
+                let extrf = args.timezone[args.timezone.length - 1].match(/<([a-z0-9-]+)/i);
+                if (extrf) {
+                    args.timezone.pop();
+                    if (this.param("formats")[extrf[1]]) {
+                        format = this.param("formats")[extrf[1]];
+                    } else {
+                        ep.reply("Invalid format name. Please specify one of: " + Object.keys(this.param("formats")).join(", "));
+                        return true;
+                    }
+                }
+            }
+
             let reqzone = args.timezone.join(" ");
 
             if (reqzone) {
@@ -133,12 +204,12 @@ class ModTime extends Module {
             
             if (timezone) {
                 let m = moment().tz(timezone);
-                ep.reply(m.format('dddd YYYY-MM-DD HH:mm:ss (Z)') + (m.isDST() ? " [DST]" : ""));
+                ep.reply(m.format(format) + (m.isDST() ? " [DST]" : ""));
             } else if (offset) {
                 let m = moment().utcOffset(offset);
-                ep.reply(m.format('dddd YYYY-MM-DD HH:mm:ss (Z)'));
+                ep.reply(m.format(format));
             } else {
-                ep.reply(moment().format('dddd YYYY-MM-DD HH:mm:ss') + " (server)");
+                ep.reply(moment().format(format.replace(/Z/, "-server-")));
             }
         
             return true;
@@ -202,8 +273,12 @@ class ModTime extends Module {
     
     
     // # Module code below this line #
+
     
-    
+    //Register callbacks to be invoked when a user sets their timezone. Signature: (handle, tzinfo)
+    registerTimezoneCallback(func) {
+        this._tzCallbacks.push(func);
+    }
 
 
 }
