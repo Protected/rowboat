@@ -27,16 +27,28 @@ class ModVRChat extends Module {
     get optionalParams() { return [
         "updatefreq",           //How often to request user states and perform updates (s)
         "statuschan",           //ID of text channel for user status messages
-        "announcechan",         //ID of text channel for announcements
-        "worldchan",            //ID of text channel for worlds (warning: all contents will be deleted)
-        "pinnedchan",           //ID of text channel for pinned worlds
         "knownrole",            //ID of a role that will be automatically assigned to known people and unassigned from unknown people
-        "expiration",           //How long to stay unfriended before unassigning (h)
+        "offlinetolerance",     //How long to delay offline announcements just to be sure they're real (s)
+        
+        "worldchan",            //ID of text channel for worlds (warning: all contents will be deleted)
         "worldstale",           //How long after retrieval until an entry in the world cache goes stale (s)
         "worldexpiration",      //How long after emptying until an entry in the world cache is removed (h)
         "staleupdatesperitr",   //How many stale worlds are updated per timer iteration
+
+        "coloroffline",         //Color for "offline"/"unused" embeds
+        "coloronline",          //Color for "online"/"used" embeds
+        
+        "pinnedchan",           //ID of text channel for pinned worlds
+
+        "announcechan",         //ID of text channel for announcements
+        "anncollapse",          //How long since the latest announcement to collapse announcements (s)
+        "anncollapseconsec",    //How long since the latest announcement to collapse announcements if it's the latest message too (s)
+        "anncollapsetrans",     //Maximum interval for collapsing a user's state transition (s)
+        "annmaxstack",          //Maximum amount of names to list in a collapsed announcement
+
+        "expiration",           //How long to stay unfriended before unassigning (h)
         "ddelay",               //Delay between queued actions (ms)
-        "offlinetolerance",     //How long to wait before offline announcement (s)
+        
         "pinnedemoji",          //Emoji used for pinning worlds
         "pinokayemoji",         //Emoji used for okaying pins
         "inviteemoji",          //Emoji used for requesting an invitation
@@ -83,12 +95,23 @@ class ModVRChat extends Module {
         super('VRChat', name);
      
         this._params["updatefreq"] = 120;
-        this._params["expiration"] = 48;
+        this._params["offlinetolerance"] = 119;
+
         this._params["worldstale"] = 3600;
         this._params["worldexpiration"] = 25;
         this._params["staleupdatesperitr"] = 10;
+        
+        this._params["coloroffline"] = [200, 200, 200];
+        this._params["coloronline"] = [40, 255, 40];
+
+        this._params["anncollapse"] = 600;
+        this._params["anncollapseconsec"] = 1200;
+        this._params["anncollapsetrans"] = 600;
+        this._params["annmaxstack"] = 10;
+
+        this._params["expiration"] = 48;
         this._params["ddelay"] = 250;
-        this._params["offlinetolerance"] = 119;
+
         this._params["pinnedemoji"] = "📌";
         this._params["pinokayemoji"] = "👍";
         this._params["inviteemoji"] = "✉️";
@@ -104,6 +127,12 @@ class ModVRChat extends Module {
         this._auth = null;  //The auth cookie
         this._pins = {};  //Map of pinned worlds (transient) {WORLDID: Message_in_pinnedchan, ...}
 
+        this._lt_online = {msg: null, ts: null, stack: []};  //State of recent 'is online' announcements
+        this._lt_offline = {msg: null, ts: null, stack: []};  //State of recent 'is offline' announcements
+        this._lt_reconnect = {msg: null, ts: null, stack: []};  //State of recent 'reconnect' announcements
+        this._lt_quickpeek = {msg: null, ts: null, stack: []};  //State of recent 'quick peek' announcements
+        
+
         this._timer = null;  //Action timer
 
         this._dqueue = [];  //Discord update queue
@@ -115,6 +144,9 @@ class ModVRChat extends Module {
 
     /* Tasks:
         Commands: Get random favorite world, random online user, random photo
+        Direct announcements based on tz and count
+        Announce trust upgrades
+        Module for tz to role
         *More logging
     */
 
@@ -226,7 +258,7 @@ class ModVRChat extends Module {
             //Invite to new world instances
             if (this.worldchan && messageReaction.message.channel.id == this.worldchan.id || this.pinnedchan && messageReaction.message.channel.id == this.pinnedchan.id) {
                 
-                if (this.worldInviteButtons.indexOf(messageReaction.emoji.name) > -1) {
+                if (this.worldInviteButtons.includes(messageReaction.emoji.name)) {
                     let worldid = this.extractWorldFromMessage(messageReaction.message);
                     let person = this.getPerson(user.id);
 
@@ -851,15 +883,15 @@ class ModVRChat extends Module {
         if (prev == status) return false;
         this._people[userid].lateststatus = status;
         if (prev) {
-            if (STATUS_ONLINE.indexOf(prev) < 0 && STATUS_ONLINE.indexOf(status) > -1) {
+            if (!STATUS_ONLINE.includes(prev) && STATUS_ONLINE.includes(status)) {
                 this._people[userid].latestflip = moment().unix();
                 if (this._people[userid].pendingflip) {
                     this._people[userid].pendingflip = false;
                 } else {
-                    this.announce("**" + this.denv.idToDisplayName(userid) + "** is online!");
+                    this.annOnline(userid);
                 }
             }
-            if (STATUS_ONLINE.indexOf(prev) > -1 && STATUS_ONLINE.indexOf(status) < 0) {
+            if (STATUS_ONLINE.includes(prev) && !STATUS_ONLINE.includes(status)) {
                 this._people[userid].latestflip = moment().unix();
                 this._people[userid].pendingflip = true;
                 //Delayed announcement is in timer
@@ -870,7 +902,7 @@ class ModVRChat extends Module {
     }
 
     finishStatusUpdate(userid) {
-        this.announce("**" + this.denv.idToDisplayName(userid) + "** is offline.");
+        this.annOffline(userid);
         this._people[userid].pendingflip = false;
         this._people.save();
     }
@@ -1051,7 +1083,7 @@ class ModVRChat extends Module {
     }
 
 
-    //Status messages
+    //Status embeds
 
     bakeStatus(userid, vrcdata, now) {
         let person = this.getPerson(userid);
@@ -1080,7 +1112,7 @@ class ModVRChat extends Module {
 
         emb.setTitle(vrcdata.displayName);
         emb.setThumbnail(person.latestpic);
-        emb.setColor(this.trustLevelColor(vrcdata.tags));
+        emb.setColor(STATUS_ONLINE.includes(vrcdata.status) ? this.param("coloronline") : this.param("coloroffline"));
         emb.setURL("https://vrchat.com/home/user/" + vrcdata.id);
         emb.fields = [];
         emb.addField("Trust", this.trustLevelLabel(vrcdata.tags), true);
@@ -1204,7 +1236,7 @@ class ModVRChat extends Module {
 
         emb.setTitle(world.name);
         emb.setThumbnail(world.imageUrl);
-        emb.setColor(membercount ? [40, 255, 40] : [200, 200, 200]);
+        emb.setColor(membercount ? this.param("coloronline") : this.param("coloroffline"));
         emb.setURL("https://vrchat.com/home/world/" + worldid);
         
         emb.fields = [];
@@ -1287,8 +1319,8 @@ class ModVRChat extends Module {
         };
 
     }
-
     
+
     setWorldLink(userid, worldname, worldmsg) {
         if (!userid || !worldname) return false;
         let person = this.getPerson(userid);
@@ -1315,11 +1347,107 @@ class ModVRChat extends Module {
     }
 
 
+    //Announcements
+
     announce(msg) {
-        this.log("Announcement:", msg);
+        this.log(msg);
         let achan = this.announcechan;
         if (!achan || !msg) return false;
         this.denv.msg(achan.id, msg);
+        return true;
+    }
+
+    annOnline(userid) {
+        this.log(this.denv.idToDisplayName(userid) + " is online.");
+
+        if (this.annReconnect(userid)) return true;
+
+        this._dqueue.push(function () {
+            this.annStateStack(userid, this._lt_online, "🟢 Online: ", true);
+        }.bind(this));
+        return true;
+    }
+
+    annOffline(userid) {
+        this.log(this.denv.idToDisplayName(userid) + " is offline.");
+
+        if (this.annQuickPeek(userid)) return true;
+
+        this._dqueue.push(function () {
+            this.annStateStack(userid, this._lt_offline, "⚪ Offline: ", false);
+        }.bind(this));
+        return true;
+    }
+
+    annReconnect(userid) {
+        let now = moment().unix();
+        if (now - this._lt_offline.ts > this.param("anncollapsetrans")) return false;
+        let idx = this._lt_offline.stack.indexOf(userid);
+        if (idx < 0) return false;
+        this._lt_offline.stack.splice(idx, 1);
+        
+        this._dqueue.push(function () {
+            this.annStateStack(userid, this._lt_reconnect, "🟣 Reconnect: ", false);
+            this.annStateStack(null, this._lt_offline, "⚪ Offline: ", false);
+        }.bind(this));
+
+        return true;
+    }
+
+    annQuickPeek(userid) {
+        let now = moment().unix();
+        if (now - this._lt_online.ts > this.param("anncollapsetrans")) return false;
+        let idx = this._lt_online.stack.indexOf(userid);
+        if (idx < 0) return false;
+        this._lt_online.stack.splice(idx, 1);
+
+        this._dqueue.push(function () {
+            this.annStateStack(userid, this._lt_quickpeek, "⚫ Quick peek: ", false);
+            this.annStateStack(null, this._lt_online, "🟢 Online: ", false);
+        }.bind(this));
+
+        return true;
+    }
+
+    async annStateStack(userid, state, prefix, reemit) {
+        let now = moment().unix();
+        if (state.ts && now - state.ts > (this.announcechan.lastMessageID == state.msg ? this.param("anncollapseconsec") : this.param("anncollapse"))) {
+            state.msg = null; state.ts = null; state.stack = [];
+        }
+        if (userid) state.stack.push(userid);
+        
+        let txt = prefix;
+        let stack = state.stack;
+        let extralen = 0;
+
+        if (stack.length > this.param("annmaxstack")) {
+            extralen = this.param("annmaxstack") - stack.length;
+            stack = stack.slice(0, this.param("annmaxstack"));
+        }
+
+        txt += "**" + stack.map(stackuserid => this.denv.idToDisplayName(stackuserid)).join("**, **") + "**";
+        if (extralen) {
+            txt += "and **" + extralen + "** other" + (extralen != 1 ? "s": "");
+        }
+        
+        if (state.msg) {
+            let message = await this.announcechan.messages.fetch(state.msg);
+            if (!stack.length) {
+                message.delete({reason: "Stack emptied."});
+                state.msg = null;
+            } else if (reemit) {
+                message.delete({reason: "Re-emit announcement."});
+                state.msg = null;
+            } else {
+                message.edit(txt);
+            }
+        }
+        if (!state.msg && stack.length) {
+            let message = await this.announcechan.send(txt);
+            state.msg = message.id;
+        }
+
+        state.ts = now;
         return true;
     }
 
@@ -1468,7 +1596,7 @@ class ModVRChat extends Module {
     }
 
     async vrcget(path) {
-        if (!path || NO_AUTH.indexOf(path) < 0 && !this._config) return null;
+        if (!path || !NO_AUTH.includes(path) && !this._config) return null;
         let options = {headers: {Cookie: []}, returnFull: true};
 
         if (this._config) options.headers.Cookie.push("apiKey=" + this._config.apiKey);
@@ -1617,30 +1745,30 @@ class ModVRChat extends Module {
 
     trustLevelColor(tags) {
         if (!tags) return [0, 0, 0];
-        if (tags.indexOf("system_trust_veteran") > -1) return [129, 67, 230];
-        if (tags.indexOf("system_trust_trusted") > -1) return [255, 123, 66];
-        if (tags.indexOf("system_trust_known") > -1) return [43, 207, 92];
-        if (tags.indexOf("system_trust_basic") > -1) return [23, 120, 255];
+        if (tags.includes("system_trust_veteran")) return [129, 67, 230];
+        if (tags.includes("system_trust_trusted")) return [255, 123, 66];
+        if (tags.includes("system_trust_known")) return [43, 207, 92];
+        if (tags.includes("system_trust_basic")) return [23, 120, 255];
         return [204, 204, 204];
     }
 
     trustLevelLabel(tags) {
         if (!tags) return "Unknown";
-        if (tags.indexOf("system_trust_veteran") > -1) return "Trusted User";
-        if (tags.indexOf("system_trust_trusted") > -1) return "Known User";
-        if (tags.indexOf("system_trust_known") > -1) return "User";
-        if (tags.indexOf("system_trust_basic") > -1) return "New User";
-        return "Visitor";
+        if (tags.includes("system_trust_veteran")) return "🟪 Trusted User";
+        if (tags.includes("system_trust_trusted")) return "🟧 Known User";
+        if (tags.includes("system_trust_known")) return "🟩 User";
+        if (tags.includes("system_trust_basic")) return "🟦 New User";
+        return "⬜ Visitor";
     }
 
     tagLabels(tags) {
         let labels = [];
-        if (tags.indexOf("admin_moderator") > -1) labels.push("🛡️ VRChat moderator");
-        if (tags.indexOf("system_legend ") > -1 || tags.indexOf("system_trust_legend ") > -1) labels.push("🌟 Legendary");
-        if (tags.indexOf("system_probable_troll") > -1) labels.push("🚩 Suspected troll");
-        if (tags.indexOf("system_troll") > -1) labels.push("👹 Troll");
-        if (tags.indexOf("system_supporter") > -1) labels.push("➕ VRChat plus");
-        if (tags.indexOf("system_early_adopter") > -1) labels.push("🐈 Early supporter");
+        if (tags.includes("admin_moderator")) labels.push("🛡️ VRChat moderator");
+        if (tags.includes("system_legend ") || tags.includes("system_trust_legend ")) labels.push("🌟 Legendary");
+        if (tags.includes("system_probable_troll")) labels.push("🚩 Suspected troll");
+        if (tags.includes("system_troll")) labels.push("👹 Troll");
+        if (tags.includes("system_supporter")) labels.push("➕ VRChat plus");
+        if (tags.includes("system_early_adopter")) labels.push("🐈 Early supporter");
         return labels;
     }
 
@@ -1683,7 +1811,7 @@ class ModVRChat extends Module {
             } else {
                 result = Math.floor(random.fraction() * 99998) + 1;
             }
-        } while (exclude.indexOf(result) > -1)
+        } while (exclude.includes(result));
         return result;
     }
 
