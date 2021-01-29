@@ -1006,7 +1006,7 @@ class ModVRChat extends Module {
     }
 
     updateTrust(userid, trust) {
-        if (!this._people[userid] || !trust) return false;
+        if (!this._people[userid] || trust === undefined) return false;
         let prev = this._people[userid].latesttrust;
         if (prev == trust) return false;
         this._people[id].latesttrust = trust;
@@ -1683,7 +1683,7 @@ class ModVRChat extends Module {
     }
 
     getPinnedMsgURL(msgid) {
-        if (!mstgid || !this.pinnedchan) return "";
+        if (!msgid || !this.pinnedchan) return "";
         return "https://discord.com/channels/" + this.denv.server.id + "/" + this.pinnedchan.id + "/" + msgid;
     }
 
@@ -2044,7 +2044,7 @@ class ModVRChat extends Module {
         if (filter) keys = keys.filter(filter);
         if (!keys.length) return null;
         let key = keys[Math.floor(random.fraction() * keys.length)];
-        return Object.assign({key: key}, keys[key]);
+        return Object.assign({key: key}, map[key]);
     }
 
 }
