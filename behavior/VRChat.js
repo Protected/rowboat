@@ -13,6 +13,9 @@ const ENDPOINT = "https://api.vrchat.cloud/api/1/";
 const NO_AUTH = ["config", "time", "visits"];
 
 const STATUS_ONLINE = ["active", "join me", "ask me"];
+const TRUST_PRECEDENCE = ["system_trust_veteran", "system_trust_trusted", "system_trust_known", "system_trust_basic"];
+
+const TRUST_CHANGE_ICON = "👉";
 
 const MAX_FIELDLEN = 1024;
 
@@ -127,11 +130,12 @@ class ModVRChat extends Module {
         this._auth = null;  //The auth cookie
         this._pins = {};  //Map of pinned worlds (transient) {WORLDID: Message_in_pinnedchan, ...}
 
-        this._lt_online = {msg: null, ts: null, stack: []};  //State of recent 'is online' announcements
-        this._lt_offline = {msg: null, ts: null, stack: []};  //State of recent 'is offline' announcements
-        this._lt_reconnect = {msg: null, ts: null, stack: []};  //State of recent 'reconnect' announcements
-        this._lt_quickpeek = {msg: null, ts: null, stack: []};  //State of recent 'quick peek' announcements
-        
+        this._lt_online = {prefix: "🟢 Online: ", msg: null, ts: null, stack: []};  //State of recent 'is online' announcements
+        this._lt_offline = {prefix: "⚪ Offline: ", msg: null, ts: null, stack: []};  //State of recent 'is offline' announcements
+        this._lt_reconnect = {prefix: "🟣 Reconnect: ", msg: null, ts: null, stack: []};  //State of recent 'reconnect' announcements
+        this._lt_quickpeek = {prefix: "⚫ Quick peek: ", msg: null, ts: null, stack: []};  //State of recent 'quick peek' announcements
+
+        this._ready = false;  //Whether we're done caching existing status messages and can start baking new ones.
 
         this._timer = null;  //Action timer
 
@@ -143,9 +147,8 @@ class ModVRChat extends Module {
     
 
     /* Tasks:
-        Commands: Get random favorite world, random online user, random photo
+        Commands: Get random photo
         Direct announcements based on tz and count
-        Announce trust upgrades
         Module for tz to role
         *More logging
     */
@@ -319,6 +322,8 @@ class ModVRChat extends Module {
 
         this.denv.on("connected", async () => {
 
+            let cachePromises = [];
+
             for (let userid in this._people) {
                 let person = this.getPerson(userid);
 
@@ -329,7 +334,7 @@ class ModVRChat extends Module {
                     //Prefetch person status messages
 
                     if (this.statuschan && person.msg) {
-                        this.statuschan.messages.fetch(person.msg);
+                        cachePromises.push(this.statuschan.messages.fetch(person.msg));
                     }
 
                 } else {
@@ -347,6 +352,8 @@ class ModVRChat extends Module {
 
                 }
             }
+
+            Promise.all(cachePromises).then(() => { this._ready = true; });
 
             if (this.worldchan) {
 
@@ -490,6 +497,8 @@ class ModVRChat extends Module {
                     }
                 }
 
+                this.updateTrust(userid, this.highestTrustLevel(friends[person.vrc].tags));
+
                 //Update saved status and announce changes
                 this.updateStatus(userid, friends[person.vrc].status);
                 if (person.pendingflip && now - person.latestflip >= this.param("offlinetolerance")) {
@@ -550,7 +559,7 @@ class ModVRChat extends Module {
         }.bind(this);
 
         this._timer = setInterval(maintimer, this.param("updatefreq") * 1000);
-        if (this.param("updatefreq") > 20) setTimeout(maintimer, 10000);  //Run faster at startup
+        if (this.param("updatefreq") >= 40) setTimeout(maintimer, 20000);  //Run faster at startup
 
 
         this._mtimer = setInterval(function () {
@@ -765,10 +774,104 @@ class ModVRChat extends Module {
             this._people.save();
             return true;
         });
-        
+
+
+        this.mod('Commands').registerCommand(this, 'vrcany user', {
+            description: "Obtain a random known user."
+        },  (env, type, userid, channelid, command, args, handle, ep) => {
+
+            let person = this.randomPerson();
+            if (!person) {
+                ep.reply("I don't know anyone yet!");
+                return true;
+            }
+            
+            ep.reply("**" + env.idToDisplayName(person.key) + "**" + (this.statuschan ? " - " + this.getPersonMsgURL(person.key) : ""));
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'vrcany onlineuser', {
+            description: "Obtain a random online known user."
+        },  (env, type, userid, channelid, command, args, handle, ep) => {
+
+            let person = this.randomPerson(people => userid => STATUS_ONLINE.includes(people[userid].lateststatus));
+            if (!person) {
+                ep.reply("No one is online!");
+                return true;
+            }
+            
+            ep.reply("**" + env.idToDisplayName(person.key) + "**" + (this.statuschan ? " - " + this.getPersonMsgURL(person.key) : ""));
+
+            return true;
+        });
+
+        if (this.param("worldchan")) {
+
+            this.mod('Commands').registerCommand(this, 'vrcany recentworld', {
+                description: "Obtain a random recently seen (cached) world."
+            },  (env, type, userid, channelid, command, args, handle, ep) => {
+
+                if (!this.worldchan) return true;
+
+                let world = this.randomWorld();
+                if (!world) {
+                    ep.reply("I haven't seen any world recently!");
+                    return true;
+                }
+
+                ep.reply("**" + world.name + "** - " + this.getWorldMsgURL(world.key));
+
+                return true;
+            });
+
+            this.mod('Commands').registerCommand(this, 'vrcany activeworld', {
+                description: "Obtain a random world currently in use by a known user."
+            },  (env, type, userid, channelid, command, args, handle, ep) => {
+
+                if (!this.worldchan) return true;
+
+                let world = this.randomWorld(worlds => worldid => this.worldMemberCount(worldid) > 0);
+                if (!world) {
+                    ep.reply("No one is online in a visible world!");
+                    return true;
+                }
+
+                ep.reply("**" + world.name + "** - " + this.getWorldMsgURL(world.key));
+
+                return true;
+            });
+
+            if (this.param("pinnedchan")) {
+
+                this.mod('Commands').registerCommand(this, 'vrcany favorite', {
+                    description: "Obtain a random message from the pinned worlds channel."
+                },  (env, type, userid, channelid, command, args, handle, ep) => {
+
+                    if (!this.pinnedchan) return true;
+
+                    let message = this.randomPin();
+                    if (!message) {
+                        ep.reply("There are no pinned worlds!");
+                        return true;
+                    }
+
+                    let data = this.extractWorldFromMessage(message, true);
+                    if (!data) return true;
+
+                    ep.reply("**" + data.title + "** - " + this.getPinnedMsgURL(message.id));
+
+                    return true;
+                });
+
+            }
+
+        }
+
       
         return true;
     };
+
 
 
     // # Module code below this line #
@@ -800,6 +903,7 @@ class ModVRChat extends Module {
             latestpic: null,                //Latest synced avatar picture
             stickypic: false,               //Whether NOT to sync avatar pictures (keep current)
             lateststatus: null,             //Latest VRChat status (used to detect changes)
+            latesttrust: null,              //Latest VRChat trust level (used to detect changes)
             latestlocation: null,           //Latest VRChat location (used for links)
             latestflip: null,               //Timestamp of latest flip between online/offline
             pendingflip: false,             //Whether there's a pending unannounced flip
@@ -901,6 +1005,18 @@ class ModVRChat extends Module {
         return true;
     }
 
+    updateTrust(userid, trust) {
+        if (!this._people[userid] || !trust) return false;
+        let prev = this._people[userid].latesttrust;
+        if (prev == trust) return false;
+        this._people[id].latesttrust = trust;
+        if (prev) {
+            this.announce(this.trustLevelIcon(prev) + TRUST_CHANGE_ICON + this.trustLevelIcon(trust) * " Trust change: **" + this.idToDisplayName(userid) + "**");
+        }
+        this._people.save();
+        return true;
+    }
+
     finishStatusUpdate(userid) {
         this.annOffline(userid);
         this._people[userid].pendingflip = false;
@@ -934,6 +1050,10 @@ class ModVRChat extends Module {
         }
 
         return true;
+    }
+
+    randomPerson(makefilter) {
+        return this.randomEntry(this._people, makefilter ? makefilter(this._people) : undefined);
     }
 
 
@@ -1019,6 +1139,11 @@ class ModVRChat extends Module {
         return Object.keys(this._worlds[worldid].members).length;
     }
 
+    getWorldMsgURL(worldid) {
+        if (!this._worlds[worldid] || !this._worlds[worldid].msg || !this.worldchan) return "";
+        return "https://discord.com/channels/" + this.denv.server.id + "/" + this.worldchan.id + "/" + this._worlds[worldid].msg;
+    }
+
     updatePrevMemberCount(worldid) {
         if (!this._worlds[worldid]) return undefined;
         this._worlds[worldid].prevmembercount = this.worldMemberCount(worldid);
@@ -1082,10 +1207,15 @@ class ModVRChat extends Module {
         this._worlds.save();
     }
 
+    randomWorld(makefilter) {
+        return this.randomEntry(this._worlds, makefilter ? makefilter(this._worlds) : undefined);
+    }
+
 
     //Status embeds
 
     bakeStatus(userid, vrcdata, now) {
+        if (!this._ready) return false;
         let person = this.getPerson(userid);
         if (!person || !vrcdata) return false;
 
@@ -1115,8 +1245,12 @@ class ModVRChat extends Module {
         emb.setColor(STATUS_ONLINE.includes(vrcdata.status) ? this.param("coloronline") : this.param("coloroffline"));
         emb.setURL("https://vrchat.com/home/user/" + vrcdata.id);
         emb.fields = [];
-        emb.addField("Trust", this.trustLevelLabel(vrcdata.tags), true);
+
+        let trust = this.highestTrustLevel(vrcdata.tags);
+        emb.addField("Trust", this.trustLevelIcon(trust) + " " + this.trustLevelLabel(trust), true);
+
         emb.addField("Status", this.statusLabel(vrcdata.status), true);
+
         if (vrcdata.location) {
             emb.addField("Location", this.placeholderLocation(vrcdata.location), true);
         }
@@ -1159,6 +1293,7 @@ class ModVRChat extends Module {
             }
         });
 
+        return true;
     }
 
     clearStatus(userid) {
@@ -1359,64 +1494,97 @@ class ModVRChat extends Module {
 
     annOnline(userid) {
         this.log(this.denv.idToDisplayName(userid) + " is online.");
+        if (!this.announcechan) return false;
+        let now = moment().unix();
 
-        if (this.annReconnect(userid)) return true;
+        if (this.annReconnect(userid, now)) return true;
+
+        //QuickPeek, Online -> Online
+        let idx;
+        if (now - this._lt_quickpeek.ts <= this.param("anncollapsetrans")) {
+            idx = this._lt_quickpeek.stack.indexOf(userid);
+            if (idx > -1) this._lt_quickpeek.stack.splice(idx, 1);
+        }
 
         this._dqueue.push(function () {
-            this.annStateStack(userid, this._lt_online, "🟢 Online: ", true);
+            this.annStateStack(userid, this._lt_online, true);
+            if (idx !== undefined) this.annStateStack(null, this._lt_quickpeek);
         }.bind(this));
         return true;
     }
 
     annOffline(userid) {
         this.log(this.denv.idToDisplayName(userid) + " is offline.");
+        if (!this.announcechan) return false;
+        let now = moment().unix();
 
-        if (this.annQuickPeek(userid)) return true;
+        if (this.annQuickPeek(userid, now)) return true;
+
+        //Reconnect, Offline -> Online
+        let idx;
+        if (now - this._lt_reconnect.ts <= this.param("anncollapsetrans")) {
+            idx = this._lt_reconnect.stack.indexOf(userid);
+            if (idx > -1) this._lt_reconnect.stack.splice(idx, 1);
+        }
 
         this._dqueue.push(function () {
-            this.annStateStack(userid, this._lt_offline, "⚪ Offline: ", false);
+            this.annStateStack(userid, this._lt_offline);
+            if (idx !== undefined) this.annStateStack(null, this._lt_reconnect);
         }.bind(this));
         return true;
     }
 
-    annReconnect(userid) {
-        let now = moment().unix();
+    annReconnect(userid, now) {
+        now = now || moment().unix();
+
+        //Offine, Online -> Reconnect
         if (now - this._lt_offline.ts > this.param("anncollapsetrans")) return false;
         let idx = this._lt_offline.stack.indexOf(userid);
         if (idx < 0) return false;
         this._lt_offline.stack.splice(idx, 1);
         
         this._dqueue.push(function () {
-            this.annStateStack(userid, this._lt_reconnect, "🟣 Reconnect: ", false);
-            this.annStateStack(null, this._lt_offline, "⚪ Offline: ", false);
+            this.annStateStack(userid, this._lt_reconnect);
+            this.annStateStack(null, this._lt_offline);
         }.bind(this));
 
         return true;
     }
 
-    annQuickPeek(userid) {
-        let now = moment().unix();
+    annQuickPeek(userid, now) {
+        now = now || moment().unix();
+
+        //Online, Offline -> Quick peek
         if (now - this._lt_online.ts > this.param("anncollapsetrans")) return false;
         let idx = this._lt_online.stack.indexOf(userid);
         if (idx < 0) return false;
         this._lt_online.stack.splice(idx, 1);
 
         this._dqueue.push(function () {
-            this.annStateStack(userid, this._lt_quickpeek, "⚫ Quick peek: ", false);
-            this.annStateStack(null, this._lt_online, "🟢 Online: ", false);
+            this.annStateStack(userid, this._lt_quickpeek);
+            this.annStateStack(null, this._lt_online);
         }.bind(this));
 
         return true;
     }
 
-    async annStateStack(userid, state, prefix, reemit) {
+    async annStateStack(userid, state, reemit) {
         let now = moment().unix();
+
+        //Create new stack (detach) if last stack is too old
         if (state.ts && now - state.ts > (this.announcechan.lastMessageID == state.msg ? this.param("anncollapseconsec") : this.param("anncollapse"))) {
             state.msg = null; state.ts = null; state.stack = [];
         }
-        if (userid) state.stack.push(userid);
+
+        //Add or bump userid
+        if (userid) {
+            let idx = stack.indexOf(userid);
+            if (idx > -1) stack.splice(idx, 1);
+            state.stack.push(userid);
+        }
         
-        let txt = prefix;
+        //Prepare list of users
+        let txt = state.prefix;
         let stack = state.stack;
         let extralen = 0;
 
@@ -1430,6 +1598,7 @@ class ModVRChat extends Module {
             txt += "and **" + extralen + "** other" + (extralen != 1 ? "s": "");
         }
         
+        //Create, update or delete message.
         if (state.msg) {
             let message = await this.announcechan.messages.fetch(state.msg);
             if (!stack.length) {
@@ -1485,7 +1654,7 @@ class ModVRChat extends Module {
             });
     }
 
-    extractWorldFromMessage(message) {
+    extractWorldFromMessage(message, verbose) {
         if (!message) return null;
         let emb = null;
         for (let checkembed of message.embeds) {
@@ -1496,7 +1665,30 @@ class ModVRChat extends Module {
         }
         if (!emb || !emb.url) return null;
         let match = emb.url.match(/wrld_[0-9a-f-]+/);
-        if (match) return match[0];
+        if (match) {
+            if (verbose) {
+                return {
+                    worldid: match[0],
+                    title: emb.title,
+                    color: emb.color,
+                    url: emb.url,
+                    image: emb.image,
+                    thumbnail: emb.thumbnail,
+                    description: emb.description
+                };
+            } else {
+                return match[0];
+            }
+        }
+    }
+
+    getPinnedMsgURL(msgid) {
+        if (!mstgid || !this.pinnedchan) return "";
+        return "https://discord.com/channels/" + this.denv.server.id + "/" + this.pinnedchan.id + "/" + msgid;
+    }
+
+    randomPin(makefilter) {
+        return this.randomEntry(this._pins, makefilter ? makefilter(this._pins) : undefined);
     }
 
 
@@ -1752,13 +1944,27 @@ class ModVRChat extends Module {
         return [204, 204, 204];
     }
 
-    trustLevelLabel(tags) {
-        if (!tags) return "Unknown";
-        if (tags.includes("system_trust_veteran")) return "🟪 Trusted User";
-        if (tags.includes("system_trust_trusted")) return "🟧 Known User";
-        if (tags.includes("system_trust_known")) return "🟩 User";
-        if (tags.includes("system_trust_basic")) return "🟦 New User";
-        return "⬜ Visitor";
+    highestTrustLevel(tags) {
+        for (let trust of TRUST_PRECEDENCE) {
+            if (tags.includes(trust)) return trust;
+        }
+        return null;
+    }
+
+    trustLevelIcon(trust) {
+        if (trust == "system_trust_veteran") return "🟪";
+        if (trust == "system_trust_trusted") return "🟧";
+        if (trust == "system_trust_known") return "🟩";
+        if (trust == "system_trust_basic") return "🟦";
+        return "⬜";
+    }
+
+    trustLevelLabel(trust) {
+        if (trust == "system_trust_veteran") return "Trusted User";
+        if (trust == "system_trust_trusted") return "Known User";
+        if (trust == "system_trust_known") return "User";
+        if (trust == "system_trust_basic") return "New User";
+        return "Visitor";
     }
 
     tagLabels(tags) {
@@ -1831,6 +2037,14 @@ class ModVRChat extends Module {
             }
         }
         return this.generateInstanceId(include, exclude);
+    }
+
+    randomEntry(map, filter) {
+        let keys = Object.keys(map);
+        if (filter) keys = keys.filter(filter);
+        if (!keys.length) return null;
+        let key = keys[Math.floor(random.fraction() * keys.length)];
+        return Object.assign({key: key}, keys[key]);
     }
 
 }
