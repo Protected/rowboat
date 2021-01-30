@@ -1578,8 +1578,8 @@ class ModVRChat extends Module {
 
         //Add or bump userid
         if (userid) {
-            let idx = stack.indexOf(userid);
-            if (idx > -1) stack.splice(idx, 1);
+            let idx = state.stack.indexOf(userid);
+            if (idx > -1) state.stack.splice(idx, 1);
             state.stack.push(userid);
         }
         
