@@ -1009,7 +1009,7 @@ class ModVRChat extends Module {
         if (!this._people[userid] || trust === undefined) return false;
         let prev = this._people[userid].latesttrust;
         if (prev == trust) return false;
-        this._people[id].latesttrust = trust;
+        this._people[userid].latesttrust = trust;
         if (prev) {
             this.announce(this.trustLevelIcon(prev) + TRUST_CHANGE_ICON + this.trustLevelIcon(trust) * " Trust change: **" + this.idToDisplayName(userid) + "**");
         }
