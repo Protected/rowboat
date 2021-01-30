@@ -16,6 +16,7 @@ const STATUS_ONLINE = ["active", "join me", "ask me"];
 const TRUST_PRECEDENCE = ["system_trust_veteran", "system_trust_trusted", "system_trust_known", "system_trust_basic"];
 
 const TRUST_CHANGE_ICON = "👉";
+const CLOCKS = ["🕛","🕧","🕐","🕜","🕑","🕝","🕒","🕞","🕓","🕟","🕔","🕠","🕕","🕡","🕖","🕢","🕗","🕣","🕘","🕤","🕙","🕥","🕚","🕦"];
 
 const MAX_FIELDLEN = 1024;
 
@@ -277,6 +278,7 @@ class ModVRChat extends Module {
                         if (messageReaction.emoji.name == this.param("publicemoji") || messageReaction.emoji.name == this.param("anyemoji")) {
                             this.getWorld(worldid, true)
                                 .then((world) => {
+                                    if (!world) throw {};
                                     let instances = world.instances.filter(ci => !ci[1] || ci[1] < world.capacity).map(ci => ci[0]);
                                     let instance;
                                     if (messageReaction.emoji.name == this.param("anyemoji")) {
@@ -286,6 +288,9 @@ class ModVRChat extends Module {
                                     }
                                     this.vrcInvite(person.vrc, this._worlds[worldid].id, instance)
                                         .catch(e => this.log("error", "Failed to invite " + user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
+                                })
+                                .catch((e) => {
+                                    this.log("warn", "Failed to invite " + user.id + " to " + worldid + " because the world couldn't be retrieved.");
                                 });
                         } else {
                             let instance = this.generateInstanceFor(person.vrc, messageReaction.emoji.name == this.param("friendsplusemoji") ? "friends+" : "friends");
@@ -536,7 +541,7 @@ class ModVRChat extends Module {
                 if (refreshed < this.param("staleupdatesperitr")) {
                     let retrieved = world.retrieved;
                     world = await this.getWorld(worldid);
-                    if (world.retrieved != retrieved) refreshed += 1;
+                    if (world && world.retrieved != retrieved) refreshed += 1;
                 }
 
                 //Bake world embed
@@ -614,12 +619,13 @@ class ModVRChat extends Module {
             try {
 
                 let data = await this.vrcUser(vrchatuser);
+                if (!data) throw {};
 
                 if (!this.getPerson(targetid)) this.registerPerson(targetid, {vrc: data.id});
 
                 if (!data.isFriend) {
                     let fstatus = await this.vrcFriendStatus(data.id);
-                    if (!fstatus.isFriend && !fstatus.outgoingRequest) {
+                    if (!fstatus || (!fstatus.isFriend && !fstatus.outgoingRequest)) {
                         await this.vrcFriendRequest(data.id);
                         ep.reply("VRChat account learned. I've sent you a friend request! Please accept it.");
                     } else if (fstatus.outgoingRequest) {
@@ -1113,6 +1119,7 @@ class ModVRChat extends Module {
         }
         return this.vrcWorld(worldid)
             .then(data => {
+                if (!data) return null;
                 data.retrieved = moment().unix();       //Time retrieved/refreshed
                 data.msg = msg;                         //Status message ID
                 data.members = members;                 //Set of members known to be in-world (discord userids)
@@ -1130,6 +1137,7 @@ class ModVRChat extends Module {
     async addWorldMember(worldid, userid) {
         try {
             let world = await this.getWorld(worldid);
+            if (!world) throw "Unable to retrieve world.";
             world.members[userid] = true;
             world.emptysince = null;
         } catch (e) {
@@ -1271,6 +1279,10 @@ class ModVRChat extends Module {
         let body = [];
         
         if (vrcdata.statusDescription) body.push("*" + this.stripNormalizedFormatting(vrcdata.statusDescription.trim()) + "*");
+
+        let clock = this.userEmbedClock(userid);
+        if (clock) body.push(clock);
+
         if (vrcdata.bio) body.push(this.stripNormalizedFormatting(vrcdata.bio.trim()));
 
         let taglabels = this.tagLabels(vrcdata.tags).join("\n");
@@ -1307,6 +1319,20 @@ class ModVRChat extends Module {
         });
 
         return true;
+    }
+
+    userEmbedClock(userid) {
+        if (!this._modTime) return null;
+        let m = this._modTime.getCurrentMomentByUserid(this.denv, userid);
+        if (!m) return null;
+        let chour = (m.hour() % 12) * 2;
+        let cmin = m.minute();
+        if (cmin >= 15 && cmin < 45) chour += 1;
+        else if (cmin >= 45) {
+            chour += 2;
+            if (chour > 23) chour = 0;
+        }
+        return CLOCKS[chour] + " " + m.format("HH:mm (Z)");
     }
 
     clearStatus(userid) {
@@ -1708,7 +1734,7 @@ class ModVRChat extends Module {
     //High level api methods
 
     async vrcConfig() {
-        return this.vrcget("config").then(data => this._config = data);
+        return this.vrcget("config").then(data => { if (data) this._config = data; });
     }
 
     async vrcTime() {
@@ -1733,10 +1759,12 @@ class ModVRChat extends Module {
     async vrcFriendList(online) {
         let list = [];
         if (online !== false) {
-            list = list.concat(await this.vrcget("auth/user/friends/?offline=false"));
+            let onlist = await this.vrcget("auth/user/friends/?offline=false");
+            if (online) list = list.concat(onlist);
         }
         if (online !== true) {
-            list = list.concat(await this.vrcget("auth/user/friends/?offline=true"));
+            let offlist = await this.vrcget("auth/user/friends/?offline=true");
+            if (offlist) list = list.concat(offlist);
         }
         return list;
     }
@@ -1813,8 +1841,9 @@ class ModVRChat extends Module {
             result = await this.jsonget(ENDPOINT + path, options)
         } catch (e) {
             this.handleVrcApiError(e);
+            return null;
         }
-        //Note: If an error is thrown and handled, result is undefined here.
+
         if (result.statusCode == 401 && this._auth) {
             //Expired session
             this._auth = null;
@@ -1837,8 +1866,9 @@ class ModVRChat extends Module {
             result = await this.jsonpost(ENDPOINT + path, fields, options);
         } catch (e) {
             this.handleVrcApiError(e);
+            return null;
         }
-        //Note: If an error is thrown and handled, result is undefined here.
+        
         if (result.statusCode == 401 && this._auth) {
             //Expired session
             this._auth = null;
