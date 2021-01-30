@@ -156,8 +156,6 @@ class ModTime extends Module {
             minArgs: 0
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            let timezone = null;
-            let offset = null;
             let format = this.mod("Users").getMeta(handle, "timeformat") || DEFAULT_FORMAT;
 
             if (args.timezone.length) {
@@ -174,42 +172,23 @@ class ModTime extends Module {
             }
 
             let reqzone = args.timezone.join(" ");
+            let parsed = this.parseTimezoneArgument(env, reqzone);
 
-            if (reqzone) {
-                if (!reqzone.match(/^-|default|server$/i)) {
-                    let info = ct.getTimezone(reqzone);
-                    if (info) {
-                        timezone = info.name;
-                    } else if (reqzone.match(/^[+-][0-9]{2}:[0-9]{2}$/)) {
-                        offset = reqzone;
-                    } else {
-                        let checkhandle = reqzone.match(/^=(.*)$/);
-                        if (checkhandle) {
-                            timezone = this.mod("Users").getMeta(checkhandle[1], "timezone");
-                        } else {
-                            let handles = this.mod("Users").getHandlesById(env.name, env.displayNameToId(reqzone) || reqzone);
-                            if (handles.length) {
-                                timezone = this.mod("Users").getMeta(handles[0], "timezone");
-                            }
-                        }
-                        if (!timezone) {
-                            ep.reply("User or timezone not found.");
-                            return true;
-                        }
-                    }
-                }
-            } else {
-                timezone = this.mod("Users").getMeta(handle, "timezone");
+            if (parsed === false) {
+                parsed = {timezone: this.mod("Users").getMeta(handle, "timezone")};
+            } else if (parsed === null) {
+                ep.reply("User or timezone not found.");
+                return true;
             }
-            
-            if (timezone) {
-                let m = moment().tz(timezone);
+
+            if (parsed.timezone) {
+                let m = moment().tz(parsed.timezone);
                 ep.reply(m.format(format) + (m.isDST() ? " [DST]" : ""));
-            } else if (offset) {
-                let m = moment().utcOffset(offset);
+            } else if (parsed.offset) {
+                let m = moment().utcOffset(parsed.offset);
                 ep.reply(m.format(format));
             } else {
-                ep.reply(moment().format(format.replace(/Z/, "-server-")));
+                ep.reply(moment().format(format.replace(/Z/, "*-server-*")));
             }
         
             return true;
@@ -267,6 +246,62 @@ class ModTime extends Module {
             return true;
         });
 
+
+        this.mod("Commands").registerCommand(this, 'timediff', {
+            description: "Shows the current difference between your timezone and another.",
+            details: [
+                "The argument can be:",
+                "  '-' / 'default' / 'server': Use server time.",
+                "  Any IANA (tz) timezone denomination: Use the given timezone (ex. Europe/London).",
+                "  Offset: Use the given offset in relation to UTC (ex. -02:00).",
+                "  USERNAME or =HANDLE: Use the timezone associated with a username or handle."
+            ],
+            args: ["timezone", true],
+            minArgs: 0
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            let timezone = this.mod("Users").getMeta(handle, "timezone");
+            if (!timezone) {
+                ep.reply("Your timezone is not set.");
+                return true;
+            }
+
+            let reqzone = args.timezone.join(" ");
+            let parsed = this.parseTimezoneArgument(env, reqzone);
+
+            if (parsed === false) {
+                parsed = {timezone: null, offset: null, owner: "*-server-*"};
+            } else if (parsed === null) {
+                ep.reply("User or timezone not found.");
+                return true;
+            }
+
+            let reqoffset, myoffset = moment().tz(timezone).utcOffset();
+            let reqdst, mydst = moment().tz(timezone).isDST();
+            if (parsed.timezone) {
+                reqoffset = moment().tz(parsed.timezone).utcOffset();
+                reqdst = moment().tz(parsed.timezone).isDST();
+            } else if (parsed.offset) {
+                reqoffset = moment().utcOffset(parsed.offset).utcOffset();
+                reqdst = false;
+            } else {
+                reqoffset = moment().utcOffset();
+                reqdst = moment().isDST();
+            }
+
+            let diff = reqoffset - myoffset;
+            if (diff == 0) {
+                ep.reply(parsed.owner + (reqdst ? " [DST]" : "") + " currently has the same clock time as you!");
+            } else {
+                let explain;
+                if (diff > 0) explain = "It's later there!";
+                else explain = "It's earlier there!";
+                ep.reply(parsed.owner + (reqdst ? " [DST]" : "") + " is " + moment().utcOffset(diff).format("Z") + " offset from you. " + explain);
+            }
+
+            return true;
+        });
+
       
         return true;
     };
@@ -275,9 +310,88 @@ class ModTime extends Module {
     // # Module code below this line #
 
     
+    //Helpers
+
+    parseTimezoneArgument(env, reqzone) {
+        if (!env || !reqzone) return false;  //Empty arguments
+
+        let timezone = null;
+        let offset = null;
+        let owner = "*-server-*";  //Use only for display purposes
+
+        if (!reqzone.match(/^-|default|server$/i)) {
+            let info = ct.getTimezone(reqzone);
+            if (info) {
+                timezone = info.name;
+                owner = timezone;
+            } else if (reqzone.match(/^[+-][01][0-9]:[0-9]{2}$/)) {
+                offset = reqzone;
+                owner = offset;
+            } else {
+                let checkhandle = reqzone.match(/^=(.*)$/);
+                if (checkhandle) {
+                    timezone = this.mod("Users").getMeta(checkhandle[1], "timezone");
+                    owner = checkhandle[1];
+                } else {
+                    let handles = this.mod("Users").getHandlesById(env.name, env.displayNameToId(reqzone) || reqzone);
+                    if (handles.length) {
+                        timezone = this.mod("Users").getMeta(handles[0], "timezone");
+                        owner = reqzone;
+                    }
+                }
+                if (!timezone) return null;  //Invalid request
+            }
+        }
+
+        return {timezone: timezone, offset: offset, owner: owner};  //If both are empty, use server time
+    }
+
+
     //Register callbacks to be invoked when a user sets their timezone. Signature: (handle, tzinfo)
+
     registerTimezoneCallback(func) {
         this._tzCallbacks.push(func);
+    }
+
+
+    //Return tz timezone names
+
+    getTimezoneByUserid(env, userid) {
+        let handles = this.mod("Users").getHandlesById(env.name, userid);
+        if (!handles.length) return null;
+        return this.getTimezoneByHandle(handles[0]);
+    }
+
+    getTimezoneByHandle(handle) {
+        return this.mod("Users").getMeta(handle, "timezone");
+    }
+
+    //Return offset in minutes
+
+    getCurrentUtcOffsetByUserid(env, userid) {
+        let timezone = this.getTimezoneByUserid(env, userid);
+        if (!timezone) return null;
+        return moment().tz(timezone).utcOffset();
+    }
+
+    getCurrentUtcOffsetByHandle(handle) {
+        let timezone = this.getTimezoneByHandle(handle);
+        if (!timezone) return null;
+        return moment().tz(timezone).utcOffset();
+    }
+
+    //Return moment.js instances
+
+    getCurrentMomentByUserid(env, userid) {
+        let timezone = this.getTimezoneByUserid(env, userid);
+        if (!timezone) return null;
+        return moment().tz(timezone);
+    }
+
+    getCurrentMomentByHandle(handle) {
+        let timezone = this.getTimezoneByHandle(handle);
+        if (!timezone) return null;
+        return moment().tz(timezone);
     }
 
 

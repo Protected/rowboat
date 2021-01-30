@@ -61,6 +61,10 @@ class ModVRChat extends Module {
         "friendsemoji",         //Emoji that represents a friends instance
     ]; }
 
+    get requiredEnvironments() { return [
+        'Discord'
+    ]; }
+
     get requiredModules() { return [
         'Commands'
     ]; }
@@ -136,6 +140,7 @@ class ModVRChat extends Module {
         this._lt_quickpeek = {prefix: "⚫ Quick peek: ", msg: null, ts: null, stack: []};  //State of recent 'quick peek' announcements
 
         this._ready = false;  //Whether we're done caching existing status messages and can start baking new ones.
+        this._modTime = null;  //A reference to the Time module, if available.
 
         this._timer = null;  //Action timer
 
@@ -157,6 +162,9 @@ class ModVRChat extends Module {
     initialize(opt) {
         if (!super.initialize(opt)) return false;
 
+        opt.moduleRequest('Time', (time) => { this._modTime = time; });
+
+        
         //# Load data
 
         this._people = this.loadData(undefined, undefined, {quiet: true});
@@ -581,6 +589,8 @@ class ModVRChat extends Module {
 
 
         //# Register commands
+
+        this.mod('Commands').registerRootDetails(this, 'vrchat', {description: "Control integration with your VRChat account."});
         
         let asscall = async (env, userid, discorduser, vrchatuser, ep) => {
 
@@ -774,6 +784,9 @@ class ModVRChat extends Module {
             this._people.save();
             return true;
         });
+
+
+        this.mod('Commands').registerRootDetails(this, 'vrcany', {description: "Return a link to a random VRChat element."});
 
 
         this.mod('Commands').registerCommand(this, 'vrcany user', {
@@ -1011,7 +1024,7 @@ class ModVRChat extends Module {
         if (prev == trust) return false;
         this._people[userid].latesttrust = trust;
         if (prev) {
-            this.announce(this.trustLevelIcon(prev) + TRUST_CHANGE_ICON + this.trustLevelIcon(trust) * " Trust change: **" + this.idToDisplayName(userid) + "**");
+            this.announce(this.trustLevelIcon(prev) + TRUST_CHANGE_ICON + this.trustLevelIcon(trust) * " Trust change: **" + this.denv.idToDisplayName(userid) + "**");
         }
         this._people.save();
         return true;
@@ -1801,6 +1814,7 @@ class ModVRChat extends Module {
         } catch (e) {
             this.handleVrcApiError(e);
         }
+        //Note: If an error is thrown and handled, result is undefined here.
         if (result.statusCode == 401 && this._auth) {
             //Expired session
             this._auth = null;
@@ -1824,6 +1838,7 @@ class ModVRChat extends Module {
         } catch (e) {
             this.handleVrcApiError(e);
         }
+        //Note: If an error is thrown and handled, result is undefined here.
         if (result.statusCode == 401 && this._auth) {
             //Expired session
             this._auth = null;
