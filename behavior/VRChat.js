@@ -437,9 +437,15 @@ class ModVRChat extends Module {
             let now = moment().unix();
 
             //Index VRChat friends
-            let friends = {}, friendlist = await this.vrcFriendList();
-            for (let friend of friendlist) {
-                friends[friend.id] = friend;
+            let friends = {}, friendlist;
+            try {
+                friendlist = await this.vrcFriendList();
+                for (let friend of friendlist) {
+                    friends[friend.id] = friend;
+                }
+            } catch (e) {
+                this.log("error", "Refreshing friend list: " + e + " (Update will not run.)");
+                return;
             }
 
             //Do things to people
@@ -470,7 +476,9 @@ class ModVRChat extends Module {
                         } else if (makesure.state == "offline") {
                             makesure.status = "offline";
                         }
-                        friends[person.vrc] = makesure;
+                        if (makesure.friendKey) {
+                            friends[person.vrc] = makesure;
+                        }
                     }
                     if (!friends[person.vrc]) {
                         this.unconfirmPerson(userid);
@@ -1760,11 +1768,13 @@ class ModVRChat extends Module {
         let list = [];
         if (online !== false) {
             let onlist = await this.vrcget("auth/user/friends/?offline=false");
-            if (online) list = list.concat(onlist);
+            if (!onlist) throw "Failure to retrieve friend list.";
+            list = list.concat(onlist);
         }
         if (online !== true) {
             let offlist = await this.vrcget("auth/user/friends/?offline=true");
-            if (offlist) list = list.concat(offlist);
+            if (!offlist) throw "Failure to retrieve friend list.";
+            list = list.concat(offlist);
         }
         return list;
     }
