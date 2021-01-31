@@ -468,7 +468,7 @@ class ModVRChat extends Module {
                         }
                         continue;
                     }
-                } else {
+                } else try {
                     let makesure = await this.vrcUser(person.vrc);
                     if (makesure) {
                         if (makesure.state == "active") {
@@ -486,6 +486,9 @@ class ModVRChat extends Module {
                         this.announce("Uh oh... " + this.denv.idToDisplayName(userid) + " is no longer my friend.");
                         continue;
                     }
+                } catch (e) {
+                    this.log("error", "Retrieving unseen user record: " + e + " (Will not update user: " + userid + " - " + person.vrc + ")");
+                    continue;
                 }
 
                 this.setPersonName(userid, friends[person.vrc].displayName);
