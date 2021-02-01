@@ -76,7 +76,7 @@ class ModDiscordTimeRoles extends Module {
         let addroles = [], removeroles = [];
         for (let roleid in this.param("roles")) {
             let roleconf = this.param("roles")[roleid];
-            if (!utcOffset || roleconf.max && utcOffset > roleconf.max || roleconf.min && utcOffset < roleconf.min) {
+            if (utcOffset == null || roleconf.max && utcOffset > roleconf.max || roleconf.min && utcOffset < roleconf.min) {
                 if (member.roles.cache.get(roleid)) {
                     removeroles.push(roleid);
                 }
