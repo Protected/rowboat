@@ -21,7 +21,7 @@
     "color-difference": "^0.3.4",
     "countries-and-timezones": "^2.3.1",
     "diff": "^3.5.0",
-    "discord.js": "^12.5.0",
+    "discord.js": "^12.5.1",
     "emojione": "^3.1.4",
     "express": "^4.17.1",
     "ffmpeg-normalize": "^1.8.0",

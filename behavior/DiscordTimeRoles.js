@@ -62,7 +62,7 @@ class ModDiscordTimeRoles extends Module {
         this.mod("Time").registerTimezoneCallback((env, userid, handle, tzinfo) => {
             if (env.name != this.denv.name) return false;
 
-            this.addAndRemoveRoles(env.server.members.cache.get(userid), moment().tz(tzinfo.name).utcOffset, true);
+            this.addAndRemoveRoles(env.server.members.cache.get(userid), moment().tz(tzinfo.name).utcOffset(), true);
 
         });
 
@@ -87,12 +87,14 @@ class ModDiscordTimeRoles extends Module {
             }
         }
 
+        let doaddroles = Promise.resolve();
         if (addroles.length) {
-            member.roles.add(addroles, "Adding role" + (addroles.length != 1 ? "s" : "") + " based on timezone rules.");
+            doaddroles = member.roles.add(addroles, "Adding role" + (addroles.length != 1 ? "s" : "") + " based on timezone rules.");
         }
         
         if (strict && removeroles.length) {
-            member.roles.remove(removeroles, "Removing role" + (removeroles.length != 1 ? "s" : "") + " based on timezone rules.");
+            //Circumventing discord.js bug
+            doaddroles.then(() => member.roles.remove(removeroles, "Removing role" + (removeroles.length != 1 ? "s" : "") + " based on timezone rules."));
         }
     }
 
