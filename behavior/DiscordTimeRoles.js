@@ -46,7 +46,7 @@ class ModDiscordTimeRoles extends Module {
 
             for (let member of this.denv.server.members.cache.array()) {
                 let utcOffset = this.mod("Time").getCurrentUtcOffsetByUserid(this.denv, member.id);
-                if (!utcOffset && !this.param("strict")) continue;
+                if (utcOffset == null && !this.param("strict")) continue;
                 
                 //Modify assignments on startup
                 
