@@ -46,7 +46,7 @@ class ModDiscordTimeRoles extends Module {
 
             for (let member of this.denv.server.members.cache.array()) {
                 let utcOffset = this.mod("Time").getCurrentUtcOffsetByUserid(this.denv, member.id);
-                if (utcOffset === null) continue;
+                if (!utcOffset && !this.param("strict")) continue;
                 
                 //Modify assignments on startup
                 
@@ -76,7 +76,7 @@ class ModDiscordTimeRoles extends Module {
         let addroles = [], removeroles = [];
         for (let roleid in this.param("roles")) {
             let roleconf = this.param("roles")[roleid];
-            if (roleconf.max && utcOffset > roleconf.max || roleconf.min && utcOffset < roleconf.min) {
+            if (!utcOffset || roleconf.max && utcOffset > roleconf.max || roleconf.min && utcOffset < roleconf.min) {
                 if (member.roles.cache.get(roleid)) {
                     removeroles.push(roleid);
                 }
