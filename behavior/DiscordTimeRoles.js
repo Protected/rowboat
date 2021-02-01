@@ -2,6 +2,8 @@
 
 const Module = require('../Module.js');
 
+const moment = require('moment');
+
 class ModDiscordTimeRoles extends Module {
 
     get requiredParams() { return [
