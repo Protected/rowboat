@@ -155,7 +155,6 @@ class ModVRChat extends Module {
     /* Tasks:
         Commands: Get random photo
         Direct announcements based on tz and count
-        Module for tz to role
         *More logging
     */
 

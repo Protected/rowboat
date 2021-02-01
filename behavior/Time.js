@@ -96,7 +96,7 @@ class ModTime extends Module {
             this.mod("Users").setMeta(handle, "timezone", info.name);
 
             for (let func of this._tzCallbacks) {
-                func(handle, info);
+                func(env, userid, handle, info);
             }
 
             ep.reply("Your timezone is now set to " + info.name + " (" + info.utcOffsetStr + ").");
@@ -347,7 +347,7 @@ class ModTime extends Module {
     }
 
 
-    //Register callbacks to be invoked when a user sets their timezone. Signature: (handle, tzinfo)
+    //Register callbacks to be invoked when a user sets their timezone. Signature: (env, userid, handle, tzinfo)
 
     registerTimezoneCallback(func) {
         this._tzCallbacks.push(func);
