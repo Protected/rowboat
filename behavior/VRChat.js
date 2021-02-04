@@ -3,6 +3,7 @@
 const moment = require('moment');
 const random = require('meteor-random');
 const { MessageEmbed } = require('discord.js');
+const WebSocket = require('ws');
 
 const Module = require('../Module.js');
 const { enableConsole } = require('../Logger.js');
@@ -11,6 +12,7 @@ const PERM_ADMIN = 'administrator';
 
 const ENDPOINT = "https://api.vrchat.cloud/api/1/";
 const NO_AUTH = ["config", "time", "visits"];
+const WEBSOCKET = "wss://pipeline.vrchat.cloud/";
 
 const STATUS_ONLINE = ["active", "join me", "ask me"];
 const TRUST_PRECEDENCE = ["system_trust_veteran", "system_trust_trusted", "system_trust_known", "system_trust_basic"];
@@ -139,6 +141,10 @@ class ModVRChat extends Module {
 
         this._config = null;  //The full object returned by the "config" API. This API must be called before any other request.
         this._auth = null;  //The auth cookie
+        this._me = null;  //The bot user data
+        this._ws = null;  //The websocket
+        this._wstimeout = null;  //The websocket's timeout timer
+
         this._pins = {};  //Map of pinned worlds (transient) {WORLDID: Message_in_pinnedchan, ...}
 
         this._lt_online = {prefix: "🟢 Online: ", msg: null, ts: null, stack: []};  //State of recent 'is online' announcements
@@ -180,6 +186,7 @@ class ModVRChat extends Module {
         //Initialize session
 
         this.vrcConfig();
+            //.then(() => this.vrcInitialize());
 
         //Log out on shut down
 
@@ -285,7 +292,7 @@ class ModVRChat extends Module {
                                     } else {
                                         instance = this.generateInstanceFor(person.vrc, "public", null, instances.map(ci => ci.split("~")[0]));
                                     }
-                                    this.vrcInvite(person.vrc, this._worlds[worldid].id, instance)
+                                    this.vrcInvite(person.vrc, worldid, instance)
                                         .catch(e => this.log("error", "Failed to invite " + user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
                                 })
                                 .catch((e) => {
@@ -293,7 +300,7 @@ class ModVRChat extends Module {
                                 });
                         } else {
                             let instance = this.generateInstanceFor(person.vrc, messageReaction.emoji.name == this.param("friendsplusemoji") ? "friends+" : "friends");
-                            this.vrcInvite(person.vrc, this._worlds[worldid].id, instance)
+                            this.vrcInvite(person.vrc, worldid, instance)
                                 .catch(e => this.log("error", "Failed to invite " + user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
                         }
 
@@ -1967,6 +1974,10 @@ class ModVRChat extends Module {
         return this.vrcget("visits");
     }
 
+    async vrcMe() {
+        return this.vrcget("auth/user").then(data => { if (data) this._me = data; });
+    }
+
     async vrcUser(vrcuser) {
         let get;
         if (this.isValidUser(vrcuser)) {
@@ -2020,6 +2031,40 @@ class ModVRChat extends Module {
             type: "invite",
             message: message || "Here's your invitation.",
             details: {worldId: worldid + (instanceid ? ":" + instanceid : "")}
+        });
+    }
+
+    async vrcInitialize() {
+        await this.vrcMe();
+
+        let heartbeat = () => {
+            if (this._wstimeout) clearTimeout(this._wstimeout);
+            this._wstimeout = setTimeout(() => {
+                this._ws.terminate();
+            }, 30000);
+        }
+
+        //Initialize websocket
+        return new Promise((resolve, reject) => {
+            let ws = new WebSocket(WEBSOCKET + "?authToken=" + this._auth);
+            
+            let connectionError = (err) => reject(err);
+
+            ws.on('open', () => {
+                this._ws = ws;
+                heartbeat();
+                resolve(ws);
+                ws.removeListener('error', connectionError);
+            });
+
+            ws.on('ping', heartbeat);
+
+            ws.on('error', connectionError);
+
+            ws.on('message', (data) => {
+                console.log("Data:", data);
+            });
+
         });
     }
 
