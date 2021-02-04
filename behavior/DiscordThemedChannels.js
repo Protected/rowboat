@@ -125,7 +125,7 @@ class ModDiscordThemedChannels extends Module {
         this.mod('Commands').registerCommand(this, 'tcany', {
             description: "Obtain a random message from a themed channel.",
             args: ["chan"]
-        },  (env, type, userid, channelid, command, args, handle, ep) => {
+        },  async (env, type, userid, channelid, command, args, handle, ep) => {
             
             let chansets = this.param('channels')[args.chan];
             if (!chansets) {
@@ -160,8 +160,14 @@ class ModDiscordThemedChannels extends Module {
                 return true;
             }
 
-            env.client.realClient.channels.fetch(channelid)
-                .then((channel) => channel.send("https://discord.com/channels/" + env.server.id + "/" + pickmsg.channel.id + "/" + pickmsg.id, pickembed));
+            let channel;
+            if (userid == channelid) {
+                channel = await env.client.realClient.users.fetch(userid).then(user => user.createDM());
+            } else {
+                channel = env.server.channels.cache.get(channelid);
+            }
+
+            channel.send("https://discord.com/channels/" + env.server.id + "/" + pickmsg.channel.id + "/" + pickmsg.id, pickembed);
 
             return true;
         });
