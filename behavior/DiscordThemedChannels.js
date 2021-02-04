@@ -160,7 +160,7 @@ class ModDiscordThemedChannels extends Module {
                 return true;
             }
 
-            let channel = env.server.channels.cache.get(channelid);
+            let channel = env.client.realClient.cache.get(channelid);
             channel.send("https://discord.com/channels/" + env.server.id + "/" + pickmsg.channel.id + "/" + pickmsg.id, pickembed);
 
             return true;
