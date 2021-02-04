@@ -160,8 +160,8 @@ class ModDiscordThemedChannels extends Module {
                 return true;
             }
 
-            let channel = env.client.realClient.cache.get(channelid);
-            channel.send("https://discord.com/channels/" + env.server.id + "/" + pickmsg.channel.id + "/" + pickmsg.id, pickembed);
+            env.client.realClient.fetch(channelid)
+                .then((channel) => channel.send("https://discord.com/channels/" + env.server.id + "/" + pickmsg.channel.id + "/" + pickmsg.id, pickembed));
 
             return true;
         });
