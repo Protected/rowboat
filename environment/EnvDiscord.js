@@ -422,6 +422,32 @@ class EnvDiscord extends Environment {
             this.emit('part', this, authorid, channel.id, info);
         }
     }
+
+
+    scanEveryMessage(channel, onMessage, onEnd) {
+        if (!channel || !onMessage) return;
+        let scanning = null;
+        let scanner = () => {
+            channel.messages.fetch({
+                limit: 100,
+                before: scanning
+            }).then((messages) => {
+                let endNow = false;
+                let messagesarr = messages.array();
+                if (messagesarr.length < 100) endNow = true;
+                for (let message of messagesarr) {
+                    onMessage(message);
+                }
+                if (!endNow) {
+                    scanning = messagesarr[messagesarr.length - 1].id;
+                    setTimeout(scanner, 250);
+                } else if (onEnd) {
+                    onEnd(channel);
+                }
+            });
+        };
+        scanner();
+    }
     
     
 };

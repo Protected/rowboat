@@ -60,6 +60,9 @@ class ModVRChat extends Module {
         "publicemoji",          //Emoji that represents a public instance
         "friendsplusemoji",     //Emoji that represents a friends+ instance ("hidden")
         "friendsemoji",         //Emoji that represents a friends instance
+
+        "alertmin",             //Minimum amount of online people to alert at
+        "alertcooldown",        //How long until a user can be alerted again (mins)
     ]; }
 
     get requiredEnvironments() { return [
@@ -128,6 +131,9 @@ class ModVRChat extends Module {
         this._params["friendsplusemoji"] = "🥳";
         this._params["friendsemoji"] = "🧑‍🤝‍🧑";
 
+        this._params["alertmin"] = 4;
+        this._params["alertcooldown"] = 60;
+
         this._people = null;  //{USERID: {see registerPerson}, ...}
         this._worlds = null;  //The worlds cache {WORLDID: {..., see getWorld}, ...}
 
@@ -151,13 +157,6 @@ class ModVRChat extends Module {
         this._mtimer = null;  //Maintenance timer
     }
     
-
-    /* Tasks:
-        Commands: Get random photo
-        Direct announcements based on tz and count
-        *More logging
-    */
-
     
     initialize(opt) {
         if (!super.initialize(opt)) return false;
@@ -173,6 +172,7 @@ class ModVRChat extends Module {
         this._worlds = this.loadData(this.name.toLowerCase() + ".worlds.json", {}, {quiet: true});
 
         this.resetAllLocations();
+        this.resetAllAlerts();
 
 
         //# Initialize VRChat
@@ -378,7 +378,7 @@ class ModVRChat extends Module {
                     }
                 }
 
-                this.scanEveryMessage(this.worldchan, (message) => {
+                this.denv.scanEveryMessage(this.worldchan, (message) => {
                     if (!index[message.id]) {
                         this._dqueue.push(function() {
                             message.delete({reason: "World not found in cache."});
@@ -392,7 +392,7 @@ class ModVRChat extends Module {
 
                 //Prefetch, index and fix favorites
 
-                this.scanEveryMessage(this.pinnedchan, (message) => {
+                this.denv.scanEveryMessage(this.pinnedchan, (message) => {
                     let worldid = this.extractWorldFromMessage(message);
                     if (!worldid) return;
                     this._pins[worldid] = message;
@@ -553,6 +553,8 @@ class ModVRChat extends Module {
                     world = await this.getWorld(worldid);
                     if (world && world.retrieved != retrieved) refreshed += 1;
                 }
+
+                if (!world) continue;
 
                 //Bake world embed
                 if (hasWorldchan) {
@@ -897,6 +899,57 @@ class ModVRChat extends Module {
 
         }
 
+
+        this.mod('Commands').registerCommand(this, 'vrcalert', {
+            description: "Receive a DM alert when a certain amount of known users are online.",
+            details: [
+                "When at least PEOPLE users are online (minimum: " + this.param("alertmin") +") I will DM you.",
+                "Optionally, those users must be within MINUTES from your timezone (use 0 to require your exact timezone).",
+                "After an alert is sent, no more alerts will be sent for " + Math.floor(this.param("alertcooldown") / 60) + "h" + (this.param("alertcooldown") % 60 ? (this.param("alertcooldown") % 60) + "m" : "") + ".",
+                "To disable the alert use `vrcalert -` ."
+            ],
+            args: ["people", "minutes"],
+            minArgs: 1
+        },  (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!this.testEnv(env)) return true;
+
+            let person = this.getPerson(userid);
+            if (!person) {
+                ep.reply("This user doesn't have a known VRChat account.");
+                return true;
+            }
+
+            let minutes = null;
+            if (this._modTime && args.minutes != null) minutes = Math.max(0, parseInt(args.minutes));
+
+            if (args.people == "-" || args.people == "cancel" || args.people == "disable" || args.people == "off") {
+                this.updateAlertParameters(userid, false);
+                ep.reply("Alert unset.");
+                return true;
+            }
+
+            let people = parseInt(args.people);
+            if (people < this.param("alertmin")) {
+                ep.reply("You can only set an alert for " + this.param("alertmin") + " or more online people.");
+                return true;
+            }
+
+            let m = null;
+            if (this._modTime) {
+                m = this._modTime.getCurrentMomentByUserid(env, userid);
+                if (minutes != null && !m) {
+                    ep.reply("You don't have a timezone! Use `tz` to set your timezone or set an alert without a timezone interval.");
+                    return true;
+                }
+            }
+
+            this.updateAlertParameters(userid, people, minutes);
+            ep.reply("Alert set for " + people + " or more people " + (m && minutes != null ? "within " + minutes + " minute" + (minutes != 1 ? "s" : "") + " of UTC" + m.format("Z") : "") + ".");
+
+            return true;
+        });
+
       
         return true;
     };
@@ -931,6 +984,9 @@ class ModVRChat extends Module {
             syncnick: true,                 //Whether to automatically change user's nickname to VRChat username
             latestpic: null,                //Latest synced avatar picture
             stickypic: false,               //Whether NOT to sync avatar pictures (keep current)
+            alert: null,                    //{people, tzrange} DM alerts
+            latestalert: null,              //Timestamp of latest alert
+            alertable: true,                //Whether user can be alerted at all (used to prevent multiple per session)
             lateststatus: null,             //Latest VRChat status (used to detect changes)
             latesttrust: null,              //Latest VRChat trust level (used to detect changes)
             latestlocation: null,           //Latest VRChat location (used for links)
@@ -1019,9 +1075,13 @@ class ModVRChat extends Module {
             if (!STATUS_ONLINE.includes(prev) && STATUS_ONLINE.includes(status)) {
                 this._people[userid].latestflip = moment().unix();
                 if (this._people[userid].pendingflip) {
+                    //Cancel offline flip
                     this._people[userid].pendingflip = false;
                 } else {
+                    //Announce to channel stack
                     this.annOnline(userid);
+                    //DM announcements
+                    this._dqueue.push(this.deliverDMAlerts());
                 }
             }
             if (STATUS_ONLINE.includes(prev) && !STATUS_ONLINE.includes(status)) {
@@ -1050,6 +1110,7 @@ class ModVRChat extends Module {
         this.annOffline(userid);
         this._people[userid].pendingflip = false;
         this._people.save();
+        this.resetDMAlerts();
     }
 
     resetAllLocations() {
@@ -1066,6 +1127,44 @@ class ModVRChat extends Module {
         this._people[userid].latestlocation = location;
         this._people.save();
         return true;
+    }
+
+    updateAlertParameters(userid, people, tzrange) {
+        if (!this._people[userid] || !people) return false;
+        if (tzrange == null) tzrange = null; //normalize
+        this._people[userid].alert = (people !== false ? {people: people, tzrange: tzrange}: null);
+        this._people.save();
+        return true;
+    }
+
+    canAlert(userid, now) {
+        if (!this._people[userid] || !this._people[userid].alertable) return false;
+        if (!this._people[userid].latestalert) return true;
+        now = now || moment().unix();
+        return this._people[userid].latestalert - now >= this.param("alertcooldown") * 60;
+    }
+
+    setAlerted(userid) {
+        if (!this._people[userid]) return false;
+        this._people[userid].latestalert = moment().unix();
+        this._people[userid].alertable = false;
+        this._people.save();
+        return true;
+    }
+
+    resetAlerted(userid) {
+        if (!this._people[userid]) return false;
+        this._people[userid].alertable = true;
+        this._people.save();
+        return true;
+    }
+
+    resetAllAlerts() {
+        for (let userid in this._people) {
+            this._people[userid].alertable = true;
+            this._people[userid].latestalert = null;
+        }
+        this._people.save();
     }
 
     unregisterPerson(userid) {
@@ -1555,9 +1654,12 @@ class ModVRChat extends Module {
             if (idx > -1) this._lt_quickpeek.stack.splice(idx, 1);
         }
 
-        this._dqueue.push(function () {
-            this.annStateStack(userid, this._lt_online, true);
-            if (idx !== undefined) this.annStateStack(null, this._lt_quickpeek);
+        this._dqueue.push(async function () {
+            let prev;
+            if (idx !== undefined) {
+                prev = await this.annStateStack(null, this._lt_quickpeek, true);
+            }
+            this.annStateStack(userid, this._lt_online, prev, true);
         }.bind(this));
         return true;
     }
@@ -1576,9 +1678,12 @@ class ModVRChat extends Module {
             if (idx > -1) this._lt_reconnect.stack.splice(idx, 1);
         }
 
-        this._dqueue.push(function () {
-            this.annStateStack(userid, this._lt_offline);
-            if (idx !== undefined) this.annStateStack(null, this._lt_reconnect);
+        this._dqueue.push(async function () {
+            let prev;
+            if (idx !== undefined) {
+                prev = await this.annStateStack(null, this._lt_reconnect, true);
+            }
+            this.annStateStack(userid, this._lt_offline, prev);
         }.bind(this));
         return true;
     }
@@ -1592,9 +1697,9 @@ class ModVRChat extends Module {
         if (idx < 0) return false;
         this._lt_offline.stack.splice(idx, 1);
         
-        this._dqueue.push(function () {
-            this.annStateStack(userid, this._lt_reconnect);
-            this.annStateStack(null, this._lt_offline);
+        this._dqueue.push(async function () {
+            let prev = await this.annStateStack(null, this._lt_offline, true);
+            this.annStateStack(userid, this._lt_reconnect, prev);
         }.bind(this));
 
         return true;
@@ -1609,15 +1714,17 @@ class ModVRChat extends Module {
         if (idx < 0) return false;
         this._lt_online.stack.splice(idx, 1);
 
-        this._dqueue.push(function () {
-            this.annStateStack(userid, this._lt_quickpeek);
-            this.annStateStack(null, this._lt_online);
+        this._dqueue.push(async function () {
+            let prev = await this.annStateStack(null, this._lt_online, true);
+            this.annStateStack(userid, this._lt_quickpeek, prev);
         }.bind(this));
 
         return true;
     }
 
-    async annStateStack(userid, state, reemit) {
+    async annStateStack(userid, state, prevmessage, reemit) {
+        //If userid is null, prevmessage can be true to retrieve stale message instead of deleting it (for reuse)
+        //prevmessage will be used only instead of (re)emitting, otherwise it's deleted
         let now = moment().unix();
 
         //Create new stack (detach) if last stack is too old
@@ -1648,10 +1755,15 @@ class ModVRChat extends Module {
         }
         
         //Create, update or delete message.
+        let ret;
         if (state.msg) {
             let message = await this.announcechan.messages.fetch(state.msg);
             if (!stack.length) {
-                message.delete({reason: "Stack emptied."});
+                if (prevmessage === true) {
+                    ret = message;
+                } else {
+                    message.delete({reason: "Stack emptied."});
+                }
                 state.msg = null;
             } else if (reemit) {
                 message.delete({reason: "Re-emit announcement."});
@@ -1661,12 +1773,112 @@ class ModVRChat extends Module {
             }
         }
         if (!state.msg && stack.length) {
-            let message = await this.announcechan.send(txt);
+            let message;
+            if (prevmessage) {
+                message = prevmessage;
+                message.edit(txt);
+            } else {
+                message = await this.announcechan.send(txt);
+            }
             state.msg = message.id;
+        } else if (prevmessage && prevmessage !== true) {
+            prevmessage.delete({reason: "Stack emptied (delayed)."});
         }
 
         state.ts = now;
-        return true;
+        return ret;
+    }
+
+
+    mapOnlinePeople(timezones) {
+        let onlinemap = {};
+        for (let userid in this._people) {
+            if (STATUS_ONLINE.includes(this._people[userid].lateststatus)) {
+                onlinemap[userid] = (timezones && this._modTime ? this._modTime.getCurrentUtcOffsetByUserid(this.denv, userid) : true);
+            }
+        }
+        return onlinemap;
+    }
+
+    deliverDMAlert(userid, count, isTimezone) {
+        this._dqueue.push(function() {
+            this.denv.msg(userid, "**" + count + "** friends of mine are currently online" + (isTimezone ? " near your timezone." : ""));
+        }.bind(this));
+    }
+
+    deliverDMAlerts() {
+
+        //Create map of online people
+
+        let onlinemap = this.mapOnlinePeople(true);
+        let onlinecount = Object.keys(onlinemap).length;
+
+        //Alert whoever
+
+        let now = moment().unix();
+
+        for (let userid in this._people) {
+            let person = this.getPerson(userid);
+            if (onlinemap[userid] || !person.alert) continue;
+            if (!this.canAlert(userid, now)) continue;
+            
+            //Simple alert (everyone)
+            if (person.alert.tzrange == null && onlinecount >= person.alert.people) {
+                this.deliverDMAlert(userid, onlinecount);
+                this.setAlerted(userid);
+                continue;
+            }
+            
+            //Timezone-based
+            if (person.alert.tzrange != null) {
+                let offset = this._modTime.getCurrentUtcOffsetByUserid(this.denv, userid);
+                let restrictedcount = 0;
+                for (let userid in onlinemap) {
+                    if (onlinemap[userid] && Math.abs(offset - onlinemap[userid]) <= person.alert.tzrange) {
+                        restrictedcount += 1;
+                    }
+                }
+                if (restrictedcount >= person.alert.people) {
+                    this.deliverDMAlert(userid, restrictedcount, true);
+                    this.setAlerted(userid);
+                }
+            }
+        }
+
+    }
+
+    resetDMAlerts() {
+
+        //Create map of online people
+
+        let onlinemap = this.mapOnlinePeople(true);
+        let onlinecount = Object.keys(onlinemap).length;
+
+        //Reset alerts as soon as previous alert conditions are no longer met
+
+        for (let userid in this._people) {
+            let person = this.getPerson(userid);
+            if (onlinemap[userid] || !person.alert) continue;
+            
+            if (person.alert.tzrange == null && onlinecount < person.alert.people) {
+                this.resetAlerted(userid);
+                continue;
+            }
+
+            if (person.alert.tzrange != null) {
+                let offset = this._modTime.getCurrentUtcOffsetByUserid(this.denv, userid);
+                let restrictedcount = 0;
+                for (let userid in onlinemap) {
+                    if (onlinemap[userid] && Math.abs(offset - onlinemap[userid]) <= person.alert.tzrange) {
+                        restrictedcount += 1;
+                    }
+                }
+                if (restrictedcount < person.alert.people) {
+                    this.resetAlerted(userid);
+                }
+            }
+        }
+
     }
 
 
@@ -1831,12 +2043,15 @@ class ModVRChat extends Module {
             } else {
                 //Unexpected error
                 this.log("error", JSON.stringify(e));
+            }
+            throw e;
+        } else {
+            if (e.statusCode == 502) {
+                this.log("warn", "Oh no, 502 bad gateway...");
+            }
+            if (e.statusCode != 401) {
                 throw e;
             }
-        } else if (e.statusCode == 502) {
-            this.log("warn", "Oh no, 502 bad gateway...");
-        } else if (e.statusCode != 401) {
-            throw e;
         }
     }
 
@@ -1959,31 +2174,6 @@ class ModVRChat extends Module {
             if (!instparts[0].match(/^[0-9]+$/)) return false;
         }
         return true;
-    }
-
-    scanEveryMessage(channel, onMessage, onEnd) {
-        if (!channel || !onMessage) return;
-        let scanning = null;
-        let scanner = () => {
-            channel.messages.fetch({
-                limit: 100,
-                before: scanning
-            }).then((messages) => {
-                let endNow = false;
-                let messagesarr = messages.array();
-                if (messagesarr.length < 100) endNow = true;
-                for (let message of messagesarr) {
-                    onMessage(message);
-                }
-                if (!endNow) {
-                    scanning = messagesarr[messagesarr.length - 1].id;
-                    setTimeout(scanner, 250);
-                } else if (onEnd) {
-                    onEnd(channel);
-                }
-            });
-        };
-        scanner();
     }
 
     processBooleanArg(arg) {
