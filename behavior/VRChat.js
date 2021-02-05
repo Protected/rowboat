@@ -32,6 +32,7 @@ class ModVRChat extends Module {
     
     get optionalParams() { return [
         "updatefreq",           //How often to request user states and perform updates (s)
+        "usewebsocket",         //Whether to connect to the VRChat websocket to receive updates
         "statuschan",           //ID of text channel for user status messages
         "knownrole",            //ID of a role that will be automatically assigned to known people and unassigned from unknown people
         "offlinetolerance",     //How long to delay offline announcements just to be sure they're real (s)
@@ -108,6 +109,7 @@ class ModVRChat extends Module {
         super('VRChat', name);
      
         this._params["updatefreq"] = 120;
+        this._params["usewebsocket"] = true;
         this._params["offlinetolerance"] = 119;
 
         this._params["worldstale"] = 3600;
@@ -143,7 +145,8 @@ class ModVRChat extends Module {
         this._auth = null;  //The auth cookie
         this._me = null;  //The bot user data
         this._ws = null;  //The websocket
-        this._wstimeout = null;  //The websocket's timeout timer
+        this._wstimeout = null;  //The websocket's ping timer
+        this._wsping = 0;  //Pending pings
 
         this._pins = {};  //Map of pinned worlds (transient) {WORLDID: Message_in_pinnedchan, ...}
 
@@ -181,14 +184,7 @@ class ModVRChat extends Module {
         this.resetAllAlerts();
 
 
-        //# Initialize VRChat
-
-        //Initialize session
-
-        this.vrcConfig();
-            //.then(() => this.vrcInitialize());
-
-        //Log out on shut down
+        //# Cleanup handler
 
         opt.pushCleanupHandler((next) => {
             if (this._auth) {
@@ -210,7 +206,7 @@ class ModVRChat extends Module {
         });
 
         
-        //# Register callbacks
+        //# Register Discord callbacks
 
         let guildMemberRemoveHandler = async (member) => {
 
@@ -425,6 +421,41 @@ class ModVRChat extends Module {
             this.denv.client.on("messageReactionAdd", messageReactionAddHandler);
         });
 
+
+        //# Set up VRChat session
+
+        let friendStateChangeHandler = (vrcuserid, state, userdata) => {
+            //TODO
+        }
+
+        let friendLocationChangeHandler = (vrcuserid, userdata, partialworld, instance, location) => {
+            //TODO
+        }
+
+        let friendAddHandler = (vrcuserid, userdata) => {
+            //TODO
+        }
+
+        let friendDeleteHandler = (vrcuserid) => {
+            //TODO
+        }
+
+        let friendUpdateHandler = (vrcuserid, userdata) => {
+            //TODO
+        }
+
+        let startup = this.vrcConfig();
+        if (this.param("usewebsocket")) {
+            startup.then(() => this.vrcInitialize())
+                .then((handlers) => {
+                    handlers.friendStateChange = friendStateChangeHandler;
+                    handlers.friendLocationChange = friendLocationChangeHandler;
+                    handlers.friendAdd = friendAddHandler;
+                    handlers.friendDelete = friendDeleteHandler;
+                    handlers.friendUpdate = friendUpdateHandler;
+                });
+        }
+            
 
         //# Start automation timers
 
@@ -1989,14 +2020,15 @@ class ModVRChat extends Module {
         return this.vrcget("users/" + get);
     }
 
-    async vrcFriendList(online) {
+    async vrcFriendList(state) {
+        //Warning: Does not include "active" state friends, for some reason
         let list = [];
-        if (online !== false) {
+        if (!state || state == "online") {
             let onlist = await this.vrcget("auth/user/friends/?offline=false");
             if (!onlist) throw "Failure to retrieve friend list.";
             list = list.concat(onlist);
         }
-        if (online !== true) {
+        if (!state || state == "offline") {
             let offlist = await this.vrcget("auth/user/friends/?offline=true");
             if (!offlist) throw "Failure to retrieve friend list.";
             list = list.concat(offlist);
@@ -2034,38 +2066,78 @@ class ModVRChat extends Module {
         });
     }
 
-    async vrcInitialize() {
-        await this.vrcMe();
 
-        let heartbeat = () => {
-            if (this._wstimeout) clearTimeout(this._wstimeout);
-            this._wstimeout = setTimeout(() => {
-                this._ws.terminate();
-            }, 30000);
+    async vrcInitialize() {
+        await this.vrcMe();  //Login
+
+        let handlers = {
+            friendStateChange: null,
+            friendLocationChange: null,
+            friendAdd: null,
+            friendDelete: null,
+            friendUpdate: null
+        };
+
+        let buildWebsocket = () => {
+            //Initialize websocket
+            return new Promise((resolve, reject) => {
+                let ws = new WebSocket(WEBSOCKET + "?authToken=" + this._auth);
+                
+                let connectionError = (err) => reject(err);
+
+                ws.on('open', () => {
+                    this._ws = ws;
+                    this.log("Established connection to the websocket.");
+                    resolve(handlers);
+                    ws.removeListener('error', connectionError);
+                });
+
+                let resetPing = () => this._wsping = [0, moment().unix()];
+
+                ws.on('ping', (data) => { resetPing(); ws.pong(data); });
+                
+                ws.on('pong', (data) => { resetPing(); });
+
+                ws.on('error', connectionError);
+
+                ws.on('message', (data) => {
+                    resetPing();
+                    let message = JSON.parse(data);
+                    let content = JSON.parse(data.content);
+                    if (handlers.friendStateChange && ["friend-active", "friend-online", "friend-offline"].includes(message.type)) {
+                        handlers.friendStateChange(content.userId, message.type.explode("-")[1], content.user);
+                    }
+                    if (handlers.friendLocationChange && message.type == "friend-location") {
+                        handlers.friendLocationChange(content.userId, content.user, content.world, content.instance, content.location);
+                    }
+                    if (handlers.friendAdd && message.type == "friend-add") {
+                        handlers.friendAdd(content.userId, content.user);
+                    }
+                    if (handlers.friendDelete && message.type == "friend-delete") {
+                        handlers.friendDelete(content.userId);
+                    }
+                    if (handlers.friendUpdate && message.type == "friend-update") {
+                        handlers.friendUpdate(content.userId, content.user);
+                    }
+                });
+
+                resetPing();
+                this._wstimeout = setInterval(() => {
+                    if (moment().unix() - this._wsping[1] < 30) return;
+                    if (this._wsping[0] > 2) {
+                        this._ws.terminate();
+                        clearInterval(this._wstimeout);
+                        buildWebsocket();
+                    } else {
+                        this._ws.ping(this._wsping[0]);
+                        this._wsping[0] += 1;
+                    }
+                }, 30000);
+
+            });
         }
 
-        //Initialize websocket
-        return new Promise((resolve, reject) => {
-            let ws = new WebSocket(WEBSOCKET + "?authToken=" + this._auth);
-            
-            let connectionError = (err) => reject(err);
-
-            ws.on('open', () => {
-                this._ws = ws;
-                heartbeat();
-                resolve(ws);
-                ws.removeListener('error', connectionError);
-            });
-
-            ws.on('ping', heartbeat);
-
-            ws.on('error', connectionError);
-
-            ws.on('message', (data) => {
-                console.log("Data:", data);
-            });
-
-        });
+        return buildWebsocket();
     }
 
 
@@ -2073,7 +2145,7 @@ class ModVRChat extends Module {
 
     setCookies(result) {
         for (let cookie of result.cookies) {
-            let parts = cookie.split("=");
+            let parts = cookie.split(";")[0].split("=");
             if (parts[0] == "auth") {
                 this._auth = parts[1];
             }

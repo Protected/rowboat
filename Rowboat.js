@@ -113,9 +113,12 @@ if (!loadMasterConfig()) return;
 
 //Process event handlers
 
-process.on('unhandledRejection', (reason, promise) => {
-    logger.warn('Unhandled Rejection at: ' + JSON.stringify(promise) + ' Reason: ' + JSON.stringify(reason));
-});
+if (!config.dontCatchRejections) {
+    //Note: As of v14, node.js does not seem to populate the callback arguments properly. Therefore, not recommended if debugging.
+    process.on('unhandledRejection', (reason, promise) => {
+        logger.warn('Unhandled Rejection at: ' + JSON.stringify(promise) + ' Reason: ' + JSON.stringify(reason));
+    });
+}
 
 function nextCleanup() {
     let onecleanup = cleaningUp.shift();
