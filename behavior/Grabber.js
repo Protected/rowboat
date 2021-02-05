@@ -58,6 +58,7 @@ class ModGrabber extends Module {
         'useYoutubedl',         //Download and use youtube-dl features. Currently: Chapters
         'normalization',        //Normalize downloaded files. One of: false, true/'ebuR128', 'rms'
         'normalTarget',         //Normalization target in LUFS or dB depending on the algorithm chosen above
+        'normalCustomTweak'     //Allowable customization interval (added to target) for normalization
     ]; }
 
     get requiredEnvironments() { return [
@@ -95,6 +96,7 @@ class ModGrabber extends Module {
         this._params['useYoutubedl'] = false;
         this._params['normalization'] = 'rms';
         this._params['normalTarget'] = -20;
+        this._params['normalCustomTweak'] = 4;
         
         this._preparing = 0;  //Used for generating temporary filenames
         
@@ -1024,6 +1026,10 @@ class ModGrabber extends Module {
             if (this.param('allowPcm') && getformat[2] == 'pcm') format = 'pcm';
         }
         if (AUDIO_FORMATS.indexOf(format) < 0) format = 'mp3';
+
+        let tweak = 0;
+        let gettweak = message.match(/\{tweak(=|:) ?(-?[0-9]{1,2})\}/iu);
+        if (gettweak) tweak = parseInt(gettweak[2]);
         
         return {
             warnauthor: warnauthor,
@@ -1036,6 +1042,7 @@ class ModGrabber extends Module {
             replace: replace,
             interval: interval,
             format: format,
+            tweak: tweak,
             all: all,
             fill: fill
         };
@@ -1059,7 +1066,8 @@ class ModGrabber extends Module {
                     track: null,
                     replace: messageObj.hash,
                     interval: messageObj.sourcePartial,
-                    format: messageObj.format
+                    format: messageObj.format,
+                    tweak: messageObj.tweak || 0
                 },
                 interval: messageObj.sourcePartial,
                 reply: null
@@ -1831,6 +1839,11 @@ class ModGrabber extends Module {
         
         entry.hash = hash;
         entry.format = mp.info.format;
+
+        let tweak = mp.info.tweak || 0;
+        tweak = Math.min(tweak, this.param("normalCustomTweak"));
+        tweak = Math.max(tweak, this.param("normalCustomTweak") * -1);
+        entry.tweak = tweak;
         
         await promisify(fs.rename)(temppath, realpath);
         
@@ -2137,7 +2150,7 @@ class ModGrabber extends Module {
             loudness: {
                 normalization: mode,
                 target: {
-                    input_i: this.param('normalTarget'),
+                    input_i: this.param('normalTarget') + song.tweak,
                     input_tp: 0
                 }
             }
