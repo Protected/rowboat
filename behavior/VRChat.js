@@ -31,16 +31,19 @@ class ModVRChat extends Module {
     ]; }
     
     get optionalParams() { return [
-        "updatefreq",           //How often to request user states and perform updates (s)
-        "usewebsocket",         //Whether to connect to the VRChat websocket to receive updates
-        "statuschan",           //ID of text channel for user status messages
+        "updatefreq",           //How often to run the main update function (s)
+        "usewebsocket",         //Whether to connect to the VRChat websocket to receive faster updates
+        "friendliststale",      //How long before the entire friend list should be refreshed by the update function (s)
+        "bakestale",            //How long a baked status embed remains fresh and shouldn't be updated (s)
+        "statuschan",           //ID of text channel for baked person status embeds
         "knownrole",            //ID of a role that will be automatically assigned to known people and unassigned from unknown people
-        "offlinetolerance",     //How long to delay offline announcements just to be sure they're real (s)
+        "offlinetolerance",     //How long to delay offline announcements to improve odds they're real and not slow world loading (s)
         
+        "worldfreq",            //How often to run the world update function (s) [Note: Worlds can be updated outside this function.]
         "worldchan",            //ID of text channel for worlds (warning: all contents will be deleted)
         "worldstale",           //How long after retrieval until an entry in the world cache goes stale (s)
         "worldexpiration",      //How long after emptying until an entry in the world cache is removed (h)
-        "staleupdatesperitr",   //How many stale worlds are updated per timer iteration
+        "staleupdatesperitr",   //How many stale worlds are updated per every time the update function runs
 
         "coloroffline",         //Color for "offline"/"unused" embeds
         "coloronline",          //Color for "online"/"used" embeds
@@ -53,8 +56,8 @@ class ModVRChat extends Module {
         "anncollapsetrans",     //Maximum interval for collapsing a user's state transition (s)
         "annmaxstack",          //Maximum amount of names to list in a collapsed announcement
 
-        "expiration",           //How long to stay unfriended before unassigning (h)
-        "ddelay",               //Delay between queued actions (ms)
+        "expiration",           //How long to stay unfriended before unassigning a person (h)
+        "ddelay",               //Delay between actions in the delayed action queue (used to prevent rate limiting) (ms)
         
         "pinnedemoji",          //Emoji used for pinning worlds
         "pinokayemoji",         //Emoji used for okaying pins
@@ -64,7 +67,7 @@ class ModVRChat extends Module {
         "friendsplusemoji",     //Emoji that represents a friends+ instance ("hidden")
         "friendsemoji",         //Emoji that represents a friends instance
 
-        "alertmin",             //Minimum amount of online people to alert at
+        "alertmin",             //Minimum amount of online people to vrcalert at
         "alertcooldown",        //How long until a user can be alerted again (mins)
     ]; }
 
@@ -108,10 +111,23 @@ class ModVRChat extends Module {
     constructor(name) {
         super('VRChat', name);
      
+        /*Loop defaults*/
         this._params["updatefreq"] = 120;
+        this._params["usewebsocket"] = false;
+        this._params["friendliststale"] = 119;
+        this._params["bakestale"] = 59;
+        /**/
+
+        /*Websocket defaults*
+        this._params["updatefreq"] = 300;
         this._params["usewebsocket"] = true;
+        this._params["friendliststale"] = 3600;
+        this._params["bakestale"] = 29;
+        /**/
+
         this._params["offlinetolerance"] = 119;
 
+        this._params["worldfreq"] = 300;
         this._params["worldstale"] = 3600;
         this._params["worldexpiration"] = 25;
         this._params["staleupdatesperitr"] = 10;
@@ -141,6 +157,9 @@ class ModVRChat extends Module {
         this._people = null;  //{USERID: {see registerPerson}, ...}
         this._worlds = null;  //The worlds cache {WORLDID: {..., see getWorld}, ...}
 
+        this._friends = null;  //The transient status cache {updated, VRCUSERID: {...}, ...}
+        this._frupdated = null;
+
         this._config = null;  //The full object returned by the "config" API. This API must be called before any other request.
         this._auth = null;  //The auth cookie
         this._me = null;  //The bot user data
@@ -158,12 +177,11 @@ class ModVRChat extends Module {
         this._ready = false;  //Whether we're done caching existing status messages and can start baking new ones.
         this._modTime = null;  //A reference to the Time module, if available.
 
-        this._timer = null;  //Action timer
+        this._timer = null;  //Main timer
+        this._wtimer = null;  //World timer
 
         this._dqueue = [];  //Discord update queue
         this._dtimer = null;  //Discord update queue timer
-
-        this._mtimer = null;  //Maintenance timer
     }
     
     
@@ -180,8 +198,7 @@ class ModVRChat extends Module {
 
         this._worlds = this.loadData(this.name.toLowerCase() + ".worlds.json", {}, {quiet: true});
 
-        this.resetAllLocations();
-        this.resetAllAlerts();
+        this.resetAllPersons();
 
 
         //# Cleanup handler
@@ -444,17 +461,23 @@ class ModVRChat extends Module {
             //TODO
         }
 
+        //Initialize VRChat session
+
         let startup = this.vrcConfig();
+
         if (this.param("usewebsocket")) {
             startup.then(() => this.vrcInitialize())
-                .then((handlers) => {
+                .then(handlers => {
                     handlers.friendStateChange = friendStateChangeHandler;
                     handlers.friendLocationChange = friendLocationChangeHandler;
                     handlers.friendAdd = friendAddHandler;
                     handlers.friendDelete = friendDeleteHandler;
                     handlers.friendUpdate = friendUpdateHandler;
-                });
+                })
         }
+
+        startup.then(() => this.refreshFriends(true))
+            .then(() => this.addMissingPeopleIndividually());
             
 
         //# Start automation timers
@@ -473,29 +496,42 @@ class ModVRChat extends Module {
 
             let now = moment().unix();
 
-            //Index VRChat friends
-            let friends = {}, friendlist;
-            try {
-                friendlist = await this.vrcFriendList();
-                for (let friend of friendlist) {
-                    friends[friend.id] = friend;
-                }
-            } catch (e) {
-                this.log("error", "Refreshing friend list: " + e + " (Update will not run.)");
+            //Refresh VRChat friends
+
+            let reallymissing = [];
+            if (this.areFriendsStale(now)) {
+                let missing = await this.refreshFriends();
+                reallymissing = await this.addMissingPeopleIndividually(missing);
+            }
+
+            if (!this._frupdated) {
+                this.log("error", "Friends list hasn't been initialized: Update will not run.");
                 return;
             }
 
-            //Do things to people
+            //Unconfirm removed friends
+
+            for (let userid of reallymissing) {
+                let person = this.getPerson(userid);
+                if (!person.confirmed) continue;
+                this.unconfirmPerson(userid);
+                this.unassignKnownRole(userid, "User is no longer confirmed.");
+                this.announce("Uh oh... " + this.denv.idToDisplayName(userid) + " is no longer my friend.");
+            }
+
+            //Do things to friends
 
             let hasStatuschan = !!this.statuschan;
+            let affectedworlds = {};
 
             for (let userid in this._people) {
-                
                 let person = this.getPerson(userid);
 
-                //Change local person confirmation state (keep on top)
+                /* === Websocket fallbacks === */
+
+                //Confirm or expire unconfirmed user (keep on top)
                 if (!person.confirmed) {
-                    if (friends[person.vrc]) {
+                    if (this._friends[person.vrc]) {
                         this.confirmPerson(userid);
                         this.assignKnownRole(userid, "User is now confirmed.");
                         this.announce("I see you, " + this.denv.idToDisplayName(userid) + "! You're my VRChat friend.");
@@ -505,100 +541,73 @@ class ModVRChat extends Module {
                         }
                         continue;
                     }
-                } else try {
-                    let makesure = await this.vrcUser(person.vrc);
-                    if (makesure) {
-                        if (makesure.state == "active") {
-                            makesure.status = "website";
-                        } else if (makesure.state == "offline") {
-                            makesure.status = "offline";
-                        }
-                        if (makesure.friendKey) {
-                            friends[person.vrc] = makesure;
-                        }
-                    }
-                    if (!friends[person.vrc]) {
-                        this.unconfirmPerson(userid);
-                        this.unassignKnownRole(userid, "User is no longer confirmed.");
-                        this.announce("Uh oh... " + this.denv.idToDisplayName(userid) + " is no longer my friend.");
-                        continue;
-                    }
-                } catch (e) {
-                    this.log("error", "Retrieving unseen user record: " + e + " (Will not update user: " + userid + " - " + person.vrc + ")");
-                    continue;
-                }
-
-                this.setPersonName(userid, friends[person.vrc].displayName);
-
-                //Update stored avatar picture location
-                if (!person.stickypic) {
-                    this.updatePic(userid, friends[person.vrc].currentAvatarImageUrl);
                 }
 
                 //Update latest location (used in world embeds)
-                let location = friends[person.vrc].location;
+                let location = this._friends[person.vrc].location;
                 if (person.latestlocation != location) {
                     let oldworldid = this.worldFromLocation(person.latestlocation);
                     if (oldworldid) {
                         this.removeWorldMember(oldworldid, userid);
+                        this.affectedworlds[oldworldid] = true;
                     }
                     this.updateLocation(userid, location);
                     let worldid = this.worldFromLocation(location);
                     if (worldid) {
                         this.addWorldMember(worldid, userid);
+                        this.affectedworlds[worldid] = true;
                     }
+                }
+
+                //Update saved status and announce changes
+                this.updateStatus(userid, this._friends[person.vrc].status);
+                if (person.pendingflip && now - person.latestflip >= this.param("offlinetolerance")) {
+                    this.finishStatusUpdate(userid);
+                }
+
+                /* === Other sync === */
+
+                //Update stored vrchat name
+                this.setPersonName(userid, this._friends[person.vrc].displayName);
+
+                //Update stored avatar picture location
+                if (!person.stickypic) {
+                    this.updatePic(userid, this._friends[person.vrc].currentAvatarImageUrl);
                 }
 
                 //Synchronize nickname with vrchat username
                 if (person.syncnick) {
                     let member = this.denv.server.members.cache.get(userid);
-                    if (member && member.displayName.toLowerCase() != friends[person.vrc].displayName.toLowerCase()) {
-                        member.setNickname(friends[person.vrc].displayName, "Synchronizing nickname with VRChat.")
-                            .catch(e => this.log("error", "Error setting nickname of " + member.displayName + " to " + friends[person.vrc].displayName + ": " + e));
+                    if (member && member.displayName.toLowerCase() != this._friends[person.vrc].displayName.toLowerCase()) {
+                        member.setNickname(this._friends[person.vrc].displayName, "Synchronizing nickname with VRChat.")
+                            .catch(e => this.log("error", "Error setting nickname of " + member.displayName + " to " + this._friends[person.vrc].displayName + ": " + e));
                     }
                 }
 
-                this.updateTrust(userid, this.highestTrustLevel(friends[person.vrc].tags));
-
-                //Update saved status and announce changes
-                this.updateStatus(userid, friends[person.vrc].status);
-                if (person.pendingflip && now - person.latestflip >= this.param("offlinetolerance")) {
-                    this.finishStatusUpdate(userid);
-                }
+                //Update stored trust and announce if pertinent
+                this.updateTrust(userid, this.highestTrustLevel(this._friends[person.vrc].tags));
 
                 //Bake status embed
-                if (hasStatuschan) {
+                if (hasStatuschan && this.isBakeStale(userid, now)) {
                     this._dqueue.push(function() {
-                        this.bakeStatus(userid, friends[person.vrc], now);
+                        this.bakeStatus(userid, this._friends[person.vrc], now);
                     }.bind(this));
                 }
 
             }
 
-            //Do things to worlds
+            //Updated affected worlds
 
             let hasWorldchan = !!this.worldchan;
 
-            let worldidsbyretrieval = Object.keys(this._worlds).sort((a, b) => this.getCachedWorld(a).retrieved < this.getCachedWorld(b).retrieved ? -1 : 1);
-            let refreshed = 0;
-
-            for (let worldid of worldidsbyretrieval) {
-
-                let world = this.getCachedWorld(worldid);
-
-                if (refreshed < this.param("staleupdatesperitr")) {
-                    let retrieved = world.retrieved;
-                    world = await this.getWorld(worldid);
-                    if (world && world.retrieved != retrieved) refreshed += 1;
-                }
-
-                if (!world) continue;
+            for (let worldid in affectedworlds) {
 
                 //Bake world embed
                 if (hasWorldchan) {
                     this._dqueue.push(function() {
                         this.bakeWorld(worldid, now)
                             .then(worldmsg => {
+                                //Always update user links - world.members changed
                                 for (let userid in world.members) {
                                     this._dqueue.push(function() {
                                         this.setWorldLink(userid, world.name, worldmsg);
@@ -611,7 +620,7 @@ class ModVRChat extends Module {
             }
 
             //Update previous world member counts.
-            //We add this to the queue so it's only executed after all worlds have been baked.
+            //We only add this to the queue so it's executed after all affected worlds have been baked (bakeWorld uses this to decide whether to reemit).
 
             this._dqueue.push(function() {
                 for (let worldid in this._worlds) {
@@ -625,7 +634,7 @@ class ModVRChat extends Module {
         if (this.param("updatefreq") >= 40) setTimeout(maintimer, 20000);  //Run faster at startup
 
 
-        this._mtimer = setInterval(function () {
+        this._wtimer = setInterval(async function () {
 
             let now = moment().unix();
 
@@ -640,7 +649,43 @@ class ModVRChat extends Module {
 
             this._worlds.save();
 
-        }.bind(this), 1800000);
+            //Update cached worlds
+
+            let hasWorldchan = !!this.worldchan;
+            let worldidsbyretrieval = Object.keys(this._worlds).sort((a, b) => this.getCachedWorld(a).retrieved < this.getCachedWorld(b).retrieved ? -1 : 1);
+            let refreshed = 0;
+
+            for (let worldid of worldidsbyretrieval) {
+                let world = this.getCachedWorld(worldid);
+                
+                let retrieved = world.retrieved;
+                world = await this.getWorld(worldid);
+
+                if (!world) continue;
+                if (world.retrieved != retrieved) refreshed += 1;
+
+                if (hasWorldchan) {
+                    this._dqueue.push(function() {
+                        let oldmsgid = world.msg;
+                        this.bakeWorld(worldid, now)
+                            .then(worldmsg => {
+                                //Update user links only if world message was reemitted
+                                if (worldmsg.id != oldmsgid) {
+                                    for (let userid in world.members) {
+                                        this._dqueue.push(function() {
+                                            this.setWorldLink(userid, world.name, worldmsg);
+                                        }.bind(this));
+                                    }
+                                }
+                            })
+                    }.bind(this));
+                }
+
+                if (refreshed >= this.param("staleupdatesperitr")) break;
+            }
+            
+
+        }.bind(this), this.param("worldfreq") * 1000);
 
 
         //# Register commands
@@ -1031,7 +1076,8 @@ class ModVRChat extends Module {
             latestflip: null,               //Timestamp of latest flip between online/offline
             pendingflip: false,             //Whether there's a pending unannounced flip
             creation: moment().unix(),      //Timestamp of the creation of the person entry (unchanging)
-            waiting: moment().unix()        //Timestamp of the start of the current waiting period for friending
+            waiting: moment().unix(),       //Timestamp of the start of the current waiting period for friending
+            baked: null                     //Timestamp of latest baking
         };
         if (keep && this._people[userid]) {
             person = this._people[userid];
@@ -1151,14 +1197,6 @@ class ModVRChat extends Module {
         this.resetDMAlerts();
     }
 
-    resetAllLocations() {
-        for (let userid in this._people) {
-            if (!this._people[userid].latestlocation) continue;
-            this._people[userid].latestlocation = null;
-        }
-        this._people.save();
-    }
-
     updateLocation(userid, location) {
         if (location && (location == "offline" || location == "private")) location = "";
         if (!this._people[userid] || location && !this.isValidLocation(location)) return false;
@@ -1179,7 +1217,7 @@ class ModVRChat extends Module {
         if (!this._people[userid] || !this._people[userid].alertable) return false;
         if (!this._people[userid].latestalert) return true;
         now = now || moment().unix();
-        return this._people[userid].latestalert - now >= this.param("alertcooldown") * 60;
+        return now - this._people[userid].latestalert >= this.param("alertcooldown") * 60;
     }
 
     setAlerted(userid) {
@@ -1197,8 +1235,23 @@ class ModVRChat extends Module {
         return true;
     }
 
-    resetAllAlerts() {
+    isBakeStale(userid, now) {
+        if (!this._people[userid]) return false;
+        if (!this._people[userid].baked) return true;
+        now = now || moment().unix();
+        return now - this._people[userid].baked >= this.param("bakestale");
+    }
+
+    setBaked(userid) {
+        if (!this._people[userid]) return false;
+        this._people[userid].baked = moment().unix();
+        this._people.save();
+        return true;
+    }
+
+    resetAllPersons() {
         for (let userid in this._people) {
+            this._people[userid].latestlocation = null;
             this._people[userid].alertable = true;
             this._people[userid].latestalert = null;
         }
@@ -1247,6 +1300,60 @@ class ModVRChat extends Module {
         } catch (e) {
             return false;
         }
+    }
+
+
+    //Transient friend list (VRChat)
+
+    async refreshFriends(reset) {
+        let notupdated = {};
+        if (reset) {
+            this._friends = {};
+        } else {
+            for (let vrcuserid of Object.keys(this._friends)){
+                notupdated[vrcuserid] = true;
+            }
+        }
+        try {
+            let friendlist = await this.vrcFriendList();
+            for (let friend of friendlist) {
+                this._friends[friend.id] = friend;
+                if (notupdated[friend.id]) delete notupdated[friend.id];
+            }
+            this._frupdated = moment().unix();
+        } catch (e) {
+            this.log("error", "Refreshing friend list: " + e);
+        }
+        return notupdated;
+    }
+
+    async addMissingPeopleIndividually(missing) {
+        let reallymissing = [];
+        for (let userid in this._people) {
+            let person = this.getPerson(userid);
+            if (!this._friends[person.vrc] || missing && missing[person.vrc]) {
+                try {
+                    let vrcdata = await this.vrcUser(person.vrc);
+                    if (vrcdata && vrcdata.friendKey) {
+                        if (vrcdata.state == "active") vrcdata.status = "website";
+                        if (vrcdata.state == "offline") vrcdata.status = "offline";
+                        this._friends[person.vrc] = vrcdata;
+                    } else {
+                        reallymissing.push(userid);
+                    }
+                } catch (e) {
+                    this.log("error", "Attempting to retrieve missing friend: " + e + " (Assigned to " + userid + ")");
+                    continue;
+                }
+            }
+        }
+        return reallymissing;
+    }
+
+    areFriendsStale(now) {
+        if (!this._friends || !this._frupdated) return true;
+        now = now || moment().unix();
+        return now - this._frupdated >= this.param("friendliststale");
     }
 
 
@@ -1463,6 +1570,7 @@ class ModVRChat extends Module {
             if (!person.latestlocation && invite) {
                 invite.remove();
             }
+            this.setBaked(userid);
         });
 
         return true;
@@ -2038,6 +2146,7 @@ class ModVRChat extends Module {
 
     async vrcFriendRequest(vrcuserid) {
         if (!this.isValidUser(vrcuserid)) throw {error: "Invalid user ID."};
+        this.log("Sending friend request to " + vrcuserid + ".");
         return this.vrcpost("user/" + vrcuserid + "/friendRequest");
     }
 
@@ -2059,10 +2168,12 @@ class ModVRChat extends Module {
     async vrcInvite(vrcuserid, worldid, instanceid, message) {
         if (!this.isValidUser(vrcuserid)) throw {error: "Invalid user ID."};
         if (!this.isValidWorld(worldid)) throw {error: "Invalid world ID."};
+        let location = worldid + (instanceid ? ":" + instanceid : "");
+        this.log("Sending invite to " + vrcuserid + " for " + location + ".");
         return this.vrcpost("user/" + vrcuserid + "/notification", {
             type: "invite",
             message: message || "Here's your invitation.",
-            details: {worldId: worldid + (instanceid ? ":" + instanceid : "")}
+            details: {worldId: location}
         });
     }
 
@@ -2103,9 +2214,9 @@ class ModVRChat extends Module {
                 ws.on('message', (data) => {
                     resetPing();
                     let message = JSON.parse(data);
-                    let content = JSON.parse(data.content);
+                    let content = JSON.parse(message.content);
                     if (handlers.friendStateChange && ["friend-active", "friend-online", "friend-offline"].includes(message.type)) {
-                        handlers.friendStateChange(content.userId, message.type.explode("-")[1], content.user);
+                        handlers.friendStateChange(content.userId, message.type.split("-")[1], content.user);
                     }
                     if (handlers.friendLocationChange && message.type == "friend-location") {
                         handlers.friendLocationChange(content.userId, content.user, content.world, content.instance, content.location);
