@@ -716,7 +716,10 @@ class ModVRChat extends Module {
                 let data = await this.vrcUser(vrchatuser);
                 if (!data) throw {};
 
-                if (!this.getPerson(targetid)) this.registerPerson(targetid, {vrc: data.id});
+                if (!this.getPerson(targetid)) {
+                    this.registerPerson(targetid, {vrc: data.id});
+                    this.addMissingPeopleIndividually();
+                }
 
                 if (!data.isFriend) {
                     let fstatus = await this.vrcFriendStatus(data.id);
