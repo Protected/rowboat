@@ -1562,7 +1562,7 @@ class ModVRChat extends Module {
             pr = message.edit(emb);
         } else {
             pr = this.statuschan.send({embed: emb, disableMentions: 'all'})
-                    .then(newmessage => this.setPersonMsg(userid, newmessage));
+                    .then(newmessage => { this.setPersonMsg(userid, newmessage); return newmessage; });
         }
 
         pr.then((msg) => {
