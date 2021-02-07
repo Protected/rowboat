@@ -549,13 +549,13 @@ class ModVRChat extends Module {
                     let oldworldid = this.worldFromLocation(person.latestlocation);
                     if (oldworldid) {
                         this.removeWorldMember(oldworldid, userid);
-                        this.affectedworlds[oldworldid] = true;
+                        affectedworlds[oldworldid] = true;
                     }
                     this.updateLocation(userid, location);
                     let worldid = this.worldFromLocation(location);
                     if (worldid) {
                         this.addWorldMember(worldid, userid);
-                        this.affectedworlds[worldid] = true;
+                        affectedworlds[worldid] = true;
                     }
                 }
 
