@@ -606,7 +606,8 @@ class ModVRChat extends Module {
                 if (hasWorldchan) {
                     this._dqueue.push(function() {
                         this.bakeWorld(worldid, now)
-                            .then(worldmsg => {
+                            .then(async worldmsg => {
+                                let world = this.getCachedWorld(worldid);
                                 //Always update user links - world.members changed
                                 for (let userid in world.members) {
                                     this._dqueue.push(function() {
