@@ -111,17 +111,17 @@ class ModVRChat extends Module {
     constructor(name) {
         super('VRChat', name);
      
-        /*Loop defaults*/
+        /*Loop defaults*
         this._params["updatefreq"] = 120;
         this._params["usewebsocket"] = false;
         this._params["friendliststale"] = 119;
         this._params["bakestale"] = 59;
         /**/
 
-        /*Websocket defaults*
+        /*Websocket defaults*/
         this._params["updatefreq"] = 300;
         this._params["usewebsocket"] = true;
-        this._params["friendliststale"] = 3600;
+        this._params["friendliststale"] = 1800;
         this._params["bakestale"] = 29;
         /**/
 
@@ -178,7 +178,8 @@ class ModVRChat extends Module {
         this._modTime = null;  //A reference to the Time module, if available.
 
         this._timer = null;  //Main timer
-        this._wtimer = null;  //World timer
+        this._qtimer = null;  //Quick timer - Used in websocket mode only
+        this._wtimer = null;  //World timer - Updates the world cache
 
         this._dqueue = [];  //Discord update queue
         this._dtimer = null;  //Discord update queue timer
@@ -442,23 +443,88 @@ class ModVRChat extends Module {
         //# Set up VRChat session
 
         let friendStateChangeHandler = (vrcuserid, state, userdata) => {
-            //TODO
+            let userid = this.getUseridByVrc(vrcuserid);
+            let person = this.getPerson(userid);
+
+            if (state == "active") userdata.status = "website";
+            if (state == "offline") userdata.status = "offline";
+            if (!this._friends[vrcuserid]) this._friends[vrcuserid] = {};
+            Object.assign(this._friends[vrcuserid], userdata);
+
+            this.updateStatus(userid, this._friends[vrcuserid].status);
+
+            if (this.statuschan) {
+                this._dqueue.push(function() {
+                    this.bakeStatus(userid, this._friends[vrcuserid]);
+                }.bind(this));
+            }
         }
 
         let friendLocationChangeHandler = (vrcuserid, userdata, partialworld, instance, location) => {
-            //TODO
+            let userid = this.getUseridByVrc(vrcuserid);
+            let person = this.getPerson(userid);
+
+            if (!this._friends[vrcuserid]) this._friends[vrcuserid] = {};
+            Object.assign(this._friends[vrcuserid], userdata);
+            this._friends[person.vrc].location = location;
+
+            let affectedworlds = {};
+
+            if (person.latestlocation != location) {
+                let oldworldid = this.worldFromLocation(person.latestlocation);
+                if (oldworldid) {
+                    this.removeWorldMember(oldworldid, userid);
+                    affectedworlds[oldworldid] = true;
+                }
+                this.updateLocation(userid, location);
+                let worldid = this.worldFromLocation(location);
+                if (worldid) {
+                    this.addWorldMember(worldid, userid);
+                    affectedworlds[worldid] = true;
+                }
+            }
+            
+            if (this.statuschan) {
+                this._dqueue.push(function() {
+                    this.bakeStatus(userid, this._friends[vrcuserid]);
+                }.bind(this));
+            }
+
+            this.updateAffectedWorlds(affectedworlds);
         }
 
         let friendAddHandler = (vrcuserid, userdata) => {
-            //TODO
+            let userid = this.getUseridByVrc(vrcuserid);
+            let person = this.getPerson(userid);
+            this._friends[vrcuserid] = userdata;
+            if (!person.confirmed) {
+                this.confirmPerson(userid);
+                this.assignKnownRole(userid, "User is now confirmed.");
+                this.announce("I see you, " + this.denv.idToDisplayName(userid) + "! You're my VRChat friend.");
+            }
         }
 
         let friendDeleteHandler = (vrcuserid) => {
-            //TODO
+            let userid = this.getUseridByVrc(vrcuserid);
+            let person = this.getPerson(userid);
+            if (person.confirmed) {
+                this.unconfirmPerson(userid);
+                this.unassignKnownRole(userid, "User is no longer confirmed.");
+                this.announce("Uh oh... " + this.denv.idToDisplayName(userid) + " is no longer my friend.");
+            }
         }
 
         let friendUpdateHandler = (vrcuserid, userdata) => {
-            //TODO
+            let userid = this.getUseridByVrc(vrcuserid);
+
+            if (!this._friends[vrcuserid]) this._friends[vrcuserid] = {};
+            Object.assign(this._friends[vrcuserid], userdata);
+
+            if (this.statuschan && this.isBakeStale(userid)) {
+                this._dqueue.push(function() {
+                    this.bakeStatus(userid, this._friends[vrcuserid]);
+                }.bind(this));
+            }
         }
 
         //Initialize VRChat session
@@ -597,28 +663,7 @@ class ModVRChat extends Module {
             }
 
             //Updated affected worlds
-
-            let hasWorldchan = !!this.worldchan;
-
-            for (let worldid in affectedworlds) {
-
-                //Bake world embed
-                if (hasWorldchan) {
-                    this._dqueue.push(function() {
-                        this.bakeWorld(worldid, now)
-                            .then(async worldmsg => {
-                                let world = this.getCachedWorld(worldid);
-                                //Always update user links - world.members changed
-                                for (let userid in world.members) {
-                                    this._dqueue.push(function() {
-                                        this.setWorldLink(userid, world.name, worldmsg);
-                                    }.bind(this));
-                                }
-                            })
-                    }.bind(this));
-                }
-
-            }
+            this.updateAffectedWorlds(affectedworlds, now);
 
             //Update previous world member counts.
             //We only add this to the queue so it's executed after all affected worlds have been baked (bakeWorld uses this to decide whether to reemit).
@@ -633,6 +678,25 @@ class ModVRChat extends Module {
 
         this._timer = setInterval(maintimer, this.param("updatefreq") * 1000);
         if (this.param("updatefreq") >= 40) setTimeout(maintimer, 20000);  //Run faster at startup
+
+
+        if (this.param("usewebsocket")) {
+            this._qtimer = setInterval(function () {
+
+                let now = moment().unix();
+
+                for (let userid in this._people) {
+                    let person = this.getPerson(userid);
+
+                    //Finish pending updates to offline status
+                    if (person.pendingflip && now - person.latestflip >= this.param("offlinetolerance")) {
+                        this.finishStatusUpdate(userid);
+                    }
+
+                }
+
+            }.bind(this), 60000);
+        }
 
 
         this._wtimer = setInterval(async function () {
@@ -1058,6 +1122,15 @@ class ModVRChat extends Module {
         for (let userid in this._people) {
             if (this._people[userid].vrc == vrcuserid) {
                 return this._people[userid];
+            }
+        }
+    }
+
+    getUseridByVrc(vrcuserid) {
+        if (!this.isValidUser(vrcuserid)) return undefined;
+        for (let userid in this._people) {
+            if (this._people[userid].vrc == vrcuserid) {
+                return userid;
             }
         }
     }
@@ -1538,8 +1611,11 @@ class ModVRChat extends Module {
         
         if (vrcdata.statusDescription) body.push("*" + this.stripNormalizedFormatting(vrcdata.statusDescription.trim()) + "*");
 
+        let clockline = [];
         let clock = this.userEmbedClock(userid);
-        if (clock) body.push(clock);
+        if (clock) clockline.push(clock);
+        clockline = clockline.concat(this.flags(vrcdata.tags, userid));
+        if (clockline.length) body.push(clockline.join(" "));
 
         if (vrcdata.bio) body.push(this.stripNormalizedFormatting(vrcdata.bio.trim()));
 
@@ -1778,6 +1854,26 @@ class ModVRChat extends Module {
         message.edit(emb);
         return true;
     }
+
+
+    updateAffectedWorlds(affectedworlds, now) {
+        if (!this.worldchan) return;
+        now = now || moment().unix();
+        for (let worldid in affectedworlds) {
+            this._dqueue.push(function() {
+                this.bakeWorld(worldid, now)
+                    .then(worldmsg => {
+                        let world = this.getCachedWorld(worldid);
+                        //Always update user links - world.members changed
+                        for (let userid in world.members) {
+                            this._dqueue.push(function() {
+                                this.setWorldLink(userid, world.name, worldmsg);
+                            }.bind(this));
+                        }
+                    })
+            }.bind(this));
+        }
+    }    
 
 
     //Announcements
@@ -2455,6 +2551,50 @@ class ModVRChat extends Module {
         if (tags.includes("system_supporter")) labels.push("➕ VRChat plus");
         if (tags.includes("system_early_adopter")) labels.push("🐈 Early supporter");
         return labels;
+    }
+
+    flags(tags, userid) {
+        let flags = [];
+        let utcOffset = null;
+        if (this._modTime && userid) {
+            utcOffset = this._modTime.getCurrentUtcOffsetByUserid(this.denv, userid);
+        }
+        if (tags.includes("language_eng")) {
+            if (utcOffset != null && utcOffset <= -300) flags.push("🇺🇸");
+            else if (utcOffset != null && utcOffset >= 480 && utcOffset <= 660) flags.push("🇦🇺");
+            else if (utcOffset != null && utcOffset >= 720) flags.push("🇳🇿");
+            else flags.push("🇬🇧");
+        }
+        if (tags.includes("language_kor")) flags.push("🇰🇷");
+        if (tags.includes("language_rus")) flags.push("🇷🇺");
+        if (tags.includes("language_spa")) flags.push("🇪🇸");
+        if (tags.includes("language_por")) {
+            if (utcOffset != null && utcOffset >= -300 && utcOffset <= -120) flags.push("🇧🇷");
+            else flags.push("🇵🇹");
+        }
+        if (tags.includes("language_zho")) flags.push("🇨🇳");
+        if (tags.includes("language_deu")) flags.push("🇩🇪");
+        if (tags.includes("language_jpn")) flags.push("🇯🇵");
+        if (tags.includes("language_fra")) flags.push("🇫🇷");
+        if (tags.includes("language_swe")) flags.push("🇸🇪");
+        if (tags.includes("language_nld")) flags.push("🇳🇱");
+        if (tags.includes("language_pol")) flags.push("🇵🇱");
+        if (tags.includes("language_dan")) flags.push("🇩🇰");
+        if (tags.includes("language_nor")) flags.push("🇳🇴");
+        if (tags.includes("language_ita")) flags.push("🇮🇹");
+        if (tags.includes("language_tha")) flags.push("🇹🇭");
+        if (tags.includes("language_fin")) flags.push("🇫🇮");
+        if (tags.includes("language_hun")) flags.push("🇭🇺");
+        if (tags.includes("language_ces")) flags.push("🇨🇿");
+        if (tags.includes("language_tur")) flags.push("🇹🇷");
+        if (tags.includes("language_ara")) {
+            if (utcOffset != null && utcOffset == 180) flags.push("🇸🇦");
+            else if (utcOffset != null && utcOffset == 120) flags.push("🇪🇬");
+            else flags.push("🇦🇪");
+        }
+        if (tags.includes("language_ron")) flags.push("🇷🇴");
+        if (tags.includes("language_vie")) flags.push("🇻🇳");
+        return flags;
     }
 
     statusLabel(status) {
