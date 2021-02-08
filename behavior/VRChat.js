@@ -449,7 +449,7 @@ class ModVRChat extends Module {
             if (!userdata) userdata = {};
 
             if (state == "active") userdata.status = "website";
-            if (state == "offline") userdata.status = "offline";
+            if (state == "offline") { userdata.status = "offline"; userdata.location = "offline"; }
             if (state == "online") userdata.location = "private";
             if (!this._friends[vrcuserid]) this._friends[vrcuserid] = {};
             Object.assign(this._friends[vrcuserid], userdata);
@@ -2626,7 +2626,7 @@ class ModVRChat extends Module {
     }
 
     placeholderLocation(location) {
-        if (location == "offline") return "Offline";
+        if (location == "offline") return "-";
         if (location == "private") return "In private world";
         return "Processing...";
     }
