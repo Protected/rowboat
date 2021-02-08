@@ -450,6 +450,7 @@ class ModVRChat extends Module {
 
             if (state == "active") userdata.status = "website";
             if (state == "offline") userdata.status = "offline";
+            if (state == "online") userdata.location = "private";
             if (!this._friends[vrcuserid]) this._friends[vrcuserid] = {};
             Object.assign(this._friends[vrcuserid], userdata);
 
@@ -707,13 +708,17 @@ class ModVRChat extends Module {
 
             //Remove old worlds from the cache
 
+            let worldclears = [];
+
             for (let worldid in this._worlds) {
                 let world = this.getCachedWorld(worldid);
-                if (world.emptysince && now - world.emptysince > this.param("worldexpiration") * 3600) {
-                    this.clearWorld(worldid);
+                if (world.emptysince && now - world.emptysince > this.param("worldexpiration") * 3600
+                        || !world.emptysince && !this.worldMemberCount(worldid)) {
+                    worldclears.push(this.clearWorld(worldid));
                 }
             }
 
+            await Promise.all(worldclears);  //Some clears are queued and only resolve later
             this._worlds.save();
 
             //Update cached worlds
@@ -725,7 +730,7 @@ class ModVRChat extends Module {
             for (let worldid of worldidsbyretrieval) {
                 let world = this.getCachedWorld(worldid);
                 
-                let retrieved = world.retrieved;
+                let retrieved = world?.retrieved;
                 world = await this.getWorld(worldid);
 
                 if (!world) continue;
@@ -1516,13 +1521,13 @@ class ModVRChat extends Module {
         return true;
     }
 
-    clearWorld(worldid) {
+    async clearWorld(worldid) {
         if (!this._worlds[worldid]) return true;
         if (this._worlds[worldid].msg && this.worldchan) {
             this._dqueue.push(function() {
                 this.worldchan.messages.fetch(this._worlds[worldid].msg)
                     .then(message => message.delete({reason: "World cleared from cache ."}))
-                    .then(() => delete this._worlds[worldid]);
+                    .then(() => { delete this._worlds[worldid]; this._worlds.save(); });
             }.bind(this));
         } else {
             delete this._worlds[worldid];
@@ -2316,21 +2321,25 @@ class ModVRChat extends Module {
                 ws.on('message', (data) => {
                     resetPing();
                     let message = JSON.parse(data);
-                    let content = JSON.parse(message.content);
-                    if (handlers.friendStateChange && ["friend-active", "friend-online", "friend-offline"].includes(message.type)) {
-                        handlers.friendStateChange(content.userId, message.type.split("-")[1], content.user);
-                    }
-                    if (handlers.friendLocationChange && message.type == "friend-location") {
-                        handlers.friendLocationChange(content.userId, content.user, content.world, content.instance, content.location);
-                    }
-                    if (handlers.friendAdd && message.type == "friend-add") {
-                        handlers.friendAdd(content.userId, content.user);
-                    }
-                    if (handlers.friendDelete && message.type == "friend-delete") {
-                        handlers.friendDelete(content.userId);
-                    }
-                    if (handlers.friendUpdate && message.type == "friend-update") {
-                        handlers.friendUpdate(content.userId, content.user);
+                    try {
+                        let content = JSON.parse(message.content);
+                        if (handlers.friendStateChange && ["friend-active", "friend-online", "friend-offline"].includes(message.type)) {
+                            handlers.friendStateChange(content.userId, message.type.split("-")[1], content.user);
+                        }
+                        if (handlers.friendLocationChange && message.type == "friend-location") {
+                            handlers.friendLocationChange(content.userId, content.user, content.world, content.instance, content.location);
+                        }
+                        if (handlers.friendAdd && message.type == "friend-add") {
+                            handlers.friendAdd(content.userId, content.user);
+                        }
+                        if (handlers.friendDelete && message.type == "friend-delete") {
+                            handlers.friendDelete(content.userId);
+                        }
+                        if (handlers.friendUpdate && message.type == "friend-update") {
+                            handlers.friendUpdate(content.userId, content.user);
+                        }
+                    } catch (e) {
+                        this.log("warn", "Could not parse websocket message: " + data);
                     }
                 });
 
