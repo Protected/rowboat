@@ -446,6 +446,8 @@ class ModVRChat extends Module {
             let userid = this.getUseridByVrc(vrcuserid);
             let person = this.getPerson(userid);
 
+            if (!userdata) userdata = {};
+
             if (state == "active") userdata.status = "website";
             if (state == "offline") userdata.status = "offline";
             if (!this._friends[vrcuserid]) this._friends[vrcuserid] = {};
