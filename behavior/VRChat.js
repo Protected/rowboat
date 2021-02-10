@@ -612,6 +612,8 @@ class ModVRChat extends Module {
                     }
                 }
 
+                if (!this._friends[person.vrc]) continue;  //Friend not yet cached
+
                 //Update latest location (used in world embeds)
                 let location = this._friends[person.vrc].location;
                 if (person.latestlocation != location) {
