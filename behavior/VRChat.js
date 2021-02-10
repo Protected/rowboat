@@ -1188,6 +1188,9 @@ class ModVRChat extends Module {
 
     unconfirmPerson(userid) {
         if (!this._people[userid]) return false;
+        if (this._friends[this._people[userid].vrc]) {
+            delete this._friends[this._people[userid].vrc];
+        }
         this._people[userid].confirmed = false;
         this._people[userid].waiting = moment().unix();
         this._people.save();
