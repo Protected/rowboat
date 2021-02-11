@@ -771,7 +771,7 @@ class ModVRChat extends Module {
             if (!this.testEnv(env)) return true;
 
             let targetid = userid;
-        
+
             if (discorduser) {
                 targetid = env.displayNameToId(discorduser);
                 if (!targetid) {
@@ -811,7 +811,16 @@ class ModVRChat extends Module {
 
             } catch (e) {
                 if (e.statusCode == 404) {
-                    ep.reply("VRChat account not found.");
+                    ep.reply("There is no VRChat account with that username.");
+
+                    try {
+                        let search = await this.vrcUserSearch(vrchatuser);
+                        if (!search || !search[0]) throw {};
+
+                        ep.reply("There is a user with the display name " + search[0].displayName + " whose username is `" + search[0].username + "`. Is this you?");
+
+                    } catch (e) {}
+
                     return true;
                 }
             };
@@ -838,7 +847,7 @@ class ModVRChat extends Module {
             args: ["vrchatuser", "discorduser", true],
             minArgs: 1,
             permissions: [PERM_ADMIN]
-        },  (env, type, userid, channelid, command, args, handle, ep) => asscall(env, userid, args.discorduser.join(" "), vrchatuser, ep));
+        },  (env, type, userid, channelid, command, args, handle, ep) => asscall(env, userid, args.discorduser.join(" "), args.vrchatuser, ep));
 
 
         let unasscall = (env, userid, discorduser, ep) => {
@@ -2227,6 +2236,10 @@ class ModVRChat extends Module {
 
     async vrcMe() {
         return this.vrcget("auth/user").then(data => { if (data) this._me = data; });
+    }
+
+    async vrcUserSearch(query) {
+        return this.vrcget("users/?n=1&search=" + encodeURIComponent(query));
     }
 
     async vrcUser(vrcuser) {

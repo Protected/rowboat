@@ -587,7 +587,7 @@ class ModCommands extends Module {
         
         let handles = this.mod('Users').getHandlesById(env.name, authorid, true);
         let handle = (handles.length ? handles[0] : null);
-        
+
         if (descriptor.permissions) {
             if (!this.mod('Users').testPermissions(env.name, authorid, channelid, descriptor.permissions, descriptor.requireAllPermissions, handle)) {
                 this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + ': Failed permission check.');
