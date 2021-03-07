@@ -22,6 +22,34 @@ const CLOCKS = ["🕛","🕧","🕐","🕜","🕑","🕝","🕒","🕞","🕓","
 
 const MAX_FIELDLEN = 1024;
 
+/*
+Object.defineProperty(global, '__stack', {
+get: function() {
+        var orig = Error.prepareStackTrace;
+        Error.prepareStackTrace = function(_, stack) {
+            return stack;
+        };
+        var err = new Error;
+        Error.captureStackTrace(err, arguments.callee);
+        var stack = err.stack;
+        Error.prepareStackTrace = orig;
+        return stack;
+    }
+});
+    
+Object.defineProperty(global, '__line', {
+get: function() {
+        return __stack[2].getLineNumber();
+    }
+});
+
+Object.defineProperty(global, '__function', {
+get: function() {
+        return __stack[2].getFunctionName();
+    }
+});
+*/
+
 class ModVRChat extends Module {
 
     get requiredParams() { return [
@@ -45,8 +73,8 @@ class ModVRChat extends Module {
         "worldexpiration",      //How long after emptying until an entry in the world cache is removed (h)
         "staleupdatesperitr",   //How many stale worlds are updated per every time the update function runs
 
-        "coloroffline",         //Color for "offline"/"unused" embeds
-        "coloronline",          //Color for "online"/"used" embeds
+        "coloroffline",         //Color for "offline"/"unused" embed accents
+        "coloronline",          //Color for "online"/"used" embed accents
         
         "pinnedchan",           //ID of text channel for pinned worlds
 
@@ -160,6 +188,8 @@ class ModVRChat extends Module {
         this._friends = null;  //The transient status cache {updated, VRCUSERID: {...}, ...}
         this._frupdated = null;
 
+        this._sneaks = {};  //Users who were sneaking when they last went offline {USERID: TS, ...}
+
         this._config = null;  //The full object returned by the "config" API. This API must be called before any other request.
         this._auth = null;  //The auth cookie
         this._me = null;  //The bot user data
@@ -215,11 +245,11 @@ class ModVRChat extends Module {
                     })
                     .finally(() => {
                         this.emptyWorlds();
-                        this._dqueue.push(next);
+                        this.dqueue(next);
                     });
             } else {
                 this.emptyWorlds();
-                this._dqueue.push(next);
+                this.dqueue(next);
             }
         });
 
@@ -340,7 +370,7 @@ class ModVRChat extends Module {
                     if (targetid) {
                         let target = this.getPerson(targetid);
                         let person = this.getPerson(user.id);
-                        if (person && person.vrc && target.latestlocation) {
+                        if (person && person.vrc && target.latestlocation && !target.sneak) {
                             this.vrcInvite(person.vrc, this.worldFromLocation(target.latestlocation), this.instanceFromLocation(target.latestlocation))
                                 .catch(e => this.log("error", "Failed to invite " + user.id + " to " + target.latestlocation + ": " + JSON.stringify(e)));
                         }
@@ -375,7 +405,7 @@ class ModVRChat extends Module {
                     //Unlearn missing persons
 
                     if (this.statuschan && person.msg) {
-                        this._dqueue.push(function() {
+                        this.dqueue(function() {
                             this.statuschan.messages.fetch(person.msg)
                                 .then(message => message.delete({reason: "User has departed the server."}));
                         }.bind(this));
@@ -401,7 +431,7 @@ class ModVRChat extends Module {
 
                 this.denv.scanEveryMessage(this.worldchan, (message) => {
                     if (!index[message.id]) {
-                        this._dqueue.push(function() {
+                        this.dqueue(function() {
                             message.delete({reason: "World not found in cache."});
                         }.bind(this));
                     }
@@ -424,7 +454,7 @@ class ModVRChat extends Module {
                         if (!r || !r.me) todo.push(function() { message.react(emoji) });
                     }
                     if (todo.length) {
-                        this._dqueue.push(function() {
+                        this.dqueue(function() {
                             for (let act of todo) {
                                 act();
                             }
@@ -457,7 +487,7 @@ class ModVRChat extends Module {
             this.updateStatus(userid, this._friends[vrcuserid].status);
 
             if (this.statuschan) {
-                this._dqueue.push(function() {
+                this.dqueue(function() {
                     this.bakeStatus(userid, this._friends[vrcuserid]);
                 }.bind(this));
             }
@@ -475,20 +505,20 @@ class ModVRChat extends Module {
 
             if (person.latestlocation != location) {
                 let oldworldid = this.worldFromLocation(person.latestlocation);
-                if (oldworldid) {
+                if (oldworldid && !person.sneak) {
                     this.removeWorldMember(oldworldid, userid);
                     affectedworlds[oldworldid] = true;
                 }
                 this.updateLocation(userid, location);
                 let worldid = this.worldFromLocation(location);
-                if (worldid) {
+                if (worldid && !person.sneak) {
                     this.addWorldMember(worldid, userid);
                     affectedworlds[worldid] = true;
                 }
             }
             
             if (this.statuschan) {
-                this._dqueue.push(function() {
+                this.dqueue(function() {
                     this.bakeStatus(userid, this._friends[vrcuserid]);
                 }.bind(this));
             }
@@ -524,7 +554,7 @@ class ModVRChat extends Module {
             Object.assign(this._friends[vrcuserid], userdata);
 
             if (this.statuschan && this.isBakeStale(userid)) {
-                this._dqueue.push(function() {
+                this.dqueue(function() {
                     this.bakeStatus(userid, this._friends[vrcuserid]);
                 }.bind(this));
             }
@@ -618,13 +648,13 @@ class ModVRChat extends Module {
                 let location = this._friends[person.vrc].location;
                 if (person.latestlocation != location) {
                     let oldworldid = this.worldFromLocation(person.latestlocation);
-                    if (oldworldid) {
+                    if (oldworldid && !person.sneak) {
                         this.removeWorldMember(oldworldid, userid);
                         affectedworlds[oldworldid] = true;
                     }
                     this.updateLocation(userid, location);
                     let worldid = this.worldFromLocation(location);
-                    if (worldid) {
+                    if (worldid && !person.sneak) {
                         this.addWorldMember(worldid, userid);
                         affectedworlds[worldid] = true;
                     }
@@ -660,7 +690,7 @@ class ModVRChat extends Module {
 
                 //Bake status embed
                 if (hasStatuschan && this.isBakeStale(userid, now)) {
-                    this._dqueue.push(function() {
+                    this.dqueue(function() {
                         this.bakeStatus(userid, this._friends[person.vrc], now);
                     }.bind(this));
                 }
@@ -673,7 +703,7 @@ class ModVRChat extends Module {
             //Update previous world member counts.
             //We only add this to the queue so it's executed after all affected worlds have been baked (bakeWorld uses this to decide whether to reemit).
 
-            this._dqueue.push(function() {
+            this.dqueue(function() {
                 for (let worldid in this._worlds) {
                     this.updatePrevMemberCount(worldid);
                 }
@@ -739,14 +769,14 @@ class ModVRChat extends Module {
                 if (world.retrieved != retrieved) refreshed += 1;
 
                 if (hasWorldchan) {
-                    this._dqueue.push(function() {
+                    this.dqueue(function() {
                         let oldmsgid = world.msg;
                         this.bakeWorld(worldid, now)
                             .then(worldmsg => {
                                 //Update user links only if world message was reemitted
                                 if (worldmsg.id != oldmsgid) {
                                     for (let userid in world.members) {
-                                        this._dqueue.push(function() {
+                                        this.dqueue(function() {
                                             this.setWorldLink(userid, world.name, worldmsg);
                                         }.bind(this));
                                     }
@@ -973,6 +1003,68 @@ class ModVRChat extends Module {
         });
 
 
+        this.mod('Commands').registerCommand(this, 'vrchat sneak', {
+            description: "Disable location tracking for one session.",
+            args: ["state"],
+            minArgs: 0
+        },  (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!this.testEnv(env)) return true;
+
+            let person = this.getPerson(userid);
+            if (!person) {
+                ep.reply("This user doesn't have a known VRChat account.");
+                return true;
+            }
+
+            let state = this.processBooleanArg(args.state);
+            if (state === undefined) {
+                if (person.sneak) {
+                    ep.reply("Sneaking is on.");
+                } else {
+                    ep.reply("Sneaking is off.");
+                }
+                return true;
+            }
+
+            if (this._sneaks[userid]) {
+                delete this._sneaks[userid];
+            }
+
+            let friend = this._friends[person.vrc];
+
+            if (state) {
+
+                let worldid = this.worldFromLocation(person.latestlocation);
+                if (worldid) {
+                    this.removeWorldMember(worldid, userid);
+                    if (friend) {
+                        this.dqueue(function () {
+                            this.bakeStatus(userid, friend);
+                        }.bind(this));
+                    }
+                    this.updateAffectedWorlds({[worldid]: true});
+                }
+
+                this._people[userid].sneak = true;
+                ep.reply("Sneaking enabled.");
+            } else {
+                this._people[userid].sneak = false;
+                ep.reply("Sneaking disabled.");
+
+                let worldid = this.worldFromLocation(person.latestlocation);
+                if (worldid) {
+                    this.addWorldMember(worldid, userid)
+                        .then(() => { if (friend) this.bakeStatus(userid, friend); })
+                        .then(() => this.updateAffectedWorlds({[worldid]: true}));
+                }
+            }
+
+            this._people.save();
+            return true;
+        });
+
+
         this.mod('Commands').registerRootDetails(this, 'vrcany', {description: "Return a link to a random VRChat element."});
 
 
@@ -1162,6 +1254,7 @@ class ModVRChat extends Module {
             syncnick: true,                 //Whether to automatically change user's nickname to VRChat username
             latestpic: null,                //Latest synced avatar picture
             stickypic: false,               //Whether NOT to sync avatar pictures (keep current)
+            sneak: false,                   //Whether to track locations
             alert: null,                    //{people, tzrange} DM alerts
             latestalert: null,              //Timestamp of latest alert
             alertable: true,                //Whether user can be alerted at all (used to prevent multiple per session)
@@ -1254,8 +1347,10 @@ class ModVRChat extends Module {
         if (prev == status) return false;
         this._people[userid].lateststatus = status;
         if (prev) {
+            let now = moment().unix();
+
             if (!STATUS_ONLINE.includes(prev) && STATUS_ONLINE.includes(status)) {
-                this._people[userid].latestflip = moment().unix();
+                this._people[userid].latestflip = now;
                 if (this._people[userid].pendingflip) {
                     //Cancel offline flip
                     this._people[userid].pendingflip = false;
@@ -1263,11 +1358,19 @@ class ModVRChat extends Module {
                     //Announce to channel stack
                     this.annOnline(userid);
                     //DM announcements
-                    this._dqueue.push(this.deliverDMAlerts());
+                    this.dqueue(this.deliverDMAlerts());
+                    //Recover sneaking
+                    if (this._sneaks[userid]) {
+                        if (now - this._sneaks[userid] < this.param("anncollapsetrans")) {
+                            this.setSneak(userid, true);
+                        }
+                        delete this._sneaks[userid];
+                    }
                 }
             }
+
             if (STATUS_ONLINE.includes(prev) && !STATUS_ONLINE.includes(status)) {
-                this._people[userid].latestflip = moment().unix();
+                this._people[userid].latestflip = now;
                 this._people[userid].pendingflip = true;
                 //Delayed announcement is in timer
             }
@@ -1288,11 +1391,23 @@ class ModVRChat extends Module {
         return true;
     }
 
+    setSneak(userid, sneak) {
+        if (!this._people[userid]) return false;
+        if (sneak == null) sneak = true;
+        this._people[userid].sneak = !!sneak;
+        this._people.save();
+        return true;
+    }
+
     finishStatusUpdate(userid) {
         this.annOffline(userid);
         this._people[userid].pendingflip = false;
+        if (this._people[userid].sneak) {
+            this._sneaks[userid] = moment().unix();
+            this._people[userid].sneak = false;
+        }
         this._people.save();
-        this.resetDMAlerts();
+        this.resetDMAlerts()
     }
 
     updateLocation(userid, location) {
@@ -1457,7 +1572,7 @@ class ModVRChat extends Module {
 
     //Manipulate world cache
 
-    async getWorld(worldid, refresh) {
+    async getWorld(worldid, refresh, dontcache) {
         let msg = null, members = {}, emptysince = null, prevmembercount = 0;
         let cachedWorld = this.getCachedWorld(worldid);
         if (cachedWorld) {
@@ -1477,7 +1592,7 @@ class ModVRChat extends Module {
                 data.members = members;                 //Set of members known to be in-world (discord userids)
                 data.emptysince = emptysince;           //Time of departure of last member
                 data.prevmembercount = prevmembercount; //Member count on the previous iteration
-                this._worlds[worldid] = data;
+                if (!dontcache) this._worlds[worldid] = data;
                 return data;
             });
     }
@@ -1538,7 +1653,7 @@ class ModVRChat extends Module {
     async clearWorld(worldid) {
         if (!this._worlds[worldid]) return true;
         if (this._worlds[worldid].msg && this.worldchan) {
-            this._dqueue.push(function() {
+            this.dqueue(function() {
                 this.worldchan.messages.fetch(this._worlds[worldid].msg)
                     .then(message => message.delete({reason: "World cleared from cache ."}))
                     .then(() => { delete this._worlds[worldid]; this._worlds.save(); });
@@ -1555,10 +1670,10 @@ class ModVRChat extends Module {
         for (let userid in this._people) {
             if (!this._people[userid].latestlocation) continue;
             this._people[userid].latestlocation = null;
-            this._dqueue.push(function() {
+            this.dqueue(function() {
                 this.clearStatus(userid);
             }.bind(this));
-            this._dqueue.push(function() {
+            this.dqueue(function() {
                 this.clearInviteButton(userid);
             }.bind(this));
         }
@@ -1573,7 +1688,7 @@ class ModVRChat extends Module {
             }
             this._worlds[worldid].members = {};
             this._worlds[worldid].emptysince = now;
-            this._dqueue.push(function() {
+            this.dqueue(function() {
                 this.bakeWorld(worldid, now)
             }.bind(this));
         }
@@ -1625,7 +1740,7 @@ class ModVRChat extends Module {
         emb.addField("Status", this.statusLabel(vrcdata.status), true);
 
         if (vrcdata.location) {
-            emb.addField("Location", this.placeholderLocation(vrcdata.location), true);
+            emb.addField("Location", this.placeholderLocation(vrcdata.location, person.sneak), true);
         }
 
         let body = [];
@@ -1665,10 +1780,10 @@ class ModVRChat extends Module {
 
         pr.then((msg) => {
             let invite = msg.reactions.cache.find(r => r.emoji.name == this.param("inviteemoji"));
-            if (person.latestlocation && !invite) {
+            if ((person.latestlocation && !person.sneak) && !invite) {
                 msg.react(this.param("inviteemoji"));
             }
-            if (!person.latestlocation && invite) {
+            if ((!person.latestlocation || person.sneak) && invite) {
                 invite.remove();
             }
             this.setBaked(userid);
@@ -1715,6 +1830,7 @@ class ModVRChat extends Module {
                 field.value = "-";
             }
         }
+        emb.setColor(this.param("coloroffline"));
         message.edit(emb);
         return true;
     }
@@ -1867,12 +1983,15 @@ class ModVRChat extends Module {
         if (!emb) return false;
         let field = emb.fields.find(field => field.name == "Location");
         if (!field) return false;
+        let oldvalue = field.value;
         if (worldmsg) {
             field.value = "[" + worldname + "](https://discord.com/channels/" + this.denv.server.id + "/" + this.worldchan.id + "/" + worldmsg.id + ")";
         } else {
             field.value = worldname;
         }
-        message.edit(emb);
+        if (oldvalue != field.value) {
+            message.edit(emb);
+        }
         return true;
     }
 
@@ -1881,17 +2000,20 @@ class ModVRChat extends Module {
         if (!this.worldchan) return;
         now = now || moment().unix();
         for (let worldid in affectedworlds) {
-            this._dqueue.push(function() {
+            this.dqueue(function() {
                 this.bakeWorld(worldid, now)
                     .then(worldmsg => {
                         let world = this.getCachedWorld(worldid);
                         //Always update user links - world.members changed
                         for (let userid in world.members) {
-                            this._dqueue.push(function() {
+                            this.dqueue(function() {
                                 this.setWorldLink(userid, world.name, worldmsg);
                             }.bind(this));
                         }
                     })
+                    .catch((e) => {
+                        this.log("warn", "Update affected worlds: " + JSON.stringify(e));
+                    });
             }.bind(this));
         }
     }    
@@ -1921,7 +2043,7 @@ class ModVRChat extends Module {
             if (idx > -1) this._lt_quickpeek.stack.splice(idx, 1);
         }
 
-        this._dqueue.push(async function () {
+        this.dqueue(async function () {
             let prev;
             if (idx !== undefined) {
                 prev = await this.annStateStack(null, this._lt_quickpeek, true);
@@ -1945,7 +2067,7 @@ class ModVRChat extends Module {
             if (idx > -1) this._lt_reconnect.stack.splice(idx, 1);
         }
 
-        this._dqueue.push(async function () {
+        this.dqueue(async function () {
             let prev;
             if (idx !== undefined) {
                 prev = await this.annStateStack(null, this._lt_reconnect, true);
@@ -1964,7 +2086,7 @@ class ModVRChat extends Module {
         if (idx < 0) return false;
         this._lt_offline.stack.splice(idx, 1);
         
-        this._dqueue.push(async function () {
+        this.dqueue(async function () {
             let prev = await this.annStateStack(null, this._lt_offline, true);
             this.annStateStack(userid, this._lt_reconnect, prev);
         }.bind(this));
@@ -1981,7 +2103,7 @@ class ModVRChat extends Module {
         if (idx < 0) return false;
         this._lt_online.stack.splice(idx, 1);
 
-        this._dqueue.push(async function () {
+        this.dqueue(async function () {
             let prev = await this.annStateStack(null, this._lt_online, true);
             this.annStateStack(userid, this._lt_quickpeek, prev);
         }.bind(this));
@@ -2068,7 +2190,7 @@ class ModVRChat extends Module {
     }
 
     deliverDMAlert(userid, count, isTimezone) {
-        this._dqueue.push(function() {
+        this.dqueue(function() {
             this.denv.msg(userid, "**" + count + "** friends of mine are currently online" + (isTimezone ? " near your timezone." : ""));
         }.bind(this));
     }
@@ -2464,6 +2586,17 @@ class ModVRChat extends Module {
 
     //Helpers
 
+    dqueue(func) {
+        this._dqueue.push(func);
+        /*
+        let f = __function, l = __line;
+        this._dqueue.push(() => {
+            console.log("->", f, l);
+            func();
+        });
+        */
+    }
+
     testEnv(env) {
         return env.name == this.denv.name;
     }
@@ -2643,8 +2776,9 @@ class ModVRChat extends Module {
         return icon + label;
     }
 
-    placeholderLocation(location) {
+    placeholderLocation(location, sneak) {
         if (location == "offline") return "-";
+        if (sneak) return "Being sneaky";
         if (location == "private") return "In private world";
         return "Processing...";
     }
