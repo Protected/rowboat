@@ -1958,7 +1958,7 @@ class ModVRChat extends Module {
         for (let rolecolor in this._misc.rolecolors) {
             let block = this.userEmbedRoleBlock(userid, rolecolor);
             if (!block) continue;
-            emb.addField(this._misc.rolecolors[rolecolor].label, block, true);
+            emb.addField(this._misc.rolecolors[rolecolor].label, block + "·", true);
         }
 
         let body = [];
@@ -2049,7 +2049,7 @@ class ModVRChat extends Module {
             if (this._misc.rolelabels[role.id]) label = this._misc.rolelabels[role.id].label;
             result.push(label);
         }
-        return result.join(this._misc.rolecolors[rolecolor].joiner || "") + "·";
+        return result.join(this._misc.rolecolors[rolecolor].joiner || "");
     }
 
     clearStatus(userid) {
