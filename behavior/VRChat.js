@@ -274,7 +274,6 @@ class ModVRChat extends Module {
 
                     let found = false;
                     for (let webhook of webhooks.array()) {
-                        console.log(webhook.id);
                         if (webhook.id == this._misc.webhook) {
                             found = true;
                             break;
