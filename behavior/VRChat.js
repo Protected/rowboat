@@ -486,7 +486,8 @@ class ModVRChat extends Module {
                     let worldid = this.extractWorldFromMessage(message);
                     if (!worldid) return;
                     this._pins[worldid] = message;
-                    
+
+                    //Fix buttons
                     let todo = [];
                     for (let emoji of this.worldInviteButtons) {
                         let r = message.reactions.cache.find(r => r.emoji.name == emoji);
@@ -1368,6 +1369,82 @@ class ModVRChat extends Module {
         });
 
 
+        this.mod('Commands').registerCommand(this, 'vrcfix updatefavorites', {
+            description: "Refresh all favorites.",
+            permissions: [PERM_ADMIN]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!this.pinnedchan) {
+                ep.reply("Favorites channel not found.");
+                return true;
+            }
+
+            this.denv.scanEveryMessage(this.pinnedchan, async (message) => {
+                let worldid = this.extractWorldFromMessage(message);
+                if (!worldid) return;
+
+                let world = await this.getWorld(worldid);
+                if (!world) return;
+
+                let emb = null;
+                for (let checkembed of message.embeds) {
+                    if (checkembed.type == "rich") {
+                        emb = checkembed;
+                        break;
+                    }
+                }
+                if (!emb) return;
+
+                let changed = false;
+
+                //Fix basic
+                if (emb.title != world.name) {
+                    emb.setTitle(world.name);
+                    changed = true;
+                }
+
+                if (emb.image != world.imageUrl) {
+                    emb.setImage(world.imageUrl);
+                    changed = true;
+                }
+
+
+                let body = [];
+                body.push(world.description);
+                body = body.join("\n\n");
+                if (emb.description != body) {
+                    emb.setDescription(body);
+                    changed = true;
+                }
+
+                //Fix tags
+                let tagsToDisplay = this.formatWorldTags(world.tags).join(", ");
+                if (tagsToDisplay) {
+                    let field = this.embedFieldByName(emb, "Tags");
+                    if (field && field.value != tagsToDisplay) {
+                        field.value = tagsToDisplay;
+                        changed = true;
+                    } else if (!field) {
+                        emb.addField("Tags", tagsToDisplay);
+                        changed = true;
+                    }
+                }
+
+                if (changed) {
+                    this.dqueue(function() {
+                        message.edit(emb);
+                    }.bind(this));
+                }
+
+            }, () => {
+                ep.reply("Done!");
+            });
+
+            ep.reply("This might take a little bit.");
+            return true;
+        });
+        
+
 
       
         return true;
@@ -1567,7 +1644,7 @@ class ModVRChat extends Module {
                     //Announce to channel stack
                     this.annOnline(userid);
                     //DM announcements
-                    this.dqueue(this.deliverDMAlerts());
+                    this.dqueue(this.deliverDMAlerts);
                     //Recover sneaking
                     if (this._sneaks[userid]) {
                         if (now - this._sneaks[userid] < this.param("anncollapsetrans")) {
@@ -2130,14 +2207,16 @@ class ModVRChat extends Module {
         emb.setThumbnail(world.imageUrl);
         emb.setColor(membercount ? this.param("coloronline") : this.param("coloroffline"));
         emb.setURL("https://vrchat.com/home/world/" + worldid);
-        
+
         emb.fields = [];
         if (mode == "normal") {
+            let tags = this.formatWorldTags(world.tags);
+            if (tags.length) {
+                emb.addField("Tags", tags.join(", "));
+            }
+
             emb.addField("Players", world.publicOccupants, true);
             emb.addField("Private", world.privateOccupants, true);
-            emb.addField("Heat", "`" + ("!".repeat(world.heat || 0) || "-") + "`", true);
-            emb.addField("Visits", world.visits, true);
-            emb.addField("Favorites", world.favorites, true);
             emb.addField("Popularity",  "`" + ("#".repeat(world.popularity || 0) || "-") +  "`", true);
         }
         
@@ -2552,6 +2631,12 @@ class ModVRChat extends Module {
         emb.setTitle(world.name);
         emb.setImage(world.imageUrl);
         emb.setURL("https://vrchat.com/home/world/" + worldid);
+
+        emb.fields = [];
+        let tags = this.formatWorldTags(world.tags);
+        if (tags.length) {
+            emb.addField("Tags", tags.join(", "));
+        }
 
         let body = [];
 
@@ -3093,6 +3178,21 @@ class ModVRChat extends Module {
         if (!keys.length) return null;
         let key = keys[Math.floor(random.fraction() * keys.length)];
         return Object.assign({key: key}, map[key]);
+    }
+
+    formatWorldTags(tags) {
+        tags = tags || [];
+        return tags.filter(tag => tag.match(/^author_tag/)).map(tag => tag.replace(/author_tag_/, "").replace(/_/g, ""));
+    }
+
+    embedFieldByName(emb, name) {
+        if (!emb || !name) return null;
+        for (let field of emb.fields) {
+            if (field.name.toLowerCase() == name.toLowerCase()) {
+                return field;
+            }
+        }
+        return null;
     }
 
 }
