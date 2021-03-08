@@ -17,6 +17,7 @@ const WEBSOCKET = "wss://pipeline.vrchat.cloud/";
 const STATUS_ONLINE = ["active", "join me", "ask me"];
 const TRUST_PRECEDENCE = ["system_trust_veteran", "system_trust_trusted", "system_trust_known", "system_trust_basic"];
 
+const ZWSP = "​";  //Zero-width space
 const TRUST_CHANGE_ICON = "👉";
 const CLOCKS = ["🕛","🕧","🕐","🕜","🕑","🕝","🕒","🕞","🕓","🕟","🕔","🕠","🕕","🕡","🕖","🕢","🕗","🕣","🕘","🕤","🕙","🕥","🕚","🕦"];
 
@@ -1957,8 +1958,7 @@ class ModVRChat extends Module {
 
         for (let rolecolor in this._misc.rolecolors) {
             let block = this.userEmbedRoleBlock(userid, rolecolor);
-            if (!block) continue;
-            emb.addField(this._misc.rolecolors[rolecolor].label, block + "·", true);
+            emb.addField(this._misc.rolecolors[rolecolor].label, block + ZWSP /*mobile layout fix*/, true);
         }
 
         let body = [];
