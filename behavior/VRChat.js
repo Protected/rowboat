@@ -1644,7 +1644,9 @@ class ModVRChat extends Module {
                     //Announce to channel stack
                     this.annOnline(userid);
                     //DM announcements
-                    this.dqueue(this.deliverDMAlerts);
+                    this.dqueue(function () {
+                        this.deliverDMAlerts()
+                    }.bind(this));
                     //Recover sneaking
                     if (this._sneaks[userid]) {
                         if (now - this._sneaks[userid] < this.param("anncollapsetrans")) {
