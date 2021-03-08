@@ -20,6 +20,8 @@ const TRUST_PRECEDENCE = ["system_trust_veteran", "system_trust_trusted", "syste
 const TRUST_CHANGE_ICON = "👉";
 const CLOCKS = ["🕛","🕧","🕐","🕜","🕑","🕝","🕒","🕞","🕓","🕟","🕔","🕠","🕕","🕡","🕖","🕢","🕗","🕣","🕘","🕤","🕙","🕥","🕚","🕦"];
 
+const WEBHOOK_AVATAR = "extra/vrchat/emptyav.png";
+
 const MAX_FIELDLEN = 1024;
 
 /*
@@ -83,6 +85,7 @@ class ModVRChat extends Module {
         "anncollapseconsec",    //How long since the latest announcement to collapse announcements if it's the latest message too (s)
         "anncollapsetrans",     //Maximum interval for collapsing a user's state transition (s)
         "annmaxstack",          //Maximum amount of names to list in a collapsed announcement
+        "usewebhook",           //Whether to use a webhook to send announcements
 
         "expiration",           //How long to stay unfriended before unassigning a person (h)
         "ddelay",               //Delay between actions in the delayed action queue (used to prevent rate limiting) (ms)
@@ -167,6 +170,7 @@ class ModVRChat extends Module {
         this._params["anncollapseconsec"] = 1200;
         this._params["anncollapsetrans"] = 600;
         this._params["annmaxstack"] = 10;
+        this._params["usewebhook"] = true;
 
         this._params["expiration"] = 48;
         this._params["ddelay"] = 250;
@@ -184,6 +188,7 @@ class ModVRChat extends Module {
 
         this._people = null;  //{USERID: {see registerPerson}, ...}
         this._worlds = null;  //The worlds cache {WORLDID: {..., see getWorld}, ...}
+        this._misc = null;  //
 
         this._friends = null;  //The transient status cache {updated, VRCUSERID: {...}, ...}
         this._frupdated = null;
@@ -199,10 +204,11 @@ class ModVRChat extends Module {
 
         this._pins = {};  //Map of pinned worlds (transient) {WORLDID: Message_in_pinnedchan, ...}
 
-        this._lt_online = {prefix: "🟢 Online: ", msg: null, ts: null, stack: []};  //State of recent 'is online' announcements
-        this._lt_offline = {prefix: "⚪ Offline: ", msg: null, ts: null, stack: []};  //State of recent 'is offline' announcements
-        this._lt_reconnect = {prefix: "🟣 Reconnect: ", msg: null, ts: null, stack: []};  //State of recent 'reconnect' announcements
-        this._lt_quickpeek = {prefix: "⚫ Quick peek: ", msg: null, ts: null, stack: []};  //State of recent 'quick peek' announcements
+        this._webhook = null;
+        this._lt_online = {prefix: "🟢 Online", msg: null, ts: null, stack: []};  //State of recent 'is online' announcements
+        this._lt_offline = {prefix: "⚪ Offline", msg: null, ts: null, stack: []};  //State of recent 'is offline' announcements
+        this._lt_reconnect = {prefix: "🟣 Reconnect", msg: null, ts: null, stack: []};  //State of recent 'reconnect' announcements
+        this._lt_quickpeek = {prefix: "⚫ Quick peek", msg: null, ts: null, stack: []};  //State of recent 'quick peek' announcements
 
         this._ready = false;  //Whether we're done caching existing status messages and can start baking new ones.
         this._modTime = null;  //A reference to the Time module, if available.
@@ -228,6 +234,8 @@ class ModVRChat extends Module {
         if (this._people === false) return false;
 
         this._worlds = this.loadData(this.name.toLowerCase() + ".worlds.json", {}, {quiet: true});
+
+        this._misc = this.loadData(this.name.toLowerCase() + ".misc.json");
 
         this.resetAllPersons();
 
@@ -255,6 +263,33 @@ class ModVRChat extends Module {
 
         
         //# Register Discord callbacks
+
+        let webhookUpdateHandler = (channel) => {
+
+            //Prevent webhook removal
+
+            if (this.param("usewebhook") && channel.id == this.announcechan.id && this._misc.webhook) {
+
+                channel.fetchWebhooks().then((webhooks) => {
+
+                    let found = false;
+                    for (let webhook of webhooks.array()) {
+                        console.log(webhook.id);
+                        if (webhook.id == this._misc.webhook) {
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found) {
+                        this.setupWebhook();
+                    }
+
+                });
+
+            }
+
+        }
 
         let guildMemberRemoveHandler = async (member) => {
 
@@ -385,6 +420,10 @@ class ModVRChat extends Module {
 
         this.denv.on("connected", async () => {
 
+            if (this.param("usewebhook")) {
+                this._webhook = await this.setupWebhook();
+            }
+
             let cachePromises = [];
 
             for (let userid in this._people) {
@@ -464,6 +503,7 @@ class ModVRChat extends Module {
 
             }
 
+            this.denv.client.on("webhookUpdate", webhookUpdateHandler);
             this.denv.client.on("guildMemberRemove", guildMemberRemoveHandler);
             this.denv.client.on("messageDelete", messageDeleteHandler);
             this.denv.client.on("messageReactionAdd", messageReactionAddHandler);
@@ -1604,7 +1644,7 @@ class ModVRChat extends Module {
     async addWorldMember(worldid, userid) {
         try {
             let world = await this.getWorld(worldid);
-            if (!world) throw "Unable to retrieve world.";
+            if (!world) throw {error: "Unable to retrieve world."};
             world.members[userid] = true;
             world.emptysince = null;
         } catch (e) {
@@ -2129,7 +2169,8 @@ class ModVRChat extends Module {
         }
         
         //Prepare list of users
-        let txt = state.prefix;
+        let txt = "";
+        let prefix = state.prefix + ": ";
         let stack = state.stack;
         let extralen = 0;
 
@@ -2158,16 +2199,18 @@ class ModVRChat extends Module {
                 message.delete({reason: "Re-emit announcement."});
                 state.msg = null;
             } else {
-                message.edit(txt);
+                message.edit(this._webhook ? txt : prefix + txt);
             }
         }
         if (!state.msg && stack.length) {
             let message;
             if (prevmessage) {
                 message = prevmessage;
-                message.edit(txt);
+                message.edit(this._webhook ? txt : prefix + txt);
+            } else if (this._webhook) {
+                message = await this._webhook.send(txt, {username: state.prefix});
             } else {
-                message = await this.announcechan.send(txt);
+                message = await this.announcechan.send(prefix + txt);
             }
             state.msg = message.id;
         } else if (prevmessage && prevmessage !== true) {
@@ -2176,6 +2219,23 @@ class ModVRChat extends Module {
 
         state.ts = now;
         return ret;
+    }
+
+
+    async setupWebhook() {
+        let webhook = null;
+        if (this._misc.webhook) {
+            try {
+                webhook = await this.denv.client.realClient.fetchWebhook(this._misc.webhook);
+            } catch (e) {}
+        }
+        if (!webhook) {
+            webhook = await this.announcechan.createWebhook(this.denv.server.me.displayName, {avatar: WEBHOOK_AVATAR, reason: "VRChat announcements webhook"});
+            if (!webhook) throw {error: "Unable to create webhook."};
+            this._misc.webhook = webhook.id;
+            this._misc.save();
+        }
+        this._webhook = webhook;
     }
 
 
@@ -2380,12 +2440,12 @@ class ModVRChat extends Module {
         let list = [];
         if (!state || state == "online") {
             let onlist = await this.vrcget("auth/user/friends/?offline=false");
-            if (!onlist) throw "Failure to retrieve friend list.";
+            if (!onlist) throw {error: "Failure to retrieve friend list."};
             list = list.concat(onlist);
         }
         if (!state || state == "offline") {
             let offlist = await this.vrcget("auth/user/friends/?offline=true");
-            if (!offlist) throw "Failure to retrieve friend list.";
+            if (!offlist) throw {error: "Failure to retrieve friend list."};
             list = list.concat(offlist);
         }
         return list;
@@ -2403,7 +2463,7 @@ class ModVRChat extends Module {
     }
 
     async vrcWorld(worldid, instanceid) {
-        if (!this.isValidWorld(worldid)) throw {error: "Invalid world ID."};
+        if (!this.isValidWorld(worldid)) {error: "Invalid world ID."};
         return this.vrcget("worlds/" + worldid + (instanceid ? "/" + instanceid : ""));
     }
 

@@ -21,7 +21,8 @@ const BRIDGE_EVENTS = [
     "channelCreate",
     "channelDelete",
     "channelUpdate",
-    "channelPinsUpdate"
+    "channelPinsUpdate",
+    "webhookUpdate"
 ];
 
 class DiscordClient extends ModernEventEmitter {
