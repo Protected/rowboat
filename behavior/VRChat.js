@@ -331,7 +331,7 @@ class ModVRChat extends Module {
                 }
             }
             
-        }
+        };
 
         let messageReactionAddHandler = async (messageReaction, user) => {
             if (user.id == this.denv.server.me.id) return;
@@ -416,7 +416,40 @@ class ModVRChat extends Module {
                 messageReaction.users.remove(user.id);
             }
 
-        }
+        };
+
+        let messageHandler = (env, type, message, authorid, channelid, messageObject) => {
+            //Only interested in direct sharing to pinnedchan
+            if (env.name != this.param("env") || type != "regular" || channelid != this.pinnedchan.id) return;
+
+            let worldids = this.extractWorldsFromText(message);
+            messageObject.delete({reason: worldids.length ? "Replacing with pinned world." : "Redirecting to main channel."});
+
+            if (!worldids.length) {
+                this.announce("> " + message.split("\n")[0] + "\n<@" + authorid + "> The <#" + channelid + "> channel is for pinned worlds only!");
+                return true;
+            }
+
+            for (let worldid of worldids) {
+                if (this._pins[worldid]) {
+                    let worldname = this.getCachedWorld(worldid)?.name || worldid;
+                    this.announce("<@" + authorid + "> The world " + worldname + " is already pinned.");
+                    return true;
+                }
+
+                this.dqueue(function() {
+                    this.potentialWorldPin(worldid, true)
+                        .then(result => {
+                            if (!result) {
+                                let worldname = this.getCachedWorld(worldid)?.name || worldid;
+                                this.announce("<@" + authorid + "> Failed to pin the world " + worldname + " - does it still exist?");
+                            }
+                        });
+                }.bind(this));
+            }
+
+            return true;
+        };
 
         this.denv.on("connected", async () => {
 
@@ -508,6 +541,7 @@ class ModVRChat extends Module {
             this.denv.client.on("guildMemberRemove", guildMemberRemoveHandler);
             this.denv.client.on("messageDelete", messageDeleteHandler);
             this.denv.client.on("messageReactionAdd", messageReactionAddHandler);
+            this.denv.on("message", messageHandler);
         });
 
 
@@ -1440,7 +1474,74 @@ class ModVRChat extends Module {
                 ep.reply("Done!");
             });
 
-            ep.reply("This might take a little bit.");
+            ep.reply("Wait...");
+            return true;
+        });
+
+
+        this.mod('Commands').registerCommand(this, 'vrcfix convertfavorites', {
+            description: "Extract pins from and remove messages from the favorites channel.",
+            details: [
+                "Note that converted messages are added to the end, so the end result might be in a different order.",
+                "May overload the delay queue while in operation."
+            ],
+            permissions: [PERM_ADMIN]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!this.pinnedchan) {
+                ep.reply("Favorites channel not found.");
+                return true;
+            }
+
+            let worldids = [];
+            let deleted = 0;
+            let pinned = 0;
+
+            this.denv.scanEveryMessage(this.pinnedchan, (message) => {
+                if (message.author?.id == this.denv.server.me.id) return;
+
+                let worldid = this.extractWorldFromMessage(message);
+                if (worldid) worldids.push(worldid);
+                for (worldid of this.extractWorldsFromText(message.content)) {
+                    worldids.push(worldid);
+                }
+
+                this.dqueue(function() {
+                    message.delete({reason: "Converting favorites."});
+                }.bind(this));
+                deleted += 1;
+
+            }, () => {
+                
+                worldids.reverse();
+
+                for (let worldid of worldids) {
+                    if (this._pins[worldid]) {
+                        let worldname = this.getCachedWorld(worldid)?.name || worldid;
+                        this.announce("The world " + worldname + " is already pinned.");
+                        return true;
+                    }
+    
+                    this.dqueue(function() {
+                        this.potentialWorldPin(worldid, true)
+                            .then(result => {
+                                if (!result) {
+                                    let worldname = this.getCachedWorld(worldid)?.name || worldid;
+                                    this.announce("Failed to pin the world " + worldname + " - does it still exist?");
+                                } else {
+                                    pinned += 1;
+                                }
+                            });
+                    }.bind(this));
+                }
+
+                this.dqueue(function() {
+                    ep.reply("Done! Pinned " + pinned + "/" + worldids.length + "; Deleted " + deleted + " message" + (deleted != 1 ? "s" : ""));
+                }.bind(this));
+
+            });
+
+            ep.reply("Wait...");
             return true;
         });
         
@@ -2620,13 +2721,28 @@ class ModVRChat extends Module {
 
     //Pin favorites
 
-    async potentialWorldPin(message) {
-        let worldid = this.extractWorldFromMessage(message);
+    async potentialWorldPin(message, byid) {
+        let worldid;
+        if (byid) {
+            worldid = message;
+        } else {
+            worldid = this.extractWorldFromMessage(message);
+        }
         if (!worldid) return false;
         if (this._pins[worldid]) return false;
 
-        let world = this._worlds[worldid];
-        if (!world) return false;
+        let world = this.getCachedWorld(worldid);
+        if (!world) {
+            if (byid) {
+                try {
+                    world = await this.getWorld(worldid, false, true);
+                } catch (e) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
 
         let emb = new MessageEmbed();
 
@@ -2683,6 +2799,11 @@ class ModVRChat extends Module {
                 return match[0];
             }
         }
+    }
+
+    extractWorldsFromText(txt) {
+        if (!txt) return [];
+        return txt.match(/wrld_[0-9a-f-]+/g) || [];
     }
 
     getPinnedMsgURL(msgid) {

@@ -58,7 +58,7 @@ class EnvDiscord extends Environment {
                 this._channels[params.defaultchannel] = this._server.channels.cache.filter(channel => channel.type == "text").find(channel => channel.name == params.defaultchannel);
                 
                 this._localClient.on("message", (message) => {
-                    if (message.author.username == client.user.username) return;
+                    if (message.author.id == client.user.id) return;
                     
                     let type = "regular";
                     let channelid = message.channel.id;
