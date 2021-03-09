@@ -631,6 +631,10 @@ class ModVRChat extends Module {
             if (this.statuschan && this.isBakeStale(userid)) {
                 this.dqueue(function() {
                     this.bakeStatus(userid, this._friends[vrcuserid]);
+                    if (this._friends[vrcuserid].latestlocation) {
+                        let worldid = this.worldFromLocation(this._friends[vrcuserid].latestlocation);
+                        this.updateAffectedWorlds({[worldid]: true});
+                    }
                 }.bind(this));
             }
         }
