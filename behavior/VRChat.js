@@ -631,8 +631,8 @@ class ModVRChat extends Module {
             if (this.statuschan && this.isBakeStale(userid)) {
                 this.dqueue(function() {
                     this.bakeStatus(userid, this._friends[vrcuserid]);
-                    if (this._friends[vrcuserid].latestlocation) {
-                        let worldid = this.worldFromLocation(this._friends[vrcuserid].latestlocation);
+                    if (this._friends[vrcuserid].location) {
+                        let worldid = this.worldFromLocation(this._friends[vrcuserid].location);
                         this.updateAffectedWorlds({[worldid]: true});
                     }
                 }.bind(this));
@@ -3069,7 +3069,7 @@ class ModVRChat extends Module {
         /*
         let f = __function, l = __line;
         this._dqueue.push(() => {
-            console.log("->", f, l);
+            console.log(moment().format("HH:mm:ss"), "->", f, l);
             func();
         });
         */
