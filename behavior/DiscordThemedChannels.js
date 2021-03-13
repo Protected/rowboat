@@ -55,6 +55,7 @@ class ModDiscordThemedChannels extends Module {
         //Register handlers
 
         let messageHandler = (message) => {
+            if (message.author.id == message.guild?.me.id) return;
             let chansets = this.chansetsByChannelid(message.channel.id);
             if (!chansets) return;
             if (this.messageFitsTheme(message, chansets.types)) {

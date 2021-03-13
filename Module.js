@@ -268,9 +268,10 @@ class Module {
                     reject({error: "Request failed: " + res.statusCode, statusCode: res.statusCode});
                 } else {
                     let body = '';
-                    res.on('data', (chunk) => body += chunk);
+                    if (options?.buffer) body = Buffer.from(body);
+                    res.on('data', (chunk) => options?.buffer ? body = Buffer.concat([body, chunk]) : body += chunk);
                     res.on('end', () => {
-                        if (options && options.returnFull) {
+                        if (options?.returnFull) {
                             resolve({body: body, cookies: res.headers["set-cookie"], statusCode: 200});
                         } else {
                             resolve(body);
@@ -284,7 +285,7 @@ class Module {
             } else {
                 req = http.get(url, options, callback);
             }
-            req.on('error', options.returnFull ? (e) => reject({error: e}) : reject);
+            req.on('error', options?.returnFull ? (e) => reject({error: e}) : reject);
         });
     }
 
@@ -321,9 +322,10 @@ class Module {
                     reject({error: "Request failed: " + res.statusCode, statusCode: res.statusCode, content: content, headers: headers});
                 } else {
                     let body = '';
-                    res.on('data', (chunk) => body += chunk);
+                    if (options?.buffer) body = Buffer.from(body);
+                    res.on('data', (chunk) => options?.buffer ? body = Buffer.concat([body, Buffer.from(chunk)]) : body += chunk);
                     res.on('end', () => {
-                        if (options && options.returnFull) {
+                        if (options?.returnFull) {
                             resolve({body: body, cookies: res.headers["set-cookie"], statusCode: 200});
                         } else {
                             resolve(body);
@@ -337,7 +339,7 @@ class Module {
             } else {
                 req = http.request(url, options, callback);
             }
-            req.on('error', options.returnFull ? (e) => reject({error: e}) : reject);
+            req.on('error', options?.returnFull ? (e) => reject({error: e}) : reject);
             req.write(content);
             req.end();
         });

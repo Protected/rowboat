@@ -4,6 +4,9 @@ const moment = require('moment');
 const random = require('meteor-random');
 const { MessageEmbed } = require('discord.js');
 const WebSocket = require('ws');
+const pngextract = require('png-chunks-extract');
+
+const fs = require('fs'); //TODO remove
 
 const Module = require('../Module.js');
 const { enableConsole } = require('../Logger.js');
@@ -101,6 +104,8 @@ class ModVRChat extends Module {
 
         "alertmin",             //Minimum amount of online people to vrcalert at
         "alertcooldown",        //How long until a user can be alerted again (mins)
+
+        "photochan",            //ID of text channel for photos (read LFS metadata)
     ]; }
 
     get requiredEnvironments() { return [
@@ -129,6 +134,10 @@ class ModVRChat extends Module {
 
     get pinnedchan() {
         return this.denv.server.channels.cache.get(this.param("pinnedchan"));
+    }
+
+    get photochan() {
+        return this.denv.server.channels.cache.get(this.param("photochan"));
     }
 
     get worldInviteButtons() {
@@ -291,6 +300,7 @@ class ModVRChat extends Module {
 
         }
 
+
         let guildMemberRemoveHandler = async (member) => {
 
             //Unlearn departing person
@@ -304,6 +314,7 @@ class ModVRChat extends Module {
             this.unregisterPerson(member.id);
 
         };
+
 
         let messageDeleteHandler = (message) => {
         
@@ -332,6 +343,7 @@ class ModVRChat extends Module {
             }
             
         };
+
 
         let messageReactionAddHandler = async (messageReaction, user) => {
             if (user.id == this.denv.server.me.id) return;
@@ -418,39 +430,74 @@ class ModVRChat extends Module {
 
         };
 
+
         let messageHandler = (env, type, message, authorid, channelid, messageObject) => {
-            //Only interested in direct sharing to pinnedchan
-            if (env.name != this.param("env") || type != "regular" || channelid != this.pinnedchan.id) return;
+            if (env.name != this.param("env") || type != "regular") return;
 
-            let worldids = this.extractWorldsFromText(message);
-            messageObject.delete({reason: worldids.length ? "Replacing with pinned world." : "Redirecting to main channel."});
+            if (channelid == this.pinnedchan?.id) {
+                //Direct sharing to pinnedchan
+                let worldids = this.extractWorldsFromText(message);
+                messageObject.delete({reason: worldids.length ? "Replacing with pinned world." : "Redirecting to main channel."});
 
-            if (!worldids.length) {
-                this.announce("> " + message.split("\n")[0] + "\n<@" + authorid + "> The <#" + channelid + "> channel is for pinned worlds only!");
-                return true;
-            }
-
-            for (let worldid of worldids) {
-                if (this._pins[worldid]) {
-                    let worldname = this.getCachedWorld(worldid)?.name || worldid;
-                    this.announce("<@" + authorid + "> The world " + worldname + " is already pinned.");
+                if (!worldids.length) {
+                    this.announce("> " + message.split("\n")[0] + "\n<@" + authorid + "> The <#" + channelid + "> channel is for pinned worlds only!");
                     return true;
                 }
 
-                this.dqueue(function() {
-                    this.potentialWorldPin(worldid, true)
-                        .then(result => {
-                            if (!result) {
-                                let worldname = this.getCachedWorld(worldid)?.name || worldid;
-                                this.announce("<@" + authorid + "> Failed to pin the world " + worldname + " - does it still exist?");
+                for (let worldid of worldids) {
+                    if (this._pins[worldid]) {
+                        let worldname = this.getCachedWorld(worldid)?.name || worldid;
+                        this.announce("<@" + authorid + "> The world " + worldname + " is already pinned.");
+                        return true;
+                    }
+
+                    this.dqueue(function() {
+                        this.potentialWorldPin(worldid, true)
+                            .then(result => {
+                                if (!result) {
+                                    let worldname = this.getCachedWorld(worldid)?.name || worldid;
+                                    this.announce("<@" + authorid + "> Failed to pin the world " + worldname + " - does it still exist?");
+                                }
+                            });
+                    }.bind(this));
+                }
+            }
+
+            if (channelid == this.photochan?.id) {
+                //Sharing to photochan
+
+                for (let attachment of messageObject.attachments.array()) {
+                    if (!attachment.width) continue;
+
+                    this.urlget(attachment.url, {buffer: true})
+                        .then((data) => {
+
+                            let metadata = null;
+                            if (attachment.name && attachment.name.match(/\.png$/i)) {
+                                metadata = pngextract(data)
+                                    .filter(chunk => chunk.name == "tEXt")
+                                    .map(chunk => this.pngDecode(chunk.data))
+                                    .find(text => text.keyword == "Description" && text.text.match(/^lfs|1|/));
+                                if (metadata) {
+                                    metadata = this.lfsMetadataToObject(metadata.text);
+                                }
                             }
-                        });
-                }.bind(this));
+
+                            messageObject.delete({reason: "Replacing with embed."})
+                                .then(() => { this.bakePicture(attachment.name || "photo.png", data, messageObject.author.id, metadata); })
+                                .catch((e) => { });
+
+                        })
+                        .catch((e) => { });
+
+                }
+
             }
 
             return true;
         };
 
+        
         this.denv.on("connected", async () => {
 
             if (this.param("usewebhook")) {
@@ -2820,6 +2867,58 @@ class ModVRChat extends Module {
     }
 
 
+    //Picture metadata
+
+    async bakePicture(name, data, userid, metadata) {
+        if (!name || !data || !data.length || !userid) return null;
+
+        let sharedBy = this.denv.idToDisplayName(userid);
+
+        let emb = new MessageEmbed();
+
+        if (metadata) {
+            let sbperson = this.getPerson(userid);
+            if (sbperson && metadata.author.id == sbperson.vrc) {
+                sharedBy = null;
+            }
+
+            let people = metadata.players
+                .sort((a, b) => {
+                    if (a.z > 0 && b.z < 0) return -1;
+                    if (a.z < 0 && b.z > 0) return 1;
+                    return b.x - a.x || b.y - a.y || b.z - a.z;
+                })
+                .map(player => {
+                    let result = player.name;
+                    if (player.id == metadata.author.id) result = "__" + result + "__";
+                    if (player.z < 0) result = "*" + result + "*";
+                    let playeruserid = this.getUseridByVrc(player.id);
+                    if (playeruserid) result = "[" + result + "](" + this.getPersonMsgURL(playeruserid) + ")";
+                    return result;
+                })
+                .join(", ");
+            emb.addField("With", people);
+
+            emb.addField("Location", "[" + metadata.world.name + "](https://vrchat.com/home/world/" + metadata.world.id + ")", true);
+        }
+
+        if (sharedBy) {
+            let msgurl = this.getPersonMsgURL(userid);
+            if (msgurl) sharedBy = "[" + sharedBy + "](" + msgurl + ")";
+            emb.addField("Shared by", sharedBy, true);
+        }
+
+        emb.attachFiles({name: name, attachment: data})
+            .setImage("attachment://" + encodeURI(name));
+
+        try {
+            return this.photochan.send({embed: emb, disableMentions: 'all'});
+        } catch (e) {
+            this.log("error", "Failed to bake picture " + url + ": " + JSON.stringify(e));
+        }
+    }
+
+
     //High level api methods
 
     async vrcConfig() {
@@ -3320,6 +3419,57 @@ class ModVRChat extends Module {
             }
         }
         return null;
+    }
+
+    lfsMetadataToObject(metadata) {
+        if (!metadata) return null;
+        let raw = metadata.match(/^lfs\|([0-9]+)\|(.*)$/u);
+        if (!raw) return null;
+        let result = {};
+        if (raw[1] == 2) {
+            for (let pair of raw[2].split("|")) {
+                let kv = pair.split(":");
+                if (kv[0] == "author") {
+                    let values = kv[1].split(",");
+                    result.author = {id: values[0], name: values[1]};
+                }
+                if (kv[0] == "world") {
+                    let values = kv[1].split(",");
+                    result.world = {id: values[0], instanceId: values[1], name: values[2]};
+                }
+                if (kv[0] == "players") {
+                    result.players = kv[1].split(";").map(player => {
+                        let values = player.split(",");
+                        return {id: values[0], x: parseFloat(values[1]), y: parseFloat(values[2]), z: parseFloat(values[3]), name: values[4]};
+                    });
+                }
+            }
+        }
+        return result;
+    }
+
+    pngDecode(data) {
+        if (data.data && data.name) {
+            data = data.data;
+        }
+
+        data = Buffer.from(data);
+          
+        let name = '';
+        let text = '';
+        let i;
+
+        for (i = 0; i < data.length; i++) {
+            if (!data[i]) break;
+            name += String.fromCharCode(data[i]);
+        }
+
+        text = data.toString('utf8', i + 1);
+          
+        return {
+            keyword: name,
+            text: text
+        };
     }
 
 }

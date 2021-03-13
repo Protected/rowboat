@@ -39,6 +39,7 @@
     "moment-timezone": "^0.5.32",
     "node-ddg-api": "^0.1.4",
     "node-feedparser": "^1.0.1",
+    "png-chunks-extract": "^1.0.0",
     "readline-sync": "^1.4.9",
     "request": "^2.87.0",
     "sqlite3": "^4.2.0",
