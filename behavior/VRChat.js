@@ -2886,7 +2886,7 @@ class ModVRChat extends Module {
                 .sort((a, b) => {
                     if (a.z > 0 && b.z < 0) return -1;
                     if (a.z < 0 && b.z > 0) return 1;
-                    return b.x - a.x || b.y - a.y || b.z - a.z;
+                    return a.x - b.x || a.y - b.y || a.z - b.z;
                 })
                 .map(player => {
                     let result = player.name;
