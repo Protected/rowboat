@@ -475,9 +475,9 @@ class ModVRChat extends Module {
                             let metadata = null;
                             if (attachment.name && attachment.name.match(/\.png$/i)) {
                                 metadata = pngextract(data)
-                                    .filter(chunk => chunk.name == "tEXt")
-                                    .map(chunk => this.pngDecode(chunk.data))
-                                    .find(text => text.keyword == "Description" && text.text.match(/^lfs|1|/));
+                                    .filter(chunk => chunk.name == "tEXt" || chunk.name == "iTXt")
+                                    .map(chunk => chunk.name == "tEXt" ? this.pngDecodetEXt(chunk.data) : this.pngDecodeiTXt(chunk.data))
+                                    .find(text => text.keyword == "Description" && text.text.match(/^lfs|2|/));
                                 if (metadata) {
                                     metadata = this.lfsMetadataToObject(metadata.text);
                                 }
@@ -3437,6 +3437,12 @@ class ModVRChat extends Module {
                     let values = kv[1].split(",");
                     result.world = {id: values[0], instanceId: values[1], name: values[2]};
                 }
+                if (kv[0] == "pos") {
+                    result.pos = kv[1].split(",");
+                }
+                if (kv[0] == "rq") {
+                    result.rq = kv[1];
+                }
                 if (kv[0] == "players") {
                     result.players = kv[1].split(";").map(player => {
                         let values = player.split(",");
@@ -3448,7 +3454,7 @@ class ModVRChat extends Module {
         return result;
     }
 
-    pngDecode(data) {
+    pngDecodetEXt(data) {
         if (data.data && data.name) {
             data = data.data;
         }
@@ -3465,6 +3471,36 @@ class ModVRChat extends Module {
         }
 
         text = data.toString('utf8', i + 1);
+          
+        return {
+            keyword: name,
+            text: text
+        };
+    }
+
+    pngDecodeiTXt(data) {
+        if (data.data && data.name) {
+            data = data.data;
+        }
+
+        data = Buffer.from(data);
+
+        let name = '';
+        let text = '';
+        let i;
+
+        for (i = 0; i < data.length; i++) {
+            if (!data[i]) break;
+            name += String.fromCharCode(data[i]);
+        }
+
+        i += 3;
+        while (data[i]) i+= 1;
+        i += 1;
+        while (data[i]) i+= 1;
+        i += 1;
+
+        text = data.toString('utf8', i);
           
         return {
             keyword: name,
