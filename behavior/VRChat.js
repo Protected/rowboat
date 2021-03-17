@@ -6,8 +6,6 @@ const { MessageEmbed } = require('discord.js');
 const WebSocket = require('ws');
 const pngextract = require('png-chunks-extract');
 
-const fs = require('fs'); //TODO remove
-
 const Module = require('../Module.js');
 const { enableConsole } = require('../Logger.js');
 
@@ -101,6 +99,7 @@ class ModVRChat extends Module {
         "publicemoji",          //Emoji that represents a public instance
         "friendsplusemoji",     //Emoji that represents a friends+ instance ("hidden")
         "friendsemoji",         //Emoji that represents a friends instance
+        "deleteemoji",          //Emoji for deleting things
 
         "alertmin",             //Minimum amount of online people to vrcalert at
         "alertcooldown",        //How long until a user can be alerted again (mins)
@@ -192,6 +191,7 @@ class ModVRChat extends Module {
         this._params["publicemoji"] = "🌍";
         this._params["friendsplusemoji"] = "🥳";
         this._params["friendsemoji"] = "🧑‍🤝‍🧑";
+        this._params["deleteemoji"] = "❌";
 
         this._params["alertmin"] = 4;
         this._params["alertcooldown"] = 60;
@@ -426,6 +426,20 @@ class ModVRChat extends Module {
 
                 //Remove all reactions from status channel
                 messageReaction.users.remove(user.id);
+            }
+
+            //Delete photos
+            if (this.photochan && messageReaction.message.channel.id == this.photochan.id) {
+
+                if (messageReaction.emoji.name == this.param("deleteemoji")) {
+                    let owners = this.extractOwnersFromPicture(messageReaction.message);
+                    if (owners && owners.find(owner => owner == user.id)) {
+                        messageReaction.message.delete({reason: "Photo removal requested by owner."});
+                    } else {
+                        messageReaction.users.remove(user.id);
+                    }
+                }
+
             }
 
         };
@@ -2916,6 +2930,37 @@ class ModVRChat extends Module {
         } catch (e) {
             this.log("error", "Failed to bake picture " + url + ": " + JSON.stringify(e));
         }
+    }
+
+
+    extractOwnersFromPicture(message) {
+        if (!message) return null;
+        let emb = null;
+        for (let checkembed of message.embeds) {
+            if (checkembed.type == "rich") {
+                emb = checkembed;
+                break;
+            }
+        }
+        if (!emb || !emb.image) return null;
+        let results = [];
+        for (let field of emb.fields) {
+            if (field.name.match(/^shared by$/i)) {
+                let extrs = field.value.match(/\[[^\]]+\]\(https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)\)/);
+                if (extrs) {
+                    let person = this.findPersonByMsg(extrs[1]);
+                    if (person) results.push(person);
+                }
+            }
+            if (field.name.match(/^with$/i)) {
+                let extrs = field.value.match(/\[[^\]]*__[^\]]+__[^\]]*\]\(https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)\)/);
+                if (extrs) {
+                    let person = this.findPersonByMsg(extrs[1]);
+                    if (person) results.push(person);
+                }
+            }
+        }
+        return results;
     }
 
 
