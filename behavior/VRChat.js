@@ -90,21 +90,22 @@ class ModVRChat extends Module {
         "usewebhook",           //Whether to use a webhook to send announcements
 
         "expiration",           //How long to stay unfriended before unassigning a person (h)
-        "ddelay",               //Delay between actions in the delayed action queue (used to prevent rate limiting) (ms)
+        "absence",              //How long can a known user stay offline before they're automatically unassigned (d)
+        "ddelay",               //Delay between actions in the delayed action queue (ms) [used to prevent rate limiting]
         
         "pinnedemoji",          //Emoji used for pinning worlds
         "pinokayemoji",         //Emoji used for okaying pins
         "inviteemoji",          //Emoji used for requesting an invitation
         "anyemoji",             //Emoji that represents any visible instance
         "publicemoji",          //Emoji that represents a public instance
-        "friendsplusemoji",     //Emoji that represents a friends+ instance ("hidden")
+        "friendsplusemoji",     //Emoji that represents a friends+ instance ["hidden"]
         "friendsemoji",         //Emoji that represents a friends instance
         "deleteemoji",          //Emoji for deleting things
 
         "alertmin",             //Minimum amount of online people to vrcalert at
         "alertcooldown",        //How long until a user can be alerted again (mins)
 
-        "photochan",            //ID of text channel for photos (read LFS metadata)
+        "photochan",            //ID of text channel for photos [read LFS metadata]
     ]; }
 
     get requiredEnvironments() { return [
@@ -182,6 +183,7 @@ class ModVRChat extends Module {
         this._params["usewebhook"] = true;
 
         this._params["expiration"] = 48;
+        this._params["absence"] = 32;
         this._params["ddelay"] = 250;
 
         this._params["pinnedemoji"] = "📌";
@@ -204,6 +206,7 @@ class ModVRChat extends Module {
         this._frupdated = null;
 
         this._sneaks = {};  //Users who were sneaking when they last went offline {USERID: TS, ...}
+        this._invisibles = {};  //Users who were invisible when they last went offline {USERID: TS, ...}
 
         this._config = null;  //The full object returned by the "config" API. This API must be called before any other request.
         this._auth = null;  //The auth cookie
@@ -417,7 +420,7 @@ class ModVRChat extends Module {
                     if (targetid) {
                         let target = this.getPerson(targetid);
                         let person = this.getPerson(user.id);
-                        if (person && person.vrc && target.latestlocation && !target.sneak) {
+                        if (person && person.vrc && target.latestlocation && !target.sneak && !target.invisible) {
                             this.vrcInvite(person.vrc, this.worldFromLocation(target.latestlocation), this.instanceFromLocation(target.latestlocation))
                                 .catch(e => this.log("error", "Failed to invite " + user.id + " to " + target.latestlocation + ": " + JSON.stringify(e)));
                         }
@@ -641,13 +644,13 @@ class ModVRChat extends Module {
 
             if (person.latestlocation != location) {
                 let oldworldid = this.worldFromLocation(person.latestlocation);
-                if (oldworldid && !person.sneak) {
+                if (oldworldid && !person.sneak && !person.invisible) {
                     this.removeWorldMember(oldworldid, userid);
                     affectedworlds[oldworldid] = true;
                 }
                 this.updateLocation(userid, location);
                 let worldid = this.worldFromLocation(location);
-                if (worldid && !person.sneak) {
+                if (worldid && !person.sneak && !person.invisible) {
                     this.addWorldMember(worldid, userid);
                     affectedworlds[worldid] = true;
                 }
@@ -666,7 +669,7 @@ class ModVRChat extends Module {
             let userid = this.getUseridByVrc(vrcuserid);
             let person = this.getPerson(userid);
             this._friends[vrcuserid] = userdata;
-            if (!person.confirmed) {
+            if (person && !person.confirmed) {
                 this.confirmPerson(userid);
                 this.assignKnownRole(userid, "User is now confirmed.");
                 this.announce("I see you, " + this.denv.idToDisplayName(userid) + "! You're my VRChat friend.");
@@ -676,7 +679,7 @@ class ModVRChat extends Module {
         let friendDeleteHandler = (vrcuserid) => {
             let userid = this.getUseridByVrc(vrcuserid);
             let person = this.getPerson(userid);
-            if (person.confirmed) {
+            if (person && person.confirmed) {
                 this.unconfirmPerson(userid);
                 this.unassignKnownRole(userid, "User is no longer confirmed.");
                 this.announce("Uh oh... " + this.denv.idToDisplayName(userid) + " is no longer my friend.");
@@ -758,6 +761,25 @@ class ModVRChat extends Module {
                 this.announce("Uh oh... " + this.denv.idToDisplayName(userid) + " is no longer my friend.");
             }
 
+            //Remove absent users
+
+            for (let userid in this._people) {
+                let person = this.getPerson(userid);
+                if (!STATUS_ONLINE.includes(person.lateststatus) && person.latestflip && now - person.latestflip > this.param("absence") * 86400) {
+                    
+                    if (this.statuschan && person.msg) {
+                        let message = this.statuschan.messages.cache.get(person.msg);
+                        if (message) message.delete({reason: "User was unassigned."});
+                    }
+        
+                    this.unassignKnownRole(userid, "User is no longer confirmed.");
+                    this.unregisterPerson(userid);
+                    this.vrcUnfriend(person.vrc);
+                    this.announce("<@" + userid + "> I haven't seen you online in more than " + this.param("absence") + " days, so I'm forgetting you. If you return, use `vrchat assign` to become friends again!");
+
+                }
+            }
+
             //Do things to friends
 
             let hasStatuschan = !!this.statuschan;
@@ -788,13 +810,13 @@ class ModVRChat extends Module {
                 let location = this._friends[person.vrc].location;
                 if (person.latestlocation != location) {
                     let oldworldid = this.worldFromLocation(person.latestlocation);
-                    if (oldworldid && !person.sneak) {
+                    if (oldworldid && !person.sneak && !person.invisible) {
                         this.removeWorldMember(oldworldid, userid);
                         affectedworlds[oldworldid] = true;
                     }
                     this.updateLocation(userid, location);
                     let worldid = this.worldFromLocation(location);
-                    if (worldid && !person.sneak) {
+                    if (worldid && !person.sneak && !person.invisible) {
                         this.addWorldMember(worldid, userid);
                         affectedworlds[worldid] = true;
                     }
@@ -1020,7 +1042,7 @@ class ModVRChat extends Module {
         },  (env, type, userid, channelid, command, args, handle, ep) => asscall(env, userid, args.discorduser.join(" "), args.vrchatuser, ep));
 
 
-        let unasscall = (env, userid, discorduser, ep) => {
+        let unasscall = (env, userid, discorduser, ep, unfriend) => {
 
             if (!this.testEnv(env)) return true;
 
@@ -1050,6 +1072,13 @@ class ModVRChat extends Module {
             this.unregisterPerson(targetid);
             ep.reply("VRChat account unlearned.");
 
+            if (unfriend) {
+                this.vrcUnfriend(person.vrc)
+                    .then(() => {
+                        ep.reply("And we are no longer friends!");
+                    });
+            }
+
             return true;
         };
 
@@ -1067,6 +1096,25 @@ class ModVRChat extends Module {
             minArgs: 0,
             permissions: [PERM_ADMIN]
         },  (env, type, userid, channelid, command, args, handle, ep) => unasscall(env, userid, args.discorduser.join(" "), ep));
+
+        this.mod('Commands').registerCommand(this, 'vrchat delete', {
+            description: "Unassigns your VRChat user and unfriends it.",
+            details: [
+                "If you want to assign again at a later date, you will have to accept my friend request again."
+            ],
+            types: ["regular"]
+        },  (env, type, userid, channelid, command, args, handle, ep) => unasscall(env, userid, null, ep, true));
+
+        this.mod('Commands').registerCommand(this, 'vrchat deletefrom', {
+            description: "Unassigns a Discord user's VRChat user and unfriends it.",
+            details: [
+                "If the Discord user is not provided, the current user is assumed.",
+                "If you want to assign again at a later date, you will have to accept my friend request again."
+            ],
+            args: ["discorduser", true],
+            minArgs: 0,
+            permissions: [PERM_ADMIN]
+        },  (env, type, userid, channelid, command, args, handle, ep) => unasscall(env, userid, args.discorduser.join(" "), ep, true));
 
 
         this.mod('Commands').registerCommand(this, 'vrchat syncnick', {
@@ -1153,7 +1201,7 @@ class ModVRChat extends Module {
 
             let person = this.getPerson(userid);
             if (!person) {
-                ep.reply("This user doesn't have a known VRChat account.");
+                ep.reply("You don't have a known VRChat account.");
                 return true;
             }
 
@@ -1164,6 +1212,11 @@ class ModVRChat extends Module {
                 } else {
                     ep.reply("Sneaking is off.");
                 }
+                return true;
+            }
+
+            if (this._people[userid].invisible && state) {
+                ep.reply("You're invisible. No need to sneak!");
                 return true;
             }
 
@@ -1205,6 +1258,72 @@ class ModVRChat extends Module {
         });
 
 
+        this.mod('Commands').registerCommand(this, 'vrchat invisible', {
+            description: "Disable status tracking for one session.",
+            args: ["state"],
+            minArgs: 0
+        },  (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!this.testEnv(env)) return true;
+
+            let person = this.getPerson(userid);
+            if (!person) {
+                ep.reply("You don't have a known VRChat account.");
+                return true;
+            }
+
+            let state = this.processBooleanArg(args.state);
+            if (state === undefined) {
+                if (person.invisible) {
+                    ep.reply("Invisibility is on.");
+                } else {
+                    ep.reply("Invisibility is off.");
+                }
+                return true;
+            }
+
+            if (this._invisibles[userid]) {
+                delete this._invisibles[userid];
+            }
+
+            let friend = this._friends[person.vrc];
+
+            if (state) {
+
+                let worldid = this.worldFromLocation(person.latestlocation);
+                if (worldid) {
+                    this.removeWorldMember(worldid, userid);
+                    if (friend) {
+                        this.dqueue(function () {
+                            this.bakeStatus(userid, friend);
+                        }.bind(this));
+                    }
+                    this.updateAffectedWorlds({[worldid]: true});
+                }
+
+                if (this._people[userid].sneak) {
+                    this._people[userid].sneak = false;
+                    ep.reply("Sneaking disabled.");
+                }
+                this._people[userid].invisible = true;
+                ep.reply("Invisibility enabled.");
+            } else {
+                this._people[userid].invisible = false;
+                ep.reply("Invisibility disabled.");
+
+                let worldid = this.worldFromLocation(person.latestlocation);
+                if (worldid) {
+                    this.addWorldMember(worldid, userid)
+                        .then(() => { if (friend) this.bakeStatus(userid, friend); })
+                        .then(() => this.updateAffectedWorlds({[worldid]: true}));
+                }
+            }
+
+            this._people.save();
+            return true;
+        });
+
+
         this.mod('Commands').registerRootDetails(this, 'vrcany', {description: "Return a link to a random VRChat element."});
 
 
@@ -1227,7 +1346,7 @@ class ModVRChat extends Module {
             description: "Obtain a random online known user."
         },  (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let person = this.randomPerson(people => userid => STATUS_ONLINE.includes(people[userid].lateststatus));
+            let person = this.randomPerson(people => userid => STATUS_ONLINE.includes(people[userid].lateststatus) && !people[userid].invisible);
             if (!person) {
                 ep.reply("No one is online!");
                 return true;
@@ -1707,6 +1826,7 @@ class ModVRChat extends Module {
             latestpic: null,                //Latest synced avatar picture
             stickypic: false,               //Whether NOT to sync avatar pictures (keep current)
             sneak: false,                   //Whether to track locations
+            invisible: false,               //Whether to track status
             alert: null,                    //{people, tzrange} DM alerts
             latestalert: null,              //Timestamp of latest alert
             alertable: true,                //Whether user can be alerted at all (used to prevent multiple per session)
@@ -1807,18 +1927,27 @@ class ModVRChat extends Module {
                     //Cancel offline flip
                     this._people[userid].pendingflip = false;
                 } else {
-                    //Announce to channel stack
-                    this.annOnline(userid);
-                    //DM announcements
-                    this.dqueue(function () {
-                        this.deliverDMAlerts()
-                    }.bind(this));
+                    //Recover invisibility
+                    if (this._invisibles[userid]) {
+                        if (now - this._invisibles[userid] < this.param("anncollapsetrans")) {
+                            this.setInvisible(userid, true);
+                        }
+                        delete this._invisibles[userid];
+                    }
                     //Recover sneaking
                     if (this._sneaks[userid]) {
                         if (now - this._sneaks[userid] < this.param("anncollapsetrans")) {
                             this.setSneak(userid, true);
                         }
                         delete this._sneaks[userid];
+                    }
+                    if (!this._people[userid].invisible) {
+                        //Announce to channel stack
+                        this.annOnline(userid);
+                        //DM announcements
+                        this.dqueue(function () {
+                            this.deliverDMAlerts()
+                        }.bind(this));
                     }
                 }
             }
@@ -1853,15 +1982,30 @@ class ModVRChat extends Module {
         return true;
     }
 
+    setInvisible(userid, invisible) {
+        if (!this._people[userid]) return false;
+        if (invisible == null) invisible = true;
+        this._people[userid].invisible = !!invisible;
+        this._people.save();
+        return true;
+    }
+
     finishStatusUpdate(userid) {
-        this.annOffline(userid);
+        if (!this._people[userid].invisible) {
+            this.annOffline(userid);
+        }
+        let now = moment().unix();
         this._people[userid].pendingflip = false;
+        if (this._people[userid].invisible) {
+            this._invisibles[userid] = now;
+            this._people[userid].invisible = false;
+        }
         if (this._people[userid].sneak) {
-            this._sneaks[userid] = moment().unix();
+            this._sneaks[userid] = now;
             this._people[userid].sneak = false;
         }
         this._people.save();
-        this.resetDMAlerts()
+        this.resetDMAlerts();
     }
 
     updateLocation(userid, location) {
@@ -2188,17 +2332,17 @@ class ModVRChat extends Module {
 
         emb.setTitle(title);
         emb.setThumbnail(person.latestpic);
-        emb.setColor(STATUS_ONLINE.includes(vrcdata.status) ? this.param("coloronline") : this.param("coloroffline"));
+        emb.setColor(!person.invisible && STATUS_ONLINE.includes(vrcdata.status) ? this.param("coloronline") : this.param("coloroffline"));
         emb.setURL("https://vrchat.com/home/user/" + vrcdata.id);
         emb.fields = [];
 
         let trust = this.highestTrustLevel(vrcdata.tags);
         emb.addField("Trust", this.trustLevelIcon(trust) + " " + this.trustLevelLabel(trust), true);
 
-        emb.addField("Status", this.statusLabel(vrcdata.status), true);
+        emb.addField("Status", this.statusLabel(person.invisible ? "offline" : vrcdata.status), true);
 
         if (vrcdata.location) {
-            emb.addField("Location", this.placeholderLocation(vrcdata.location, person.sneak), true);
+            emb.addField("Location", person.invisible ? this.placeholderLocation("offline") : this.placeholderLocation(vrcdata.location, person.sneak), true);
         }
 
         for (let rolecolor in this._misc.rolecolors) {
@@ -2223,7 +2367,7 @@ class ModVRChat extends Module {
 
         emb.setDescription(body.join("\n\n"));
 
-        if (vrcdata.last_login && vrcdata.status == "offline" && !person.pendingflip) {
+        if (vrcdata.last_login && vrcdata.status == "offline" && !person.pendingflip && !person.invisible) {
             if (person.latestflip) {
                 emb.setFooter("Last seen " + moment.unix(person.latestflip).from(now));
             } else if (vrcdata.last_login) {
@@ -2243,10 +2387,10 @@ class ModVRChat extends Module {
 
         pr.then((msg) => {
             let invite = msg.reactions.cache.find(r => r.emoji.name == this.param("inviteemoji"));
-            if ((person.latestlocation && !person.sneak) && !invite) {
+            if ((person.latestlocation && !person.sneak && !person.invisible) && !invite) {
                 msg.react(this.param("inviteemoji"));
             }
-            if ((!person.latestlocation || person.sneak) && invite) {
+            if ((!person.latestlocation || person.sneak || person.invisible) && invite) {
                 invite.remove();
             }
             this.setBaked(userid);
@@ -3017,6 +3161,12 @@ class ModVRChat extends Module {
         if (!this.isValidUser(vrcuserid)) throw {error: "Invalid user ID."};
         this.log("Sending friend request to " + vrcuserid + ".");
         return this.vrcpost("user/" + vrcuserid + "/friendRequest");
+    }
+
+    async vrcUnfriend(vrcuserid) {
+        if (!this.isValidUser(vrcuserid)) throw {error: "Invalid user ID."};
+        this.log("Unfriending " + vrcuserid + ".");
+        return this.vrcpost("auth/user/friends/" + vrcuserid, undefined, "DELETE");
     }
 
     async vrcFriendStatus(vrcuserid) {
