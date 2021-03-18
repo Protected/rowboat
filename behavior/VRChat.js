@@ -315,6 +315,7 @@ class ModVRChat extends Module {
             }
 
             this.unregisterPerson(member.id);
+            this.vrcUnfriend(person.vrc);
 
         };
 
