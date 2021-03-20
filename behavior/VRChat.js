@@ -1003,7 +1003,7 @@ class ModVRChat extends Module {
                 }
 
             } catch (e) {
-                if (e.statusCode == 404) {
+                if (e.statusCode == 403 || e.statusCode == 404) {
                     ep.reply("There is no VRChat account with that username.");
 
                     try {
