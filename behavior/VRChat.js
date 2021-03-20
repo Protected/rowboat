@@ -2147,7 +2147,7 @@ class ModVRChat extends Module {
                 try {
                     let vrcdata = await this.vrcUser(person.vrc);
                     if (vrcdata && vrcdata.friendKey) {
-                        if (vrcdata.state == "active") vrcdata.status = "website";
+                        if (vrcdata.state == "active" || vrcdata.state == "online" && vrcdata.location == "offline") vrcdata.status = "website";  //Mitigate weird API results
                         if (vrcdata.state == "offline") vrcdata.status = "offline";
                         this._friends[person.vrc] = vrcdata;
                     } else {
