@@ -2129,6 +2129,7 @@ class ModVRChat extends Module {
         try {
             let friendlist = await this.vrcFriendList();
             for (let friend of friendlist) {
+                if (friend.status == "active" && friend.location == "offline") friend.status = "website";  //Mitigate weird API results
                 this._friends[friend.id] = friend;
                 if (notupdated[friend.id]) delete notupdated[friend.id];
             }
@@ -3143,9 +3144,9 @@ class ModVRChat extends Module {
     }
 
     async vrcFriendList(state) {
-        //Warning: Does not include "active" state friends, for some reason
         let list = [];
         if (!state || state == "online") {
+            //Warning 2021-03-20: May now "active" state friends, with status = "active", location = "offline"
             let onlist = await this.vrcget("auth/user/friends/?offline=false");
             if (!onlist) throw {error: "Failure to retrieve friend list."};
             list = list.concat(onlist);
