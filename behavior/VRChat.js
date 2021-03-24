@@ -2394,7 +2394,7 @@ class ModVRChat extends Module {
                 result.push(roledata.emoji);
             }
         }
-        return result.join(this._misc.rolecolors[rolecolor].joiner || "");
+        return result.join("");
     }
 
     clearStatus(userid) {
