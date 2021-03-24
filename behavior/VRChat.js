@@ -225,6 +225,7 @@ class ModVRChat extends Module {
 
         this._ready = false;  //Whether we're done caching existing status messages and can start baking new ones.
         this._modTime = null;  //A reference to the Time module, if available.
+        this._modReactionRoles = null;  //A reference to the ReactionRoles module, if available.
 
         this._timer = null;  //Main timer
         this._qtimer = null;  //Quick timer - Used in websocket mode only
@@ -239,6 +240,7 @@ class ModVRChat extends Module {
         if (!super.initialize(opt)) return false;
 
         opt.moduleRequest('Time', (time) => { this._modTime = time; });
+        opt.moduleRequest('ReactionRoles', (reactionRoles) => { this._modReactionRoles = reactionRoles; });
 
         
         //# Load data
@@ -248,7 +250,11 @@ class ModVRChat extends Module {
 
         this._worlds = this.loadData(this.name.toLowerCase() + ".worlds.json", {}, {quiet: true});
 
-        this._misc = this.loadData(this.name.toLowerCase() + ".misc.json", {rolecolors: {}, rolelabels: {}}, {quiet: true});
+        this._misc = this.loadData(this.name.toLowerCase() + ".misc.json", {
+            webhook: null,
+            pronounscolor: null,
+            statusrolegroups: []
+        }, {quiet: true});
 
         this.resetAllPersons();
 
@@ -1472,10 +1478,11 @@ class ModVRChat extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'vrcrole pronouns', {
+        this.mod('Commands').registerCommand(this, 'vrcconfig pronouns', {
             description: "Sets the pronouns role color.",
             details: [
-                "Use - to unset."
+                "Use - to unset.",
+                "Requires ReactionRoles."
             ],
             args: ["color"],
             permissions: [PERM_ADMIN]
@@ -1487,21 +1494,28 @@ class ModVRChat extends Module {
                 return true;
             }
 
-            if (color == "-") color = undefined;
-            else color = color.toLowerCase();
+            if (color == "-") {
+                color = undefined;
+            } else {
+                color = color.toLowerCase();
+                if (!this._modReactionRoles || !this._modReactionRoles.getGroup(color)) {
+                    ep.reply("There is no ReactionRoles group with this color. Please create one first.");
+                    return true;
+                }
+            }
+
             this.setPronounsColor(color);
             ep.reply("Ok.");
 
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'vrcrole addcolor', {
+        this.mod('Commands').registerCommand(this, 'vrcconfig addcolorgroup', {
             description: "Adds roles with a certain color to status embeds.",
             details: [
-                "Use - instead of the label if you want a blank label."
+                "Requires ReactionRoles."
             ],
-            args: ["color", "label", "joiner"],
-            minArgs: 2,
+            args: ["color"],
             permissions: [PERM_ADMIN]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
     
@@ -1511,16 +1525,18 @@ class ModVRChat extends Module {
                 return true;
             }
 
-            let label = args.label;
-            if (label == "-") label = "";
+            if (!this._modReactionRoles || !this._modReactionRoles.getGroup(color)) {
+                ep.reply("There is no ReactionRoles group with this color. Please create one first.");
+                return true;
+            }
 
-            this.addRoleColor(color.toLowerCase(), label, args.joiner);
+            this.addStatusRoleGroup(color.toLowerCase());
             ep.reply("Ok.");
     
             return true;
         });
     
-        this.mod('Commands').registerCommand(this, 'vrcrole delcolor', {
+        this.mod('Commands').registerCommand(this, 'vrcrole delcolorgroup', {
             description: "Removes roles with a certain color from status embeds.",
             args: ["color"],
             permissions: [PERM_ADMIN]
@@ -1532,62 +1548,13 @@ class ModVRChat extends Module {
                 return true;
             }
 
-            this.delRoleColor(color.toLowerCase());
+            this.delStatusRoleGroup(color.toLowerCase());
             ep.reply("Ok.");
     
             return true;
         });
     
-        this.mod('Commands').registerCommand(this, 'vrcrole addlabel', {
-            description: "Sets a label for a role.",
-            args: ["roleid", "label", true],
-            permissions: [PERM_ADMIN]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
     
-            let label = args.label.join(" ");
-
-            env.server.roles.fetch(args.roleid)
-                .then(role => {
-                    this.setRoleLabel(role.id, label);
-                    ep.reply("Ok.");
-                })
-                .catch (e => {
-                    ep.reply("Role not found.");
-                })
-    
-            return true;
-        });
-    
-        this.mod('Commands').registerCommand(this, 'vrcrole dellabel', {
-            description: "Removes the label for a role.",
-            args: ["roleid"],
-            permissions: [PERM_ADMIN]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
-    
-            this.unsetRoleLabel(roleid);
-            ep.reply("Ok.");
-    
-            return true;
-        });
-
-        this.mod('Commands').registerCommand(this, 'vrcrole checkcolor', {
-            description: "Retrieve the current color of a role.",
-            args: ["roleid"],
-            permissions: [PERM_ADMIN]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
-
-            env.server.roles.fetch(args.roleid)
-                .then(role => {
-                    ep.reply(role.name + ": " + role.hexColor);
-                })
-                .catch (e => {
-                    ep.reply("Role not found.");
-                })
-
-            return true;
-        });
-
-
         this.mod('Commands').registerCommand(this, 'vrcfix updatefavorites', {
             description: "Refresh all favorites.",
             permissions: [PERM_ADMIN]
@@ -1743,40 +1710,22 @@ class ModVRChat extends Module {
 
     //Dynamic settings
 
-    addRoleColor(color, label, joiner) {
+    addStatusRoleGroup(color) {
         if (!color) return false;
-        if (!label) label = "";
-        if (!joiner) joiner = "";
-        if (!this._misc.rolecolors) {
-            this._misc.rolecolors = {};
+        if (!this._misc.statusrolegroups) {
+            this._misc.statusrolegroups = [];
         }
-        this._misc.rolecolors[color] = {label: label, joiner: joiner};
+        if (!this._misc.statusrolegroups.includes(color)) {
+            this._misc.statusrolegroups.push(color);
+        }
         this._misc.save();
         return true;
     }
 
-    delRoleColor(color) {
+    delStatusRoleGroup(color) {
         if (!color) return false;
-        if (!this._misc.rolecolors || !this._misc.rolecolors[color]) return true;
-        delete this._misc.rolecolors[color];
-        this._misc.save();
-        return true;
-    }
-
-    setRoleLabel(roleid, label) {
-        if (!roleid || !label) return false;
-        if (!this._misc.rolelabels) {
-            this._misc.rolelabels = {};
-        }
-        this._misc.rolelabels[roleid] = {label: label};
-        this._misc.save();
-        return true;
-    }
-
-    unsetRoleLabel(roleid) {
-        if (!roleid) return false;
-        if (!this._misc.rolelabels || !this._misc.rolelabels[roleid]) return true;
-        delete this._misc.rolelabels[roleid];
+        if (!this._misc.statusrolegroups || !this._misc.statusrolegroups.includes(color)) return true;
+        this._misc.statusrolegroups = this._misc.statusrolegroups.filter(checkcolor => checkcolor != color);
         this._misc.save();
         return true;
     }
@@ -2347,9 +2296,12 @@ class ModVRChat extends Module {
             emb.addField("Location", person.invisible ? this.placeholderLocation("offline") : this.placeholderLocation(vrcdata.location, person.sneak), true);
         }
 
-        for (let rolecolor in this._misc.rolecolors) {
-            let block = this.userEmbedRoleBlock(userid, rolecolor);
-            emb.addField(this._misc.rolecolors[rolecolor].label, block + ZWSP /*mobile layout fix*/, true);
+        if (this._modReactionRoles && this._misc.statusrolegroups) {
+            for (let rolecolor of this._misc.statusrolegroups) {
+                let group = this._modReactionRoles.getGroup(rolecolor);
+                let block = this.userEmbedRoleBlock(userid, rolecolor);
+                emb.addField(group.label, block + ZWSP /*mobile layout fix*/, true);
+            }
         }
 
         let body = [];
@@ -2416,29 +2368,31 @@ class ModVRChat extends Module {
     }
 
     userEmbedPronouns(userid) {
-        if (!this._misc.pronounscolor) return null;
+        if (!this._modReactionRoles || !this._misc.pronounscolor) return null;
         let member = this.denv.server.members.cache.get(userid);
         if (!member) return null;
         let result = [];
         for (let role of member.roles.cache.array()) {
             if (role.hexColor.toLowerCase() != this._misc.pronounscolor) continue;
-            if (this._misc.rolelabels[role.id]) {
-                result.push(this._misc.rolelabels[role.id].label);
+            let roledata = this._modReactionRoles.getRole(role.id);
+            if (roledata) {
+                result.push(roledata.emoji);
             }
         }
         return result.join(" ");
     }
 
     userEmbedRoleBlock(userid, rolecolor) {
-        if (!this._misc.rolecolors[rolecolor]) return null;
+        if (!this._modReactionRoles) return null;
         let member = this.denv.server.members.cache.get(userid);
         if (!member) return null;
         let result = [];
         for (let role of member.roles.cache.array()) {
             if (role.hexColor.toLowerCase() != rolecolor) continue;
-            let label = role.name;
-            if (this._misc.rolelabels[role.id]) label = this._misc.rolelabels[role.id].label;
-            result.push(label);
+            let roledata = this._modReactionRoles.getRole(role.id);
+            if (roledata) {
+                result.push(roledata.emoji);
+            }
         }
         return result.join(this._misc.rolecolors[rolecolor].joiner || "");
     }
@@ -3496,7 +3450,7 @@ class ModVRChat extends Module {
             utcOffset = this._modTime.getCurrentUtcOffsetByUserid(this.denv, userid);
         }
         if (tags.includes("language_eng")) {
-            if (utcOffset != null && utcOffset <= -300) flags.push("🇺🇸");
+            if (utcOffset != null && utcOffset <= -240) flags.push("🇺🇸");
             else if (utcOffset != null && utcOffset >= 480 && utcOffset <= 660) flags.push("🇦🇺");
             else if (utcOffset != null && utcOffset >= 720) flags.push("🇳🇿");
             else flags.push("🇬🇧");
