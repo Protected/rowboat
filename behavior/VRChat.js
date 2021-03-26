@@ -2877,6 +2877,9 @@ class ModVRChat extends Module {
         if (!worldid) return false;
         if (this._pins[worldid]) return false;
 
+        let userid = message.author?.id;
+        let sharedBy = this.denv.idToDisplayName(userid);
+
         let world = this.getCachedWorld(worldid);
         if (!world) {
             if (byid) {
@@ -2899,7 +2902,13 @@ class ModVRChat extends Module {
         emb.fields = [];
         let tags = this.formatWorldTags(world.tags);
         if (tags.length) {
-            emb.addField("Tags", tags.join(", "));
+            emb.addField("Tags", tags.join(", "), true);
+        }
+
+        if (sharedBy) {
+            let msgurl = this.getPersonMsgURL(userid);
+            if (msgurl) sharedBy = "[" + sharedBy + "](" + msgurl + ")";
+            emb.addField("Pinned by", sharedBy, true);
         }
 
         let body = [];
