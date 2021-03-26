@@ -754,6 +754,7 @@ class ModVRChat extends Module {
             let reallymissing = [];
             if (this.areFriendsStale(now)) {
                 reallymissing = await this.refreshFriends();
+                reallymissing = Object.keys(reallymissing);
             }
 
             if (!this._frupdated) {
@@ -2433,7 +2434,8 @@ class ModVRChat extends Module {
             } else {
                 //Force reset if transition is no members -> members
                 this.worldchan.messages.fetch(world.msg)
-                    .then(oldmsg => oldmsg.delete({reason: "Bumping down world"}));
+                    .then(oldmsg => oldmsg.delete({reason: "Bumping down world"}))
+                    .catch(() => {});
             }
         }
 
