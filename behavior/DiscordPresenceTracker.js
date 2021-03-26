@@ -42,8 +42,6 @@ class ModDiscordPresenceTracker extends Module {
             twitch: {
                 //Match every field in Activity to identify this activity
                 filter: {name: "Twitch", type: "STREAMING"},
-                //Presented in the main embed (when activity is starting)
-                description: "Now streaming",
                 //Activity title
                 fieldTitle: "details",
                 //Used Activity fields and their display labels

@@ -623,6 +623,7 @@ class ModVRChat extends Module {
             let person = this.getPerson(userid);
 
             if (!userdata) userdata = {};
+            if (userdata.state) delete userdata.state;
 
             if (state == "active") userdata.status = "website";
             if (state == "offline") { userdata.status = "offline"; userdata.location = "offline"; }
@@ -642,6 +643,8 @@ class ModVRChat extends Module {
         let friendLocationChangeHandler = (vrcuserid, userdata, partialworld, instance, location) => {
             let userid = this.getUseridByVrc(vrcuserid);
             let person = this.getPerson(userid);
+
+            if (userdata.state) delete userdata.state;
 
             if (!this._friends[vrcuserid]) this._friends[vrcuserid] = {};
             Object.assign(this._friends[vrcuserid], userdata);
@@ -696,6 +699,8 @@ class ModVRChat extends Module {
         let friendUpdateHandler = (vrcuserid, userdata) => {
             let userid = this.getUseridByVrc(vrcuserid);
 
+            if (userdata.state) delete userdata.state;
+
             if (!this._friends[vrcuserid]) this._friends[vrcuserid] = {};
             Object.assign(this._friends[vrcuserid], userdata);
 
@@ -725,8 +730,7 @@ class ModVRChat extends Module {
                 })
         }
 
-        startup.then(() => this.refreshFriends(true))
-            .then(() => this.addMissingPeopleIndividually());
+        startup.then(() => this.refreshFriends(true));
             
 
         //# Start automation timers
@@ -749,8 +753,7 @@ class ModVRChat extends Module {
 
             let reallymissing = [];
             if (this.areFriendsStale(now)) {
-                let missing = await this.refreshFriends();
-                reallymissing = await this.addMissingPeopleIndividually(missing);
+                reallymissing = await this.refreshFriends();
             }
 
             if (!this._frupdated) {
@@ -991,7 +994,6 @@ class ModVRChat extends Module {
 
                 if (!this.getPerson(targetid)) {
                     this.registerPerson(targetid, {vrc: data.id});
-                    this.addMissingPeopleIndividually();
                 }
 
                 if (!data.isFriend) {
@@ -2078,7 +2080,7 @@ class ModVRChat extends Module {
         try {
             let friendlist = await this.vrcFriendList();
             for (let friend of friendlist) {
-                if (friend.status == "active" && friend.location == "offline") friend.status = "website";  //Mitigate weird API results
+                if (friend.status == "active" && friend.location == "offline") friend.status = "website";
                 this._friends[friend.id] = friend;
                 if (notupdated[friend.id]) delete notupdated[friend.id];
             }
@@ -2087,29 +2089,6 @@ class ModVRChat extends Module {
             this.log("error", "Refreshing friend list: " + e);
         }
         return notupdated;
-    }
-
-    async addMissingPeopleIndividually(missing) {
-        let reallymissing = [];
-        for (let userid in this._people) {
-            let person = this.getPerson(userid);
-            if (!this._friends[person.vrc] || missing && missing[person.vrc]) {
-                try {
-                    let vrcdata = await this.vrcUser(person.vrc);
-                    if (vrcdata && vrcdata.friendKey) {
-                        if (vrcdata.state == "active" || vrcdata.state == "online" && vrcdata.location == "offline") vrcdata.status = "website";  //Mitigate weird API results
-                        if (vrcdata.state == "offline") vrcdata.status = "offline";
-                        this._friends[person.vrc] = vrcdata;
-                    } else {
-                        reallymissing.push(userid);
-                    }
-                } catch (e) {
-                    this.log("error", "Attempting to retrieve missing friend: " + e + " (Assigned to " + userid + ")");
-                    continue;
-                }
-            }
-        }
-        return reallymissing;
     }
 
     areFriendsStale(now) {
@@ -3100,7 +3079,6 @@ class ModVRChat extends Module {
     async vrcFriendList(state) {
         let list = [];
         if (!state || state == "online") {
-            //Warning 2021-03-20: May now "active" state friends, with status = "active", location = "offline"
             let onlist = await this.vrcget("auth/user/friends/?offline=false");
             if (!onlist) throw {error: "Failure to retrieve friend list."};
             list = list.concat(onlist);
@@ -3207,7 +3185,7 @@ class ModVRChat extends Module {
                             handlers.friendUpdate(content.userId, content.user);
                         }
                     } catch (e) {
-                        this.log("warn", "Could not parse websocket message: " + data);
+                        this.log("warn", "Could not parse websocket message: " + message.content);
                     }
                 });
 
