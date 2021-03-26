@@ -362,7 +362,7 @@ class ModVRChat extends Module {
             if (this.worldchan && messageReaction.message.channel.id == this.worldchan.id) {
 
                 if (this.pinnedchan && messageReaction.emoji.name == this.param("pinnedemoji")) {
-                    this.potentialWorldPin(messageReaction.message)
+                    this.potentialWorldPin(messageReaction.message, false, user.id)
                         .then(result => {
                             if (result) {
                                 let pinnedreaction = messageReaction.message.reactions.cache.find(r => r.emoji.name == this.param("pinnedemoji"));
@@ -476,7 +476,7 @@ class ModVRChat extends Module {
                     }
 
                     this.dqueue(function() {
-                        this.potentialWorldPin(worldid, true)
+                        this.potentialWorldPin(worldid, true, authorid)
                             .then(result => {
                                 if (!result) {
                                     let worldname = this.getCachedWorld(worldid)?.name || worldid;
@@ -1656,9 +1656,9 @@ class ModVRChat extends Module {
                 if (message.author?.id == this.denv.server.me.id) return;
 
                 let worldid = this.extractWorldFromMessage(message);
-                if (worldid) worldids.push(worldid);
+                if (worldid) worldids.push([worldid, message.author?.id]);
                 for (worldid of this.extractWorldsFromText(message.content)) {
-                    worldids.push(worldid);
+                    worldids.push([worldid, message.author?.id]);
                 }
 
                 this.dqueue(function() {
@@ -1670,7 +1670,8 @@ class ModVRChat extends Module {
                 
                 worldids.reverse();
 
-                for (let worldid of worldids) {
+                for (let desc of worldids) {
+                    let worldid = desc[0], userid = desc[1];
                     if (this._pins[worldid]) {
                         let worldname = this.getCachedWorld(worldid)?.name || worldid;
                         this.announce("The world " + worldname + " is already pinned.");
@@ -1678,7 +1679,7 @@ class ModVRChat extends Module {
                     }
     
                     this.dqueue(function() {
-                        this.potentialWorldPin(worldid, true)
+                        this.potentialWorldPin(worldid, true, userid)
                             .then(result => {
                                 if (!result) {
                                     let worldname = this.getCachedWorld(worldid)?.name || worldid;
@@ -2867,7 +2868,7 @@ class ModVRChat extends Module {
 
     //Pin favorites
 
-    async potentialWorldPin(message, byid) {
+    async potentialWorldPin(message, byid, userid) {
         let worldid;
         if (byid) {
             worldid = message;
@@ -2877,7 +2878,6 @@ class ModVRChat extends Module {
         if (!worldid) return false;
         if (this._pins[worldid]) return false;
 
-        let userid = message.author?.id;
         let sharedBy = this.denv.idToDisplayName(userid);
 
         let world = this.getCachedWorld(worldid);
