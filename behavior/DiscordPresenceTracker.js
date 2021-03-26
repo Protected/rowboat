@@ -15,7 +15,7 @@ class ModDiscordPresenceTracker extends Module {
     get optionalParams() { return [
         "roleid",               //Optional role required for being tracked
         "activities",           //List of tracked activities
-        "actinfo"               //Activity descriptors: {NAME: {filter: {...}, description, fieldTitle, fieldLabels: {...}, color}, ...}
+        "actinfo"               //Activity descriptors: {NAME: {filter: {...}, fieldTitle, fieldLabels: {...}, online, color}, ...}
     ]; }
 
     get requiredEnvironments() { return [
@@ -46,6 +46,8 @@ class ModDiscordPresenceTracker extends Module {
                 fieldTitle: "details",
                 //Used Activity fields and their display labels
                 fieldLabels: {details: "Title", state: "Game"},
+                //Online message
+                online: "Now streaming on Twitch!",
                 //Embed accent color
                 color: "#593695"
             }
@@ -129,7 +131,7 @@ class ModDiscordPresenceTracker extends Module {
             embed.addField(info.fieldLabels[field], activity[field]);
         }
 
-        embed.setDescription("Now online!");
+        embed.setDescription(info.online);
 
         this.announcechan.send(embed);
     }
