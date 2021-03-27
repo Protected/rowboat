@@ -188,7 +188,7 @@ class ModTime extends Module {
                 let m = moment().utcOffset(parsed.offset);
                 ep.reply(m.format(format));
             } else {
-                ep.reply(moment().format(format.replace(/Z/, "*-server-*")));
+                ep.reply(moment().format(format.replace(/Z/, "[*-server-*]")));
             }
         
             return true;

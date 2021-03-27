@@ -1,6 +1,8 @@
 /* Module: DiscordPresenceTracker -- Announces updates to user presence in a Discord channel. */
 
+const moment = require('moment');
 const { MessageEmbed } = require('discord.js');
+
 const Module = require('../Module.js');
 
 class ModDiscordPresenceTracker extends Module {
@@ -15,7 +17,9 @@ class ModDiscordPresenceTracker extends Module {
     get optionalParams() { return [
         "roleid",               //Optional role required for being tracked
         "activities",           //List of tracked activities
-        "actinfo"               //Activity descriptors: {NAME: {filter: {...}, fieldTitle, fieldLabels: {...}, online, color}, ...}
+        "actinfo",              //Activity descriptors: {NAME: {filter: {...}, fieldTitle, fieldLabels: {...}, online, color}, ...}
+        "reconnecttolerance",   //How long until a disconnection becomes valid to be announced
+        "reconnectchecktimer",  //How often to validate disconnections
     ]; }
 
     get requiredEnvironments() { return [
@@ -46,12 +50,19 @@ class ModDiscordPresenceTracker extends Module {
                 fieldTitle: "details",
                 //Used Activity fields and their display labels
                 fieldLabels: {details: "Title", state: "Game"},
-                //Online message
+                //Messages
                 online: "Now streaming on Twitch!",
+                offline: "Stream is now offline.",
                 //Embed accent color
                 color: "#593695"
             }
         };
+
+        this._params["reconnecttolerance"] = 180;
+        this._params["reconnectchecktimer"] = 61;
+
+        this._pendingoffline = {};  //{userid: {ACTIVITY: TS, ...}, ...}
+        this._timer = null;
 
     }
 
@@ -60,6 +71,7 @@ class ModDiscordPresenceTracker extends Module {
 
         let presenceUpdateHandler = (oldPresence, presence) => {
             if (this.param("roleid") && !presence.member.roles.cache.get(this.param("roleid"))) return;
+            let now = moment().unix();
 
             for (let name of this.param("activities")) {
                 let oldActivity = (oldPresence ? this.presenceGetActivity(oldPresence, name) : null);
@@ -68,9 +80,18 @@ class ModDiscordPresenceTracker extends Module {
                 if (!oldActivity && !activity) continue;
                 let info = this.actinfo(name);
 
-                if (!oldActivity && activity) this.activityStart(presence.member, info, activity);
-                if (oldActivity && activity) this.activityUpdate(presence.member, info, oldActivity, activity);
-                if (oldActivity && !activity) this.activityEnd(oldPresence.member, info, oldActivity);
+                if (!oldActivity && activity) {
+                    if (!this.isPendingOffline(presence.userID, name)) {
+                        this.activityStart(presence.member, info, activity);
+                    }
+                    this.clearOffline(presence.userID, name);
+                }
+                if (oldActivity && activity) {
+                    this.activityUpdate(presence.member, info, oldActivity, activity);
+                }
+                if (oldActivity && !activity) {
+                    this.scheduleOffline(presence.userID, name, now);
+                }
             }
 
         }
@@ -78,6 +99,21 @@ class ModDiscordPresenceTracker extends Module {
         this.denv.on("connected", async () => {
             this.denv.client.on("presenceUpdate", presenceUpdateHandler);
         });
+
+        this._timer = setInterval(async function () {
+            let now = moment().unix();
+
+            for (let userid in this._pendingoffline) {
+                let member = null;
+                for (let name in this._pendingoffline[userid]) {
+                    if (this.isPendingOffline(userid, name, now)) continue;
+                    if (!member) member = await this.denv.server.members.fetch(userid);
+                    this.activityEnd(member, this.actinfo(name));
+                    this.clearOffline(userid, name);
+                }
+            }
+
+        }.bind(this), this.param("reconnectchecktimer") * 1000);
 
       
         return true;
@@ -108,6 +144,33 @@ class ModDiscordPresenceTracker extends Module {
             }
         }
         return null;
+    }
+
+    scheduleOffline(userid, activityname, now) {
+        if (!userid || !activityname) return false;
+        if (!now) now = moment().unix();
+        if (!this._pendingoffline[userid]) {
+            this._pendingoffline[userid] = {};
+        }
+        this._pendingoffline[userid][activityname] = now;
+        return true;
+    }
+
+    clearOffline(userid, activityname) {
+        if (!userid || !activityname || !this._pendingoffline[userid]) return false;
+        if (this._pendingoffline[userid][activityname]) {
+            delete this._pendingoffline[userid][activityname];
+        }
+        if (!Object.keys(this._pendingoffline[userid]).length) {
+            delete this._pendingoffline[userid];
+        }
+        return true;
+    }
+
+    isPendingOffline(userid, activityname, now) {
+        if (!userid || !activityname || !this._pendingoffline[userid]) return false;
+        if (!now) now = moment().unix();
+        return this._pendingoffline[userid][activityname] && this._pendingoffline[userid][activityname] - now < this.param("reconnecttolerance");
     }
     
     activityStart(member, info, activity) {
@@ -154,11 +217,11 @@ class ModDiscordPresenceTracker extends Module {
         }
     }
 
-    activityEnd(member, info, activity) {
+    activityEnd(member, info) {
         let embed = new MessageEmbed();
         embed.setAuthor(member.displayName, member.user.displayAvatarURL());
         
-        embed.setDescription("Now offline.");
+        embed.setDescription(info.offline);
 
         this.announcechan.send(embed);
     }

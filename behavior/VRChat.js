@@ -86,6 +86,7 @@ class ModVRChat extends Module {
         "anncollapse",          //How long since the latest announcement to collapse announcements (s)
         "anncollapseconsec",    //How long since the latest announcement to collapse announcements if it's the latest message too (s)
         "anncollapsetrans",     //Maximum interval for collapsing a user's state transition (s)
+        "annremovetransmin",    //Maximum interval for removing instead of collapsing a reconnect/peek (s)
         "annmaxstack",          //Maximum amount of names to list in a collapsed announcement
         "usewebhook",           //Whether to use a webhook to send announcements
 
@@ -179,6 +180,7 @@ class ModVRChat extends Module {
         this._params["anncollapse"] = 600;
         this._params["anncollapseconsec"] = 1200;
         this._params["anncollapsetrans"] = 600;
+        this._params["annremovetransmin"] = 45;
         this._params["annmaxstack"] = 10;
         this._params["usewebhook"] = true;
 
@@ -621,6 +623,7 @@ class ModVRChat extends Module {
         let friendStateChangeHandler = (vrcuserid, state, userdata) => {
             let userid = this.getUseridByVrc(vrcuserid);
             let person = this.getPerson(userid);
+            if (!person) return;
 
             if (!userdata) userdata = {};
             if (userdata.state) delete userdata.state;
@@ -643,6 +646,7 @@ class ModVRChat extends Module {
         let friendLocationChangeHandler = (vrcuserid, userdata, partialworld, instance, location) => {
             let userid = this.getUseridByVrc(vrcuserid);
             let person = this.getPerson(userid);
+            if (!person) return;
 
             if (userdata.state) delete userdata.state;
 
@@ -2656,14 +2660,17 @@ class ModVRChat extends Module {
         now = now || moment().unix();
 
         //Offine, Online -> Reconnect
-        if (now - this._lt_offline.ts > this.param("anncollapsetrans")) return false;
+        let interv = now - this._lt_offline.ts;
+        if (interv > this.param("anncollapsetrans")) return false;
         let idx = this._lt_offline.stack.indexOf(userid);
         if (idx < 0) return false;
         this._lt_offline.stack.splice(idx, 1);
         
         this.dqueue(async function () {
             let prev = await this.annStateStack(null, this._lt_offline, true);
-            this.annStateStack(userid, this._lt_reconnect, prev);
+            if (interv > this.param("annremovetransmin")) {
+                this.annStateStack(userid, this._lt_reconnect, prev);
+            }
         }.bind(this));
 
         return true;
@@ -2673,14 +2680,17 @@ class ModVRChat extends Module {
         now = now || moment().unix();
 
         //Online, Offline -> Quick peek
-        if (now - this._lt_online.ts > this.param("anncollapsetrans")) return false;
+        let interv = now - this._lt_online.ts;
+        if (interv > this.param("anncollapsetrans")) return false;
         let idx = this._lt_online.stack.indexOf(userid);
         if (idx < 0) return false;
         this._lt_online.stack.splice(idx, 1);
 
         this.dqueue(async function () {
             let prev = await this.annStateStack(null, this._lt_online, true);
-            this.annStateStack(userid, this._lt_quickpeek, prev);
+            if (interv > this.param("annremovetransmin")) {
+                this.annStateStack(userid, this._lt_quickpeek, prev);
+            }
         }.bind(this));
 
         return true;
