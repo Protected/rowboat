@@ -2092,7 +2092,7 @@ class ModVRChat extends Module {
             }
             this._frupdated = moment().unix();
         } catch (e) {
-            this.log("error", "Refreshing friend list: " + e);
+            this.log("error", "Refreshing friend list: " + JSON.stringify(e));
         }
         return notupdated;
     }
@@ -2128,7 +2128,8 @@ class ModVRChat extends Module {
                 data.prevmembercount = prevmembercount; //Member count on the previous iteration
                 if (!dontcache) this._worlds[worldid] = data;
                 return data;
-            });
+            })
+            .catch((e) => {});
     }
 
     getCachedWorld(worldid) {
@@ -2893,11 +2894,8 @@ class ModVRChat extends Module {
         let world = this.getCachedWorld(worldid);
         if (!world) {
             if (byid) {
-                try {
-                    world = await this.getWorld(worldid, false, true);
-                } catch (e) {
-                    return false;
-                }
+                world = await this.getWorld(worldid, false, true);
+                if (!world) return false;
             } else {
                 return false;
             }
