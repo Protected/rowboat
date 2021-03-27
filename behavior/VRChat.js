@@ -318,7 +318,7 @@ class ModVRChat extends Module {
 
             let person = this.getPerson(member.id);
             if (this.statuschan && person.msg) {
-                let message = this.statuschan.messages.cache.get(person.msg);
+                let message = await this.statuschan.messages.fetch(person.msg);
                 if (message) message.delete({reason: "User has departed the server."});
             }
 
@@ -552,7 +552,8 @@ class ModVRChat extends Module {
                     if (this.statuschan && person.msg) {
                         this.dqueue(function() {
                             this.statuschan.messages.fetch(person.msg)
-                                .then(message => message.delete({reason: "User has departed the server."}));
+                                .then(message => message.delete({reason: "User has departed the server."}))
+                                .catch((e) => { this.log("warn", "Failed to delete departed user's message: " + JSON.stringify(e)); });
                         }.bind(this));
                     }
 
@@ -783,7 +784,7 @@ class ModVRChat extends Module {
                 if (!STATUS_ONLINE.includes(person.lateststatus) && person.latestflip && now - person.latestflip > this.param("absence") * 86400) {
                     
                     if (this.statuschan && person.msg) {
-                        let message = this.statuschan.messages.cache.get(person.msg);
+                        let message = await this.statuschan.messages.fetch(person.msg);
                         if (message) message.delete({reason: "User was unassigned."});
                     }
         
@@ -1077,8 +1078,9 @@ class ModVRChat extends Module {
             }
 
             if (this.statuschan && person.msg) {
-                let message = this.statuschan.messages.cache.get(person.msg);
-                if (message) message.delete({reason: "User was unassigned."});
+                this.statuschan.messages.fetch(person.msg)
+                    .then((message) => { message.delete({reason: "User was unassigned."}) })
+                    .catch((e) => { this.log("warn", "Failed to delete unassigned user's message: " + JSON.stringify(e)); });
             }
 
             this.unassignKnownRole(targetid, "User is no longer confirmed.");
@@ -2383,12 +2385,14 @@ class ModVRChat extends Module {
         return result.join("");
     }
 
-    clearStatus(userid) {
+    async clearStatus(userid) {
         let person = this.getPerson(userid);
         if (!person) return false;
         let message = null, emb = null;
         if (person.msg) {
-            message = this.statuschan.messages.cache.get(person.msg);
+            try {
+                message = await this.statuschan.messages.fetch(person.msg);
+            } catch (e) {}
         }
         if (message) {
             for (let checkembed of message.embeds) {
