@@ -2547,11 +2547,14 @@ class ModVRChat extends Module {
     }
     
 
-    setWorldLink(userid, worldname, worldmsg) {
+    async setWorldLink(userid, worldname, worldmsg) {
         if (!userid || !worldname) return false;
         let person = this.getPerson(userid);
         if (!person) return false;
-        let message = this.statuschan.messages.cache.get(person.msg);
+        let message;
+        try {
+            message = await this.statuschan.messages.fetch(person.msg);
+        } catch (e) {}
         if (!message) return false;
         let emb = null;
         for (let checkembed of message.embeds) {
