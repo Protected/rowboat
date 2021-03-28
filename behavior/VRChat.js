@@ -595,14 +595,14 @@ class ModVRChat extends Module {
                     this._pins[worldid] = message;
 
                     //Fix buttons
-                    let todo = [];
+                    let tasks = [];
                     for (let emoji of this.worldInviteButtons) {
                         let r = message.reactions.cache.find(r => r.emoji.name == emoji);
-                        if (!r || !r.me) todo.push(function() { message.react(emoji) });
+                        if (!r || !r.me) tasks.push(function() { message.react(emoji) });
                     }
-                    if (todo.length) {
+                    if (tasks.length) {
                         this.dqueue(function() {
-                            for (let act of todo) {
+                            for (let act of tasks) {
                                 act();
                             }
                         }.bind(this));
@@ -1377,15 +1377,37 @@ class ModVRChat extends Module {
 
         if (this.param("worldchan")) {
 
+            let worldfilter = (worlds, worldid, filters) => {
+                filters = filters.join(" ").split("|").map(filter => filter.toLowerCase().trim());
+                for (let item of filters) {
+                    if (worlds[worldid].name.toLowerCase().indexOf(item) > -1) return true;
+                    if (worlds[worldid].description.toLowerCase().indexOf(item) > -1) return true;
+                    if (worlds[worldid].authorName.toLowerCase().indexOf(item) > -1) return true;
+                    for (let tag of worlds[worldid].tags) {
+                        if (!tag.match(/^author_tag/)) continue;
+                        tag = tag.replace(/author_tag_/, "").replace(/_/g, "");
+                        if (tag == item) return true;
+                    }
+                }
+                return false;
+            }
+
             this.mod('Commands').registerCommand(this, 'vrcany recentworld', {
-                description: "Obtain a random recently seen (cached) world."
+                description: "Obtain a random recently seen (cached) world.",
+                args: ["filter", true],
+                minArgs: 0
             },  (env, type, userid, channelid, command, args, handle, ep) => {
 
                 if (!this.worldchan) return true;
 
-                let world = this.randomWorld();
+                let filter = undefined;
+                if (args.filter.length) {
+                    filter = worlds => worldid => worldfilter(worlds, worldid, args.filter);
+                }
+
+                let world = this.randomWorld(filter);
                 if (!world) {
-                    ep.reply("I haven't seen any world recently!");
+                    ep.reply("I haven't seen any world recently" + (args.filter.length ? " matching your search" : "") + "!");
                     return true;
                 }
 
@@ -1395,14 +1417,24 @@ class ModVRChat extends Module {
             });
 
             this.mod('Commands').registerCommand(this, 'vrcany activeworld', {
-                description: "Obtain a random world currently in use by a known user."
+                description: "Obtain a random world currently in use by a known user.",
+                args: ["filter", true],
+                minArgs: 0
             },  (env, type, userid, channelid, command, args, handle, ep) => {
 
                 if (!this.worldchan) return true;
 
-                let world = this.randomWorld(worlds => worldid => this.worldMemberCount(worldid) > 0);
+                let filter = worlds => worldid => {
+                    if (this.worldMemberCount(worldid) < 1) return false;
+                    if (args.filter.length) {
+                        return worldfilter(worlds, worldid, filters);
+                    }
+                    return true;
+                }
+
+                let world = this.randomWorld(filter);
                 if (!world) {
-                    ep.reply("No one is online in a visible world!");
+                    ep.reply("No one is online in a visible world" + (args.filter.length ? " matching your search" : "") + "!");
                     return true;
                 }
 
@@ -1411,29 +1443,51 @@ class ModVRChat extends Module {
                 return true;
             });
 
-            if (this.param("pinnedchan")) {
+        }
 
-                this.mod('Commands').registerCommand(this, 'vrcany favorite', {
-                    description: "Obtain a random message from the pinned worlds channel."
-                },  (env, type, userid, channelid, command, args, handle, ep) => {
+        if (this.param("pinnedchan")) {
 
-                    if (!this.pinnedchan) return true;
+            this.mod('Commands').registerCommand(this, 'vrcany favorite', {
+                description: "Obtain a random message from the pinned worlds channel.",
+                args: ["filter", true],
+                minArgs: 0
+            },  (env, type, userid, channelid, command, args, handle, ep) => {
 
-                    let message = this.randomPin();
-                    if (!message) {
-                        ep.reply("There are no pinned worlds!");
-                        return true;
+                if (!this.pinnedchan) return true;
+
+                let filter = undefined;
+                if (args.filter.length) {
+                    let filters = args.filter.join(" ").split("|").map(filter => filter.toLowerCase().trim());
+
+                    filter = pins => worldid => {
+                        let data = this.extractWorldFromMessage(pins[worldid], true);
+                        for (let item of filters) {
+                            if (data.title.toLowerCase().indexOf(item) > -1) return true;
+                            if (data.description.toLowerCase().indexOf(item) > -1) return true;
+                            if (data.tags) {
+                                for (let tag of data.tags) {
+                                    if (tag == item) return true;
+                                }
+                            }
+                        }
+                        return false;
                     }
+                
+                }
 
-                    let data = this.extractWorldFromMessage(message, true);
-                    if (!data) return true;
-
-                    ep.reply("**" + data.title + "** - " + this.getPinnedMsgURL(message.id));
-
+                let message = this.randomPin(filter);
+                if (!message) {
+                    ep.reply("There are no pinned worlds" + (args.filter.length ? " matching your search" : "") + "!");
                     return true;
-                });
+                }
 
-            }
+                let data = this.extractWorldFromMessage(message, true);
+                if (!data) return true;
+
+                ep.reply("**" + data.title + "** - " + this.getPinnedMsgURL(message.id));
+
+                return true;
+            });
 
         }
 
@@ -2962,6 +3016,11 @@ class ModVRChat extends Module {
         let match = emb.url.match(/wrld_[0-9a-f-]+/);
         if (match) {
             if (verbose) {
+                let tags = [];
+                let tagfield = emb.fields.find(field => field.name == "Tags");
+                if (tagfield) {
+                    tags = tagfield.value.split(",").map(tag => tag.trim());
+                }
                 return {
                     worldid: match[0],
                     title: emb.title,
@@ -2969,7 +3028,8 @@ class ModVRChat extends Module {
                     url: emb.url,
                     image: emb.image,
                     thumbnail: emb.thumbnail,
-                    description: emb.description
+                    description: emb.description,
+                    tags: tags
                 };
             } else {
                 return match[0];
