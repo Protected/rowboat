@@ -2261,8 +2261,12 @@ class ModVRChat extends Module {
             }
         }
 
+        let previouslocationcontents = null;
         if (!emb) {
             emb = new MessageEmbed();
+        } else {
+            previouslocationcontents = emb.fields.filter(field => field.name == "Location");
+            if (previouslocationcontents) previouslocationcontents = previouslocationcontents.value;
         }
 
         let title = vrcdata.displayName;
@@ -2281,7 +2285,7 @@ class ModVRChat extends Module {
         emb.addField("Status", this.statusLabel(person.invisible ? "offline" : vrcdata.status), true);
 
         if (vrcdata.location) {
-            emb.addField("Location", person.invisible ? this.placeholderLocation("offline") : this.placeholderLocation(vrcdata.location, person.sneak), true);
+            emb.addField("Location", person.invisible ? this.placeholderLocation("offline") : this.placeholderLocation(vrcdata.location, person.sneak, previouslocationcontents), true);
         }
 
         if (this._modReactionRoles && this._misc.statusrolegroups) {
@@ -3508,11 +3512,11 @@ class ModVRChat extends Module {
         return icon + label;
     }
 
-    placeholderLocation(location, sneak) {
+    placeholderLocation(location, sneak, defaultcontents) {
         if (location == "offline") return "-";
         if (sneak) return "Being sneaky";
         if (location == "private") return "In private world";
-        return "Processing...";
+        return defaultcontents || "Processing...";
     }
 
     generateNonce() {
