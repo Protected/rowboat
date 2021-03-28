@@ -2265,7 +2265,7 @@ class ModVRChat extends Module {
         if (!emb) {
             emb = new MessageEmbed();
         } else {
-            previouslocationcontents = emb.fields.filter(field => field.name == "Location");
+            previouslocationcontents = emb.fields.find(field => field.name == "Location");
             if (previouslocationcontents) previouslocationcontents = previouslocationcontents.value;
         }
 
