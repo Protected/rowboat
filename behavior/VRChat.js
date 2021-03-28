@@ -2445,13 +2445,13 @@ class ModVRChat extends Module {
 
         let message = null, emb = null;
         if (world.msg) {
-            if (world.prevmembercount || !membercount) {
-                message = this.worldchan.messages.cache.get(world.msg);
-            } else {
+            try {
+                message = await this.worldchan.messages.fetch(world.msg)
+            } catch (e) {}
+            if (message && !world.prevmembercount && membercount) {
                 //Force reset if transition is no members -> members
-                this.worldchan.messages.fetch(world.msg)
-                    .then(oldmsg => oldmsg.delete({reason: "Bumping down world"}))
-                    .catch(() => {});
+                message.delete({reason: "Bumping down world"}).catch(() => {});
+                message = null;
             }
         }
 
