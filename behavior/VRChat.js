@@ -2532,9 +2532,9 @@ class ModVRChat extends Module {
 
         try {
             if (message) {
-                return message.edit(emb);
+                return await message.edit(emb);
             } else {
-                return this.worldchan.send({embed: emb, disableMentions: 'all'})
+                return await this.worldchan.send({embed: emb, disableMentions: 'all'})
                     .then(newmessage => {
                         this.setWorldMsg(worldid, newmessage);
                         if (this._pins[worldid]) {
