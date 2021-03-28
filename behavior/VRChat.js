@@ -1380,9 +1380,9 @@ class ModVRChat extends Module {
             let worldfilter = (worlds, worldid, filters) => {
                 filters = filters.join(" ").split("|").map(filter => filter.toLowerCase().trim());
                 for (let item of filters) {
-                    if (worlds[worldid].name.toLowerCase().indexOf(item) > -1) return true;
-                    if (worlds[worldid].description.toLowerCase().indexOf(item) > -1) return true;
-                    if (worlds[worldid].authorName.toLowerCase().indexOf(item) > -1) return true;
+                    if (worlds[worldid].name?.toLowerCase().indexOf(item) > -1) return true;
+                    if (worlds[worldid].description?.toLowerCase().indexOf(item) > -1) return true;
+                    if (worlds[worldid].authorName?.toLowerCase().indexOf(item) > -1) return true;
                     for (let tag of worlds[worldid].tags) {
                         if (!tag.match(/^author_tag/)) continue;
                         tag = tag.replace(/author_tag_/, "").replace(/_/g, "");
@@ -1462,8 +1462,8 @@ class ModVRChat extends Module {
                     filter = pins => worldid => {
                         let data = this.extractWorldFromMessage(pins[worldid], true);
                         for (let item of filters) {
-                            if (data.title.toLowerCase().indexOf(item) > -1) return true;
-                            if (data.description.toLowerCase().indexOf(item) > -1) return true;
+                            if (data.title?.toLowerCase().indexOf(item) > -1) return true;
+                            if (data.description?.toLowerCase().indexOf(item) > -1) return true;
                             if (data.tags) {
                                 for (let tag of data.tags) {
                                     if (tag == item) return true;
