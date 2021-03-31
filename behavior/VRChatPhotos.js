@@ -85,9 +85,10 @@ class ModVRChatPhotos extends Module {
 
             if (this.messageHasAttachmentPhotos(messageObject)) {
                 this.reemitMessage(messageObject);
+
+                return true;
             }
 
-            return true;
         };
 
 

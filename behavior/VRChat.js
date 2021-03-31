@@ -480,9 +480,9 @@ class ModVRChat extends Module {
                             });
                     }.bind(this));
                 }
-            }
 
-            return true;
+                return true;
+            }
         };
 
         
