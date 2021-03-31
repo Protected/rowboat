@@ -959,6 +959,8 @@ class ModVRChat extends Module {
 
             try {
 
+                if (vrchatuser.indexOf(" ") > -1) throw {spaces: true};
+
                 let data = await this.vrcUser(vrchatuser);
                 if (!data) throw {};
 
@@ -981,7 +983,18 @@ class ModVRChat extends Module {
                 }
 
             } catch (e) {
-                if (e.statusCode == 403 || e.statusCode == 404) {
+                if (e.spaces) {
+                    try {
+                        let search = await this.vrcUserSearch(vrchatuser);
+                        if (search && search[0]) {
+                            ep.reply("That name has spaces in it. Please use your user ID instead.");
+                            ep.reply("There is a user with the display name " + search[0].displayName + " whose user ID is `" + search[0].id + "`. Is this you?");
+                        } else {
+                            ep.reply("There is no VRChat account with that username.");
+                        }
+
+                    } catch (e) {}
+                } else if (e.statusCode == 403 || e.statusCode == 404) {
                     ep.reply("There is no VRChat account with that username.");
 
                     try {
@@ -991,8 +1004,6 @@ class ModVRChat extends Module {
                         ep.reply("There is a user with the display name " + search[0].displayName + " whose username is `" + search[0].username + "`. Is this you?");
 
                     } catch (e) {}
-
-                    return true;
                 }
             };
 
