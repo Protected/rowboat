@@ -734,6 +734,7 @@ class ModVRChat extends Module {
             //Unconfirm removed friends
 
             for (let userid of reallymissing) {
+                console.log(userid, " is really missing!");
                 let person = this.getPerson(userid);
                 if (!person.confirmed) continue;
                 this.unconfirmPerson(userid);
@@ -1510,6 +1511,37 @@ class ModVRChat extends Module {
 
             this.updateAlertParameters(userid, people, minutes);
             ep.reply("Alert set for " + people + " or more people " + (m && minutes != null ? "within " + minutes + " minute" + (minutes != 1 ? "s" : "") + " of UTC" + m.format("Z") : "") + ".");
+
+            return true;
+        });
+
+
+        this.mod('Commands').registerRootDetails(this, 'vrcount', {description: "Counters for registered VR elements."});
+
+        this.mod('Commands').registerCommand(this, 'vrcount members', {
+            description: "Returns the current amount of known users."
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            let count = Object.keys(this._people).length;
+            if (count) {
+                ep.reply(env.idToDisplayName(userid) + ": " + count);
+            } else{
+                ep.reply(env.idToDisplayName(userid) + ": I don't know anyone yet.");
+            }
+
+            return true;
+        });
+
+        this.mod('Commands').registerCommand(this, 'vrcount favorites', {
+            description: "Returns the current amount of favorites."
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            let count = Object.keys(this._pins).length;
+            if (count) {
+                ep.reply(env.idToDisplayName(userid) + ": " + count);
+            } else{
+                ep.reply(env.idToDisplayName(userid) + ": There are no favorites yet.");
+            }
 
             return true;
         });

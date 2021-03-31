@@ -1,7 +1,7 @@
 /* Module: VRChatPhotos -- Manages a channel for sharing VRChat photos and screenshots. */
 
 const random = require('meteor-random');
-const { MessageEmbed, Message } = require('discord.js');
+const { MessageEmbed } = require('discord.js');
 const pngextract = require('png-chunks-extract');
 
 const Module = require('../Module.js');
@@ -22,6 +22,15 @@ class ModVRChatPhotos extends Module {
     get optionalParams() { return [
         "name",                 //Album name override
         "deleteemoji",          //Emoji for deleting things
+
+        /* Contest */
+        "contestchan",          //ID of text channel for contest candidates
+        "nominationrole",       //Role required for nominating
+        "candidatemin",         //Minimum timestamp for eligible candidates
+        "candidatemax",         //Maximum timestamp for eligible candidates
+        "maxnominations",       //Maximum candidates per member
+        "nominationemoji",      //Reaction emoji used for nominating
+        "contestemojis"         //List of emojis allowed to "stick" in the contest channel (for votes)
     ]; }
 
     get requiredEnvironments() { return [
@@ -41,13 +50,25 @@ class ModVRChatPhotos extends Module {
         return this.denv.server.channels.cache.get(this.param("photochan"));
     }
 
+    get contestchan() {
+        return this.denv.server.channels.cache.get(this.param("contestchan"));
+    }
+
     constructor(name) {
         super('VRChatPhotos', name);
      
         this._params["name"] = name.toLowerCase();
         this._params["deleteemoji"] = "❌";
 
+        this._params["maxnominations"] = 3;
+        this._params["nominationemoji"] = "⭐";
+        this._params["contestemojis"] = [];
+
         this._index = {};  //{ID: MESSAGE, ...}
+
+        this._contestindex = {};  //{MESSAGEID: {contestant: USERID, msg: MESSAGE, original: ORIGMESSAGEID}, ...}
+        this._contestants = {};  //{USERID: [MESSAGEID, ...]}
+        this._contestoriginals = {};  //{ORIGMESSAGEID: MESSAGEID, ...}
     }
     
     
@@ -60,11 +81,11 @@ class ModVRChatPhotos extends Module {
         let messageReactionAddHandler = async (messageReaction, user) => {
             if (user.id == this.denv.server.me.id) return;
 
-            //Delete photos
             if (this.photochan && messageReaction.message.channel.id == this.photochan.id) {
 
+                //Delete photos
                 if (messageReaction.emoji.name == this.param("deleteemoji")) {
-                    let owners = this.extractOwnersFromPicture(messageReaction.message);
+                    let owners = Object.values(this.extractOwnersFromPicture(messageReaction.message));
                     if (owners && owners.find(owner => owner == user.id)) {
                         messageReaction.message.delete({reason: "Photo removal requested by owner."});
                     } else {
@@ -72,6 +93,58 @@ class ModVRChatPhotos extends Module {
                     }
                 }
 
+                //Create contest candidate
+                if (this.contestchan && messageReaction.emoji.name == this.param("nominationemoji") && this.messageHasPhotos(messageReaction.message)) {
+                    if (this._contestants[user.id] && this._contestants[user.id].length >= this.param("maxnominations")) {
+                        this.denv.msg(user.id, "You have reached the maximum amount of nominations. Delete an existing candidate first.");
+                    } else {
+                        let member = await this.denv.server.members.fetch(user);
+                        if (!this.param("nominationrole") || member.roles.cache.get(this.param("nominationrole"))) {
+                            let ct = messageReaction.message.createdTimestamp / 1000;
+                            let et = messageReaction.message.editedTimestamp ? messageReaction.message.editedTimestamp / 1000 : ct;
+                            if (this.param("candidatemin") && (ct < this.param("candidatemin") || et < this.param("candidatemin"))
+                                    || this.param("candidatemax") && (ct > this.param("candidatemax") || et > this.param("candidatemax"))) {
+                                this.denv.msg(user.id, "That photo was shared or edited outside the contest period.");
+                            } else if (this._contestoriginals[messageReaction.message.id]) {
+                                this.denv.msg(user.id, "That photo is already nominated!");
+                            } else {
+                                let owners = this.extractOwnersFromPicture(messageReaction.message);
+                                let fields = this.getPhotoMessageFields(messageReaction.message);
+                                let candidate = await this.bakeCandidate(member, owners, fields, this.getPhotoMsgURL(messageReaction.message.id));
+                                if (candidate) {
+                                    this._contestindex[candidate.id] = {contestant: user.id, msg: candidate, original: messageReaction.message.id};
+                                    if (!this._contestants[user.id]) this._contestants[user.id] = [];
+                                    this._contestants[user.id].push(candidate.id);
+                                    this._contestoriginals[messageReaction.message.id] = candidate.id;
+                                }
+                            }
+                        }
+                    }
+                    messageReaction.users.remove(user.id);
+                }
+
+            }
+            
+            if (this.contestchan && messageReaction.message.channel.id == this.contestchan.id) {
+
+                //Delete contest candidate
+                if (messageReaction.emoji.name == this.param("deleteemoji")) {
+                    let contestant = this.extractContestantFromPicture(messageReaction.message);
+                    if (contestant == user.id) {
+                        messageReaction.message.delete({reason: "Candidate removal requested by contestant."})
+                            .then(() => {
+                                let contestant = this._contestindex[message.id].contestant;
+                                this._contestants[contestant] = this._contestants[contestant].filter(entry => entry != message.id);
+                                if (this._contestoriginals[this._contestindex[message.id].original]) delete this._contestoriginals[this._contestindex[message.id].original];
+                                delete this._contestindex[message.id];
+                            });
+                        return;
+                    }
+                }
+
+                if (!this.param("contestemojis").find(ce => ce == messageReaction.emoji.name)) {
+                    messageReaction.users.remove(user.id);
+                }
             }
 
         };
@@ -102,9 +175,25 @@ class ModVRChatPhotos extends Module {
         };
 
         let messageDeleteHandler = (message) => {
+
             if (this._index[message.id]) {
                 delete this._index[message.id];
+                return;
             }
+
+            if (this._contestindex[message.id]) {
+                let contestant = this._contestindex[message.id].contestant;
+                this._contestants[contestant] = this._contestants[contestant].filter(entry => entry != message.id);
+                if (this._contestoriginals[this._contestindex[message.id].original]) delete this._contestoriginals[this._contestindex[message.id].original];
+                delete this._contestindex[message.id];
+                return;
+            }
+
+            if (this._contestoriginals[message.id]) {
+                delete this._contestoriginals[message.id];
+                return;
+            }
+
         };
 
         
@@ -119,6 +208,29 @@ class ModVRChatPhotos extends Module {
                     this._index[message.id] = message;
                 }
             });
+
+            //Prefetch and index contest channel contents
+            
+            if (this.contestchan) {
+
+                this._contestindex = {};
+                this._contestants = {};
+                this._contestoriginals = {};
+
+                this.denv.scanEveryMessage(this.contestchan, (message) => {
+                    if (this.messageHasPhotos(message)) {
+                        let contestant = this.extractContestantFromPicture(message);
+                        if (contestant) {
+                            let original = this.extractOriginalFromCandidatePicture(message);
+                            this._contestindex[message.id] = {contestant: contestant, msg: message, original: original};
+                            if (!this._contestants[contestant]) this._contestants[contestant] = [];
+                            this._contestants[contestant].push(message.id);
+                            if (original) this._contestoriginals[original] = message.id;
+                        }
+                    }
+                });
+
+            }
 
             this.denv.client.on("messageReactionAdd", messageReactionAddHandler);
             this.denv.on("message", messageHandler);
@@ -198,6 +310,42 @@ class ModVRChatPhotos extends Module {
 
             return true;
         });
+
+
+        this.mod('Commands').registerRootExtension(this, 'VRChat', 'vrcount');
+
+        this.mod('Commands').registerCommand(this, 'vrcount ' + this.param("name"), {
+            description: "Returns the current amount of photos in the " + this.param("name") + " album."
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            let count = Object.keys(this._index).length;
+            if (count) {
+                ep.reply(env.idToDisplayName(userid) + ": " + count);
+            } else{
+                ep.reply(env.idToDisplayName(userid) + ": There are no photos in this album yet.");
+            }
+
+            return true;
+        });
+
+        if (this.param("contestchan")) {
+
+            this.mod('Commands').registerCommand(this, 'vrcount ' + this.param("name") + " candidates", {
+                description: "Returns the current amount of contest candidates associated with the " + this.param("name") + " album."
+            }, (env, type, userid, channelid, command, args, handle, ep) => {
+    
+                let count = Object.keys(this._contestindex).length;
+                if (count) {
+                    ep.reply(env.idToDisplayName(userid) + ": " + count);
+                } else{
+                    ep.reply(env.idToDisplayName(userid) + ": There are no contest candidates yet.");
+                }
+    
+                return true;
+            });
+
+        }
+
 
         
         return true;
@@ -390,20 +538,20 @@ class ModVRChatPhotos extends Module {
         }
         if (!emb || !emb.image) return null;
 
-        let results = [];
+        let results = {};
         for (let field of emb.fields) {
             if (field.name.match(/^shared by$/i)) {
                 let extrs = field.value.match(/\[[^\]]+\]\(https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)\)/);
                 if (extrs) {
                     let person = vrchat.findPersonByMsg(extrs[1]);
-                    if (person) results.push(person);
+                    if (person) results.sharedBy = person;
                 }
             }
             if (field.name.match(/^with$/i)) {
                 let extrs = field.value.match(/\[[^\]]*__[^\]]+__[^\]]*\]\(https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)\)/);
                 if (extrs) {
                     let person = vrchat.findPersonByMsg(extrs[1]);
-                    if (person) results.push(person);
+                    if (person) results.author = person;
                 }
             }
         }
@@ -460,6 +608,85 @@ class ModVRChatPhotos extends Module {
 
     randomPhoto(makefilter) {
         return this.randomEntry(this._index, makefilter ? makefilter(this._index) : undefined);
+    }
+
+    //Contest
+
+    async bakeCandidate(member, owners, fields, messageurl) {
+        if (!member || !owners || !fields || Object.keys(owners).length < 1) return null;
+
+        let vrchat = this.mod("VRChat");
+
+        let nominate, label;
+        if (owners.author) {
+            nominate = owners.author;
+            label = "Author";
+        } else if (owners.sharedBy) {
+            nominate = owners.sharedBy;
+            label = "Shared by";
+        }
+
+        if (!nominate) return null;
+
+        let emb = new MessageEmbed();
+
+        let msgurl = vrchat.getPersonMsgURL(nominate);
+        if (msgurl) {
+            emb.addField(label, "[" + this.denv.idToDisplayName(nominate) + "](" + msgurl + ")", true);
+        } else {
+            emb.addField(label, this.denv.idToDisplayName(nominate), true);
+        }
+
+        msgurl = vrchat.getPersonMsgURL(member.id);
+        if (msgurl) {
+            emb.addField("Nominated by", "[" + this.denv.idToDisplayName(member.id) + "](" + msgurl + ")", true);
+        } else {
+            emb.addField("Nominated by", this.denv.idToDisplayName(member.id), true);
+        }
+
+        emb.setImage(fields.image);
+
+        try {
+            return this.contestchan.send(messageurl, {embed: emb, disableMentions: 'all'});
+        } catch (e) {
+            this.log("error", "Failed to bake candidate: " + JSON.stringify(e));
+        }
+    }
+
+
+
+    extractContestantFromPicture(message) {
+        if (!message) return null;
+
+        let vrchat = this.mod("VRChat");
+
+        let emb = null;
+        for (let checkembed of message.embeds) {
+            if (checkembed.type == "rich") {
+                emb = checkembed;
+                break;
+            }
+        }
+        if (!emb || !emb.image) return null;
+
+        let results = {};
+        for (let field of emb.fields) {
+            if (field.name.match(/^nominated by$/i)) {
+                let extrs = field.value.match(/\[[^\]]+\]\(https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)\)/);
+                if (extrs) {
+                    let person = vrchat.findPersonByMsg(extrs[1]);
+                    if (person) return person;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    extractOriginalFromCandidatePicture(message) {
+        if (!message || !message.content) return null;
+        let extr = message.content.match(/https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)/);
+        if (extr) return extr[1];
     }
 
     
