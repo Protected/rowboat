@@ -4,7 +4,6 @@ const moment = require('moment');
 const random = require('meteor-random');
 const { MessageEmbed } = require('discord.js');
 const WebSocket = require('ws');
-const pngextract = require('png-chunks-extract');
 
 const Module = require('../Module.js');
 const { enableConsole } = require('../Logger.js');
@@ -105,8 +104,6 @@ class ModVRChat extends Module {
 
         "alertmin",             //Minimum amount of online people to vrcalert at
         "alertcooldown",        //How long until a user can be alerted again (mins)
-
-        "photochan",            //ID of text channel for photos [read LFS metadata]
     ]; }
 
     get requiredEnvironments() { return [
@@ -136,11 +133,7 @@ class ModVRChat extends Module {
     get pinnedchan() {
         return this.denv.server.channels.cache.get(this.param("pinnedchan"));
     }
-
-    get photochan() {
-        return this.denv.server.channels.cache.get(this.param("photochan"));
-    }
-
+    
     get worldInviteButtons() {
         return [
             this.param("anyemoji"),
@@ -440,13 +433,13 @@ class ModVRChat extends Module {
                 messageReaction.users.remove(user.id);
             }
 
-            //Delete photos
-            if (this.photochan && messageReaction.message.channel.id == this.photochan.id) {
+            //Delete favorites
+            if (this.pinnedchan && messageReaction.message.channel.id == this.pinnedchan.id) {
 
                 if (messageReaction.emoji.name == this.param("deleteemoji")) {
-                    let owners = this.extractOwnersFromPicture(messageReaction.message);
+                    let owners = this.extractOwnersFromPin(messageReaction.message);
                     if (owners && owners.find(owner => owner == user.id)) {
-                        messageReaction.message.delete({reason: "Photo removal requested by owner."});
+                        messageReaction.message.delete({reason: "Favorite removal requested by creator."});
                     } else {
                         messageReaction.users.remove(user.id);
                     }
@@ -487,37 +480,6 @@ class ModVRChat extends Module {
                             });
                     }.bind(this));
                 }
-            }
-
-            if (channelid == this.photochan?.id) {
-                //Sharing to photochan
-
-                for (let attachment of messageObject.attachments.array()) {
-                    if (!attachment.width) continue;
-
-                    this.urlget(attachment.url, {buffer: true})
-                        .then((data) => {
-
-                            let metadata = null;
-                            if (attachment.name && attachment.name.match(/\.png$/i)) {
-                                metadata = pngextract(data)
-                                    .filter(chunk => chunk.name == "tEXt" || chunk.name == "iTXt")
-                                    .map(chunk => chunk.name == "tEXt" ? this.pngDecodetEXt(chunk.data) : this.pngDecodeiTXt(chunk.data))
-                                    .find(text => text.keyword == "Description" && text.text.match(/^lfs|2|/));
-                                if (metadata) {
-                                    metadata = this.lfsMetadataToObject(metadata.text);
-                                }
-                            }
-
-                            messageObject.delete({reason: "Replacing with embed."})
-                                .then(() => { this.bakePicture(attachment.name || "photo.png", data, messageObject.author.id, metadata); })
-                                .catch((e) => { });
-
-                        })
-                        .catch((e) => { });
-
-                }
-
             }
 
             return true;
@@ -1377,20 +1339,18 @@ class ModVRChat extends Module {
 
         if (this.param("worldchan")) {
 
-            let worldfilter = (worlds, worldid, filters) => {
-                filters = filters.join(" ").split("|").map(filter => filter.toLowerCase().trim());
-                for (let item of filters) {
-                    if (worlds[worldid].name?.toLowerCase().indexOf(item) > -1) return true;
-                    if (worlds[worldid].description?.toLowerCase().indexOf(item) > -1) return true;
-                    if (worlds[worldid].authorName?.toLowerCase().indexOf(item) > -1) return true;
-                    for (let tag of worlds[worldid].tags) {
-                        if (!tag.match(/^author_tag/)) continue;
-                        tag = tag.replace(/author_tag_/, "").replace(/_/g, "");
-                        if (tag == item) return true;
+            let worldfilter = (worlds, worldid, filters) => this.matchAgainstFilters(worlds[worldid], filters.join(" "), [
+                    (world, filter) => world.name?.toLowerCase().indexOf(filter) > -1,
+                    (world, filter) => world.description?.toLowerCase().indexOf(filter) > -1,
+                    (world, filter) => world.authorName?.toLowerCase().indexOf(filter) > -1,
+                    (world, filter) => {
+                        for (let tag of world.tags) {
+                            if (!tag.match(/^author_tag/)) continue;
+                            tag = tag.replace(/author_tag_/, "").replace(/_/g, "");
+                            if (tag == filter) return true;
+                        }
                     }
-                }
-                return false;
-            }
+                ]);
 
             this.mod('Commands').registerCommand(this, 'vrcany recentworld', {
                 description: "Obtain a random recently seen (cached) world.",
@@ -1424,12 +1384,15 @@ class ModVRChat extends Module {
 
                 if (!this.worldchan) return true;
 
-                let filter = worlds => worldid => {
-                    if (this.worldMemberCount(worldid) < 1) return false;
-                    if (args.filter.length) {
-                        return worldfilter(worlds, worldid, filters);
+                let filter = undefined;
+                if (args.filter.length) {
+                    filter = worlds => worldid => {
+                        if (this.worldMemberCount(worldid) < 1) return false;
+                        if (args.filter.length) {
+                            return worldfilter(worlds, worldid, args.filter);
+                        }
+                        return true;
                     }
-                    return true;
                 }
 
                 let world = this.randomWorld(filter);
@@ -1457,22 +1420,20 @@ class ModVRChat extends Module {
 
                 let filter = undefined;
                 if (args.filter.length) {
-                    let filters = args.filter.join(" ").split("|").map(filter => filter.toLowerCase().trim());
-
                     filter = pins => worldid => {
                         let data = this.extractWorldFromMessage(pins[worldid], true);
-                        for (let item of filters) {
-                            if (data.title?.toLowerCase().indexOf(item) > -1) return true;
-                            if (data.description?.toLowerCase().indexOf(item) > -1) return true;
-                            if (data.tags) {
-                                for (let tag of data.tags) {
-                                    if (tag == item) return true;
+                        return this.matchAgainstFilters(data, args.filter.join(" "), [
+                            (data, filter) => data.title?.toLowerCase().indexOf(filter) > -1,
+                            (data, filter) => data.description?.toLowerCase().indexOf(filter) > -1,
+                            (data, filter) => {
+                                if (data.tags) {
+                                    for (let tag of data.tags) {
+                                        if (tag == filter) return true;
+                                    }
                                 }
                             }
-                        }
-                        return false;
-                    }
-                
+                        ]);
+                    };
                 }
 
                 let message = this.randomPin(filter);
@@ -1601,7 +1562,7 @@ class ModVRChat extends Module {
             return true;
         });
     
-        this.mod('Commands').registerCommand(this, 'vrcrole delcolorgroup', {
+        this.mod('Commands').registerCommand(this, 'vrcconfig delcolorgroup', {
             description: "Removes roles with a certain color from status embeds.",
             args: ["color"],
             permissions: [PERM_ADMIN]
@@ -1619,6 +1580,9 @@ class ModVRChat extends Module {
             return true;
         });
     
+
+        this.mod('Commands').registerRootDetails(this, 'vrcfix', {description: "Manual fixes for VRChat elements."});
+
     
         this.mod('Commands').registerCommand(this, 'vrcfix updatefavorites', {
             description: "Refresh all favorites.",
@@ -2788,7 +2752,7 @@ class ModVRChat extends Module {
         let extralen = 0;
 
         if (stack.length > this.param("annmaxstack")) {
-            extralen = this.param("annmaxstack") - stack.length;
+            extralen = stack.length - this.param("annmaxstack");
             stack = stack.slice(0, this.param("annmaxstack"));
         }
 
@@ -3042,69 +3006,7 @@ class ModVRChat extends Module {
         return txt.match(/wrld_[0-9a-f-]+/g) || [];
     }
 
-    getPinnedMsgURL(msgid) {
-        if (!msgid || !this.pinnedchan) return "";
-        return "https://discord.com/channels/" + this.denv.server.id + "/" + this.pinnedchan.id + "/" + msgid;
-    }
-
-    randomPin(makefilter) {
-        return this.randomEntry(this._pins, makefilter ? makefilter(this._pins) : undefined);
-    }
-
-
-    //Picture metadata
-
-    async bakePicture(name, data, userid, metadata) {
-        if (!name || !data || !data.length || !userid) return null;
-
-        let sharedBy = this.denv.idToDisplayName(userid);
-
-        let emb = new MessageEmbed();
-
-        if (metadata) {
-            let sbperson = this.getPerson(userid);
-            if (sbperson && metadata.author.id == sbperson.vrc) {
-                sharedBy = null;
-            }
-
-            let people = metadata.players
-                .sort((a, b) => {
-                    if (a.z > 0 && b.z < 0) return -1;
-                    if (a.z < 0 && b.z > 0) return 1;
-                    return a.x - b.x || a.y - b.y || a.z - b.z;
-                })
-                .map(player => {
-                    let result = player.name;
-                    if (player.id == metadata.author.id) result = "__" + result + "__";
-                    if (player.z < 0) result = "*" + result + "*";
-                    let playeruserid = this.getUseridByVrc(player.id);
-                    if (playeruserid) result = "[" + result + "](" + this.getPersonMsgURL(playeruserid) + ")";
-                    return result;
-                })
-                .join(", ");
-            emb.addField("With", people);
-
-            emb.addField("Location", "[" + metadata.world.name + "](https://vrchat.com/home/world/" + metadata.world.id + ")", true);
-        }
-
-        if (sharedBy) {
-            let msgurl = this.getPersonMsgURL(userid);
-            if (msgurl) sharedBy = "[" + sharedBy + "](" + msgurl + ")";
-            emb.addField("Shared by", sharedBy, true);
-        }
-
-        emb.attachFiles({name: name, attachment: data})
-            .setImage("attachment://" + encodeURI(name));
-
-        try {
-            return this.photochan.send({embed: emb, disableMentions: 'all'});
-        } catch (e) {
-            this.log("error", "Failed to bake picture " + url + ": " + JSON.stringify(e));
-        }
-    }
-
-
-    extractOwnersFromPicture(message) {
+    extractOwnersFromPin(message) {
         if (!message) return null;
         let emb = null;
         for (let checkembed of message.embeds) {
@@ -3113,18 +3015,11 @@ class ModVRChat extends Module {
                 break;
             }
         }
-        if (!emb || !emb.image) return null;
+        if (!emb) return null;
         let results = [];
         for (let field of emb.fields) {
-            if (field.name.match(/^shared by$/i)) {
+            if (field.name.match(/^pinned by$/i)) {
                 let extrs = field.value.match(/\[[^\]]+\]\(https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)\)/);
-                if (extrs) {
-                    let person = this.findPersonByMsg(extrs[1]);
-                    if (person) results.push(person);
-                }
-            }
-            if (field.name.match(/^with$/i)) {
-                let extrs = field.value.match(/\[[^\]]*__[^\]]+__[^\]]*\]\(https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)\)/);
                 if (extrs) {
                     let person = this.findPersonByMsg(extrs[1]);
                     if (person) results.push(person);
@@ -3132,6 +3027,15 @@ class ModVRChat extends Module {
             }
         }
         return results;
+    }
+
+    getPinnedMsgURL(msgid) {
+        if (!msgid || !this.pinnedchan) return "";
+        return "https://discord.com/channels/" + this.denv.server.id + "/" + this.pinnedchan.id + "/" + msgid;
+    }
+
+    randomPin(makefilter) {
+        return this.randomEntry(this._pins, makefilter ? makefilter(this._pins) : undefined);
     }
 
 
@@ -3642,91 +3546,23 @@ class ModVRChat extends Module {
         return null;
     }
 
-    lfsMetadataToObject(metadata) {
-        if (!metadata) return null;
-        let raw = metadata.match(/^lfs\|([0-9]+)\|(.*)$/u);
-        if (!raw) return null;
-        let result = {};
-        if (raw[1] == 2) {
-            for (let pair of raw[2].split("|")) {
-                let kv = pair.split(":");
-                if (kv[0] == "author") {
-                    let values = kv[1].split(",");
-                    result.author = {id: values[0], name: values[1]};
+    matchAgainstFilters(thing, filterstr, tests) {
+        //tests = [(thing, filter) => true|false, ...]
+        if (!thing || !filterstr || !tests || !tests.length) return false;
+        let orfilters = filterstr.toLowerCase().split("|").map(filter => filter.trim());
+        for (let orfilter of orfilters) {
+            let ofresult = true;
+            let andfilters = orfilter.split("&").map(filter => filter.trim());
+            for (let andfilter of andfilters) {
+                let afresult = false;
+                for (let test of tests) {
+                    if (test(thing, andfilter)) { afresult = true; break; }  //one valid test validates filter
                 }
-                if (kv[0] == "world") {
-                    let values = kv[1].split(",");
-                    result.world = {id: values[0], instanceId: values[1], name: values[2]};
-                }
-                if (kv[0] == "pos") {
-                    result.pos = kv[1].split(",");
-                }
-                if (kv[0] == "rq") {
-                    result.rq = kv[1];
-                }
-                if (kv[0] == "players") {
-                    result.players = kv[1].split(";").map(player => {
-                        let values = player.split(",");
-                        return {id: values[0], x: parseFloat(values[1]), y: parseFloat(values[2]), z: parseFloat(values[3]), name: values[4]};
-                    });
-                }
+                if (!afresult) { ofresult = false; break; }  //one failed filter invalidates and section
             }
+            if (ofresult) return true;  //one successful and section validates or section
         }
-        return result;
-    }
-
-    pngDecodetEXt(data) {
-        if (data.data && data.name) {
-            data = data.data;
-        }
-
-        data = Buffer.from(data);
-          
-        let name = '';
-        let text = '';
-        let i;
-
-        for (i = 0; i < data.length; i++) {
-            if (!data[i]) break;
-            name += String.fromCharCode(data[i]);
-        }
-
-        text = data.toString('utf8', i + 1);
-          
-        return {
-            keyword: name,
-            text: text
-        };
-    }
-
-    pngDecodeiTXt(data) {
-        if (data.data && data.name) {
-            data = data.data;
-        }
-
-        data = Buffer.from(data);
-
-        let name = '';
-        let text = '';
-        let i;
-
-        for (i = 0; i < data.length; i++) {
-            if (!data[i]) break;
-            name += String.fromCharCode(data[i]);
-        }
-
-        i += 3;
-        while (data[i]) i+= 1;
-        i += 1;
-        while (data[i]) i+= 1;
-        i += 1;
-
-        text = data.toString('utf8', i);
-          
-        return {
-            keyword: name,
-            text: text
-        };
+        return false;
     }
 
 }
