@@ -137,7 +137,8 @@ class ModVRChatPhotos extends Module {
                 if (messageReaction.emoji.name == this.param("deleteemoji") && this.param("candidatedelete")) {
                     let contestant = this.extractContestantFromPicture(messageReaction.message);
                     if (contestant == user.id) {
-                        messageReaction.message.delete({reason: "Candidate removal requested by contestant."})
+                        let message = messageReaction.message;
+                        message.delete({reason: "Candidate removal requested by contestant."})
                             .then(() => {
                                 let contestant = this._contestindex[message.id].contestant;
                                 this._contestants[contestant] = this._contestants[contestant].filter(entry => entry != message.id);
