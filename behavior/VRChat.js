@@ -725,7 +725,7 @@ class ModVRChat extends Module {
             let reallymissing = [];
             if (this.areFriendsStale(now)) {
                 reallymissing = await this.refreshFriends();
-                reallymissing = Object.keys(reallymissing);
+                reallymissing = reallymissing ? Object.keys(reallymissing) : [];
             }
 
             if (!this._frupdated) {
@@ -919,7 +919,7 @@ class ModVRChat extends Module {
                         this.bakeWorld(worldid, now)
                             .then(worldmsg => {
                                 //Update user links only if world message was reemitted
-                                if (worldmsg.id != oldmsgid) {
+                                if (worldmsg && worldmsg.id != oldmsgid) {
                                     for (let userid in world.members) {
                                         this.dqueue(function() {
                                             this.setWorldLink(userid, world.name, worldmsg);
@@ -2160,6 +2160,7 @@ class ModVRChat extends Module {
             this._frupdated = moment().unix();
         } catch (e) {
             this.log("error", "Refreshing friend list: " + JSON.stringify(e));
+            return null;
         }
         return notupdated;
     }
@@ -2291,7 +2292,7 @@ class ModVRChat extends Module {
             this._worlds[worldid].members = {};
             this._worlds[worldid].emptysince = now;
             this.dqueue(function() {
-                this.bakeWorld(worldid, now)
+                this.bakeWorld(worldid, now);
             }.bind(this));
         }
         this._worlds.save();
@@ -2659,6 +2660,7 @@ class ModVRChat extends Module {
             this.dqueue(function() {
                 this.bakeWorld(worldid, now)
                     .then(worldmsg => {
+                        if (!worldmsg) return;
                         let world = this.getCachedWorld(worldid);
                         //Always update user links - world.members changed
                         for (let userid in world.members) {
@@ -3272,8 +3274,8 @@ class ModVRChat extends Module {
             }
             throw e;
         } else {
-            if (e.statusCode == 502) {
-                this.log("warn", "Oh no, 502 bad gateway...");
+            if (e.statusCode == 502 || e.statusCode == 504) {
+                this.log("warn", "Oh no, gateway errors (" + e.statusCode + ")...");
             }
             if (e.statusCode != 401) {
                 throw e;
