@@ -310,13 +310,15 @@ class ModVRChat extends Module {
             //Unlearn departing person
 
             let person = this.getPerson(member.id);
-            if (this.statuschan && person.msg) {
+            if (person && this.statuschan && person.msg) {
                 let message = await this.statuschan.messages.fetch(person.msg);
                 if (message) message.delete({reason: "User has departed the server."});
             }
 
             this.unregisterPerson(member.id);
-            this.vrcUnfriend(person.vrc);
+            if (person) {
+                this.vrcUnfriend(person.vrc);
+            }
 
         };
 
