@@ -542,7 +542,19 @@ class ModVRChatPhotos extends Module {
                 break;
             }
         }
-        if (!emb || !emb.image) return null;
+        
+        if (!emb || !emb.image) {
+            
+            for (let attachment of message.attachments.array()) {
+                if (attachment.width) {
+                    return {
+                        sharedBy: message.author?.id
+                    }
+                }
+            }
+
+            return null;
+        }
 
         let results = {};
         for (let field of emb.fields) {
