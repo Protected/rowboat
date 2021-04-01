@@ -733,10 +733,10 @@ class ModVRChat extends Module {
 
             //Unconfirm removed friends
 
-            for (let userid of reallymissing) {
-                console.log(userid, " is really missing!");
+            for (let vrcuserid of reallymissing) {
+                let userid = this.getUseridByVrc(vrcuserid);
                 let person = this.getPerson(userid);
-                if (!person.confirmed) continue;
+                if (!person || !person.confirmed) continue;
                 this.unconfirmPerson(userid);
                 this.unassignKnownRole(userid, "User is no longer confirmed.");
                 this.announce("Uh oh... " + this.denv.idToDisplayName(userid) + " is no longer my friend.");

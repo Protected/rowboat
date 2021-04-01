@@ -30,7 +30,8 @@ class ModVRChatPhotos extends Module {
         "candidatemax",         //Maximum timestamp for eligible candidates
         "maxnominations",       //Maximum candidates per member
         "nominationemoji",      //Reaction emoji used for nominating
-        "contestemojis"         //List of emojis allowed to "stick" in the contest channel (for votes)
+        "contestemojis",        //List of emojis allowed to "stick" in the contest channel (for votes)
+        "candidatedelete"       //Whether candidates can be deleted using a reaction
     ]; }
 
     get requiredEnvironments() { return [
@@ -63,6 +64,7 @@ class ModVRChatPhotos extends Module {
         this._params["maxnominations"] = 3;
         this._params["nominationemoji"] = "⭐";
         this._params["contestemojis"] = [];
+        this._params["candidatedelete"] = true;
 
         this._index = {};  //{ID: MESSAGE, ...}
 
@@ -128,7 +130,7 @@ class ModVRChatPhotos extends Module {
             if (this.contestchan && messageReaction.message.channel.id == this.contestchan.id) {
 
                 //Delete contest candidate
-                if (messageReaction.emoji.name == this.param("deleteemoji")) {
+                if (messageReaction.emoji.name == this.param("deleteemoji") && this.param("candidatedelete")) {
                     let contestant = this.extractContestantFromPicture(messageReaction.message);
                     if (contestant == user.id) {
                         messageReaction.message.delete({reason: "Candidate removal requested by contestant."})
