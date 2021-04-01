@@ -724,8 +724,8 @@ class ModVRChat extends Module {
 
             let reallymissing = [];
             if (this.areFriendsStale(now)) {
-                reallymissing = await this.refreshFriends();
-                reallymissing = reallymissing ? Object.keys(reallymissing) : [];
+                let missing  = await this.refreshFriends();
+                reallymissing = await this.checkMissingPeopleIndividually(missing);
             }
 
             if (!this._frupdated) {
@@ -2163,6 +2163,26 @@ class ModVRChat extends Module {
             return null;
         }
         return notupdated;
+    }
+
+    async checkMissingPeopleIndividually(missing) {
+        //Doesn't update this._friends anymore
+        let reallymissing = [];
+        for (let userid in this._people) {
+            let person = this.getPerson(userid);
+            if (!this._friends[person.vrc] || missing && missing[person.vrc]) {
+                try {
+                    let vrcdata = await this.vrcUser(person.vrc);
+                    if (!vrcdata || !vrcdata.friendKey) {
+                        reallymissing.push(userid);
+                    }
+                } catch (e) {
+                    this.log("error", "Attempting to retrieve missing friend: " + e + " (Assigned to " + userid + ")");
+                    continue;
+                }
+            }
+        }
+        return reallymissing;
     }
 
     areFriendsStale(now) {
