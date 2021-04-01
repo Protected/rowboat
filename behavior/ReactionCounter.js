@@ -60,7 +60,7 @@ class ModReactionCounter extends Module {
                 counts.push({msg: message.id, count: reaction ? reaction.count : 0});
             }, () => {
                 counts.sort((a, b) => a.count != b.count ? b.count - a.count : random.fraction() - 0.5);
-                counts = counts.slice(amount);
+                counts = counts.slice(0, amount);
                 ep.reply("**__Top " + amount + ":__**");
                 let i = 1;
                 for (let item of counts) {
