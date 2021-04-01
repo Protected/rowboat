@@ -85,6 +85,8 @@ class ModVRChatPhotos extends Module {
 
             if (this.photochan && messageReaction.message.channel.id == this.photochan.id) {
 
+                if (messageReaction.message.partial) await messageReaction.message.fetch();
+
                 //Delete photos
                 if (messageReaction.emoji.name == this.param("deleteemoji")) {
                     let owners = Object.values(this.extractOwnersFromPicture(messageReaction.message));
@@ -128,6 +130,8 @@ class ModVRChatPhotos extends Module {
             }
             
             if (this.contestchan && messageReaction.message.channel.id == this.contestchan.id) {
+
+                if (messageReaction.message.partial) await messageReaction.message.fetch();
 
                 //Delete contest candidate
                 if (messageReaction.emoji.name == this.param("deleteemoji") && this.param("candidatedelete")) {
