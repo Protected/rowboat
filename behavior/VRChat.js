@@ -7,6 +7,7 @@ const WebSocket = require('ws');
 
 const Module = require('../Module.js');
 const { enableConsole } = require('../Logger.js');
+const { exitOnError } = require('winston');
 
 const PERM_ADMIN = 'administrator';
 
@@ -1771,8 +1772,26 @@ class ModVRChat extends Module {
             ep.reply("Wait...");
             return true;
         });
-        
 
+
+        this.mod('Commands').registerCommand(this, 'vrcfix simulatestatus', {
+            description: "Simulates a status update.",
+            args: ["userid", "status"],
+            permissions: [PERM_ADMIN]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        
+            let person = this.getPerson(args.userid);
+            if (!person) {
+                ep.reply("Not a member or not a known person.");
+                return true;
+            }
+
+            this.updateStatus(args.userid, args.status);
+
+            ep.reply("Done.");
+
+            return true;
+        });
 
       
         return true;
@@ -2769,6 +2788,8 @@ class ModVRChat extends Module {
             let prev = await this.annStateStack(null, this._lt_offline, true);
             if (interv > this.param("annremovetransmin")) {
                 this.annStateStack(userid, this._lt_reconnect, prev);
+            } else if (prev && prev !== true) {
+                prev.delete({reason: "Ignoring transition (delayed)."});
             }
         }.bind(this));
 
@@ -2789,6 +2810,8 @@ class ModVRChat extends Module {
             let prev = await this.annStateStack(null, this._lt_online, true);
             if (interv > this.param("annremovetransmin")) {
                 this.annStateStack(userid, this._lt_quickpeek, prev);
+            } else if (prev && prev !== true) {
+                prev.delete({reason: "Ignoring transition (delayed)."});
             }
         }.bind(this));
 
