@@ -5,6 +5,7 @@ const { MessageEmbed } = require('discord.js');
 const pngextract = require('png-chunks-extract');
 
 const Module = require('../Module.js');
+const { relativeTimeThreshold } = require('moment');
 
 const PERM_ADMIN = 'administrator';
 
@@ -267,6 +268,39 @@ class ModVRChatPhotos extends Module {
 
             return true;
         });
+
+        this.mod('Commands').registerCommand(this, 'vrcfix recandidate' + this.param("name"), {
+            description: "Re-bakes a contest candidate message (edits the original).",
+            args: ["messageid"],
+            permissions: [PERM_ADMIN]
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!this.contestchan) {
+                ep.reply("There is no contest channel.");
+                return true;
+            }
+
+            let message = await this.contestchan.messages.fetch(args.messageid);
+            if (!message) {
+                ep.reply("Candidate message not found.");
+                return true;
+            }
+
+            let photomessage = await this.getPhotoMsgFromURL(message.content);
+            if (!photomessage) {
+                ep.reply("Original message not found in candidate.");
+                return true;
+            }
+
+            let owners = this.extractOwnersFromPicture(photomessage);
+            let fields = this.getPhotoMessageFields(photomessage);
+            await this.bakeCandidate(null, owners, fields, this.getPhotoMsgURL(photomessage.id), message);
+
+            ep.reply("Ok.");
+
+            return true;
+        });
+
 
 
         this.mod('Commands').registerRootExtension(this, 'VRChat', 'vrcany');
@@ -625,14 +659,23 @@ class ModVRChatPhotos extends Module {
         return "https://discord.com/channels/" + this.denv.server.id + "/" + this.photochan.id + "/" + msgid;
     }
 
+    async getPhotoMsgFromURL(url) {
+        if (!url || !this.photochan) return null;
+        let match = url.match(/https:\/\/discord\.com\/channels\/([0-9]+)\/([0-9]+)\/([0-9]+)/);
+        if (!match) return null;
+        if (match[1] != this.denv.server.id) return null;
+        if (match[2] != this.photochan.id) return null;
+        return this.photochan.messages.fetch(match[3]);
+    }
+
     randomPhoto(makefilter) {
         return this.randomEntry(this._index, makefilter ? makefilter(this._index) : undefined);
     }
 
     //Contest
 
-    async bakeCandidate(member, owners, fields, messageurl) {
-        if (!member || !owners || !fields || Object.keys(owners).length < 1) return null;
+    async bakeCandidate(member, owners, fields, messageurl, existing) {
+        if (!member && !existing || !owners || !fields || Object.keys(owners).length < 1) return null;
 
         let vrchat = this.mod("VRChat");
 
@@ -647,7 +690,24 @@ class ModVRChatPhotos extends Module {
 
         if (!nominate) return null;
 
-        let emb = new MessageEmbed();
+        let emb;
+        if (existing) {
+            for (let checkembed of existing.embeds) {
+                if (checkembed.type == "rich") {
+                    emb = checkembed;
+                    break;
+                }
+            }
+        }
+
+        let nominatedfield = null;
+        if (emb) {
+            nominatedfield = this.embedFieldByName(emb, "Nominated by");
+        } else {
+            emb = new MessageEmbed();
+        }
+
+        emb.fields = [];
 
         let msgurl = vrchat.getPersonMsgURL(nominate);
         if (msgurl) {
@@ -656,17 +716,25 @@ class ModVRChatPhotos extends Module {
             emb.addField(label, this.denv.idToDisplayName(nominate), true);
         }
 
-        msgurl = vrchat.getPersonMsgURL(member.id);
-        if (msgurl) {
-            emb.addField("Nominated by", "[" + this.denv.idToDisplayName(member.id) + "](" + msgurl + ")", true);
-        } else {
-            emb.addField("Nominated by", this.denv.idToDisplayName(member.id), true);
+        if (member) {
+            msgurl = vrchat.getPersonMsgURL(member.id);
+            if (msgurl) {
+                emb.addField("Nominated by", "[" + this.denv.idToDisplayName(member.id) + "](" + msgurl + ")", true);
+            } else {
+                emb.addField("Nominated by", this.denv.idToDisplayName(member.id), true);
+            }
+        } else if (nominatedfield) {
+            emb.addField("Nominated by", nominatedfield.value, true);
         }
 
         emb.setImage(fields.image);
 
         try {
-            return this.contestchan.send(messageurl, {embed: emb, disableMentions: 'all'});
+            if (existing) {
+                return await existing.edit(messageurl, {embed: emb});
+            } else {
+                return await this.contestchan.send(messageurl, {embed: emb, disableMentions: 'all'});
+            }
         } catch (e) {
             this.log("error", "Failed to bake candidate: " + JSON.stringify(e));
         }
