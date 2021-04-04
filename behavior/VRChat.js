@@ -14,6 +14,7 @@ const PERM_ADMIN = 'administrator';
 const ENDPOINT = "https://api.vrchat.cloud/api/1/";
 const NO_AUTH = ["config", "time", "visits"];
 const WEBSOCKET = "wss://pipeline.vrchat.cloud/";
+const HTTP_USER_AGENT = "Protected/Rowboat";
 
 const STATUS_ONLINE = ["active", "join me", "ask me"];
 const TRUST_PRECEDENCE = ["system_trust_veteran", "system_trust_trusted", "system_trust_known", "system_trust_basic"];
@@ -3231,7 +3232,7 @@ class ModVRChat extends Module {
         let buildWebsocket = () => {
             //Initialize websocket
             return new Promise((resolve, reject) => {
-                let ws = new WebSocket(WEBSOCKET + "?authToken=" + this._auth);
+                let ws = new WebSocket(WEBSOCKET + "?authToken=" + this._auth, {headers: {"User-Agent": HTTP_USER_AGENT}});
                 
                 let connectionError = (err) => reject(err);
 
@@ -3328,7 +3329,10 @@ class ModVRChat extends Module {
 
     async vrcget(path) {
         if (!path || !NO_AUTH.includes(path) && !this._config) return null;
-        let options = {headers: {Cookie: []}, returnFull: true};
+        let options = {headers: {
+            Cookie: [],
+            "User-Agent": HTTP_USER_AGENT
+        }, returnFull: true};
 
         if (this._config) options.headers.Cookie.push("apiKey=" + this._config.apiKey);
         if (this._auth) options.headers.Cookie.push("auth=" + this._auth);
@@ -3352,7 +3356,10 @@ class ModVRChat extends Module {
 
     async vrcpost(path, fields, method) {
         if (!path || !this._config) return null;
-        let options = {headers: {Cookie: []}, returnFull: true};
+        let options = {headers: {
+            Cookie: [],
+            "User-Agent": HTTP_USER_AGENT
+        }, returnFull: true};
         if (method) options.method = method;
 
         if (this._config) options.headers.Cookie.push("apiKey=" + this._config.apiKey);
