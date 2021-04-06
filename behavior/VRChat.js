@@ -2173,7 +2173,7 @@ class ModVRChat extends Module {
         try {
             let friendlist = await this.vrcFriendList();
             for (let friend of friendlist) {
-                if (friend.status == "active" && friend.location == "offline") friend.status = "website";
+                if (friend.status != "offline" && friend.location == "offline") friend.status = "website";
                 this._friends[friend.id] = friend;
                 if (notupdated[friend.id]) delete notupdated[friend.id];
             }
@@ -3564,7 +3564,7 @@ class ModVRChat extends Module {
         if (status == "join me") icon = "🔵";
         if (status == "ask me") icon ="🟠";
         if (status == "busy") icon = "🔴";
-        if (status == "website") icon = "🟣";  //Nonstandard, displays as a green "Active" on the website
+        if (status == "website") icon = "🟣";  //Nonstandard, displays as "Active" on the website with a random status color
         if (status == "offline") icon = "⚪";
         if (icon) icon += " ";
 
