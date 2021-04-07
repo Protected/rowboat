@@ -777,13 +777,13 @@ class ModVRChat extends Module {
     
                 this.unassignKnownRole(userid, "User is no longer confirmed.");
                 this.unregisterPerson(userid);
-                this.vrcUnfriend(person.vrc);
             }
 
             for (let userid in this._people) {
                 let person = this.getPerson(userid);
                 if (!STATUS_ONLINE.includes(person.lateststatus) && person.latestflip && now - person.latestflip > this.param("absence") * 86400) {
                     personGone(userid, person);
+                    this.vrcUnfriend(person.vrc);
                     this.announce("<@" + userid + "> I haven't seen you in VRChat in more than " + this.param("absence") + " days, so I'm forgetting you. If you return, use `vrchat assign` to become friends again!");
                 } else if (person.latestdiscord && now - person.latestdiscord > this.param("inactivity") * 86400) {
                     personGone(userid, person);
