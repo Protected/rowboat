@@ -93,6 +93,8 @@ class ModVRChat extends Module {
 
         "expiration",           //How long to stay unfriended before unassigning a person (h)
         "absence",              //How long can a known user stay offline before they're automatically unassigned (d)
+        "inactivity",           //How long can a known user not talk on Discord before they're automatically unassigned (d)
+
         "ddelay",               //Delay between actions in the delayed action queue (ms) [used to prevent rate limiting]
         
         "pinnedemoji",          //Emoji used for pinning worlds
@@ -181,6 +183,8 @@ class ModVRChat extends Module {
 
         this._params["expiration"] = 48;
         this._params["absence"] = 32;
+        this._params["inactivity"] = 62;
+
         this._params["ddelay"] = 250;
 
         this._params["pinnedemoji"] = "📌";
@@ -238,6 +242,9 @@ class ModVRChat extends Module {
 
         opt.moduleRequest('Time', (time) => { this._modTime = time; });
         opt.moduleRequest('ReactionRoles', (reactionRoles) => { this._modReactionRoles = reactionRoles; });
+        
+        let modActivity = null;
+        opt.moduleRequest('Activity', (activity) => { modActivity = activity; });
 
         
         //# Load data
@@ -357,8 +364,10 @@ class ModVRChat extends Module {
         let messageReactionAddHandler = async (messageReaction, user) => {
             if (user.id == this.denv.server.me.id) return;
 
+            let channelid = messageReaction.message.channel.id;
+
             //Pin worlds to favorites by reacting to them with pinnedemoji
-            if (this.worldchan && messageReaction.message.channel.id == this.worldchan.id) {
+            if (this.worldchan && channelid == this.worldchan.id) {
 
                 if (this.pinnedchan && messageReaction.emoji.name == this.param("pinnedemoji")) {
                     this.potentialWorldPin(messageReaction.message, false, user.id)
@@ -369,12 +378,13 @@ class ModVRChat extends Module {
                                 messageReaction.message.react(this.param("pinokayemoji"));
                             }
                         });
+                    this.setLatestDiscord(user.id);
                 }
 
             }
 
             //Invite to new world instances
-            if (this.worldchan && messageReaction.message.channel.id == this.worldchan.id || this.pinnedchan && messageReaction.message.channel.id == this.pinnedchan.id) {
+            if (this.worldchan && channelid == this.worldchan.id || this.pinnedchan && channelid == this.pinnedchan.id) {
                 
                 if (this.worldInviteButtons.includes(messageReaction.emoji.name)) {
                     let worldid = this.extractWorldFromMessage(messageReaction.message);
@@ -406,7 +416,7 @@ class ModVRChat extends Module {
 
                     }
 
-                    if (this.pinnedchan && messageReaction.message.channel.id == this.pinnedchan.id) {
+                    if (this.pinnedchan && channelid == this.pinnedchan.id) {
                         messageReaction.users.remove(user.id);
                     }
                 }
@@ -414,12 +424,12 @@ class ModVRChat extends Module {
             }
 
             //Removed all reactions from worlds channel (keep below worlds actions)
-            if (this.worldchan && messageReaction.message.channel.id == this.worldchan.id) {
+            if (this.worldchan && channelid == this.worldchan.id) {
                 messageReaction.users.remove(user.id);
             }
 
             //Obtain public/friends location invite by reacting to user with inviteemoji
-            if (this.statuschan && messageReaction.message.channel.id == this.statuschan.id) {
+            if (this.statuschan && channelid == this.statuschan.id) {
 
                 if (messageReaction.emoji.name == this.param("inviteemoji")) {
                     let targetid = this.findPersonByMsg(messageReaction.message.id);
@@ -438,7 +448,7 @@ class ModVRChat extends Module {
             }
 
             //Delete favorites
-            if (this.pinnedchan && messageReaction.message.channel.id == this.pinnedchan.id) {
+            if (this.pinnedchan && channelid == this.pinnedchan.id) {
 
                 if (messageReaction.emoji.name == this.param("deleteemoji")) {
                     let owners = this.extractOwnersFromPin(messageReaction.message);
@@ -451,11 +461,20 @@ class ModVRChat extends Module {
 
             }
 
+            //Regular (keep at the end)
+            if ((!this.statuschan || channelid != this.statuschan.id)
+                    && (!this.worldchan || channelid != this.worldchan.id)
+                    && (!this.pinnedchan || channelid != this.pinnedchan.id)) {
+                this.setLatestDiscord(user.id);
+            }
+
         };
 
 
         let messageHandler = (env, type, message, authorid, channelid, messageObject) => {
             if (env.name != this.param("env") || type != "regular") return;
+
+            this.setLatestDiscord(authorid);
 
             if (channelid == this.pinnedchan?.id) {
                 //Direct sharing to pinnedchan
@@ -746,22 +765,29 @@ class ModVRChat extends Module {
                 this.announce("Uh oh... " + this.denv.idToDisplayName(userid) + " is no longer my friend.");
             }
 
-            //Remove absent users
+            //Remove absent and inactive users
+
+            let personGone = (userid, person) => {
+                if (this.statuschan && person.msg) {
+                    this.statuschan.messages.fetch(person.msg)
+                        .then((message) => {
+                            if (message) message.delete({reason: "User was unassigned."});
+                        });
+                }
+    
+                this.unassignKnownRole(userid, "User is no longer confirmed.");
+                this.unregisterPerson(userid);
+                this.vrcUnfriend(person.vrc);
+            }
 
             for (let userid in this._people) {
                 let person = this.getPerson(userid);
                 if (!STATUS_ONLINE.includes(person.lateststatus) && person.latestflip && now - person.latestflip > this.param("absence") * 86400) {
-                    
-                    if (this.statuschan && person.msg) {
-                        let message = await this.statuschan.messages.fetch(person.msg);
-                        if (message) message.delete({reason: "User was unassigned."});
-                    }
-        
-                    this.unassignKnownRole(userid, "User is no longer confirmed.");
-                    this.unregisterPerson(userid);
-                    this.vrcUnfriend(person.vrc);
-                    this.announce("<@" + userid + "> I haven't seen you online in more than " + this.param("absence") + " days, so I'm forgetting you. If you return, use `vrchat assign` to become friends again!");
-
+                    personGone(userid, person);
+                    this.announce("<@" + userid + "> I haven't seen you in VRChat in more than " + this.param("absence") + " days, so I'm forgetting you. If you return, use `vrchat assign` to become friends again!");
+                } else if (person.latestdiscord && now - person.latestdiscord > this.param("inactivity") * 86400) {
+                    personGone(userid, person);
+                    this.announce("<@" + userid + "> I haven't seen you say or do anything in more than " + this.param("inactivity") + " days, so I'm forgetting you. If you return, use `vrchat assign` to become friends again!");
                 }
             }
 
@@ -1794,6 +1820,33 @@ class ModVRChat extends Module {
             return true;
         });
 
+
+        this.mod('Commands').registerCommand(this, 'vrcfix ldfromactivity', {
+            description: "Updates person latestdiscord fields with data from the Activity module.",
+            permissions: [PERM_ADMIN]
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!modActivity) {
+                ep.reply("Activity module not found.");
+                return true;
+            }
+
+            let data = modActivity.getAllNickRegisters(this.param("env"));
+            let count = 0;
+
+            for (let actperson of data) {
+                if (!actperson.last || !actperson.last.length) continue;
+                let le = actperson.last[actperson.last.length - 1];
+                if (this.setLatestDiscord(le[1], le[2])) {
+                    count += 1;
+                }
+            }
+
+            ep.reply("Ok. Updated people: " + count);
+
+            return true;
+        });
+
       
         return true;
     };
@@ -1880,6 +1933,7 @@ class ModVRChat extends Module {
             latestlocation: null,           //Latest VRChat location (used for links)
             latestflip: null,               //Timestamp of latest flip between online/offline
             pendingflip: false,             //Whether there's a pending unannounced flip
+            latestdiscord: moment().unix(), //Latest activity on Discord
             creation: moment().unix(),      //Timestamp of the creation of the person entry (unchanging)
             waiting: moment().unix(),       //Timestamp of the start of the current waiting period for friending
             baked: null                     //Timestamp of latest baking
@@ -2087,6 +2141,15 @@ class ModVRChat extends Module {
     resetAlerted(userid) {
         if (!this._people[userid]) return false;
         this._people[userid].alertable = true;
+        this._people.save();
+        return true;
+    }
+
+    setLatestDiscord(userid, now) {
+        if (!this._people[userid]) return false;
+        now = now || moment().unix();
+        if (this._people[userid].latestdiscord && this._people[userid].latestdiscord >= now) return false;
+        this._people[userid].latestdiscord = now;
         this._people.save();
         return true;
     }

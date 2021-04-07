@@ -3,6 +3,8 @@
 const Module = require('../Module.js');
 const moment = require('moment');
 
+const PERM_ADMIN = "administrator";
+
 class ModActivity extends Module {
 
 
@@ -217,6 +219,7 @@ class ModActivity extends Module {
             
             return true;
         });
+
         
         return true;
     }
@@ -241,6 +244,13 @@ class ModActivity extends Module {
         
         return nickregister;
     }
+
+    getAllNickRegisters(env) {
+        let envregister = this._activitydata[env];
+        if (!envregister) envregister = this._activitydata[env] = {};
+        return Object.values(envregister);
+    }
+
     
     
     //Helpers for indexing registers by author (used only in runtime)
