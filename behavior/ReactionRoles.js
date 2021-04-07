@@ -62,6 +62,10 @@ class ModReactionRoles extends Module {
                 this.setupGroupReactions(role.hexColor, message);
             }
 
+            for (let roleid in this._data.roles) {
+                this.roleUnrelate(roleid, role.id);
+            }
+
         }
 
         let roleUpdateHandler = async (oldRole, role) => {

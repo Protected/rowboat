@@ -25,6 +25,17 @@ const BRIDGE_EVENTS = [
     "webhookUpdate"
 ];
 
+const INTENTS = [
+    "GUILDS",
+    "GUILD_MEMBERS",
+    "GUILD_WEBHOOKS",
+    "GUILD_VOICE_STATES",
+    "GUILD_PRESENCES",
+    "GUILD_MESSAGES",
+    "GUILD_MESSAGE_REACTIONS",
+    "DIRECT_MESSAGES"
+];
+
 class DiscordClient extends ModernEventEmitter {
 
     constructor() {
@@ -62,9 +73,8 @@ class DiscordClient extends ModernEventEmitter {
         this._token = token;
         
         this._realClient = new discord.Client({
-            apiRequestMethod: 'sequential',
-            fetchAllMembers: true,
-            partials: Object.values(discord.Constants.PartialTypes)
+            partials: Object.values(discord.Constants.PartialTypes),
+            intents: INTENTS
         });
         
         this._realClient.on('error', (error) => {

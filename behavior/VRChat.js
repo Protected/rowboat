@@ -7,7 +7,6 @@ const WebSocket = require('ws');
 
 const Module = require('../Module.js');
 const { enableConsole } = require('../Logger.js');
-const { exitOnError } = require('winston');
 
 const PERM_ADMIN = 'administrator';
 
@@ -22,8 +21,6 @@ const TRUST_PRECEDENCE = ["system_trust_veteran", "system_trust_trusted", "syste
 const ZWSP = "​";  //Zero-width space
 const TRUST_CHANGE_ICON = "👉";
 const CLOCKS = ["🕛","🕧","🕐","🕜","🕑","🕝","🕒","🕞","🕓","🕟","🕔","🕠","🕕","🕡","🕖","🕢","🕗","🕣","🕘","🕤","🕙","🕥","🕚","🕦"];
-
-const WEBHOOK_AVATAR = "extra/vrchat/emptyav.png";
 
 const MAX_FIELDLEN = 1024;
 
@@ -89,7 +86,6 @@ class ModVRChat extends Module {
         "anncollapsetrans",     //Maximum interval for collapsing a user's state transition (s)
         "annremovetransmin",    //Maximum interval for removing instead of collapsing a reconnect/peek (s)
         "annmaxstack",          //Maximum amount of names to list in a collapsed announcement
-        "usewebhook",           //Whether to use a webhook to send announcements
 
         "expiration",           //How long to stay unfriended before unassigning a person (h)
         "absence",              //How long can a known user stay offline before they're automatically unassigned (d)
@@ -150,21 +146,12 @@ class ModVRChat extends Module {
     constructor(name) {
         super('VRChat', name);
      
-        /*Loop defaults*
-        this._params["updatefreq"] = 120;
-        this._params["usewebsocket"] = false;
-        this._params["friendliststale"] = 119;
-        this._params["bakestale"] = 59;
-        /**/
-
-        /*Websocket defaults*/
-        this._params["updatefreq"] = 300;
+        this._params["updatefreq"] = 180;
         this._params["usewebsocket"] = true;
-        this._params["friendliststale"] = 1800;
+        this._params["friendliststale"] = 179;
         this._params["bakestale"] = 29;
-        /**/
 
-        this._params["offlinetolerance"] = 119;
+        this._params["offlinetolerance"] = 20;
 
         this._params["worldfreq"] = 300;
         this._params["worldstale"] = 3600;
@@ -179,7 +166,6 @@ class ModVRChat extends Module {
         this._params["anncollapsetrans"] = 600;
         this._params["annremovetransmin"] = 45;
         this._params["annmaxstack"] = 10;
-        this._params["usewebhook"] = true;
 
         this._params["expiration"] = 48;
         this._params["absence"] = 32;
@@ -218,7 +204,6 @@ class ModVRChat extends Module {
 
         this._pins = {};  //Map of pinned worlds (transient) {WORLDID: Message_in_pinnedchan, ...}
 
-        this._webhook = null;
         this._lt_online = {prefix: "🟢 Online", msg: null, ts: null, stack: []};  //State of recent 'is online' announcements
         this._lt_offline = {prefix: "⚪ Offline", msg: null, ts: null, stack: []};  //State of recent 'is offline' announcements
         this._lt_reconnect = {prefix: "🟣 Reconnect", msg: null, ts: null, stack: []};  //State of recent 'reconnect' announcements
@@ -255,7 +240,6 @@ class ModVRChat extends Module {
         this._worlds = this.loadData(this.name.toLowerCase() + ".worlds.json", {}, {quiet: true});
 
         this._misc = this.loadData(this.name.toLowerCase() + ".misc.json", {
-            webhook: null,
             pronounscolor: null,
             statusrolegroups: []
         }, {quiet: true});
@@ -286,32 +270,6 @@ class ModVRChat extends Module {
 
         
         //# Register Discord callbacks
-
-        let webhookUpdateHandler = (channel) => {
-
-            //Prevent webhook removal
-
-            if (this.param("usewebhook") && channel.id == this.announcechan.id && this._misc.webhook) {
-
-                channel.fetchWebhooks().then((webhooks) => {
-
-                    let found = false;
-                    for (let webhook of webhooks.array()) {
-                        if (webhook.id == this._misc.webhook) {
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if (!found) {
-                        this.setupWebhook();
-                    }
-
-                });
-
-            }
-
-        }
 
 
         let guildMemberRemoveHandler = async (member) => {
@@ -358,6 +316,13 @@ class ModVRChat extends Module {
                 }
             }
             
+        };
+
+
+        let voiceStateUpdateHandler = (oldState, state) => {
+
+            this.setLatestDiscord(state.member?.id);
+
         };
 
 
@@ -511,10 +476,6 @@ class ModVRChat extends Module {
         
         this.denv.on("connected", async () => {
 
-            if (this.param("usewebhook")) {
-                this._webhook = await this.setupWebhook();
-            }
-
             let cachePromises = [];
 
             for (let userid in this._people) {
@@ -596,9 +557,9 @@ class ModVRChat extends Module {
 
             }
 
-            this.denv.client.on("webhookUpdate", webhookUpdateHandler);
             this.denv.client.on("guildMemberRemove", guildMemberRemoveHandler);
             this.denv.client.on("messageDelete", messageDeleteHandler);
+            this.denv.client.on("voiceStateUpdate", voiceStateUpdateHandler);
             this.denv.client.on("messageReactionAdd", messageReactionAddHandler);
             this.denv.on("message", messageHandler);
         });
@@ -2930,16 +2891,14 @@ class ModVRChat extends Module {
                 message.delete({reason: "Re-emit announcement."});
                 state.msg = null;
             } else {
-                message.edit(this._webhook ? txt : prefix + txt);
+                message.edit(prefix + txt);
             }
         }
         if (!state.msg && stack.length) {
             let message;
             if (prevmessage) {
                 message = prevmessage;
-                message.edit(this._webhook ? txt : prefix + txt);
-            } else if (this._webhook) {
-                message = await this._webhook.send(txt, {username: state.prefix});
+                message.edit(prefix + txt);
             } else {
                 message = await this.announcechan.send(prefix + txt);
             }
@@ -2950,23 +2909,6 @@ class ModVRChat extends Module {
 
         state.ts = now;
         return ret;
-    }
-
-
-    async setupWebhook() {
-        let webhook = null;
-        if (this._misc.webhook) {
-            try {
-                webhook = await this.denv.client.realClient.fetchWebhook(this._misc.webhook);
-            } catch (e) {}
-        }
-        if (!webhook) {
-            webhook = await this.announcechan.createWebhook(this.denv.server.me.displayName, {avatar: WEBHOOK_AVATAR, reason: "VRChat announcements webhook"});
-            if (!webhook) throw {error: "Unable to create webhook."};
-            this._misc.webhook = webhook.id;
-            this._misc.save();
-        }
-        this._webhook = webhook;
     }
 
 
