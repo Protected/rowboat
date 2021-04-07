@@ -18,7 +18,7 @@ const HTTP_USER_AGENT = "Protected/Rowboat";
 const STATUS_ONLINE = ["active", "join me", "ask me"];
 const TRUST_PRECEDENCE = ["system_trust_veteran", "system_trust_trusted", "system_trust_known", "system_trust_basic"];
 
-const ZWSP = "​";  //Zero-width space
+const ZWSP = "​";  //Zero-width space (\u200b)
 const TRUST_CHANGE_ICON = "👉";
 const CLOCKS = ["🕛","🕧","🕐","🕜","🕑","🕝","🕒","🕞","🕓","🕟","🕔","🕠","🕕","🕡","🕖","🕢","🕗","🕣","🕘","🕤","🕙","🕥","🕚","🕦"];
 

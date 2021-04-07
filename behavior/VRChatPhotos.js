@@ -1,15 +1,17 @@
 /* Module: VRChatPhotos -- Manages a channel for sharing VRChat photos and screenshots. */
 
+const moment = require('moment');
 const random = require('meteor-random');
 const { MessageEmbed } = require('discord.js');
 const pngextract = require('png-chunks-extract');
 
 const Module = require('../Module.js');
-const { relativeTimeThreshold } = require('moment');
 
 const PERM_ADMIN = 'administrator';
 
 const MAX_FIELDLEN = 1024;
+
+const ZWSP = "​";  //Zero-width space (\u200b)
 
 class ModVRChatPhotos extends Module {
 
@@ -23,6 +25,10 @@ class ModVRChatPhotos extends Module {
     get optionalParams() { return [
         "name",                 //Album name override
         "deleteemoji",          //Emoji for deleting things
+
+        "usewebhook",           //Use a webhook to re-emit photos
+        "webhooklifetime",      //How long to keep a webhook so the user can share multiple photos (s)
+        "maxwebhooks",          //Maximum total simultaneous webhooks
 
         /* Contest */
         "contestchan",          //ID of text channel for contest candidates
@@ -62,12 +68,18 @@ class ModVRChatPhotos extends Module {
         this._params["name"] = name.toLowerCase();
         this._params["deleteemoji"] = "❌";
 
+        this._params["usewebhook"] = true;
+        this._params["webhooklifetime"] = 60;
+        this._params["maxwebhooks"] = 5;
+
         this._params["maxnominations"] = 3;
         this._params["nominationemoji"] = "⭐";
         this._params["contestemojis"] = [];
         this._params["candidatedelete"] = true;
 
         this._index = {};  //{ID: MESSAGE, ...}
+
+        this._webhooks = {};  //{USERID: {userid, webhook, ts, cleartimer}}
 
         this._contestindex = {};  //{MESSAGEID: {contestant: USERID, msg: MESSAGE, original: ORIGMESSAGEID}, ...}
         this._contestants = {};  //{USERID: [MESSAGEID, ...]}
@@ -77,6 +89,17 @@ class ModVRChatPhotos extends Module {
     
     initialize(opt) {
         if (!super.initialize(opt)) return false;
+
+        
+        //# Cleanup handler
+
+        opt.pushCleanupHandler((next) => {
+            let promises = [];
+            for (let userid in this._webhooks) {
+                promises.push(this.removeWebhook(userid));
+            }
+            Promise.all(promises).then(next);
+        });
 
         
         //# Register Discord callbacks
@@ -486,27 +509,27 @@ class ModVRChatPhotos extends Module {
             }
 
             return message.delete({reason: "Replacing with embed."})
-                .then(() => this.bakePicture(attachment.name || "photo.png", data, message.author.id, metadata))
+                .then(() => this.bakePicture(attachment.name || "photo.png", data, message.member, metadata))
                 .then((message) => { this._index[message.id] = message; })
-                .catch((e) => { });
+                .catch((e) => {  });
         });
     }
 
     
     //Picture metadata
 
-    async bakePicture(name, data, userid, metadata) {
-        if (!name || !data || !data.length || !userid) return null;
+    async bakePicture(name, data, member, metadata) {
+        if (!name || !data || !data.length || !member) return null;
 
         let vrchat = this.mod("VRChat");
 
-        let sharedBy = this.denv.idToDisplayName(userid);
+        let sharedBy = this.denv.idToDisplayName(member.id);
 
         let emb = new MessageEmbed();
 
         if (metadata) {
-            let sbperson = vrchat.getPerson(userid);
-            if (sbperson && metadata.author.id == sbperson.vrc) {
+            let sbperson = vrchat.getPerson(member.id);
+            if (this.param("usewebhook") || sbperson && metadata.author.id == sbperson.vrc) {
                 sharedBy = null;
             }
 
@@ -538,18 +561,18 @@ class ModVRChatPhotos extends Module {
                         val = newval;
                         continue;
                     }
-                    emb.addField(fieldcount ? "\u200b" : "With", val);
+                    emb.addField(fieldcount ? ZWSP : "With", val);
                     fieldcount += 1;
                     val = person;
                 }
-                if (val) emb.addField(fieldcount ? "\u200b" : "With", val);
+                if (val) emb.addField(fieldcount ? ZWSP : "With", val);
             }
 
             emb.addField("Location", "[" + metadata.world.name + "](https://vrchat.com/home/world/" + metadata.world.id + ")", true);
         }
 
         if (sharedBy) {
-            let msgurl = vrchat.getPersonMsgURL(userid);
+            let msgurl = vrchat.getPersonMsgURL(member.id);
             if (msgurl) sharedBy = "[" + sharedBy + "](" + msgurl + ")";
             emb.addField("Shared by", sharedBy, true);
         }
@@ -558,10 +581,53 @@ class ModVRChatPhotos extends Module {
             .setImage("attachment://" + encodeURI(name));
 
         try {
-            return this.photochan.send({embed: emb, disableMentions: 'all'});
+            if (this.param("usewebhook")) {
+                return this.getWebhook(member).then((webhook) => webhook.send({embeds: [emb], disableMentions: 'all'}));
+            } else {
+                return this.photochan.send({embed: emb, disableMentions: 'all'});
+            }
         } catch (e) {
             this.log("error", "Failed to bake picture " + url + ": " + JSON.stringify(e));
         }
+    }
+
+
+    async getWebhook(member) {
+        if (!member) throw {error: "Member not found."};
+        if (!this._webhooks[member.id]) return this.prepareWebhook(member);
+        this._webhooks[member.id].ts = moment().unix();
+        clearTimeout(this._webhooks[member.id].cleartimer);
+        this.setWebhookCleanupTimer(member.id);
+        return this._webhooks[member.id].webhook;
+    }
+
+    async prepareWebhook(member) {
+        if (!member) throw {error: "Member not found."};
+        
+        if (Object.keys(this._webhooks).length >= this.param("maxwebhooks")) {
+            let oldest = Object.values(this._webhooks).sort((a, b) => b.ts - a.ts)[0];
+            await this.removeWebhook(oldest.id);
+        }
+
+        let webhook = await this.photochan.createWebhook(member.displayName, {avatar: member.user.displayAvatarURL(), reason: "Photo sharing."});
+        this._webhooks[member.id] = {userid: member.id, webhook: webhook, ts: moment().unix(), cleartimer: null};
+        this.setWebhookCleanupTimer(member.id);
+        return webhook;
+    }
+
+    async removeWebhook(userid) {
+        if (!userid || !this._webhooks[userid]) return null;
+        clearTimeout(this._webhooks[userid].cleartimer);
+        let webhook = this._webhooks[userid].webhook;
+        delete this._webhooks[userid];
+        return webhook.delete();
+    }
+
+    setWebhookCleanupTimer(userid) {
+        if (!userid || !this._webhooks[userid]) return;
+        this._webhooks[userid].cleartimer = setTimeout(function() {
+            this.removeWebhook(userid);
+        }.bind(this), this.param("webhooklifetime") * 1000);
     }
 
 
