@@ -493,7 +493,7 @@ class ModVRChatPhotos extends Module {
             return message.delete({reason: "Replacing with embed."})
                 .then(() => this.bakePicture(attachment.name || "photo.png", data, message.member, metadata))
                 .then((message) => { this._index[message.id] = message; })
-                .catch((e) => { console.log(e); });
+                .catch((e) => {  });
         });
     }
 

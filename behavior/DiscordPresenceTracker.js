@@ -20,6 +20,7 @@ class ModDiscordPresenceTracker extends Module {
         "actinfo",              //Activity descriptors: {NAME: {filter: {...}, fieldTitle, fieldLabels: {...}, online, color}, ...}
         "reconnecttolerance",   //How long until a disconnection becomes valid to be announced
         "reconnectchecktimer",  //How often to validate disconnections
+        "usewebhook"            //Whether to use a temporary webhook for announcements
     ]; }
 
     get requiredEnvironments() { return [
@@ -60,6 +61,8 @@ class ModDiscordPresenceTracker extends Module {
 
         this._params["reconnecttolerance"] = 180;
         this._params["reconnectchecktimer"] = 61;
+
+        this._params["usewebhook"] = true;
 
         this._pendingoffline = {};  //{userid: {ACTIVITY: TS, ...}, ...}
         this._timer = null;
@@ -170,21 +173,24 @@ class ModDiscordPresenceTracker extends Module {
     isPendingOffline(userid, activityname, now) {
         if (!userid || !activityname || !this._pendingoffline[userid]) return false;
         if (!now) now = moment().unix();
-        return this._pendingoffline[userid][activityname] && this._pendingoffline[userid][activityname] - now < this.param("reconnecttolerance");
+        return this._pendingoffline[userid][activityname] && now - this._pendingoffline[userid][activityname] < this.param("reconnecttolerance");
     }
     
     activityStart(member, info, activity) {
         let embed = new MessageEmbed();
-        embed.setAuthor(member.displayName, member.user.displayAvatarURL());
-        embed.setColor(info.color);
+        
+        if (!this.param("usewebhook")) {
+            embed.setAuthor(member.displayName, member.user.displayAvatarURL());
+        }
 
+        embed.setColor(info.color);
         embed.setTitle(activity[info.fieldTitle]);
 
         if (activity.url) {
             embed.setURL(activity.url);
         }
         
-        let image = activity.assets.smallImageURL() || activity.assets.largeImageURL();
+        let image = activity.assets.largeImageURL() || activity.assets.smallImageURL();
         if (image) {
             embed.setThumbnail(image);
         }
@@ -196,12 +202,20 @@ class ModDiscordPresenceTracker extends Module {
 
         embed.setDescription(info.online);
 
-        this.announcechan.send(embed);
+        if (this.param("usewebhook")) {
+            this.denv.getWebhook(this.announcechan, member).then((webhook) => webhook.send(embed));
+        } else {
+            this.announcechan.send(embed);
+        }
     }
 
     activityUpdate(member, info, oldActivity, activity) {
         let embed = new MessageEmbed();
-        embed.setAuthor(member.displayName, member.user.displayAvatarURL());
+        
+        if (!this.param("usewebhook")) {
+            embed.setAuthor(member.displayName, member.user.displayAvatarURL());
+        }
+
         embed.setColor(info.color);
 
         let changes = [];
@@ -213,17 +227,28 @@ class ModDiscordPresenceTracker extends Module {
 
         if (changes.length) {
             embed.setDescription(changes.join("\n"));
-            this.announcechan.send(embed);
+            if (this.param("usewebhook")) {
+                this.denv.getWebhook(this.announcechan, member).then((webhook) => webhook.send(embed));
+            } else {
+                this.announcechan.send(embed);
+            }
         }
     }
 
     activityEnd(member, info) {
         let embed = new MessageEmbed();
-        embed.setAuthor(member.displayName, member.user.displayAvatarURL());
+        
+        if (!this.param("usewebhook")) {
+            embed.setAuthor(member.displayName, member.user.displayAvatarURL());
+        }
         
         embed.setDescription(info.offline);
 
-        this.announcechan.send(embed);
+        if (this.param("usewebhook")) {
+            this.denv.getWebhook(this.announcechan, member).then((webhook) => webhook.send(embed));
+        } else {
+            this.announcechan.send(embed);
+        }
     }
 
 

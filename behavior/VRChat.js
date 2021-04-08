@@ -162,6 +162,8 @@ class ModVRChat extends Module {
         this._params["coloroffline"] = [200, 200, 200];
         this._params["coloronline"] = [40, 255, 40];
 
+        this._params["pinnedwebhook"] = true;
+
         this._params["anncollapse"] = 600;
         this._params["anncollapseconsec"] = 1200;
         this._params["anncollapsetrans"] = 600;
@@ -438,7 +440,7 @@ class ModVRChat extends Module {
 
 
         let messageHandler = (env, type, message, authorid, channelid, messageObject) => {
-            if (env.name != this.param("env") || type != "regular") return;
+            if (env.name != this.param("env") || type != "regular" || messageObject.webhookID) return;
 
             this.setLatestDiscord(authorid);
 
@@ -3054,8 +3056,19 @@ class ModVRChat extends Module {
         emb.setDescription(body.join("\n\n"));
 
         this._pins[worldid] = true;
-        return this.pinnedchan.send({embed: emb, disableMentions: 'all'})
-            .then(newmessage => {
+
+        let post;
+
+        if (this.param("pinnedwebhook")) {
+            let member = await this.denv.server.members.fetch(userid);
+            let webhook = await this.denv.getWebhook(this.pinnedchan, member);
+            post = webhook.send({embeds: [emb], disableMentions: 'all'});
+        }
+        if (!post) {
+            post = this.pinnedchan.send({embed: emb, disableMentions: 'all'});
+        }
+
+        return post.then(newmessage => {
                 this._pins[worldid] = newmessage;
                 for (let emoji of this.worldInviteButtons) {
                     newmessage.react(emoji);
