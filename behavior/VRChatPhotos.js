@@ -1,6 +1,5 @@
 /* Module: VRChatPhotos -- Manages a channel for sharing VRChat photos and screenshots. */
 
-const moment = require('moment');
 const random = require('meteor-random');
 const { MessageEmbed } = require('discord.js');
 const pngextract = require('png-chunks-extract');
@@ -27,8 +26,6 @@ class ModVRChatPhotos extends Module {
         "deleteemoji",          //Emoji for deleting things
 
         "usewebhook",           //Use a webhook to re-emit photos
-        "webhooklifetime",      //How long to keep a webhook so the user can share multiple photos (s)
-        "maxwebhooks",          //Maximum total simultaneous webhooks
 
         /* Contest */
         "contestchan",          //ID of text channel for contest candidates
@@ -69,8 +66,6 @@ class ModVRChatPhotos extends Module {
         this._params["deleteemoji"] = "❌";
 
         this._params["usewebhook"] = true;
-        this._params["webhooklifetime"] = 60;
-        this._params["maxwebhooks"] = 5;
 
         this._params["maxnominations"] = 3;
         this._params["nominationemoji"] = "⭐";
@@ -78,8 +73,6 @@ class ModVRChatPhotos extends Module {
         this._params["candidatedelete"] = true;
 
         this._index = {};  //{ID: MESSAGE, ...}
-
-        this._webhooks = {};  //{USERID: {userid, webhook, ts, cleartimer}}
 
         this._contestindex = {};  //{MESSAGEID: {contestant: USERID, msg: MESSAGE, original: ORIGMESSAGEID}, ...}
         this._contestants = {};  //{USERID: [MESSAGEID, ...]}
@@ -89,17 +82,6 @@ class ModVRChatPhotos extends Module {
     
     initialize(opt) {
         if (!super.initialize(opt)) return false;
-
-        
-        //# Cleanup handler
-
-        opt.pushCleanupHandler((next) => {
-            let promises = [];
-            for (let userid in this._webhooks) {
-                promises.push(this.removeWebhook(userid));
-            }
-            Promise.all(promises).then(next);
-        });
 
         
         //# Register Discord callbacks
@@ -511,7 +493,7 @@ class ModVRChatPhotos extends Module {
             return message.delete({reason: "Replacing with embed."})
                 .then(() => this.bakePicture(attachment.name || "photo.png", data, message.member, metadata))
                 .then((message) => { this._index[message.id] = message; })
-                .catch((e) => {  });
+                .catch((e) => { console.log(e); });
         });
     }
 
@@ -582,52 +564,13 @@ class ModVRChatPhotos extends Module {
 
         try {
             if (this.param("usewebhook")) {
-                return this.getWebhook(member).then((webhook) => webhook.send({embeds: [emb], disableMentions: 'all'}));
+                return this.denv.getWebhook(this.photochan, member).then((webhook) => webhook.send({embeds: [emb], disableMentions: 'all'}));
             } else {
                 return this.photochan.send({embed: emb, disableMentions: 'all'});
             }
         } catch (e) {
             this.log("error", "Failed to bake picture " + url + ": " + JSON.stringify(e));
         }
-    }
-
-
-    async getWebhook(member) {
-        if (!member) throw {error: "Member not found."};
-        if (!this._webhooks[member.id]) return this.prepareWebhook(member);
-        this._webhooks[member.id].ts = moment().unix();
-        clearTimeout(this._webhooks[member.id].cleartimer);
-        this.setWebhookCleanupTimer(member.id);
-        return this._webhooks[member.id].webhook;
-    }
-
-    async prepareWebhook(member) {
-        if (!member) throw {error: "Member not found."};
-        
-        if (Object.keys(this._webhooks).length >= this.param("maxwebhooks")) {
-            let oldest = Object.values(this._webhooks).sort((a, b) => b.ts - a.ts)[0];
-            await this.removeWebhook(oldest.id);
-        }
-
-        let webhook = await this.photochan.createWebhook(member.displayName, {avatar: member.user.displayAvatarURL(), reason: "Photo sharing."});
-        this._webhooks[member.id] = {userid: member.id, webhook: webhook, ts: moment().unix(), cleartimer: null};
-        this.setWebhookCleanupTimer(member.id);
-        return webhook;
-    }
-
-    async removeWebhook(userid) {
-        if (!userid || !this._webhooks[userid]) return null;
-        clearTimeout(this._webhooks[userid].cleartimer);
-        let webhook = this._webhooks[userid].webhook;
-        delete this._webhooks[userid];
-        return webhook.delete();
-    }
-
-    setWebhookCleanupTimer(userid) {
-        if (!userid || !this._webhooks[userid]) return;
-        this._webhooks[userid].cleartimer = setTimeout(function() {
-            this.removeWebhook(userid);
-        }.bind(this), this.param("webhooklifetime") * 1000);
     }
 
 

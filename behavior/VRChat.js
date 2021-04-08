@@ -79,6 +79,7 @@ class ModVRChat extends Module {
         "coloronline",          //Color for "online"/"used" embed accents
         
         "pinnedchan",           //ID of text channel for pinned worlds
+        "pinnedwebhook",        //Whether to use a webhook for pinned worlds (simulate requester)
 
         "announcechan",         //ID of text channel for announcements
         "anncollapse",          //How long since the latest announcement to collapse announcements (s)
@@ -151,7 +152,7 @@ class ModVRChat extends Module {
         this._params["friendliststale"] = 179;
         this._params["bakestale"] = 29;
 
-        this._params["offlinetolerance"] = 20;
+        this._params["offlinetolerance"] = 60;
 
         this._params["worldfreq"] = 300;
         this._params["worldstale"] = 3600;

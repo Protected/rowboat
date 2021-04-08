@@ -160,7 +160,10 @@ var loadEnvironments = exports.loadEnvironments = function() {
             sharedInstances[sharedModule] = shared[sharedName];
         }
         
-        if (!env.initialize(sharedInstances)) {
+        if (!env.initialize({
+            sharedInstances: sharedInstances,
+            pushCleanupHandler: pushCleanupHandler
+        })) {
             logger.error("Could not initialize the environment: " + name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
             return false;
         }

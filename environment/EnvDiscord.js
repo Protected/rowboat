@@ -1,10 +1,10 @@
 /* Environment: Discord -- This environment connects to a Discord server/guild. */
 
+const moment = require('moment');
+
 const Environment = require('../Environment.js');
 
-
 class EnvDiscord extends Environment {
-
 
     get requiredParams() { return [
         'token',                //Discord application token
@@ -14,7 +14,9 @@ class EnvDiscord extends Environment {
     ]; }
         
     get optionalParams() { return [
-        'senddelay'             //Message queue send delay (ms)
+        'senddelay',            //Message queue send delay (ms)
+        'webhooklifetime',      //How long to keep a webhook (s)
+        'maxwebhooks'           //Maximum total simultaneous webhooks
     ]; }
     
     get sharedModules() { return [
@@ -25,17 +27,33 @@ class EnvDiscord extends Environment {
         super('Discord', name);
 
         this._params['senddelay'] = 500;
+        this._params["webhooklifetime"] = 60;
+        this._params["maxwebhooks"] = 5;
         
         this._localClient = null;  //DiscordClient (manages shared discord.js Client object)
         this._client = null;  //Actual discord.js Client object
         this._server = null;  //discord.js Guild object (formerly Server) for the server identified by this environment's 'server' ID.
         this._channels = {};
+
+        this._webhooks = {};  //{CHANNELID: {USERID: {userid, webhook, ts, cleartimer}, ...}, ...}
     }
     
     
-    initialize(sharedInstances) {
-        if (!super.initialize(sharedInstances)) return false;
-        this._localClient = sharedInstances.DiscordClient;
+    initialize(opt) {
+        if (!super.initialize(opt)) return false;
+
+        this._localClient = opt.sharedInstances.DiscordClient;
+
+        opt.pushCleanupHandler((next) => {
+            let promises = [];
+            for (let channelid in this._webhooks) {
+                for (let userid in this._webhooks[channelid]) {
+                    promises.push(this.removeWebhook(channelid, userid));
+                }
+            }
+            Promise.all(promises).then(next);
+        });
+
         return true;
     }
     
@@ -447,6 +465,62 @@ class EnvDiscord extends Environment {
             });
         };
         scanner();
+    }
+
+
+    //Temporary webhooks that simulate members
+
+    async getWebhook(channel, member) {
+        if (!member) throw {error: "Member must be provided."};
+        if (!channel) throw {error: "Channel must be provided."};
+        if (!this._webhooks[channel.id]?.[member.id]) return this.prepareWebhook(channel, member);
+        this._webhooks[channel.id][member.id].ts = moment().unix();
+        clearTimeout(this._webhooks[channel.id][member.id].cleartimer);
+        this.setWebhookCleanupTimer(channel.id, member.id);
+        return this._webhooks[channel.id][member.id].webhook;
+    }
+
+    countWebhooks() {
+        return Object.values(this._webhooks).reduce((count, channelhooks) => count += Object.keys(channelhooks).length, 0);
+    }
+
+    oldestWebhook() {
+        return Object.values(this._webhooks).reduce((candidate, channelhooks) => {
+            let oldestinchannel = channelhooks.sort((a, b) => b.ts - a.ts)[0];
+            if (!candidate || oldestinchannel.ts < candidate.ts) return oldestinchannel;
+            return candidate;
+        });
+    }
+
+    async prepareWebhook(channel, member) {
+        if (!member) throw {error: "Member must be provided."};
+        if (!channel) throw {error: "Channel must be provided."};
+        
+        if (this.countWebhooks() >= this.param("maxwebhooks")) {
+            let oldest = this.oldestWebhook();
+            await this.removeWebhook(oldest.channelid, oldest.userid);
+        }
+
+        let webhook = await channel.createWebhook(member.displayName, {avatar: member.user.displayAvatarURL(), reason: "User simulation."});
+        if (!this._webhooks[channel.id]) this._webhooks[channel.id] = {};
+        this._webhooks[channel.id][member.id] = {channelid: channel.id, userid: member.id, webhook: webhook, ts: moment().unix(), cleartimer: null};
+        this.setWebhookCleanupTimer(channel.id, member.id);
+        return webhook;
+    }
+
+    async removeWebhook(channelid, userid) {
+        if (!channelid || !userid || !this._webhooks[channelid]?.[userid]) return null;
+        clearTimeout(this._webhooks[channelid][userid].cleartimer);
+        let webhook = this._webhooks[channelid][userid].webhook;
+        delete this._webhooks[channelid][userid];
+        return webhook.delete();
+    }
+
+    setWebhookCleanupTimer(channelid, userid) {
+        if (!userid || !this._webhooks[channelid]?.[userid]) return;
+        this._webhooks[channelid][userid].cleartimer = setTimeout(function() {
+            this.removeWebhook(channelid, userid);
+        }.bind(this), this.param("webhooklifetime") * 1000);
     }
     
     
