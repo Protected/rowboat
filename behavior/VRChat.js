@@ -795,6 +795,7 @@ class ModVRChat extends Module {
 
                 //Update latest location (used in world embeds)
                 let location = this._friends[person.vrc].location;
+                if (location && (location == "offline" || location == "private")) location = "";
                 if (person.latestlocation != location) {
                     
                     if (this.param("statedebug")) {
