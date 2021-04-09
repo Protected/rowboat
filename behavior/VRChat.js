@@ -817,7 +817,7 @@ class ModVRChat extends Module {
 
                 //Update saved status and announce changes
                 if (this.param("statedebug") && person.lateststatus != this._friends[person.vrc].status) {
-                    this.log("!> Status >> " + person.name + " " + location);
+                    this.log("!> Status >> " + person.name + " " + this._friends[person.vrc].status);
                 }
                 this.updateStatus(userid, this._friends[person.vrc].status);
                 if (person.pendingflip && now - person.latestflip >= this.param("offlinetolerance")) {
