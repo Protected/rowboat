@@ -27,7 +27,7 @@ class ModReactionRoles extends Module {
     constructor(name) {
         super('ReactionRoles', name);
 
-        this._data = null;
+        this._data = null;  //{roles: {ROLEID: {emoji, desc, add, remove, require}, ...}, groups: {COLOR: {label, channel, message}, ...}}
         this._emoji = {};  //Index of registered roles by emoji
     }
 

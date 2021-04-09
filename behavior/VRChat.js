@@ -668,6 +668,16 @@ class ModVRChat extends Module {
             if (userdata.state) delete userdata.state;
 
             if (!this._friends[vrcuserid]) this._friends[vrcuserid] = {};
+
+            if (this.param("statedebug")) {
+                let person = this.getPerson(userid);
+                for (let key in userdata) {
+                    if (this._friends[vrcuserid][key] != userdata[key]) {
+                        this.log("-> Update >> " + person.name + " " + key + " (" + this._friends[vrcuserid][key] + " -> " + userdata[key] + ")");
+                    }
+                }
+            }
+
             Object.assign(this._friends[vrcuserid], userdata);
 
             if (this.statuschan && this.isBakeStale(userid)) {
