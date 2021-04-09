@@ -673,7 +673,7 @@ class ModReactionRoles extends Module {
 
     getRole(roleid) {
         if (!roleid) return null;
-        return this._data.roles[roleid]
+        return this._data.roles[roleid];
     }
 
     roleRelateAdd(roleid, relateid) {

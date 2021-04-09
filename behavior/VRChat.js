@@ -831,7 +831,7 @@ class ModVRChat extends Module {
                 }
                 this.updateStatus(userid, this._friends[person.vrc].status);
                 if (person.pendingflip && now - person.latestflip >= this.param("offlinetolerance")) {
-                    if (this.param("statedebug")) this.log("!> Flip >> " + person.name);
+                    if (this.param("statedebug")) this.log("!> Flip (timer) >> " + person.name);
                     this.finishStatusUpdate(userid);
                 }
 
@@ -884,7 +884,7 @@ class ModVRChat extends Module {
         if (this.param("updatefreq") >= 40) setTimeout(maintimer, 20000);  //Run faster at startup
 
 
-        if (this.param("usewebsocket")) {
+        if (this.param("usewebsocket") && this.param("updatefreq") > 300) {
             this._qtimer = setInterval(function () {
 
                 let now = moment().unix();
@@ -894,12 +894,13 @@ class ModVRChat extends Module {
 
                     //Finish pending updates to offline status
                     if (person.pendingflip && now - person.latestflip >= this.param("offlinetolerance")) {
+                        if (this.param("statedebug")) this.log("!> Flip (det) >> " + person.name);
                         this.finishStatusUpdate(userid);
                     }
 
                 }
 
-            }.bind(this), 60000);
+            }.bind(this), 59070);  //Don't align with maintimer
         }
 
 
