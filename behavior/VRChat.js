@@ -3318,10 +3318,12 @@ class ModVRChat extends Module {
     //Low level api methods
 
     setCookies(result) {
-        for (let cookie of result.cookies) {
-            let parts = cookie.split(";")[0].split("=");
-            if (parts[0] == "auth") {
-                this._auth = parts[1];
+        if (result.cookies) {
+            for (let cookie of result.cookies) {
+                let parts = cookie.split(";")[0].split("=");
+                if (parts[0] == "auth") {
+                    this._auth = parts[1];
+                }
             }
         }
         return result.body;
