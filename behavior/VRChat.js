@@ -105,6 +105,8 @@ class ModVRChat extends Module {
 
         "alertmin",             //Minimum amount of online people to vrcalert at
         "alertcooldown",        //How long until a user can be alerted again (mins)
+
+        "statedebug"            //Log inbound state and location changes
     ]; }
 
     get requiredEnvironments() { return [
@@ -152,7 +154,7 @@ class ModVRChat extends Module {
         this._params["friendliststale"] = 179;
         this._params["bakestale"] = 29;
 
-        this._params["offlinetolerance"] = 60;
+        this._params["offlinetolerance"] = 119;
 
         this._params["worldfreq"] = 300;
         this._params["worldstale"] = 3600;
@@ -187,6 +189,8 @@ class ModVRChat extends Module {
 
         this._params["alertmin"] = 4;
         this._params["alertcooldown"] = 60;
+
+        this._params["statedebug"] = false;
 
         this._people = null;  //{USERID: {see registerPerson}, ...}
         this._worlds = null;  //The worlds cache {WORLDID: {..., see getWorld}, ...}
@@ -575,6 +579,10 @@ class ModVRChat extends Module {
             let person = this.getPerson(userid);
             if (!person) return;
 
+            if (this.param("statedebug")) {
+                this.log("-> StateChange >> " + person.name + " " + state);
+            }
+
             if (!userdata) userdata = {};
             if (userdata.state) delete userdata.state;
 
@@ -597,6 +605,10 @@ class ModVRChat extends Module {
             let userid = this.getUseridByVrc(vrcuserid);
             let person = this.getPerson(userid);
             if (!person) return;
+
+            if (this.param("statedebug")) {
+                this.log("-> LocationChange >> " + person.name + " " + location);
+            }
 
             if (userdata.state) delete userdata.state;
 
@@ -784,6 +796,11 @@ class ModVRChat extends Module {
                 //Update latest location (used in world embeds)
                 let location = this._friends[person.vrc].location;
                 if (person.latestlocation != location) {
+                    
+                    if (this.param("statedebug")) {
+                        this.log("!> Location >> " + person.name + " " + location);
+                    }
+
                     let oldworldid = this.worldFromLocation(person.latestlocation);
                     if (oldworldid && !person.sneak && !person.invisible) {
                         this.removeWorldMember(oldworldid, userid);
@@ -798,8 +815,12 @@ class ModVRChat extends Module {
                 }
 
                 //Update saved status and announce changes
+                if (this.param("statedebug") && person.lateststatus != this._friends[person.vrc].status) {
+                    this.log("!> Status >> " + person.name + " " + location);
+                }
                 this.updateStatus(userid, this._friends[person.vrc].status);
                 if (person.pendingflip && now - person.latestflip >= this.param("offlinetolerance")) {
+                    if (this.param("statedebug")) this.log("!> Flip >> " + person.name);
                     this.finishStatusUpdate(userid);
                 }
 
