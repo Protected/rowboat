@@ -240,7 +240,7 @@ class ModReactionChannels extends Module {
             let channel = await env.server.channels.create(name, {
                 type: args.type,
                 parent: parent,
-                permissionOverwrites: [{id: userid, allow: ["VIEW_CHANNEL", "MANAGE_CHANNELS", "MANAGE_ROLES"]}],
+                permissionOverwrites: [{id: env.server.id, deny: ["VIEW_CHANNEL"]}, {id: userid, allow: ["VIEW_CHANNEL", "MANAGE_CHANNELS", "MANAGE_ROLES"]}],
                 reason: "Requested by " + userid + " using rchan create."
             });
 
