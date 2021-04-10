@@ -3560,7 +3560,7 @@ class ModVRChat extends Module {
     tagLabels(tags) {
         let labels = [];
         if (tags.includes("admin_moderator")) labels.push("🛡️ VRChat moderator");
-        if (tags.includes("system_legend ") || tags.includes("system_trust_legend ")) labels.push("🌟 Legendary");
+        if (tags.includes("system_legend") || tags.includes("system_trust_legend")) labels.push("🌟 Legendary");
         if (tags.includes("system_probable_troll")) labels.push("🚩 Suspected troll");
         if (tags.includes("system_troll")) labels.push("👹 Troll");
         if (tags.includes("system_supporter")) labels.push("➕ VRChat plus");
