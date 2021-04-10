@@ -235,14 +235,21 @@ class ModReactionChannels extends Module {
             }
 
             let parent = this.getParent();
-            if (parent) parent = env.server.channels.cache.get(parent);
+            let po = undefined;
+            if (parent) {
+                parent = env.server.channels.cache.get(parent);
+                po = parent.permissionOverwrites;
+            }
 
             let channel = await env.server.channels.create(name, {
                 type: args.type,
                 parent: parent,
-                permissionOverwrites: [{id: env.server.id, deny: ["VIEW_CHANNEL"]}, {id: userid, allow: ["VIEW_CHANNEL", "MANAGE_CHANNELS", "MANAGE_ROLES"]}],
+                permissionOverwrites: po,
                 reason: "Requested by " + userid + " using rchan create."
             });
+          
+            await channel.updateOverwrite(env.server.id, {VIEW_CHANNEL: false});
+            await channel.updateOverwrite(userid, {VIEW_CHANNEL: true, MANAGE_CHANNELS: true, MANAGE_ROLES: true});
 
             this.setChannel(channel.id, emoji);
             this._emoji[emoji] = channel.id;
