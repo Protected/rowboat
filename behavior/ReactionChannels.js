@@ -804,7 +804,8 @@ class ModReactionChannels extends Module {
 
     hasMemberChannelRequirements(member, channel) {
         let data = this.getChannel(channel?.id);
-        if (!member || !data || !data.require) return false;
+        if (!member || !data) return false;
+        if (!data.require) return true;
 
         for (let roleid of data.require) {
             if (!member.roles.cache.get(roleid)) {
