@@ -1275,7 +1275,7 @@ class ModRajio extends Module {
         }
         
         if (this.param('usestatus')) {
-            this.denv.client.realClient.user.setActivity(song.name + (song.author ? " (" + song.author + ")" : ""), {type: 'PLAYING'}).catch(() => {});
+            this.denv.client.realClient.user.setActivity(song.name + (song.author ? " (" + song.author + ")" : ""), {type: 'PLAYING'});
         }
         
         let att = 1.0;
@@ -1339,7 +1339,7 @@ class ModRajio extends Module {
         this.grabber.setAdditionalStats(this.metaprefix + '.playing', null);
         
         if (this.param('usestatus')) {
-            this.denv.client.realClient.user.setActivity(null).catch(() => {});
+            this.denv.client.realClient.user.setActivity(null);
         }
         
         if (this._pending) {
@@ -1374,7 +1374,7 @@ class ModRajio extends Module {
         this.log('Pausing song: ' + this._play.hash + ' at ' + pausetime);
         
         if (this.param('usestatus')) {
-            this.denv.client.realClient.user.setActivity("*Paused*", {type: 'PLAYING'}).catch(() => {});
+            this.denv.client.realClient.user.setActivity("*Paused*", {type: 'PLAYING'});
         }
         
         this._pause = [this._play, pausetime];
