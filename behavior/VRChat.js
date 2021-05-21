@@ -2233,7 +2233,7 @@ class ModVRChat extends Module {
         try {
             let friendlist = await this.vrcFriendList();
             for (let friend of friendlist) {
-                if (friend.status != "offline" && friend.location == "offline") friend.status = "website";
+                if (friend.status != "offline" && (friend.location == "offline" || friend.location == "")) friend.status = "website";
                 this._friends[friend.id] = friend;
                 if (notupdated[friend.id]) delete notupdated[friend.id];
             }
