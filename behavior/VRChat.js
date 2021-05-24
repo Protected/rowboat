@@ -2845,7 +2845,7 @@ class ModVRChat extends Module {
         let members = [];
         for (let userid in instance.members) {
             let line, person = this.getPerson(userid);
-            if (!url) url = this.linkFromLocation(person.latestlocation).replace(/\)/g, "\\)");
+            if (!url) url = this.linkFromLocation(person.latestlocation);
             line = "[" + (person.name || this.denv.idToDisplayName(userid)) + "](" + this.getPersonMsgURL(userid) + ")";
             members.push(line);
         }
