@@ -26,6 +26,7 @@ class ModVRChatPhotos extends Module {
         "deleteemoji",          //Emoji for deleting things
 
         "usewebhook",           //Use a webhook to re-emit photos
+        "embedwithoutmeta",     //Whether to re-emit photos without metadata
 
         /* Contest */
         "contestchan",          //ID of text channel for contest candidates
@@ -66,6 +67,7 @@ class ModVRChatPhotos extends Module {
         this._params["deleteemoji"] = "❌";
 
         this._params["usewebhook"] = true;
+        this._params["embedwithoutmeta"] = false;
 
         this._params["maxnominations"] = 3;
         this._params["nominationemoji"] = "⭐";
@@ -487,6 +489,9 @@ class ModVRChatPhotos extends Module {
                     .find(text => text.keyword == "Description" && text.text.match(/^lfs|2|/));
                 if (metadata) {
                     metadata = this.lfsMetadataToObject(metadata.text);
+                } else if (!this.param("embedwithoutmeta")) {
+                    this._index[message.id] = message;
+                    return;
                 }
             }
 
