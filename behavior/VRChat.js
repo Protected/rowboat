@@ -292,8 +292,10 @@ class ModVRChat extends Module {
 
             let person = this.getPerson(member.id);
             if (person && this.statuschan && person.msg) {
-                let message = await this.statuschan.messages.fetch(person.msg);
-                if (message) message.delete({reason: "User has departed the server."});
+                try {
+                    let message = await this.statuschan.messages.fetch(person.msg);
+                    if (message) message.delete({reason: "User has departed the server."});
+                } catch (e) {}
             }
 
             this.unregisterPerson(member.id);
@@ -522,7 +524,9 @@ class ModVRChat extends Module {
                     //Prefetch person status messages
 
                     if (this.statuschan && person.msg) {
-                        cachePromises.push(this.statuschan.messages.fetch(person.msg));
+                        try {
+                            cachePromises.push(this.statuschan.messages.fetch(person.msg));
+                        } catch (e) {}
                     }
 
                 } else {
@@ -788,7 +792,8 @@ class ModVRChat extends Module {
                     this.statuschan.messages.fetch(person.msg)
                         .then((message) => {
                             if (message) message.delete({reason: "User was unassigned."});
-                        });
+                        })
+                        .catch(() => {});
                 }
     
                 this.unassignKnownRole(userid, "User is no longer confirmed.");
@@ -2443,7 +2448,8 @@ class ModVRChat extends Module {
             this.dqueue(function() {
                 this.worldchan.messages.fetch(this._worlds[worldid].msg)
                     .then(message => message.delete({reason: "World cleared from cache ."}))
-                    .then(() => { delete this._worlds[worldid]; this._worlds.save(); });
+                    .catch(() => {})
+                    .finally(() => { delete this._worlds[worldid]; this._worlds.save(); });
             }.bind(this));
         } else {
             delete this._worlds[worldid];
@@ -2879,6 +2885,7 @@ class ModVRChat extends Module {
                     return await message.edit(emb);
                 } else {
                     message.delete({reason: "Instance is empty."});
+                    delete world.instances[instanceid];
                     return null;
                 }
             } else {
@@ -3119,20 +3126,23 @@ class ModVRChat extends Module {
         //Create, update or delete message.
         let ret;
         if (state.msg) {
-            let message = await this.announcechan.messages.fetch(state.msg);
-            if (!stack.length) {
-                if (prevmessage === true) {
-                    ret = message;
+            let message;
+            try {
+                message = await this.announcechan.messages.fetch(state.msg);
+                if (!stack.length) {
+                    if (prevmessage === true) {
+                        ret = message;
+                    } else {
+                        message.delete({reason: "Stack emptied."});
+                    }
+                    state.msg = null;
+                } else if (reemit) {
+                    message.delete({reason: "Re-emit announcement."});
+                    state.msg = null;
                 } else {
-                    message.delete({reason: "Stack emptied."});
+                    message.edit(prefix + txt);
                 }
-                state.msg = null;
-            } else if (reemit) {
-                message.delete({reason: "Re-emit announcement."});
-                state.msg = null;
-            } else {
-                message.edit(prefix + txt);
-            }
+            } catch (e) {}
         }
         if (!state.msg && stack.length) {
             let message;
@@ -3297,9 +3307,11 @@ class ModVRChat extends Module {
         let post;
 
         if (this.param("pinnedwebhook")) {
-            let member = await this.denv.server.members.fetch(userid);
-            let webhook = await this.denv.getWebhook(this.pinnedchan, member);
-            post = webhook.send({embeds: [emb], disableMentions: 'all'});
+            try {
+                let member = await this.denv.server.members.fetch(userid);
+                let webhook = await this.denv.getWebhook(this.pinnedchan, member);
+                post = webhook.send({embeds: [emb], disableMentions: 'all'});
+            } catch (e) {}
         }
         if (!post) {
             post = this.pinnedchan.send({embed: emb, disableMentions: 'all'});
