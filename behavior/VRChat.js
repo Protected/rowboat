@@ -331,6 +331,11 @@ class ModVRChat extends Module {
                     delete this._pins[worldid];
                 }
             }
+
+            let ids = this.findInstanceByMsg(message.id);
+            if (ids) {
+                this.clearInstance(ids[0], ids[1]);
+            }
             
         };
 
@@ -2442,6 +2447,12 @@ class ModVRChat extends Module {
         return true;
     }
 
+    clearInstanceMsg(worldid, instanceid) {
+        if (!this._worlds[worldid] || !this._worlds[worldid].instances[instanceid]) return false;
+        this._worlds[worldid].instances[instanceid].msg = null;
+        return true;
+    }
+
     async clearWorld(worldid) {
         if (!this._worlds[worldid]) return true;
         if (this._worlds[worldid].msg && this.worldchan) {
@@ -2453,6 +2464,28 @@ class ModVRChat extends Module {
             }.bind(this));
         } else {
             delete this._worlds[worldid];
+            this._worlds.save();
+        }
+        return true;
+    }
+
+    clearInstance(worldid, instanceid, dontsave) {
+        if (!this._worlds[worldid] || !this._worlds[worldid].instances[instanceid]) return false;
+        let instance = this._worlds[worldid].instances[instanceid];
+        if (instance.msg && this.instancechan) {
+            this.dqueue(function() {
+                this.instancechan.messages.fetch(instance.msg)
+                    .then(message => {
+                        //Delete instance first to prevent infinite recursion with the message deletion handler
+                        delete this._worlds[worldid].instances[instanceid];
+                        if (!dontsave) this._worlds.save();
+                        message.delete({reason: "Instance cleared."});
+                    })
+                    .catch(() => {});
+            }.bind(this));
+        } else {
+            delete this._worlds[worldid].instances[instanceid];
+            if (!dontsave) this._worlds.save();
         }
         return true;
     }
@@ -2478,6 +2511,9 @@ class ModVRChat extends Module {
                         this._worlds[worldid].emptysince = now;
                 }
                 continue;
+            }
+            for (let instanceid in this._worlds[worldid].instances) {
+                this.clearInstance(worldid, instanceid, true);
             }
             this._worlds[worldid].members = {};
             this._worlds[worldid].emptysince = now;
@@ -2884,8 +2920,7 @@ class ModVRChat extends Module {
                 if (members.length) {
                     return await message.edit(emb);
                 } else {
-                    message.delete({reason: "Instance is empty."});
-                    delete world.instances[instanceid];
+                    this.clearInstance(worldid, instanceid);
                     return null;
                 }
             } else {
