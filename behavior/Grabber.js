@@ -481,8 +481,8 @@ class ModGrabber extends Module {
                 }
             
                 this.queueFixLoudness(this._index[hash], {
-                    success: (newsong) => ep.reply(newsong.hash + ": Loudness fixed from " + hash + "."),
-                    error: (oldsong, err) => ep.reply(oldsong.hash + ": Failed loudness fix: " + err)
+                    success: (newsong) => ep.reply("`#" + newsong.hash + "`: Loudness fixed from #" + hash + "."),
+                    error: (oldsong, err) => ep.reply("`#" + oldsong.hash + "`: Failed loudness fix: " + err)
                 });
 
                 ep.reply("Loudness fix requested.");
@@ -534,8 +534,8 @@ class ModGrabber extends Module {
             }
         
             this.queueReformat(this._index[hash], args.format, {
-                success: (newsong) => ep.reply(newsong.hash + ": Reformat from " + hash + "."),
-                error: (oldsong, err) => ep.reply(oldsong.hash + ": Failed reformat: " + err)
+                success: (newsong) => ep.reply("`#" + newsong.hash + "`: Reformat from " + hash + "."),
+                error: (oldsong, err) => ep.reply("`#" + oldsong.hash + "`: Failed reformat: " + err)
             });
 
             ep.reply("Reformat requested.");
@@ -920,10 +920,10 @@ class ModGrabber extends Module {
         if (this.param('channels').indexOf(channelid) < 0) return false;
         this.queueScanMessage(rawobj, {
             accepted: (messageObj, messageAuthor, reply, hash) => {
-                if (reply) reply("Got it, " + messageAuthor + " (" + hash + ").");
+                if (reply) reply("Got it, " + messageAuthor + " (`#" + hash + "`).");
             },
             exists: (messageObj, messageAuthor, reply, hash) => {
-                if (reply) reply(messageAuthor + ", the song was already known (" + hash + ").");
+                if (reply) reply(messageAuthor + ", the song was already known (`#" + hash + "`).");
             },
             errorDuration: (messageObj, messageAuthor, reply, label) => {
                 if (reply) reply(messageAuthor + ", I only index songs with a duration between " + this.param('minDuration') + " and " + this.param('maxDuration') + " seconds" + (label ? " (" + label + ")" : "") + ".");
@@ -1788,7 +1788,7 @@ class ModGrabber extends Module {
         //Bunch of failure conditions
         if (fs.existsSync(realpath)) {
             fs.unlink(temppath, (err) => {});
-            this.log('  Already existed: ' + originalname + '  (as ' + hash + ')');
+            this.log('  Already existed: ' + originalname + '  (as `#' + hash + '`)');
             if (!readOnly && !mp.regrab) {
                 this._index[hash].seen.push(now);
                 if (this._index[hash].sharedBy.indexOf(mp.author) < 0) {
@@ -1928,7 +1928,7 @@ class ModGrabber extends Module {
             this._sessionGrabs.unshift([hash, now]);
         }
         
-        this.log('  Successfully grabbed from ' + entry.sourceType + ': ' + originalname + '  (as ' + hash + ')');
+        this.log('  Successfully grabbed from ' + entry.sourceType + ': ' + originalname + '  (as `#' + hash + '`)');
         if (callbacks.accepted) callbacks.accepted(messageObj, mp.authorName, mp.reply, hash);
         
         if (!mp.regrab) {
@@ -1956,6 +1956,13 @@ class ModGrabber extends Module {
     
     
     //Other auxiliary methods
+
+    extractHashes(text) {
+        if (!text) return [];
+        let results = [...text.matchAll(/#([0-9a-f]{32})/ig)].map(result => result[1]);
+        if (!results) return [];
+        return results;
+    }
     
     /* Expand alternative syntaxes in 'hash' arguments. Returns:
         true - Ambiguous (parameter matches more than one indexed song)

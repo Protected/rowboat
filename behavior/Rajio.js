@@ -220,11 +220,9 @@ class ModRajio extends Module {
     get dchan() {
         return this.denv.server.channels.cache.get(this._channel);
     }
-    
+
     get vc() {
-        let voice = this.denv.server.voice;
-        if (!voice) return null;
-        return this.denv.server.voice.connection;
+        return this.denv.server.me.voice.connection;
     }
     
     get listeners() {
@@ -1304,7 +1302,6 @@ class ModRajio extends Module {
             this.abortskip();
         
             let ender = () => {
-            
                 let llisteners = this.listeners.length;
                 let decreases = this.decreaseremaining();
                 Promise.all(decreases).then(() => {
@@ -1339,7 +1336,8 @@ class ModRajio extends Module {
         this.grabber.setAdditionalStats(this.metaprefix + '.playing', null);
         
         if (this.param('usestatus')) {
-            this.denv.client.realClient.user.setActivity(null);
+            //this.denv.client.realClient.user.setActivity(null);  BROKEN IN discord.js 2021/06
+            this.denv.client.realClient.user.setPresence({ activities: [] });
         }
         
         if (this._pending) {

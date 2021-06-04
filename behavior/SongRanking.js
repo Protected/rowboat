@@ -40,44 +40,95 @@ const LIKEABILITY_WORDS = {
 };
 
 const LIKEABILITY_REACTIONS = {
-    ok_hand: 2,
-    thumbsup: 2,
-    clap: 2,
-    laughing: 2,
-    satisfied: 2,
-    heart_eyes: 2,
     heart: 2,
+    orange_heart: 2,
+    yellow_heart: 2,
+    green_heart: 2,
+    blue_heart: 2,
+    purple_heart: 2,
+    black_heart: 2,
+    brown_heart: 2,
+    white_heart: 2,
     hearts: 2,
-    smile: 1,
-    smiley: 1,
-    slight_smile: 1,
+    first_place: 2,
+    star: 2,
+    star_struck: 2,
+    heart_eyes: 2,
+    heart_eyes_cat: 2,
+    top: 2,
+    heart_decoration: 2,
+    fire: 2,
+
+    pushpin: 1,
+    dollar: 1,
+    second_place: 1,
+    sun_with_face: 1,
+    clap: 1,
+    metal: 1,
+    thumbsup: 1,
+    ok_hand: 1,
     grin: 1,
     grinning: 1,
-    relieved: 1,
+    smiley: 1,
+    smile: 1,
+    slight_smile: 1,
     relaxed: 1,
-    metal: 1,
+    smiling_imp: 1,
+    ok: 1,
+    cool: 1,
+    arrow_up_small: 1,
+    arrow_up: 1,
+    heavy_plus_sign: 1,
+    musical_note: 1,
+    notes: 1,
+
+    third_place: -1,
+    broken_heart: -1,
+    octagonal_sign: -1,
+    cloud: -1,
+    sweat_drops: -1,
+    thumbsdown: -1,
+    face_with_raised_eyebrow: -1,
+    worried: -1,
+    confused: -1,
+    disappointed: -1,
     weary: -1,
     slight_frown: -1,
-    expressionless: -1,
-    unamused: -1,
-    disappointed: -1,
-    worried: -1,
     frowning: -1,
     anguished: -1,
-    sleepy: -1,
+    unamused: -1,
     grimacing: -1,
+    rolling_eyes: -1,
+    pouting_cat: -1,
+    imp: -1,
+    arrow_down_small: -1,
+    arrow_down: -1,
+    heavy_minus_sign: -1,
+
+    no_entry: -2,
+    x: -2,
     poop: -2,
     rage: -2,
-    thumbsdown: -2,
     nauseated_face: -2,
-    sick: -2
+    face_vomiting: -2,
+    skull: -2,
+    skull_crossbones: -2,
+    mute: -2,
+    anger: -2,
+
+    expressionless: 0,
+    neutral_face: 0,
+    no_mouth: 0,
+    question: 0,
+    grey_question: 0,
+    interrobang: 0
 };
 
 const LIKEABILITY_ICONS = {
-    "-2": 'poop',
-    "-1": 'nauseated_face',
-    "1": 'slight_smile',
-    "2": 'ok_hand'
+    "-2": 'skull',
+    "-1": 'imp',
+    "1": 'sun_with_face',
+    "2": 'heart'
 };
 
 
@@ -100,7 +151,8 @@ class ModSongRanking extends Module {
     get optionalParams() { return [
         'scaleExtremists',      //Scale down -2/2 votes of people who have more than X times as many of those votes as -1/1 votes
         'allowRemoval',         //Allow users to remove their votes from the index by voting 0
-        'preventLastRemoval'    //Prevent removal of a vote from the index if it's the last vote associated with an entry
+        'preventLastRemoval',   //Prevent removal of a vote from the index if it's the last vote associated with an entry
+        'extractReacts',        //Allow likeability changes by reacting to all self messages containing hashes (otherwise goes through grabber only)
     ]; }
     
     get requiredEnvironments() { return [
@@ -117,6 +169,7 @@ class ModSongRanking extends Module {
         this._params['scaleExtremists'] = 1.0;
         this._params['allowRemoval'] = true;
         this._params['preventLastRemoval'] = true;
+        this._params['extractReacts'] = true;
         
         this._index = {};  //{USERID: {LIKEABILITY: [HASH, ...], ...}, ...}
     }
@@ -139,7 +192,7 @@ class ModSongRanking extends Module {
         //Build index
         
         for (let hash of this.grabber.everySong()) {
-            let likmap = this.grabber.getSongMeta(hash, "like");
+            let likmap = this.grabber.getSongMeta(hash, "like") || {};
             for (let userid in likmap) {
                 if (!this._index[userid]) this._index[userid] = {};
                 if (!this._index[userid][likmap[userid]]) this._index[userid][likmap[userid]] = [];
@@ -177,7 +230,7 @@ class ModSongRanking extends Module {
         
         this.grabber.registerOnRemoveSong((hash, ismoderator, removerid) => {
         
-            let like = this.grabber.getSongMeta(hash, 'like');
+            let like = this.grabber.getSongMeta(hash, 'like') || {};
 
             if (!ismoderator) {
                 for (let userid in like) {
@@ -196,7 +249,8 @@ class ModSongRanking extends Module {
                 }
                 this.grabber.setUserStat(userid, 'likes', likestats);
                 
-                for (let sharer of this.grabber.getSongMeta(hash, 'sharedBy')) {
+                let sharedBy = this.grabber.getSongMeta(hash, 'sharedBy') || [];
+                for (let sharer of sharedBy) {
                     
                     let losstats = this.grabber.getUserStat(sharer, 'likesonshares');
                     if (losstats && losstats[like[userid]]) {
@@ -216,7 +270,8 @@ class ModSongRanking extends Module {
             this.grabber.setAdditionalStats('icons', this.likeabilityIcons);
             this.computeStatsIntoGrabberIndex(true);
         
-            env.client.on('messageReactionAdd', (messageReaction, user) => {
+            env.client.on('messageReactionAdd', async (messageReaction, user) => {
+                await messageReaction.message.fetch();
                 if (!messageReaction.message.channel || messageReaction.message.channel.guild.id != env.server.id) return;
                 
                 let emojiname = '';
@@ -224,12 +279,19 @@ class ModSongRanking extends Module {
                 if (!extr) return;
                 emojiname = extr[1];
                 if (LIKEABILITY_REACTIONS[emojiname] === undefined) return;
-                
-                this.grabber.queueScanMessage(messageReaction.message, {
-                    exists: (messageObj, messageAuthor, reply, hash) => {
+
+                if (messageReaction.message.author.id == env.server.me.id) {
+                    let hashes = this.grabber.extractHashes(messageReaction.message.content);
+                    for (let hash of hashes) {
                         this.setSongLikeability(hash, user.id, LIKEABILITY_REACTIONS[emojiname]);
                     }
-                }, true);
+                } else {
+                    this.grabber.queueScanMessage(messageReaction.message, {
+                        exists: (messageObj, messageAuthor, reply, hash) => {
+                            this.setSongLikeability(hash, user.id, LIKEABILITY_REACTIONS[emojiname]);
+                        }
+                    }, true);
+                }
             });
             
         }, self);
@@ -253,10 +315,10 @@ class ModSongRanking extends Module {
         
         let details = [
             "Likeability can be one of:",
-            " 2 = :ok_hand: = I especially like the song",
-            " 1 = :slight_smile: = (default) The song is ok/good",
-            "-1 = :worried: = The song is bad/don't like it much",
-            "-2 = :poop: = I hate this song"
+            " 2 = :heart: = I especially like the song",
+            " 1 = :sun_with_face: = (default) The song is ok/good",
+            "-1 = :imp: = The song is bad/don't like it much",
+            "-2 = :skull: = I hate this song"
         ];
 
         if (this.param('allowRemoval')) {
@@ -369,7 +431,7 @@ class ModSongRanking extends Module {
         }
         
         for (let hash of this.grabber.everySong()) {
-            let like = this.grabber.getSongMeta(hash, 'like');
+            let like = this.grabber.getSongMeta(hash, 'like') || {};
             for (let userid in like) {
                 
                 let likestats = this.grabber.getUserStat(userid, 'likes');
@@ -378,7 +440,8 @@ class ModSongRanking extends Module {
                 likestats[like[userid]] += 1;
                 this.grabber.setUserStat(userid, 'likes', likestats, true);
                 
-                for (let sharer of this.grabber.getSongMeta(hash, 'sharedBy')) {
+                let sharedBy = this.grabber.getSongMeta(hash, 'sharedBy') || [];
+                for (let sharer of sharedBy) {
                     
                     let losstats = this.grabber.getUserStat(sharer, 'likesonshares');
                     if (!losstats) losstats = {};
@@ -420,7 +483,8 @@ class ModSongRanking extends Module {
         likestats[likeability] += 1;
         this.grabber.setUserStat(userid, 'likes', likestats);
         
-        for (let sharer of this.grabber.getSongMeta(hash, 'sharedBy')) {
+        let sharedBy = this.grabber.getSongMeta(hash, 'sharedBy') || [];
+        for (let sharer of sharedBy) {
             
             let losstats = this.grabber.getUserStat(sharer, 'likesonshares');
             if (!losstats) losstats = {};
@@ -455,7 +519,8 @@ class ModSongRanking extends Module {
             this.grabber.setUserStat(userid, 'likes', likestats);
         }
 
-        for (let sharer of this.grabber.getSongMeta(hash, 'sharedBy')) {
+        let sharedBy = this.grabber.getSongMeta(hash, 'sharedBy') || [];
+        for (let sharer of sharedBy) {
 
             let losstats = this.grabber.getUserStat(sharer, 'likesonshares');
             if (losstats && losstats[likeability]) {
