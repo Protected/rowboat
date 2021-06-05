@@ -58,6 +58,8 @@ const LIKEABILITY_REACTIONS = {
     top: 2,
     heart_decoration: 2,
     fire: 2,
+    two_hearts: 2,
+    sparkling_heart: 2,
 
     pushpin: 1,
     dollar: 1,
@@ -125,10 +127,10 @@ const LIKEABILITY_REACTIONS = {
 };
 
 const LIKEABILITY_ICONS = {
-    "-2": 'skull',
-    "-1": 'imp',
-    "1": 'sun_with_face',
-    "2": 'heart'
+    "-2": 'heart',
+    "-1": 'thumbsup',
+    "1": 'weary',
+    "2": 'nauseated_face'
 };
 
 
@@ -315,11 +317,12 @@ class ModSongRanking extends Module {
         
         let details = [
             "Likeability can be one of:",
-            " 2 = :heart: = I especially like the song",
-            " 1 = :sun_with_face: = (default) The song is ok/good",
-            "-1 = :imp: = The song is bad/don't like it much",
-            "-2 = :skull: = I hate this song"
+            " 2 = :" + LIKEABILITY_ICONS[2] + ": = I especially like the song",
+            " 1 = :" + LIKEABILITY_ICONS[1] + ": = (default) The song is ok/good",
+            "-1 = :" + LIKEABILITY_ICONS[-1] + ": = The song is bad/don't like it much",
+            "-2 = :" + LIKEABILITY_ICONS[-2] + ": = I hate this song"
         ];
+        
 
         if (this.param('allowRemoval')) {
             details.splice(3, 0, " 0 = Remove a previous vote" + (this.param('preventLastRemoval') ? " (if it isn't the last in the song)" : ""));
