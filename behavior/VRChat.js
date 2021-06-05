@@ -2770,8 +2770,8 @@ class ModVRChat extends Module {
                 emb.addField("Tags", tags.join(", "));
             }
 
-            emb.addField("Players", world.publicOccupants, true);
-            emb.addField("Private", world.privateOccupants, true);
+            emb.addField("Players", world.publicOccupants || 0, true);
+            emb.addField("Private", world.privateOccupants || 0, true);
             emb.addField("Popularity",  "`" + ("#".repeat(world.popularity || 0) || "-") +  "`", true);
         }
         
