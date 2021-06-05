@@ -127,10 +127,10 @@ const LIKEABILITY_REACTIONS = {
 };
 
 const LIKEABILITY_ICONS = {
-    "-2": 'heart',
-    "-1": 'thumbsup',
-    "1": 'weary',
-    "2": 'nauseated_face'
+    "2": 'heart',
+    "1": 'thumbsup',
+    "-1": 'weary',
+    "-2": 'nauseated_face'
 };
 
 
