@@ -540,7 +540,7 @@ class ModRajio extends Module {
                 this._userremaining[userid] = counter;
             }
             
-            ep.reply('OK.');
+            ep.ok();
         
             return true;
         });
@@ -632,7 +632,7 @@ class ModRajio extends Module {
             }
             
             this._volume = volume;
-            ep.reply('OK.');
+            ep.ok();
         
             return true;
         });
@@ -681,7 +681,7 @@ class ModRajio extends Module {
                 this.autowithdraw(userid);
             }
             
-            ep.reply('OK.');
+            ep.ok();
         
             return true;
         }

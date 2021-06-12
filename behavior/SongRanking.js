@@ -369,7 +369,7 @@ class ModSongRanking extends Module {
                     return true;
                 }
                 if (this.unsetSongLikeability(hash, userid)) {
-                    ep.reply("Ok.");
+                    ep.ok();
                 } else {
                     ep.reply("Song not found.");
                 }
@@ -377,7 +377,7 @@ class ModSongRanking extends Module {
             }
         
             if (this.setSongLikeability(hash, userid, parseInt(lik))) {
-                ep.reply("Ok.");
+                ep.ok();
             } else {
                 ep.reply("Song not found or invalid argument.");
             }

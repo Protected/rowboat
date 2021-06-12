@@ -209,7 +209,7 @@ class ModReactionRoles extends Module {
                     if (!description) description = role.name;
                     this.setRole(role.id, emoji, description);
                     this._emoji[emoji] = role.id;
-                    ep.reply("Ok.");
+                    ep.ok();
                 })
                 .catch (e => {
                     ep.reply("Role not found.");
@@ -232,7 +232,7 @@ class ModReactionRoles extends Module {
             }
 
             this.unsetRole(roleid);
-            ep.reply("Ok.");
+            ep.ok();
     
             return true;
         });
@@ -320,7 +320,7 @@ class ModReactionRoles extends Module {
             let targetroleids = this.extractRoleIdsFromCollection(args.targetroleid);
 
             if (this.roleUnrelate(roleid, targetroleids)) {
-                ep.reply("Ok."); 
+                ep.ok(); 
             } else {
                 ep.reply("Can't unrelate a role from itself!");
             }
@@ -388,7 +388,7 @@ class ModReactionRoles extends Module {
             let label = args.label.join(" ");
 
             this.addGroup(color, label, args.joiner);
-            ep.reply("Ok.");
+            ep.ok();
     
             return true;
         });
@@ -407,7 +407,7 @@ class ModReactionRoles extends Module {
             color = color.toLowerCase();
 
             this.delGroup(color);
-            ep.reply("Ok.");
+            ep.ok();
     
             return true;
         });
@@ -512,7 +512,7 @@ class ModReactionRoles extends Module {
             let message = await channel.send(embed);
             this.setGroupMessage(color, channel.id, message.id);
             this.setupGroupReactions(color, message);
-            ep.reply("Ok.");
+            ep.ok();
 
             return true;
         });
@@ -556,7 +556,7 @@ class ModReactionRoles extends Module {
                 message.edit(embed);
                 this.setGroupMessage(color, channel.id, args.messageid);
                 this.setupGroupReactions(color, message);
-                ep.reply("Ok.");
+                ep.ok();
             } catch (e) {
                 ep.reply("Message not found.");
             };
@@ -595,7 +595,7 @@ class ModReactionRoles extends Module {
                 let embed = await this.generateGroupMessageEmbed(color);
                 message.edit(embed);
                 this.setupGroupReactions(color, message);
-                ep.reply("Ok.");
+                ep.ok();
             } catch (e) {
                 ep.reply("Message not found.");
             };
@@ -627,7 +627,7 @@ class ModReactionRoles extends Module {
             }            
 
             this.resetGroupMessage(color);
-            ep.reply("Ok.");
+            ep.ok();
 
             return true;
         });

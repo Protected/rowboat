@@ -355,7 +355,7 @@ class ModGrabber extends Module {
                     }
                 }
 
-                ep.reply('Ok.');
+                ep.ok();
             } else {
                 ep.reply('Historic hash not found in index! I will just remove it from the history.');
             }
@@ -389,7 +389,7 @@ class ModGrabber extends Module {
                 let info = this._index[hash];
                 if (info.sharedBy.length > 1) {
                     info.sharedBy = info.sharedBy.filter((shareid) => shareid != userid);
-                    ep.reply('Ok.');
+                    ep.ok();
                     return true;
                 } else if (info.sharedBy[0] != userid) {
                     ep.reply("You can only delete your own songs.");
@@ -402,7 +402,7 @@ class ModGrabber extends Module {
                     
             if (this.removeByHash(hash, candeleteall, userid)) {
                 this._sessionGrabs = this._sessionGrabs.filter((item) => item[0] != hash);
-                ep.reply('Ok.');
+                ep.ok();
             } else {
                 ep.reply('Hash not found or not removable.');
             }
@@ -659,7 +659,7 @@ class ModGrabber extends Module {
             this._index[hash][args.field] = newvalue;
             this._index.save();
             
-            ep.reply("Ok.");
+            ep.ok();
         
             return true;
         });
@@ -788,7 +788,7 @@ class ModGrabber extends Module {
             if (this._index[hash].keywords.indexOf(args.keyword) < 0) {
                 this._index[hash].keywords.push(args.keyword);
                 this._index.save();
-                ep.reply("Ok.");
+                ep.ok();
             } else {
                 ep.reply("Already existed.");
             }
@@ -830,7 +830,7 @@ class ModGrabber extends Module {
             if (ind > -1) {
                 this._index[hash].keywords.splice(ind, 1);
                 this._index.save();
-                ep.reply("Ok.");
+                ep.ok();
             } else {
                 ep.reply("Doesn't exist.");
             }

@@ -361,7 +361,7 @@ class ModVRChat extends Module {
                             if (result) {
                                 let pinnedreaction = messageReaction.message.reactions.cache.find(r => r.emoji.name == this.param("pinnedemoji"));
                                 if (pinnedreaction) pinnedreaction.remove();
-                                messageReaction.message.react(this.param("pinokayemoji"));
+                                this.denv.react(messageReaction.message, this.param("pinokayemoji"));
                             }
                         });
                     this.setLatestDiscord(user.id);
@@ -584,17 +584,9 @@ class ModVRChat extends Module {
                     this._pins[worldid] = message;
 
                     //Fix buttons
-                    let tasks = [];
                     for (let emoji of this.worldInviteButtons) {
                         let r = message.reactions.cache.find(r => r.emoji.name == emoji);
-                        if (!r || !r.me) tasks.push(function() { message.react(emoji) });
-                    }
-                    if (tasks.length) {
-                        this.dqueue(function() {
-                            for (let act of tasks) {
-                                act();
-                            }
-                        }.bind(this));
+                        if (!r || !r.me) this.denv.react(message, emoji);
                     }
                 });
 
@@ -1656,7 +1648,7 @@ class ModVRChat extends Module {
             }
 
             this.setPronounsColor(color);
-            ep.reply("Ok.");
+            ep.ok();
 
             return true;
         });
@@ -1682,7 +1674,7 @@ class ModVRChat extends Module {
             }
 
             this.addStatusRoleGroup(color.toLowerCase());
-            ep.reply("Ok.");
+            ep.ok();
     
             return true;
         });
@@ -1700,7 +1692,7 @@ class ModVRChat extends Module {
             }
 
             this.delStatusRoleGroup(color.toLowerCase());
-            ep.reply("Ok.");
+            ep.ok();
     
             return true;
         });
@@ -2626,7 +2618,7 @@ class ModVRChat extends Module {
         pr.then((msg) => {
             let invite = msg.reactions.cache.find(r => r.emoji.name == this.param("inviteemoji"));
             if ((person.latestlocation && !person.sneak && !person.invisible) && !invite) {
-                msg.react(this.param("inviteemoji"));
+                this.denv.react(msg, this.param("inviteemoji"));
             }
             if ((!person.latestlocation || person.sneak || person.invisible) && invite) {
                 invite.remove();
@@ -2829,12 +2821,12 @@ class ModVRChat extends Module {
                     .then(newmessage => {
                         this.setWorldMsg(worldid, newmessage);
                         if (this._pins[worldid]) {
-                            newmessage.react(this.param("pinokayemoji"));
+                            this.denv.react(newmessage, this.param("pinokayemoji"));
                         } else {
-                            newmessage.react(this.param("pinnedemoji"));
+                            this.denv.react(newmessage, this.param("pinnedemoji"));
                         }
                         for (let emoji of this.worldInviteButtons) {
-                            newmessage.react(emoji);
+                            this.denv.react(newmessage, emoji);
                         }
                         return newmessage;
                     });
@@ -2928,7 +2920,7 @@ class ModVRChat extends Module {
                     .then(newmessage => {
                         this.setInstanceMsg(worldid, instanceid, newmessage);
                         if (url) {
-                            newmessage.react(this.param("inviteemoji"));
+                            this.denv.react(newmessage, this.param("inviteemoji"));
                         }
                         return newmessage;
                     });
@@ -3355,7 +3347,7 @@ class ModVRChat extends Module {
         return post.then(newmessage => {
                 this._pins[worldid] = newmessage;
                 for (let emoji of this.worldInviteButtons) {
-                    newmessage.react(emoji);
+                    this.denv.react(newmessage, emoji);
                 }
                 return true;
             });

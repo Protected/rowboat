@@ -306,7 +306,7 @@ class ModReactionChannels extends Module {
 
             this.updateMessage();
 
-            ep.reply("Ok.");
+            ep.ok();
             
             return true;
         });
@@ -328,7 +328,7 @@ class ModReactionChannels extends Module {
 
             this.updateMessage();
 
-            ep.reply("Ok.");
+            ep.ok();
     
             return true;
         });
@@ -388,7 +388,7 @@ class ModReactionChannels extends Module {
             let targetroleids = this.extractRoleIdsFromCollection(args.targetroleid);
 
             if (this.channelRoleUnrelate(targetchannelid, targetroleids)) {
-                ep.reply("Ok."); 
+                ep.ok(); 
             } else {
                 ep.reply("Unable to remove relationship.");
             }
@@ -508,7 +508,7 @@ class ModReactionChannels extends Module {
             let message = await channel.send(embed);
             this.setEmbedMessageAttach(channel.id, message.id);
             this.setupMessageReactions(message);
-            ep.reply("Ok.");
+            ep.ok();
 
             return true;
         });
@@ -547,7 +547,7 @@ class ModReactionChannels extends Module {
                 message.edit(embed);
                 this.setEmbedMessageAttach(channel.id, message.id);
                 this.setupMessageReactions(message);
-                ep.reply("Ok.");
+                ep.ok();
             } catch (e) {
                 ep.reply("Message not found.");
             };
@@ -568,7 +568,7 @@ class ModReactionChannels extends Module {
 
             let result = await this.updateMessage();
             if (result) {
-                ep.reply("Ok.");
+                ep.ok();
             } else {
                 ep.reply("Message not found.");
             }
@@ -591,7 +591,7 @@ class ModReactionChannels extends Module {
             }           
 
             this.unsetEmbedMessage();
-            ep.reply("Ok.");
+            ep.ok();
 
             return true;
         });

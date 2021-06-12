@@ -48,6 +48,10 @@ class DiscordClient extends ModernEventEmitter {
         
         this._outbox = [];
         this._carrier = null;
+
+        this._reactionbox = [];
+        this._reactioncarrier = null;
+        this._reactioncap = 30;
         
         this._sendDelay = 500;
         this._token = null;
@@ -64,7 +68,7 @@ class DiscordClient extends ModernEventEmitter {
         
         this._environments[envDiscord.name] = envDiscord;
         
-        if (this._realClient) {   
+        if (this._realClient) {
             return new Promise((resolve) => {
                 this._resolveOnLogin.push(resolve);
             });
@@ -94,6 +98,10 @@ class DiscordClient extends ModernEventEmitter {
         this._realClient.once('ready', () => {
             this._carrier = setInterval(() => {
                 self.deliverMsgs.apply(self, null);
+            }, this._sendDelay);
+
+            this._reactioncarrier = setInterval(() => {
+                self.deliverReactions.apply(self, null);
             }, this._sendDelay);
             
             for (let resolve of this._resolveOnLogin) {
@@ -193,11 +201,28 @@ class DiscordClient extends ModernEventEmitter {
         
         this._outbox = newOutbox;
     }
+
+
+    deliverReactions() {
+        if (!this._reactionbox.length) return;
+        let next = this._reactionbox.shift();
+        if (!next || next.length != 2) return;
+        next[0].react(next[1]);
+    }
     
     
     //Outbox a string or MessageEmbed
     outbox(discordchan, msg) {
         this._outbox.push([discordchan, msg]);
+        return true;
+    }
+
+
+    //Outbox a reaction
+    reactionbox(discordmsg, emoji) {
+        if (this._reactionbox.length >= this._reactioncap) return false;
+        this._reactionbox.push([discordmsg, emoji]);
+        return true;
     }
 
 }

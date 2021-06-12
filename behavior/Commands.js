@@ -5,6 +5,7 @@
 const Module = require('../Module.js');
 
 const PERM_ADMIN = 'administrator';
+const OK_EMOJI = '✅';
 
 class ModCommands extends Module {
 
@@ -679,6 +680,18 @@ class ModCommands extends Module {
                             env.notice(authorid, (typeof msg == "object" ? msg : env.applyFormatting(msg)));
                         } else {
                             env.msg(authorid, (typeof msg == "object" ? msg : env.applyFormatting(msg)));
+                        }
+                    },
+                    react: function(emoji) {
+                        if (env.envName == "Discord") {
+                            env.react(rawobject, emoji);
+                        }
+                    },
+                    ok: function() {
+                        if (env.envName == "Discord") {
+                            env.react(rawobject, OK_EMOJI);
+                        } else {
+                            ep.reply("Ok.");
                         }
                     },
                     rawobject: rawobject

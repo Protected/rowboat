@@ -231,7 +231,12 @@ class EnvDiscord extends Environment {
             targetchan = this._channels[this.param('defaultchannel')];
         }
 
-        this._localClient.outbox(targetchan, msg);
+        return this._localClient.outbox(targetchan, msg);
+    }
+
+    react(msg, emoji) {  //Discord-specific
+        if (msg.client?.user?.id != this._client.user?.id) return false;
+        return this._localClient.reactionbox(msg, emoji);
     }
     
     

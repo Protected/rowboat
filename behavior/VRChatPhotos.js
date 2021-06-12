@@ -271,7 +271,7 @@ class ModVRChatPhotos extends Module {
             }
 
             await this.reemitMessage(message);
-            ep.reply("Ok.");
+            ep.ok();
 
             return true;
         });
@@ -303,7 +303,7 @@ class ModVRChatPhotos extends Module {
             let fields = this.getPhotoMessageFields(photomessage);
             await this.bakeCandidate(null, owners, fields, this.getPhotoMsgURL(photomessage.id), message);
 
-            ep.reply("Ok.");
+            ep.ok();
 
             return true;
         });
