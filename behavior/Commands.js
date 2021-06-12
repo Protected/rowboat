@@ -670,7 +670,14 @@ class ModCommands extends Module {
         try {
             if (!descriptor.callback[targetmod](env, type, authorid, channelid, command, passargs, handle, {
                     reply: function(msg) {
-                        env.msg(channelid, (typeof msg == "object" ? msg : env.applyFormatting(msg)));
+                        let options = {};
+                        if (env.name == "Discord") {
+                            options.reply = {
+                                messageReference: rawobject.id,
+                                failIfNotExists: false
+                            }
+                        }
+                        env.msg(channelid, (typeof msg == "object" ? msg : env.applyFormatting(msg)), options);
                     },
                     pub: function(msg) {
                         env.msg((channelid == authorid ? null : channelid), (typeof msg == "object" ? msg : env.applyFormatting(msg)));

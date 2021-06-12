@@ -199,7 +199,7 @@ class EnvIRC extends Environment {
     }
 
 
-    msg(targetid, msg) {
+    msg(targetid, msg, options) {
         if (!targetid) targetid = this.param('channels')[0];
         
         let parts;
@@ -224,7 +224,7 @@ class EnvIRC extends Environment {
     }
     
     
-    notice(targetid, msg) {
+    notice(targetid, msg, options) {
         if (!targetid) targetid = channels[0];
         
         let parts;

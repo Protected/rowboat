@@ -109,8 +109,8 @@ class Environment extends ModernEventEmitter {
 
     connect() {}
     disconnect() {}
-    msg(targetid, msg) {}
-    notice(targetid, msg) {}
+    msg(targetid, msg, options) {}
+    notice(targetid, msg, options) {}
     
     
     /* Environments should emit the following events (arguments are for the listeners):

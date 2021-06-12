@@ -142,7 +142,15 @@ class DiscordClient extends ModernEventEmitter {
             if (!packages[rawchannelid]) {
                 packages[rawchannelid] = {
                     targetchan: this._outbox[i][0],
-                    messages: []
+                    messages: [],
+                    options: this._outbox[i][2] || {}
+                }
+            } else if (this._outbox[i][2]) {
+                //Try to merge options
+                for (let key in this._outbox[i][2]) {
+                    if (!packages[rawchannelid].options[key]) {
+                        packages[rawchannelid].options[key] = this._outbox[i][2][key];
+                    }
                 }
             }
             packages[rawchannelid].messages.push(this._outbox[i][1]);
@@ -168,16 +176,32 @@ class DiscordClient extends ModernEventEmitter {
             
             //Deliver message to Discord
             let todeliver = msgparts.join("\n");
+
             let deliveropts = {
                 disable_everyone: true,
                 split: {char: "\n"},
-                embed: (embed && !embed.name ? embed : null)
             };
+
             if (todeliver.trim().match(/```$/)) {
                 deliveropts.split.prepend = '```';
                 deliveropts.split.append = '```';
             }
-            pack.targetchan.send(todeliver, embed && embed.name ? embed : deliveropts).catch();  //embed.name being present means it's a MessageAttachment
+
+            for (let key in pack.options) {
+                deliveropts[key] = pack.options[key];
+            }
+
+            deliveropts.content = todeliver;
+
+            if (embed) {
+                if (embed.name) {
+                    deliveropts.files = [embed];
+                } else {
+                    deliveropts.embeds = [embed];
+                }
+            }
+
+            pack.targetchan.send(deliveropts).catch();  //embed.name being present means it's a MessageAttachment
             
             //List environments that target the server the package was delivered to
             let notifyEnvironments = [];
@@ -212,8 +236,8 @@ class DiscordClient extends ModernEventEmitter {
     
     
     //Outbox a string or MessageEmbed
-    outbox(discordchan, msg) {
-        this._outbox.push([discordchan, msg]);
+    outbox(discordchan, msg, options) {
+        this._outbox.push([discordchan, msg, options]);
         return true;
     }
 

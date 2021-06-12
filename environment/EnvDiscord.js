@@ -224,14 +224,14 @@ class EnvDiscord extends Environment {
     }
     
     
-    msg(targetid, msg) {
+    msg(targetid, msg, options) {
         let targetchan = this.getActualChanFromTarget(targetid);
 
         if (!targetchan) {
             targetchan = this._channels[this.param('defaultchannel')];
         }
 
-        return this._localClient.outbox(targetchan, msg);
+        return this._localClient.outbox(targetchan, msg, options);
     }
 
     react(msg, emoji) {  //Discord-specific
@@ -240,8 +240,8 @@ class EnvDiscord extends Environment {
     }
     
     
-    notice(targetid, msg) {
-        this.msg(targetid, msg);
+    notice(targetid, msg, options) {
+        this.msg(targetid, msg, options);
     }
     
 
