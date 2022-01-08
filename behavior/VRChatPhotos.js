@@ -413,6 +413,9 @@ class ModVRChatPhotos extends Module {
                     if (!(counter % 50)) {
                         ep.reply("Downloaded: " + counter);
                     }
+                }, (e) => {
+                    delete inProgress[message.id];
+                    this.log("Failed " + message.id + ": " + e);
                 });
 
                 if (!newdownload) {
@@ -494,7 +497,7 @@ class ModVRChatPhotos extends Module {
         return false;
     }
 
-    getMessageAttachmentPhoto(message, onPhoto) {
+    getMessageAttachmentPhoto(message, onPhoto, onError) {
         if (!message || !onPhoto) return null;
 
         for (let attachment of message.attachments.array()) {
@@ -502,14 +505,14 @@ class ModVRChatPhotos extends Module {
 
             return this.urlget(attachment.url, {buffer: true})
                 .then((data) => onPhoto(attachment, data))
-                .catch((e) => { })
+                .catch((e) => onError ? onError(e) : undefined)
                 ;
         }
 
         return null;
     }
 
-    getMessageEmbedPhoto(message, onPhoto) {
+    getMessageEmbedPhoto(message, onPhoto, onError) {
         if (!message || !onPhoto) return null;
 
         for (let embed of message.embeds) {
@@ -517,7 +520,7 @@ class ModVRChatPhotos extends Module {
 
             return this.urlget(embed.image.url, {buffer: true})
                 .then((data) => onPhoto(embed.image, data))
-                .catch((e) => { })
+                .catch((e) => onError ? onError(e) : undefined)
                 ;
         }
 
@@ -585,16 +588,18 @@ class ModVRChatPhotos extends Module {
         });
     }
 
-    downloadMessagePhoto(message, targetpath, onEnd) {
+    downloadMessagePhoto(message, targetpath, onEnd, onFail) {
         if (!message || !this.messageHasPhotos(message) || !targetpath) return null;
 
         let handleDownloadedPhoto = (filename, data) => {
             let metadata = null;
             if (filename && filename.match(/\.png$/i)) {
-                metadata = pngextract(data)
-                    .filter(chunk => chunk.name == "tEXt" || chunk.name == "iTXt")
-                    .map(chunk => chunk.name == "tEXt" ? this.pngDecodetEXt(chunk.data) : this.pngDecodeiTXt(chunk.data))
-                    .find(text => text.keyword == "Description" && text.text.match(/^lfs|2|/));
+                try {
+                    metadata = pngextract(data)
+                        .filter(chunk => chunk.name == "tEXt" || chunk.name == "iTXt")
+                        .map(chunk => chunk.name == "tEXt" ? this.pngDecodetEXt(chunk.data) : this.pngDecodeiTXt(chunk.data))
+                        .find(text => text.keyword == "Description" && text.text.match(/^lfs|2|/));
+                } catch (e) {}
                 if (metadata) {
                     metadata = this.lfsMetadataToObject(metadata.text);
                 }
@@ -620,11 +625,11 @@ class ModVRChatPhotos extends Module {
         if (this.messageHasAttachmentPhotos(message)) {
             return this.getMessageAttachmentPhoto(message, (attachment, data) => {
                 handleDownloadedPhoto(attachment.name, data);
-            });
+            }, onFail);
         } else {
             return this.getMessageEmbedPhoto(message, (embedimage, data) => {
                 handleDownloadedPhoto(embedimage.url.split("/").pop(), data);
-            })
+            }, onFail);
         }
 
     }
