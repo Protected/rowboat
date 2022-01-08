@@ -5,6 +5,7 @@ const random = require('meteor-random');
 const { MessageEmbed } = require('discord.js');
 const pngextract = require('png-chunks-extract');
 const fs = require('fs');
+const { readdir } = 'fs/promises';
 
 const Module = require('../Module.js');
 
@@ -369,7 +370,7 @@ class ModVRChatPhotos extends Module {
             description: "Back up the photos from the " + this.param("name") + " album.",
             permissions: [PERM_ADMIN],
             type: ["private"]
-        },  (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             if (!this.photochan) return true;
 
@@ -386,6 +387,12 @@ class ModVRChatPhotos extends Module {
                 queue.push(message);
             }
 
+            let existing = await readdir(this.param("backuppath"));
+            existing = existing.map(filename => {
+                let extrid = filename.match(/([0-9]+)(\.[^.]+)?$/);
+                if (extrid) return extrid[1];
+            });
+
             let inProgress = {};
             let downloadTimer = setInterval(function() {
                 if (Object.keys(inProgress).length >= 3) {  //maximum simultaneous
@@ -396,6 +403,10 @@ class ModVRChatPhotos extends Module {
                 if (!message) {
                     clearInterval(downloadTimer);
                     ep.reply("Done!");
+                    return;
+                }
+
+                if (existing.find(test => test == message.id)) {
                     return;
                 }
 
