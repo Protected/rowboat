@@ -1494,6 +1494,9 @@ class ModVRChat extends Module {
 
         }
 
+
+        this.mod('Commands').registerRootDetails(this, 'vrcsave', {description: "Save backup data."});
+
         if (this.param("pinnedchan")) {
 
             this.mod('Commands').registerCommand(this, 'vrcany favorite', {
@@ -1532,6 +1535,29 @@ class ModVRChat extends Module {
                 if (!data) return true;
 
                 ep.reply("**" + data.title + "** - " + this.getPinnedMsgURL(message.id));
+
+                return true;
+            });
+
+
+            this.mod('Commands').registerCommand(this, 'vrcsave favorites', {
+                description: "Back up the list of pinned worlds.",
+                permissions: [PERM_ADMIN],
+                type: ["private"]
+            },  (env, type, userid, channelid, command, args, handle, ep) => {
+
+                if (!this.pinnedchan) return true;
+
+                let favoritefile = this.loadData("favoritefile.json", {}, {pretty: true});
+
+                this.denv.scanEveryMessage(this.pinnedchan, (message) => {
+                    let data = this.extractWorldFromMessage(message, true);
+                    if (!data) return;
+                    favoritefile[data.worldid] = data;
+                }, () => {
+                    favoritefile.save();
+                    ep.ok();
+                });
 
                 return true;
             });

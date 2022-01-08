@@ -1,8 +1,10 @@
 /* Module: VRChatPhotos -- Manages a channel for sharing VRChat photos and screenshots. */
 
+const moment = require('moment');
 const random = require('meteor-random');
 const { MessageEmbed } = require('discord.js');
 const pngextract = require('png-chunks-extract');
+const fs = require('fs');
 
 const Module = require('../Module.js');
 
@@ -24,6 +26,7 @@ class ModVRChatPhotos extends Module {
     get optionalParams() { return [
         "name",                 //Album name override
         "deleteemoji",          //Emoji for deleting things
+        "backuppath",           //Subdirectory for backups
 
         "usewebhook",           //Use a webhook to re-emit photos
         "embedwithoutmeta",     //Whether to re-emit photos without metadata
@@ -360,6 +363,64 @@ class ModVRChatPhotos extends Module {
         });
 
 
+        this.mod('Commands').registerRootExtension(this, 'VRChat', 'vrcsave');
+
+        this.mod('Commands').registerCommand(this, 'vrcsave ' + this.param("name"), {
+            description: "Back up the photos from the " + this.param("name") + " album.",
+            permissions: [PERM_ADMIN],
+            type: ["private"]
+        },  (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!this.photochan) return true;
+
+            if (!this.param("backuppath")) {
+                ep.reply("There is no backup path.");
+                return true;
+            }
+
+            let counter = 0;
+            let queue = [];
+
+            for (let id in this._index) {
+                let message = this._index[id];
+                queue.push(message);
+            }
+
+            let inProgress = {};
+            let downloadTimer = setInterval(function() {
+                if (Object.keys(inProgress).length >= 3) {  //maximum simultaneous
+                    return;
+                }
+
+                let message = queue.pop();
+                if (!message) {
+                    clearInterval(downloadTimer);
+                    ep.reply("Done!");
+                    return;
+                }
+
+                let newdownload = this.downloadMessagePhoto(message, this.param("backuppath"), () => {
+                    delete inProgress[message.id];
+                    counter += 1;
+                    if (!(counter % 50)) {
+                        ep.reply("Downloaded: " + counter);
+                    }
+                });
+
+                if (!newdownload) {
+                    return;
+                }
+
+                inProgress[message.id] = newdownload;
+
+            }.bind(this), 1000);
+
+            ep.reply("Starting downloads, please wait...");
+
+            return true;
+        });
+
+
         this.mod('Commands').registerRootExtension(this, 'VRChat', 'vrcount');
 
         this.mod('Commands').registerCommand(this, 'vrcount ' + this.param("name"), {
@@ -440,6 +501,20 @@ class ModVRChatPhotos extends Module {
         return null;
     }
 
+    getMessageEmbedPhoto(message, onPhoto) {
+        if (!message || !onPhoto) return null;
+
+        for (let embed of message.embeds) {
+            if (embed.type != "rich" && embed.type != "image" || !embed.image) continue;
+
+            return this.urlget(embed.image.url, {buffer: true})
+                .then((data) => onPhoto(embed.image, data))
+                .catch((e) => { })
+                ;
+        }
+
+    }
+
     getPhotoMessageFields(message) {
         if (!message) return {};
 
@@ -500,6 +575,50 @@ class ModVRChatPhotos extends Module {
                 .then((message) => { this._index[message.id] = message; })
                 .catch((e) => {  });
         });
+    }
+
+    downloadMessagePhoto(message, targetpath, onEnd) {
+        if (!message || !this.messageHasPhotos(message) || !targetpath) return null;
+
+        let handleDownloadedPhoto = (filename, data) => {
+            let metadata = null;
+            if (filename && filename.match(/\.png$/i)) {
+                metadata = pngextract(data)
+                    .filter(chunk => chunk.name == "tEXt" || chunk.name == "iTXt")
+                    .map(chunk => chunk.name == "tEXt" ? this.pngDecodetEXt(chunk.data) : this.pngDecodeiTXt(chunk.data))
+                    .find(text => text.keyword == "Description" && text.text.match(/^lfs|2|/));
+                if (metadata) {
+                    metadata = this.lfsMetadataToObject(metadata.text);
+                }
+            }
+
+            let targetfile = targetpath + "/vrcp_" + moment(message.createdTimestamp).format("Y-MM-DD_HH-mm");
+            if (metadata) {
+                targetfile += "_" + metadata.author.name + "_" + metadata.world.name;
+            } else {
+                let owners = this.extractOwnersFromPicture(message);
+                targetfile += "_" + (owners.author || owners.sharedBy || "") + "_";
+            }
+            targetfile += "_" + message.id;
+
+            let ext = filename.match(/\.[a-z0-9]+$/i);
+            if (ext) {
+                targetfile += ext[0];
+            }
+            
+            fs.writeFile(targetfile, data, () => { if (onEnd) onEnd(targetfile); });
+        }
+
+        if (this.messageHasAttachmentPhotos(message)) {
+            return this.getMessageAttachmentPhoto(message, (attachment, data) => {
+                handleDownloadedPhoto(attachment.name, data);
+            });
+        } else {
+            return this.getMessageEmbedPhoto(message, (embedimage, data) => {
+                handleDownloadedPhoto(embedimage.url.split("/").pop(), data);
+            })
+        }
+
     }
 
     
