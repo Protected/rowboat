@@ -5,7 +5,6 @@ const random = require('meteor-random');
 const { MessageEmbed } = require('discord.js');
 const pngextract = require('png-chunks-extract');
 const fs = require('fs');
-const { readdir } = 'fs/promises';
 
 const Module = require('../Module.js');
 
@@ -387,15 +386,17 @@ class ModVRChatPhotos extends Module {
                 queue.push(message);
             }
 
-            let existing = await readdir(this.param("backuppath"));
+            let existing = await fs.promises.readdir(this.param("backuppath"));
             existing = existing.map(filename => {
                 let extrid = filename.match(/([0-9]+)(\.[^.]+)?$/);
                 if (extrid) return extrid[1];
             });
 
+            queue = queue.filter(queued => !existing.find(test => test == queued.id));
+
             let inProgress = {};
             let downloadTimer = setInterval(function() {
-                if (Object.keys(inProgress).length >= 3) {  //maximum simultaneous
+                if (Object.keys(inProgress).length >= 2) {  //maximum simultaneous
                     return;
                 }
 
@@ -403,10 +404,6 @@ class ModVRChatPhotos extends Module {
                 if (!message) {
                     clearInterval(downloadTimer);
                     ep.reply("Done!");
-                    return;
-                }
-
-                if (existing.find(test => test == message.id)) {
                     return;
                 }
 
@@ -424,7 +421,7 @@ class ModVRChatPhotos extends Module {
 
                 inProgress[message.id] = newdownload;
 
-            }.bind(this), 1000);
+            }.bind(this), 2000);
 
             ep.reply("Starting downloads, please wait...");
 
@@ -608,7 +605,7 @@ class ModVRChatPhotos extends Module {
                 targetfile += "_" + metadata.author.name + "_" + metadata.world.name;
             } else {
                 let owners = this.extractOwnersFromPicture(message);
-                targetfile += "_" + (owners.author || owners.sharedBy || "") + "_";
+                targetfile += "_" + this.env.idToDisplayName(owners.author || owners.sharedBy || "") + "_";
             }
             targetfile += "_" + message.id;
 
