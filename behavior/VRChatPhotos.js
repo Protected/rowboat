@@ -610,7 +610,7 @@ class ModVRChatPhotos extends Module {
                 targetfile += "_" + metadata.author.name + "_" + metadata.world.name;
             } else {
                 let owners = this.extractOwnersFromPicture(message);
-                targetfile += "_" + this.env.idToDisplayName(owners.author || owners.sharedBy || "") + "_";
+                targetfile += "_" + this.denv.idToDisplayName(owners.author || owners.sharedBy || "") + "_";
             }
             targetfile += "_" + message.id;
 
