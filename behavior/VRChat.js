@@ -14,6 +14,7 @@ const ENDPOINT = "https://api.vrchat.cloud/api/1/";
 const NO_AUTH = ["config", "time", "visits"];
 const WEBSOCKET = "wss://pipeline.vrchat.cloud/";
 const HTTP_USER_AGENT = "Protected/Rowboat";
+const RATE_DELAY = 1000;
 
 const STATUS_ONLINE = ["active", "join me", "ask me"];
 const TRUST_PRECEDENCE = ["system_trust_veteran", "system_trust_trusted", "system_trust_known", "system_trust_basic"];
@@ -3648,6 +3649,15 @@ class ModVRChat extends Module {
                 throw e;
             }
         }
+    }
+
+    async rateDelay(promise) {
+        let result = await promise;
+        return new Promise((resolve, reject) => {
+            setTimeout(function() { 
+                resolve(result);
+             }.bind(this), RATE_DELAY);
+        });
     }
 
     async vrcget(path) {
