@@ -2476,10 +2476,14 @@ class ModVRChat extends Module {
         if (!this._worlds[worldid]) return true;
         if (this._worlds[worldid].msg && this.worldchan) {
             this.dqueue(function() {
-                this.worldchan.messages.fetch(this._worlds[worldid].msg)
-                    .then(message => message.delete({reason: "World cleared from cache ."}))
-                    .catch(() => {})
-                    .finally(() => { delete this._worlds[worldid]; this._worlds.save(); });
+                try{ 
+                    this.worldchan.messages.fetch(this._worlds[worldid].msg)
+                        .then(message => message.delete({reason: "World cleared from cache ."}))
+                        .catch(() => {})
+                        .finally(() => { delete this._worlds[worldid]; this._worlds.save(); });
+                } catch (e) {
+                    //World no longer exists locally
+                }
             }.bind(this));
         } else {
             delete this._worlds[worldid];
@@ -2859,8 +2863,8 @@ class ModVRChat extends Module {
                     });
             }
         } catch (e) {
-            if (mode == "normal") return this.bakeWorld(worldid, now, "stark");
-            if (mode == "stark") return this.bakeWorld(worldid, now, "text");
+            if (mode == "normal") return this.bakeWorld(worldid, now.unix(), "stark");
+            if (mode == "stark") return this.bakeWorld(worldid, now.unix(), "text");
             this.log("warn", "Failed to bake " + worldid + " in text mode: " + JSON.stringify(e));
         };
 
