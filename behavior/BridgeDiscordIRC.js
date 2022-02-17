@@ -105,7 +105,7 @@ class ModBridgeDiscordIRC extends Module {
     onIrcMessage(env, type, message, authorid, channelid, rawobject) {
         if (type != "action" && type != "regular") return;
 
-        let target = null;
+        let target = this.param('defaultdiscordchannel') || null;
 
         let directedmessage = /^\[#([a-zA-Z0-9]+)\] (.+)/.exec(message);
         if (directedmessage) {
