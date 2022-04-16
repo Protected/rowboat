@@ -58,7 +58,7 @@ class ModReactionRoles extends Module {
                 let channel = this.denv.server.channels.cache.get(group.channel);
                 let message = await channel.messages.fetch(group.message);
                 let embed = await this.generateGroupMessageEmbed(role.hexColor);
-                message.edit(embed);
+                message.edit({embeds: [embed]});
                 this.setupGroupReactions(role.hexColor, message);
             }
 
@@ -76,7 +76,7 @@ class ModReactionRoles extends Module {
                 let channel = this.denv.server.channels.cache.get(oldGroup.channel);
                 let message = await channel.messages.fetch(oldGroup.message);
                 let embed = await this.generateGroupMessageEmbed(oldRole.hexColor);
-                message.edit(embed);
+                message.edit({embeds: [embed]});
                 this.setupGroupReactions(oldRole.hexColor, message);
             }
 
@@ -85,7 +85,7 @@ class ModReactionRoles extends Module {
                 let channel = this.denv.server.channels.cache.get(group.channel);
                 let message = await channel.messages.fetch(group.message);
                 let embed = await this.generateGroupMessageEmbed(role.hexColor);
-                message.edit(embed);
+                message.edit({embeds: [embed]});
                 this.setupGroupReactions(role.hexColor, message);
             }
 
@@ -553,7 +553,7 @@ class ModReactionRoles extends Module {
             try {
                 let message = await channel.messages.fetch(args.messageid);
                 let embed = await this.generateGroupMessageEmbed(color);
-                message.edit(embed);
+                message.edit({embeds: [embed]});
                 this.setGroupMessage(color, channel.id, args.messageid);
                 this.setupGroupReactions(color, message);
                 ep.ok();
@@ -593,7 +593,7 @@ class ModReactionRoles extends Module {
             try {
                 let message = await channel.messages.fetch(group.message);
                 let embed = await this.generateGroupMessageEmbed(color);
-                message.edit(embed);
+                message.edit({embeds: [embed]});
                 this.setupGroupReactions(color, message);
                 ep.ok();
             } catch (e) {

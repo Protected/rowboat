@@ -544,7 +544,7 @@ class ModReactionChannels extends Module {
                 let message = await channel.messages.fetch(args.messageid);
                 this.setEmbedMessageData(color, args.label.join(" "));
                 let embed = await this.generateMessageEmbed();
-                message.edit(embed);
+                message.edit({embeds: [embed]});
                 this.setEmbedMessageAttach(channel.id, message.id);
                 this.setupMessageReactions(message);
                 ep.ok();
@@ -788,7 +788,7 @@ class ModReactionChannels extends Module {
         let data = this.getChannel(channel.id);
         if (!data) throw {error: "Channel not found."};
 
-        await channel.permissionOverwrites.edit(member.id, {VIEW_CHANNEL: true}, reason);
+        await channel.permissionOverwrites.edit(member.id, {VIEW_CHANNEL: true}, {reason: reason});
         if (data.represent) {
             await member.roles.add(data.represent, reason);
         }
@@ -798,7 +798,7 @@ class ModReactionChannels extends Module {
         let data = this.getChannel(channel.id);
         if (!data) throw {error: "Channel not found."};
         
-        await channel.permissionOverwrites.edit(member.id, {VIEW_CHANNEL: null}, reason);
+        await channel.permissionOverwrites.edit(member.id, {VIEW_CHANNEL: null}, {reason: reason});
         if (data.represent) {
             member.roles.remove(data.represent, reason);
         }
@@ -914,7 +914,7 @@ class ModReactionChannels extends Module {
         try {
             let message = await channel.messages.fetch(embeddata.message);
             let embed = await this.generateMessageEmbed();
-            message.edit(embed);
+            message.edit({embeds: [embed]});
             this.setupMessageReactions(message);
         } catch (e) {
             return false;

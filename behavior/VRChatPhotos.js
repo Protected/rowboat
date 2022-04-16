@@ -876,7 +876,7 @@ class ModVRChatPhotos extends Module {
 
         try {
             if (existing) {
-                return await existing.edit(messageurl, {embed: emb});
+                return await existing.edit(messageurl, {embeds: [emb]});
             } else {
                 return await this.contestchan.send(messageurl, {embeds: [emb]});
             }

@@ -1799,7 +1799,7 @@ class ModVRChat extends Module {
 
                 if (changed) {
                     this.dqueue(function() {
-                        message.edit(emb);
+                        message.edit({embeds: [emb]});
                     }.bind(this));
                 }
 
@@ -2648,7 +2648,7 @@ class ModVRChat extends Module {
 
         let pr;
         if (message) {
-            pr = message.edit(emb);
+            pr = message.edit({embeds: [emb]});
         } else {
             pr = this.statuschan.send({embeds: [emb]})
                     .then(newmessage => { this.setPersonMsg(userid, newmessage); return newmessage; });
@@ -2739,7 +2739,7 @@ class ModVRChat extends Module {
             }
         }
         emb.setColor(this.param("coloroffline"));
-        message.edit(emb);
+        message.edit({embeds: [emb]});
         return true;
     }
 
@@ -2854,7 +2854,7 @@ class ModVRChat extends Module {
 
         try {
             if (message) {
-                return await message.edit(emb);
+                return await message.edit({embeds: [emb]});
             } else {
                 return await this.worldchan.send({embeds: [emb]})
                     .then(newmessage => {
@@ -2949,7 +2949,7 @@ class ModVRChat extends Module {
         try {
             if (message) {
                 if (members.length) {
-                    return await message.edit(emb);
+                    return await message.edit({embeds: [emb]});
                 } else {
                     this.clearInstance(worldid, instanceid);
                     return null;
@@ -3000,7 +3000,7 @@ class ModVRChat extends Module {
             field.value = worldname;
         }
         if (oldvalue != field.value) {
-            message.edit(emb);
+            message.edit({embeds: [emb]});
         }
         return true;
     }
