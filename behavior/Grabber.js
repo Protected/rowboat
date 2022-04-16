@@ -227,7 +227,7 @@ class ModGrabber extends Module {
                     limit: 100,
                     before: scanning
                 }).then((messages) => {
-                    let messagesarr = messages.array();
+                    let messagesarr = [...messages.values()];
                     if (messagesarr.length < 100) endNow = true;
                     for (let message of messagesarr) {
                         if (message.createdTimestamp <= cutoff) endNow = true;
@@ -1187,8 +1187,8 @@ class ModGrabber extends Module {
         }
         
         //Attachment
-        if (single && messageObj.attachments && messageObj.attachments.array().length) {
-            for (let ma of messageObj.attachments.array()) {
+        if (single && messageObj.attachments && messageObj.attachments.size) {
+            for (let ma of messageObj.attachments.values()) {
                 if (!ma.name || !ma.name.match(/\.(mp3|ogg|flac|wav|pcm|wma|aac|m4a)$/) || ma.size < 20480) continue;
                 let mp = await this.obtainMessageParams(messageObj, fragment);
                 this._scanQueue.push(["Grab from Attachment", function() {

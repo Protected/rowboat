@@ -940,10 +940,9 @@ class ModDictionaryGame extends Module {
             let png = this.createPngFromText(query, this.param('fancyFont'), this.param('fancySize'),
                     this.param('fancyColor'), this.param('fancyBgcolor'));
             let re = new discord.MessageEmbed()
-                .attachFiles({name: "query.png", attachment: png})
                 .setImage("attachment://query.png");
             if (this._showCategory) re.setDescription(this._current.category);
-            env.msg(this._channelid, re);
+            env.msg(this._channelid, {embeds: [re], files: [{name: "query.png", attachment: png}]});
         } else {
             //Plaintext (normal)
             env.msg(this._channelid, env.applyFormatting("**" + this.escapeNormalizedFormatting(query) + "**"

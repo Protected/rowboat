@@ -37,20 +37,20 @@ class ModDiscordVoiceText extends Module {
             let textchannel = this.denv.server.channels.cache.get(this.param("textchannelid"));
             if (!textchannel) return;
 
-            if (oldState.channelID != this.param("voicechannelid") && state.channelID == this.param("voicechannelid")) {
+            if (oldState.channelId != this.param("voicechannelid") && state.channelId == this.param("voicechannelid")) {
                 //User connected to the audio channel
                 
-                if (!textchannel.permissionOverwrites.get(state.id)?.allow.has("VIEW_CHANNEL")) {
-                    textchannel.updateOverwrite(state.id, {VIEW_CHANNEL: true}, "Connected to voice channel.");
+                if (!textchannel.permissionOverwrites.cache.get(state.id)?.allow.has("VIEW_CHANNEL")) {
+                    textchannel.permissionOverwrites.edit(state.id, {VIEW_CHANNEL: true}, "Connected to voice channel.");
                 }
 
             }
 
-            if (oldState.channelID == this.param("voicechannelid") && state.channelID != this.param("voicechannelid")) {
+            if (oldState.channelId == this.param("voicechannelid") && state.channelId != this.param("voicechannelid")) {
                 //User left the audio channel
 
-                if (textchannel.permissionOverwrites.get(state.id)?.allow.has("VIEW_CHANNEL")) {
-                    textchannel.updateOverwrite(state.id, {VIEW_CHANNEL: null}, "Disconnected from voice channel.");
+                if (textchannel.permissionOverwrites.cache.get(state.id)?.allow.has("VIEW_CHANNEL")) {
+                    textchannel.permissionOverwrites.edit(state.id, {VIEW_CHANNEL: null}, "Disconnected from voice channel.");
                 }
 
             }
@@ -64,15 +64,15 @@ class ModDiscordVoiceText extends Module {
 
             if (voicechannel && textchannel) {
 
-                for (let member of voicechannel.members.array()) {
-                    if (!textchannel.members.get(member.id) && !textchannel.permissionOverwrites.get(member.id)?.allow.has("VIEW_CHANNEL")) {
-                        textchannel.updateOverwrite(member.id, {VIEW_CHANNEL: true}, "Connected to voice channel.");
+                for (let member of voicechannel.members.values()) {
+                    if (!textchannel.members.get(member.id) && !textchannel.permissionOverwrites.cache.get(member.id)?.allow.has("VIEW_CHANNEL")) {
+                        textchannel.permissionOverwrites.edit(member.id, {VIEW_CHANNEL: true}, "Connected to voice channel.");
                     }
                 }
 
-                for (let member of textchannel.members.array()) {
-                    if (!voicechannel.members.get(member.id) && textchannel.permissionOverwrites.get(member.id)?.allow.has("VIEW_CHANNEL")) {
-                        textchannel.updateOverwrite(member.id, {VIEW_CHANNEL: null}, "Disconnected from voice channel.");
+                for (let member of textchannel.members.values()) {
+                    if (!voicechannel.members.get(member.id) && textchannel.permissionOverwrites.cache.get(member.id)?.allow.has("VIEW_CHANNEL")) {
+                        textchannel.permissionOverwrites.edit(member.id, {VIEW_CHANNEL: null}, "Disconnected from voice channel.");
                     }
                 }
 

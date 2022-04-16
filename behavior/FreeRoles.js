@@ -108,7 +108,7 @@ class ModFreeRoles extends Module {
             environments: ['Discord']
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            let member = env.server.member(userid);
+            let member = env.server.members.cache.get(userid);
 
             let intersect = args.role.join(" ").split("&").map(el => el.trim());
             let roles = this._freeRoles[env.name];
@@ -167,7 +167,7 @@ class ModFreeRoles extends Module {
             environments: ['Discord']
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            let member = env.server.member(userid);
+            let member = env.server.members.cache.get(userid);
 
             let intersect = args.role.join(" ").split("&").map(el => el.trim());
             let roles = this._freeRoles[env.name];
@@ -249,7 +249,7 @@ class ModFreeRoles extends Module {
                     return true;
                 }
 
-                let members = roleobj.members.array().map(member => member.id);
+                let members = roleobj.members.map(member => member.id);
                 if (!resultids) {
                     resultids = members;
                 } else {

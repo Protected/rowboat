@@ -108,7 +108,7 @@ var resetContext = exports.resetContext = function() {
     modulerequests = {};
 }
 
-if (!loadMasterConfig()) return;
+if (!loadMasterConfig()) throw new ("Unable to load master config.");
 
 
 //Process event handlers
@@ -179,7 +179,7 @@ var loadEnvironments = exports.loadEnvironments = function() {
     return true;
 }
 
-if (!loadEnvironments()) return;
+if (!loadEnvironments()) throw new ("Unable to load environments.");
 
 
 //Load and initialize modules
@@ -258,7 +258,7 @@ var loadModules = exports.loadModules = function() {
     return true;
 }
 
-if (!loadModules()) return;
+if (!loadModules()) throw new ("Unable to load behavioral modules.");
 
 
 //Run environments

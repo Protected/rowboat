@@ -103,7 +103,7 @@ class ModDuckDuckGo extends Module {
                         .setTitle(answ.Heading)
                         .setDescription(text)
                         .setURL(url)
-                        .setFooter(attrib);
+                        .setFooter({text: attrib});
 
                     if (answ.Infobox && answ.Infobox.content) {
                         for (let infoitem of answ.Infobox.content) {
@@ -113,9 +113,7 @@ class ModDuckDuckGo extends Module {
                         }
                     }
 
-                    try {
-                        ep.reply(re);
-                    } catch (e) {}
+                    ep.reply(re);
 
                     //"See also" box with extra links
 

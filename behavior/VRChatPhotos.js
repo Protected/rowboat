@@ -102,7 +102,7 @@ class ModVRChatPhotos extends Module {
                 if (messageReaction.emoji.name == this.param("deleteemoji")) {
                     let owners = Object.values(this.extractOwnersFromPicture(messageReaction.message));
                     if (owners && owners.find(owner => owner == user.id)) {
-                        messageReaction.message.delete({reason: "Photo removal requested by owner."});
+                        messageReaction.message.delete();
                     } else {
                         messageReaction.users.remove(user.id);
                     }
@@ -149,7 +149,7 @@ class ModVRChatPhotos extends Module {
                     let contestant = this.extractContestantFromPicture(messageReaction.message);
                     if (contestant == user.id) {
                         let message = messageReaction.message;
-                        message.delete({reason: "Candidate removal requested by contestant."})
+                        message.delete()
                             .then(() => {
                                 let contestant = this._contestindex[message.id].contestant;
                                 this._contestants[contestant] = this._contestants[contestant].filter(entry => entry != message.id);
@@ -357,7 +357,7 @@ class ModVRChatPhotos extends Module {
             let pickembed = new MessageEmbed();
             pickembed.setImage(data.image);
 
-            channel.send(this.getPhotoMsgURL(message.id), pickembed);
+            env.msg(channel, this.getPhotoMsgURL(message.id), pickembed);
 
             return true;
         });
@@ -480,7 +480,7 @@ class ModVRChatPhotos extends Module {
 
     messageHasAttachmentPhotos(message) {
         if (!message) return false;
-        for (let attachment of message.attachments.array()) {
+        for (let attachment of message.attachments.values()) {
             if (attachment.width) return true;
         }
         return false;
@@ -491,7 +491,7 @@ class ModVRChatPhotos extends Module {
         for (let embed of message.embeds) {
             if (embed.type == "rich" && embed.image) return true;
         }
-        for (let attachment of message.attachments.array()) {
+        for (let attachment of message.attachments.values()) {
             if (attachment.width) return true;
         }
         return false;
@@ -500,7 +500,7 @@ class ModVRChatPhotos extends Module {
     getMessageAttachmentPhoto(message, onPhoto, onError) {
         if (!message || !onPhoto) return null;
 
-        for (let attachment of message.attachments.array()) {
+        for (let attachment of message.attachments.values()) {
             if (!attachment.width) continue;
 
             return this.urlget(attachment.url, {buffer: true})
@@ -546,7 +546,7 @@ class ModVRChatPhotos extends Module {
             }
         }
 
-        for (let attachment of message.attachments.array()) {
+        for (let attachment of message.attachments.values()) {
             if (attachment.width) {
                 return {
                     type: "attachment",
@@ -581,7 +581,7 @@ class ModVRChatPhotos extends Module {
                 }
             }
 
-            return message.delete({reason: "Replacing with embed."})
+            return message.delete()
                 .then(() => this.bakePicture(attachment.name || "photo.png", data, message.member, metadata))
                 .then((message) => { this._index[message.id] = message; })
                 .catch((e) => {  });
@@ -696,14 +696,13 @@ class ModVRChatPhotos extends Module {
             emb.addField("Shared by", sharedBy, true);
         }
 
-        emb.attachFiles({name: name, attachment: data})
-            .setImage("attachment://" + encodeURI(name));
+        emb.setImage("attachment://" + encodeURI(name));
 
         try {
             if (this.param("usewebhook")) {
-                return this.denv.getWebhook(this.photochan, member).then((webhook) => webhook.send({embeds: [emb], disableMentions: 'all'}));
+                return this.denv.getWebhook(this.photochan, member).then((webhook) => webhook.send({embeds: [emb], files: [{name: name, attachment: data}]}));
             } else {
-                return this.photochan.send({embed: emb, disableMentions: 'all'});
+                return this.denv.msg(this.photochan, {embeds: [emb], files: [{name: name, attachment: data}]});
             }
         } catch (e) {
             this.log("error", "Failed to bake picture " + url + ": " + JSON.stringify(e));
@@ -726,7 +725,7 @@ class ModVRChatPhotos extends Module {
         
         if (!emb || !emb.image) {
             
-            for (let attachment of message.attachments.array()) {
+            for (let attachment of message.attachments.values()) {
                 if (attachment.width) {
                     return {
                         sharedBy: message.author?.id
@@ -879,7 +878,7 @@ class ModVRChatPhotos extends Module {
             if (existing) {
                 return await existing.edit(messageurl, {embed: emb});
             } else {
-                return await this.contestchan.send(messageurl, {embed: emb, disableMentions: 'all'});
+                return await this.contestchan.send(messageurl, {embeds: [emb]});
             }
         } catch (e) {
             this.log("error", "Failed to bake candidate: " + JSON.stringify(e));

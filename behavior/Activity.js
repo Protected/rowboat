@@ -190,7 +190,7 @@ class ModActivity extends Module {
             let role = env.server.roles.cache.find(r => r.name == args.role);
             let registers = {};
             
-            for (let member of role.members.array()) {
+            for (let member of role.members.values()) {
                 if (this._authorseen[env.name]) {
                     let nickname = (member.nickname || member.user.username);
                     let check = this._authorseen[env.name][member.id];

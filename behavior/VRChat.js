@@ -234,6 +234,8 @@ class ModVRChat extends Module {
 
         this._dqueue = [];  //Discord update queue
         this._dtimer = null;  //Discord update queue timer
+
+        this._lastAnnounceMessageId = null;  //Id of the last message in the announce channel
     }
     
     
@@ -295,7 +297,7 @@ class ModVRChat extends Module {
             if (person && this.statuschan && person.msg) {
                 try {
                     let message = await this.statuschan.messages.fetch(person.msg);
-                    if (message) message.delete({reason: "User has departed the server."});
+                    if (message) message.delete();
                 } catch (e) {}
             }
 
@@ -460,7 +462,7 @@ class ModVRChat extends Module {
                 if (messageReaction.emoji.name == this.param("deleteemoji")) {
                     let owners = this.extractOwnersFromPin(messageReaction.message);
                     if (owners && owners.find(owner => owner == user.id)) {
-                        messageReaction.message.delete({reason: "Favorite removal requested by creator."});
+                        messageReaction.message.delete();
                     } else {
                         messageReaction.users.remove(user.id);
                     }
@@ -479,14 +481,18 @@ class ModVRChat extends Module {
 
 
         let messageHandler = (env, type, message, authorid, channelid, messageObject) => {
-            if (env.name != this.param("env") || type != "regular" || messageObject.webhookID) return;
+            if (env.name != this.param("env") || type != "regular" || messageObject.webhookId) return;
 
             this.setLatestDiscord(authorid);
+
+            if (channelid == this.announcechan?.id) {
+                this._lastAnnounceMessageId = messageObject.id;
+            }
 
             if (channelid == this.pinnedchan?.id) {
                 //Direct sharing to pinnedchan
                 let worldids = this.extractWorldsFromText(message);
-                messageObject.delete({reason: worldids.length ? "Replacing with pinned world." : "Redirecting to main channel."});
+                messageObject.delete();
 
                 if (!worldids.length) {
                     this.announce("> " + message.split("\n")[0] + "\n<@" + authorid + "> The <#" + channelid + "> channel is for pinned worlds only!");
@@ -542,7 +548,7 @@ class ModVRChat extends Module {
                     if (this.statuschan && person.msg) {
                         this.dqueue(function() {
                             this.statuschan.messages.fetch(person.msg)
-                                .then(message => message.delete({reason: "User has departed the server."}))
+                                .then(message => message.delete())
                                 .catch((e) => { this.log("warn", "Failed to delete departed user's message: " + JSON.stringify(e)); });
                         }.bind(this));
                     }
@@ -568,7 +574,7 @@ class ModVRChat extends Module {
                 this.denv.scanEveryMessage(this.worldchan, (message) => {
                     if (!index[message.id]) {
                         this.dqueue(function() {
-                            message.delete({reason: "World not found in cache."});
+                            message.delete();
                         }.bind(this));
                     }
                 });
@@ -789,7 +795,7 @@ class ModVRChat extends Module {
                 if (this.statuschan && person.msg) {
                     this.statuschan.messages.fetch(person.msg)
                         .then((message) => {
-                            if (message) message.delete({reason: "User was unassigned."});
+                            if (message) message.delete();
                         })
                         .catch(() => {});
                 }
@@ -1118,7 +1124,7 @@ class ModVRChat extends Module {
 
             if (this.statuschan && person.msg) {
                 this.statuschan.messages.fetch(person.msg)
-                    .then((message) => { message.delete({reason: "User was unassigned."}) })
+                    .then((message) => { message.delete(); })
                     .catch((e) => { this.log("warn", "Failed to delete unassigned user's message: " + JSON.stringify(e)); });
             }
 
@@ -1832,7 +1838,7 @@ class ModVRChat extends Module {
                 }
 
                 this.dqueue(function() {
-                    message.delete({reason: "Converting favorites."});
+                    message.delete();
                 }.bind(this));
                 deleted += 1;
 
@@ -2478,7 +2484,7 @@ class ModVRChat extends Module {
             this.dqueue(function() {
                 try{ 
                     this.worldchan.messages.fetch(this._worlds[worldid].msg)
-                        .then(message => message.delete({reason: "World cleared from cache ."}))
+                        .then(message => message.delete())
                         .catch(() => {})
                         .finally(() => { delete this._worlds[worldid]; this._worlds.save(); });
                 } catch (e) {
@@ -2502,7 +2508,7 @@ class ModVRChat extends Module {
                         //Delete instance first to prevent infinite recursion with the message deletion handler
                         delete this._worlds[worldid].instances[instanceid];
                         if (!dontsave) this._worlds.save();
-                        message.delete({reason: "Instance cleared."});
+                        message.delete();
                     })
                     .catch(() => {});
             }.bind(this));
@@ -2642,7 +2648,7 @@ class ModVRChat extends Module {
         if (message) {
             pr = message.edit(emb);
         } else {
-            pr = this.statuschan.send({embed: emb, disableMentions: 'all'})
+            pr = this.statuschan.send({embeds: [emb]})
                     .then(newmessage => { this.setPersonMsg(userid, newmessage); return newmessage; });
         }
 
@@ -2679,7 +2685,7 @@ class ModVRChat extends Module {
         let member = this.denv.server.members.cache.get(userid);
         if (!member) return null;
         let result = [];
-        for (let role of member.roles.cache.array()) {
+        for (let role of member.roles.cache.values()) {
             if (role.hexColor.toLowerCase() != this._misc.pronounscolor) continue;
             let roledata = this._modReactionRoles.getRole(role.id);
             if (roledata) {
@@ -2694,7 +2700,7 @@ class ModVRChat extends Module {
         let member = this.denv.server.members.cache.get(userid);
         if (!member) return null;
         let result = [];
-        for (let role of member.roles.cache.array()) {
+        for (let role of member.roles.cache.values()) {
             if (role.hexColor.toLowerCase() != rolecolor) continue;
             let roledata = this._modReactionRoles.getRole(role.id);
             if (roledata) {
@@ -2763,7 +2769,7 @@ class ModVRChat extends Module {
             } catch (e) {}
             if (message && !world.prevmembercount && membercount) {
                 //Force reset if transition is no members -> members
-                message.delete({reason: "Bumping down world"}).catch(() => {});
+                message.delete().catch(() => {});
                 message = null;
             }
         }
@@ -2848,7 +2854,7 @@ class ModVRChat extends Module {
             if (message) {
                 return await message.edit(emb);
             } else {
-                return await this.worldchan.send({embed: emb, disableMentions: 'all'})
+                return await this.worldchan.send({embeds: [emb]})
                     .then(newmessage => {
                         this.setWorldMsg(worldid, newmessage);
                         if (this._pins[worldid]) {
@@ -2947,7 +2953,7 @@ class ModVRChat extends Module {
                     return null;
                 }
             } else {
-                return await this.instancechan.send({embed: emb, disableMentions: 'all'})
+                return await this.instancechan.send({embeds: [emb]})
                     .then(newmessage => {
                         this.setInstanceMsg(worldid, instanceid, newmessage);
                         if (url) {
@@ -3119,7 +3125,7 @@ class ModVRChat extends Module {
             if (interv > this.param("annremovetransmin")) {
                 this.annStateStack(userid, this._lt_reconnect, prev);
             } else if (prev && prev !== true) {
-                prev.delete({reason: "Ignoring transition (delayed)."});
+                prev.delete();
             }
         }.bind(this));
 
@@ -3141,7 +3147,7 @@ class ModVRChat extends Module {
             if (interv > this.param("annremovetransmin")) {
                 this.annStateStack(userid, this._lt_quickpeek, prev);
             } else if (prev && prev !== true) {
-                prev.delete({reason: "Ignoring transition (delayed)."});
+                prev.delete();
             }
         }.bind(this));
 
@@ -3154,7 +3160,7 @@ class ModVRChat extends Module {
         let now = moment().unix();
 
         //Create new stack (detach) if last stack is too old
-        if (state.ts && now - state.ts > (this.announcechan.lastMessageID == state.msg ? this.param("anncollapseconsec") : this.param("anncollapse"))) {
+        if (state.ts && now - state.ts > (this._lastAnnounceMessageId == state.msg ? this.param("anncollapseconsec") : this.param("anncollapse"))) {
             state.msg = null; state.ts = null; state.stack = [];
         }
 
@@ -3191,11 +3197,11 @@ class ModVRChat extends Module {
                     if (prevmessage === true) {
                         ret = message;
                     } else {
-                        message.delete({reason: "Stack emptied."});
+                        message.delete();
                     }
                     state.msg = null;
                 } else if (reemit) {
-                    message.delete({reason: "Re-emit announcement."});
+                    message.delete();
                     state.msg = null;
                 } else {
                     message.edit(prefix + txt);
@@ -3208,11 +3214,11 @@ class ModVRChat extends Module {
                 message = prevmessage;
                 message.edit(prefix + txt);
             } else {
-                message = await this.announcechan.send(prefix + txt);
+                message = await this.denv.msg(this.announcechan, prefix + txt);
             }
             state.msg = message.id;
         } else if (prevmessage && prevmessage !== true) {
-            prevmessage.delete({reason: "Stack emptied (delayed)."});
+            prevmessage.delete();
         }
 
         state.ts = now;
@@ -3368,11 +3374,11 @@ class ModVRChat extends Module {
             try {
                 let member = await this.denv.server.members.fetch(userid);
                 let webhook = await this.denv.getWebhook(this.pinnedchan, member);
-                post = webhook.send({embeds: [emb], disableMentions: 'all'});
+                post = webhook.send({embeds: [emb]});
             } catch (e) {}
         }
         if (!post) {
-            post = this.pinnedchan.send({embed: emb, disableMentions: 'all'});
+            post = this.pinnedchan.send({embeds: [emb]});
         }
 
         return post.then(newmessage => {

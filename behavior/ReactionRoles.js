@@ -503,7 +503,7 @@ class ModReactionRoles extends Module {
             }
 
             let channel = env.server.channels.cache.get(targetchannelid);
-            if (!channel || channel.type != "text") {
+            if (!channel || channel.type != "GUILD_TEXT") {
                 ep.reply("Text channel not found.");
                 return true;
             }
@@ -545,7 +545,7 @@ class ModReactionRoles extends Module {
             }
 
             let channel = env.server.channels.cache.get(targetchannelid);
-            if (!channel || channel.type != "text") {
+            if (!channel || channel.type != "GUILD_TEXT") {
                 ep.reply("Text channel not found.");
                 return true;
             }

@@ -65,9 +65,9 @@ class ModDiscordThemedChannels extends Module {
             if (chansets.redirect) {
                 let redirectchannel = message.channel.guild.channels.cache.get(chansets.redirect);
                 if (redirectchannel) {
-                    message.delete({reason: "Redirecting to " + chansets.redirect})
+                    message.delete()
                         .then(() => {
-                            redirectchannel.send("**" + message.member.displayName + "** in <#" + message.channel.id + ">: " + message.content);
+                            this.denv(chan).msg(redirectchannel, "**" + message.member.displayName + "** in <#" + message.channel.id + ">: " + message.content);
                         });
                 }
             }
@@ -114,7 +114,7 @@ class ModDiscordThemedChannels extends Module {
                     });
                 }
 
-                this.env(env).client.on("message", messageHandler);
+                this.env(env).client.on("messageCreate", messageHandler);
                 this.env(env).client.on("messageUpdate", messageUpdateHandler);
                 this.env(env).client.on("messageDelete", messageDeleteHandler);
             });
@@ -149,7 +149,7 @@ class ModDiscordThemedChannels extends Module {
             let pickembed = embeds[Math.floor(random.fraction() * embeds.length)];
 
             if (!pickembed && chansets.types.includes("image")) {
-                let attachments = pickmsg.attachments.array().filter(att => att.width);
+                let attachments = [...pickmsg.attachments.values()].filter(att => att.width);
                 let pickatt = attachments[Math.floor(random.fraction() * attachments.length)];
                 if (pickatt) {
                     pickembed = new MessageEmbed().setImage(pickatt.url);
@@ -168,7 +168,7 @@ class ModDiscordThemedChannels extends Module {
                 channel = env.server.channels.cache.get(channelid);
             }
 
-            channel.send("https://discord.com/channels/" + env.server.id + "/" + pickmsg.channel.id + "/" + pickmsg.id, pickembed);
+            env.msg(channel, "https://discord.com/channels/" + env.server.id + "/" + pickmsg.channel.id + "/" + pickmsg.id, pickembed);
 
             return true;
         });
@@ -192,8 +192,8 @@ class ModDiscordThemedChannels extends Module {
 
     messageFitsTheme(message, types) {
         let embeds = message.embeds;
-        let attachments = message.attachments.array();
-        if (!embeds.length && !attachments.length) return false;
+        let attachments = message.attachments;
+        if (!embeds.length && !attachments.size) return false;
 
         let inctypes = false, notypes = false;
 
@@ -205,7 +205,7 @@ class ModDiscordThemedChannels extends Module {
             }
         }
 
-        for (let att of attachments) {
+        for (let att of attachments.values()) {
             if (att.width && types.includes("image")) {
                 inctypes = true;
             }

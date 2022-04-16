@@ -82,7 +82,7 @@ class ModBridgeDiscordIRC extends Module {
         
         this.discord.on('connected', (env) => {
             env.client.on('messageUpdate', (oldMessage, newMessage) => {
-                if (oldMessage.channel.type == "dm") return;
+                if (oldMessage.channel.type == "DM") return;
                 if (oldMessage.channel.guild.id != env.server.id) return;
                 if (this.param('discordBlacklist').indexOf(oldMessage.channel.id) > -1) return;
                 if (oldMessage.content == newMessage.content) return;
@@ -152,7 +152,7 @@ class ModBridgeDiscordIRC extends Module {
         
         let authorname = env.idToDisplayName(authorid);
         
-        let roles = env.server.roles.cache.array().sort((a, b) => (b.position - a.position));
+        let roles = [...env.server.roles.cache.values()].sort((a, b) => (b.position - a.position));
         for (let role of roles) {
             if (rawobject.member.roles.cache.get(role.id)) {
                 authorname = "" + this.closestTtyColor(role.hexColor) + authorname + "";
@@ -196,7 +196,7 @@ class ModBridgeDiscordIRC extends Module {
         
         let authorname = env.idToDisplayName(authorid);
         
-        let roles = env.server.roles.cache.array().sort((a, b) => (b.position - a.position));
+        let roles = [...env.server.roles.cache.values()].sort((a, b) => (b.position - a.position));
         for (let role of roles) {
             if (oldMessage.member.roles.cache.get(role.id)) {
                 authorname = "" + this.closestTtyColor(role.hexColor) + authorname + "";

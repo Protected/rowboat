@@ -217,8 +217,8 @@ class ModCommands extends Module {
         
             return true;
         });
-        
-        
+
+
         this.registerCommand(this, 'reload', {
             description: "Reload this application. All environments and modules will be reloaded.",
             types: ["private"],

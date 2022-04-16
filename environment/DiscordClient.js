@@ -4,13 +4,12 @@ const discord = require('discord.js');
 const ModernEventEmitter = require('../ModernEventEmitter.js');
 
 const BRIDGE_EVENTS = [
-    "message",
+    "messageCreate",
     "messageUpdate",
     "messageDelete",
     "guildMemberAdd",
     "guildMemberRemove",
     "guildMemberUpdate",
-    "guildMemberSpeaking",
     "presenceUpdate",
     "roleCreate",
     "roleDelete",
@@ -35,6 +34,12 @@ const INTENTS = [
     "GUILD_MESSAGE_REACTIONS",
     "DIRECT_MESSAGES"
 ];
+
+const MAXIMUM_EMBEDS = 10;
+const MAXIMUM_LENGTH = 2000;
+const MAXIMUM_ATTACH = 8388608;
+const MAXIMUM_COMPROWS = 5;
+const EXPIRE_QUEUED_MESSAGE = 60; //seconds
 
 class DiscordClient extends ModernEventEmitter {
 
@@ -133,97 +138,147 @@ class DiscordClient extends ModernEventEmitter {
     
     
     deliverMsgs() {
-        if (!this._outbox.length) return;
-    
-        //Merge multiple messages together into packages in order to minimize amount of API calls (one package per channel)
+        if (!this._outbox?.length) return;
+
+        let now = Date.now();
+
+        //Helper function adds an outboxed message to a package
+        let outboxToPackage = (pack, entry, position, item) => {
+            pack.messages.push(entry);
+            pack.length += (entry.content?.length || 0);
+            for (let attachment of entry.attachments || []) {
+                pack.attach += attachment.size;
+            }
+            pack.embed += (entry.embeds?.length || 0);
+            pack.comprows += (entry.components?.length || 0);
+            pack.resolves.push(item.resolve);
+            pack.rejects.push(item.reject)
+            this._outbox.splice(position, 1);
+            return position - 1;
+        }
+
+        //Create one package per channel, containing as many messages as possible (without exceeding limits)
         let packages = {};
         for (let i = 0; this._outbox && i < this._outbox.length; i++) {
-            let rawchannelid = this._outbox[i][0].id;
-            if (!packages[rawchannelid]) {
-                packages[rawchannelid] = {
-                    targetchan: this._outbox[i][0],
+            let entry = this._outbox[i].message;
+            let rawchannelid = this._outbox[i].channel.id;
+
+            let pack = packages[rawchannelid];
+            if (!pack) {
+                pack = packages[rawchannelid] = {
+                    targetchan: this._outbox[i].channel,
                     messages: [],
-                    options: this._outbox[i][2] || {}
-                }
-            } else if (this._outbox[i][2]) {
-                //Try to merge options
-                for (let key in this._outbox[i][2]) {
-                    if (!packages[rawchannelid].options[key]) {
-                        packages[rawchannelid].options[key] = this._outbox[i][2][key];
-                    }
-                }
+                    length: 0,
+                    attach: 0,
+                    embed: 0,
+                    comprows: 0,
+                    resolves: [],
+                    rejects: []
+                };
             }
-            packages[rawchannelid].messages.push(this._outbox[i][1]);
+
+            if (!pack.messages.length) {
+                //Always accept the first message for each channel
+                i = outboxToPackage(pack, entry, i, this._outbox[i]);
+                continue;
+            }
+
+            let reject = false;
+            
+            if (pack.length + entry.content?.length + 1 > MAXIMUM_LENGTH) {
+                //Message makes package contents too long
+                reject = true;
+            }
+
+            let size = 0;
+            for (let attachment of entry.attachments || []) {
+                size += attachment.size;
+            }
+            if (pack.attach + size > MAXIMUM_ATTACH) {
+                //Message makes attachments size too large
+                reject = true;
+            }
+
+            if (pack.embed + (entry.embeds?.length || 0) > MAXIMUM_EMBEDS) {
+                //Message adds too many embeds to package
+                reject = true;
+            }
+
+            if (pack.comprows + (entry.components?.length || 0) > MAXIMUM_COMPROWS) {
+                //Message adds too many component rows to package
+                reject = true;
+            }
+
+            if (pack.messages[0].reply?.messageReference !== entry.reply?.messageReference) {
+                //Message is replying to a different message
+                reject = true;
+            }
+
+            if (!reject) {
+                //Message accepted in package
+                i = outboxToPackage(pack, entry, i, this._outbox[i]);
+            } else if (now - this._outbox[i].ts > EXPIRE_QUEUED_MESSAGE * 1000) {
+                //If the message failed to be packaged for delivery on time, discard it
+                this._outbox.splice(i, 1);
+                i -= 1;
+                this._outbox[i].reject("Expired in queue.");
+            }
         }
         
-        let newOutbox = [];
-        
+        //Deliver packages
         for (let rawchannelid in packages) {
             let pack = packages[rawchannelid];
             
-            //The message (as delivered to Discord) must end at the first MessageEmbed (API only supports one per message)
-            let msgparts = [];
-            let embed = null;
+            let realmessage = pack.messages.shift();
+            realmessage.tts = false;
+            realmessage.allowedMentions = undefined;
+
             for (let message of pack.messages) {
-                if (embed) {
-                    newOutbox.push([pack.targetchan, message]);
-                } else if (typeof message == "string" || typeof message == "number") {
-                    msgparts.push(message);
-                } else if (typeof message == "object") {
-                    embed = message;
+                if (!realmessage.content) {
+                    realmessage.content = message.content;
+                } else if (message.content) {
+                    realmessage.content = realmessage.content + "\n" + message.content;
                 }
-            }
-            
-            //Deliver message to Discord
-            let todeliver = msgparts.join("\n");
-
-            let deliveropts = {
-                disable_everyone: true,
-                split: {char: "\n"},
-            };
-
-            if (todeliver.trim().match(/```$/)) {
-                deliveropts.split.prepend = '```';
-                deliveropts.split.append = '```';
-            }
-
-            for (let key in pack.options) {
-                deliveropts[key] = pack.options[key];
-            }
-
-            deliveropts.content = todeliver;
-
-            if (embed) {
-                if (embed.name) {
-                    deliveropts.files = [embed];
-                } else {
-                    deliveropts.embeds = [embed];
+                  
+                for (let lst of ["embeds", "files", "components", "attachments", "stickers"]) {
+                    if (!realmessage[lst]?.length) {
+                        realmessage[lst] = message[lst];
+                    } else if (message[lst]?.length) {
+                        realmessage[lst] = realmessage[lst].concat(message[lst]);
+                    }
                 }
             }
 
-            pack.targetchan.send(deliveropts).catch();  //embed.name being present means it's a MessageAttachment
+            pack.targetchan.send(realmessage)
+                .then(() => {
+                    //Resolve promises
+                    for (let resolve of pack.resolves) {
+                        resolve();
+                    }
+                })
+                .catch((e) => {
+                    for (let reject of pack.rejects) {
+                        reject(e);
+                    }
+                });
             
             //List environments that target the server the package was delivered to
             let notifyEnvironments = [];
             for (let name in this._environments) {
                 let env = this._environments[name];
-                if (env.param('servername') == pack.targetchan.guild.name) {
+                if (env.param('server') == pack.targetchan.guild.id) {
                     notifyEnvironments.push(env);
                 }
             }
             
             //Trigger messageSent event on listed environments
-            for (let message of msgparts) {
-                setTimeout(() => {
-                    for (let env of notifyEnvironments) {
-                        env.emit('messageSent', env, env.channelIdToType(pack.targetchan), rawchannelid, message);
-                    }
-                }, 1);
-            }
-            
+            setTimeout(() => {
+                for (let env of notifyEnvironments) {
+                    env.emit('messageSent', env, env.channelIdToType(pack.targetchan), rawchannelid, realmessage.content);
+                }
+            }, 1);
         }
         
-        this._outbox = newOutbox;
     }
 
 
@@ -235,10 +290,17 @@ class DiscordClient extends ModernEventEmitter {
     }
     
     
-    //Outbox a string or MessageEmbed
-    outbox(discordchan, msg, options) {
-        this._outbox.push([discordchan, msg, options]);
-        return true;
+    //Outbox a message
+    outbox(discordchan, messageoptions) {
+        return new Promise((resolve, reject) => {
+            this._outbox.push({
+                channel: discordchan,
+                message: messageoptions,
+                ts: Date.now(),
+                resolve: resolve,
+                reject: reject
+            });
+        });
     }
 
 

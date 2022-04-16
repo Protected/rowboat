@@ -3,13 +3,15 @@
 const moment = require('moment');
 
 const Environment = require('../Environment.js');
+const discord = require('discord.js');
+
+const MAXIMUM_MSG_LENGTH = 2000;
 
 class EnvDiscord extends Environment {
 
     get requiredParams() { return [
         'token',                //Discord application token
         'server',               //Server ID to operate on (application must have been previously added to server)
-        'defaultchannel',       //Default channel to operate on (must be a channel in the above server)
         'privatemessages'       //Environment will receive private messages to the bot
     ]; }
         
@@ -73,15 +75,13 @@ class EnvDiscord extends Environment {
                     this.log('error', "Could not obtain server object.");
                 }
                 
-                this._channels[params.defaultchannel] = this._server.channels.cache.filter(channel => channel.type == "text").find(channel => channel.name == params.defaultchannel);
-                
-                this._localClient.on("message", (message) => {
+                this._localClient.on("messageCreate", (message) => {
                     if (message.author.id == client.user.id) return;
                     
                     let type = "regular";
                     let channelid = message.channel.id;
                     
-                    if (message.channel.type == "dm") {
+                    if (message.channel.type == "DM") {
                         if (!this.param('privatemessages')) return;
                         type = "private";
                         channelid = message.author.id;
@@ -99,8 +99,7 @@ class EnvDiscord extends Environment {
                     if (chans.length) {
                         this.triggerJoin(member.id, chans, {reason: "add"});
                     }
-                    let roles = member.roles.cache.array();
-                    for (let role of roles) {
+                    for (let role of member.roles.cache.values()) {
                         this.emit('gotRole', this, member.id, role.id);
                     }
                 });
@@ -114,8 +113,7 @@ class EnvDiscord extends Environment {
                     if (chans.length) {
                         this.triggerPart(member.id, chans, {reason: "remove"});
                     }
-                    let roles = member.roles.cache.array();
-                    for (let role of roles) {
+                    for (let role of member.roles.cache.values()) {
                         this.emit('lostRole', this, member.id, role.id);
                     }
                 });
@@ -226,12 +224,39 @@ class EnvDiscord extends Environment {
     
     msg(targetid, msg, options) {
         let targetchan = this.getActualChanFromTarget(targetid);
+        if (!targetchan || !options && !msg) return false;
+        if (!options) options = {};
+        else options = {...options};
 
-        if (!targetchan) {
-            targetchan = this._channels[this.param('defaultchannel')];
+        if (msg) {
+            if (typeof msg == "object") {
+                if (msg.fields !== undefined) options.embeds = [msg];
+                else if (msg.size !== undefined) options.files = [options];
+                else for (let key of msg) {
+                    options[key] = msg[key];
+                }
+            } else {
+                if (msg.length > MAXIMUM_MSG_LENGTH) {
+                    let code = msg.trim().match(/^```[a-z]?/i);
+                    if (!msg.trim().match(/```$/)) code = undefined;
+                    let partPromises = [];
+                    for (let part of discord.Util.splitMessage(msg, {
+                        maxLength: MAXIMUM_MSG_LENGTH,
+                        prepend: code ? code[0] : undefined,
+                        append: code ? '```' : undefined
+                    })) {
+                        if (part != msg) {
+                            partPromises.push(this.msg(targetid, part, options));
+                        }
+                    }
+                    return Promise.all(partPromises);
+                } else {
+                    options.content = msg;
+                }
+            }
         }
 
-        return this._localClient.outbox(targetchan, msg, options);
+        return this._localClient.outbox(targetchan, options);
     }
 
     react(msg, emoji) {  //Discord-specific
@@ -262,8 +287,8 @@ class EnvDiscord extends Environment {
         if (parts[1]) {
             refuser = this._server.members.cache.filter(member => member.user.username == parts[0]).find(member => member.user.discriminator == parts[1]);
         } else {
-            let cache = this._server.members.cache.filter(member => member.user.username == displayname).array();
-            if (cache.length == 1) {
+            let cache = this._server.members.cache.filter(member => member.user.username == displayname);
+            if (cache.size == 1) {
                 refuser = cache[0];
             } else {
                 displayname = displayname.toLowerCase();
@@ -295,15 +320,13 @@ class EnvDiscord extends Environment {
     
     listUserIds(channel) {
         let targetchan = this.getActualChanFromTarget(channel);
-        if (!targetchan) {
-            targetchan = this._channels[this.param('defaultchannel')];
-        }
+        if (!targetchan) return [];
         
-        if (targetchan.type == "dm" || !targetchan.type) return [targetchan.recipient.id];
+        if (targetchan.type == "DM" || !targetchan.type) return [targetchan.recipient.id];
         
         let ids = [];
-        if (targetchan.type == "text") {
-            for (let member of targetchan.members.array()) {
+        if (targetchan.type == "GUILD_TEXT") {
+            for (let member of targetchan.members.values()) {
                 ids.push(member.id);
             }
         }
@@ -316,7 +339,7 @@ class EnvDiscord extends Environment {
         let member = this._server.members.cache.get(id);
         if (!member) return [];
         let result = [];
-        let roles = member.roles.cache.array().sort((a, b) => (b.position - a.position));
+        let roles = [...member.roles.cache.values()].sort((a, b) => (b.position - a.position));
         for (let role of roles) {
             result.push(role.id);
         }
@@ -333,7 +356,7 @@ class EnvDiscord extends Environment {
     channelIdToType(channelid) {
         let chan = this.getActualChanFromTarget(channelid);
         if (!chan) return "unknown";
-        if (!chan.type || chan.type == "dm") return "private";
+        if (!chan.type || chan.type == "DM") return "private";
         return "regular";
     }
     
@@ -393,13 +416,13 @@ class EnvDiscord extends Environment {
 
         if (typeof targetid == "string") {
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == "text").get(targetid);
+                this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == "GUILD_TEXT").get(targetid);
             }
             if (!this._channels[targetid]) {
                 this._channels[targetid] = this._server.members.cache.get(targetid);
             }
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == "text").find(channel => channel.name == targetid);
+                this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == "GUILD_TEXT").find(channel => channel.name == targetid);
             }
             if (!this._channels[targetid]) {
                 this._channels[targetid] = this._server.members.cache.find(channel => channel.name == targetid);
@@ -419,8 +442,7 @@ class EnvDiscord extends Environment {
         let channels = [];
         if (!member) return channels;
         
-        let allchannels = member.guild.channels.cache.array();
-        for (let channel of allchannels) {
+        for (let channel of member.guild.channels.cache.values()) {
             let pfm = channel.permissionsFor(member);
             if (!pfm || !pfm.has) continue;
             if (pfm.has("VIEW_CHANNEL")) {
@@ -456,7 +478,7 @@ class EnvDiscord extends Environment {
                 before: scanning
             }).then((messages) => {
                 let endNow = false;
-                let messagesarr = messages.array();
+                let messagesarr = [...messages.values()];
                 if (messagesarr.length < 100) endNow = true;
                 for (let message of messagesarr) {
                     onMessage(message);

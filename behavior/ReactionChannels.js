@@ -5,7 +5,7 @@ const { MessageEmbed } = require('discord.js');
 const Module = require('../Module.js');
 
 const PERM_ADMIN = 'administrator';
-const CREATE_TYPES = ['text', 'voice'];
+const CREATE_TYPES = {'text': 'GUILD_TEXT', 'voice': 'GUILD_VOICE'};
 const NEUTRAL_COLOR = "#808080";
 
 class ModReactionChannels extends Module {
@@ -149,9 +149,9 @@ class ModReactionChannels extends Module {
 
             //Remove user from channels if requirements are lost
 
-            let currentroles = member.roles.cache.array().map(role => role.id);
-            let lostroles = oldMember.roles.cache.array().filter(role => !currentroles.includes(role.id));
-            for (let role of lostroles) {
+            let currentroles = member.roles.cache.map(role => role.id);
+            let lostroles = oldMember.roles.cache.filter(role => !currentroles.includes(role.id));
+            for (let role of lostroles.values()) {
                 for (let channelid of this.getChannelsByRequire(role.id)) {
                     let channel = this.denv.server.channels.cache.get(channelid);
                     if (this.isMemberInChannel(member, channel)) {
@@ -211,8 +211,8 @@ class ModReactionChannels extends Module {
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             if (!args.type) args.type = "text";
-            if (!CREATE_TYPES.includes(args.type)) {
-                ep.reply("The type must be one of: " + CREATE_TYPES.join(", "));
+            if (!Object.keys(CREATE_TYPES).includes(args.type)) {
+                ep.reply("The type must be one of: " + Object.keys(CREATE_TYPES).join(", "));
                 return true;
             }
 
@@ -238,18 +238,18 @@ class ModReactionChannels extends Module {
             let po = undefined;
             if (parent) {
                 parent = env.server.channels.cache.get(parent);
-                po = parent.permissionOverwrites;
+                po = parent.permissionOverwrites.cache;
             }
 
             let channel = await env.server.channels.create(name, {
-                type: args.type,
+                type: CREATE_TYPES[args.type],
                 parent: parent,
                 permissionOverwrites: po,
                 reason: "Requested by " + userid + " using rchan create."
             });
           
-            await channel.updateOverwrite(env.server.id, {VIEW_CHANNEL: false});
-            await channel.updateOverwrite(userid, {VIEW_CHANNEL: true, MANAGE_CHANNELS: true, MANAGE_ROLES: true});
+            await channel.permissionOverwrites.edit(env.server.id, {VIEW_CHANNEL: false});
+            await channel.permissionOverwrites.edit(userid, {VIEW_CHANNEL: true, MANAGE_CHANNELS: true, MANAGE_ROLES: true});
 
             this.setChannel(channel.id, emoji);
             this._emoji[emoji] = channel.id;
@@ -427,7 +427,7 @@ class ModReactionChannels extends Module {
             embed.setTitle(this.channelLabel(channel));
             embed.setColor(NEUTRAL_COLOR);
             embed.setDescription(chandata.emoji + (channel.topic ? " " + channel.topic : ""));
-            if (channel.type == "text") {
+            if (channel.type == "GUILD_TEXT") {
                 embed.setURL(this.channelURL(targetchannelid));
             }
 
@@ -498,7 +498,7 @@ class ModReactionChannels extends Module {
             }
 
             let channel = env.server.channels.cache.get(targetchannelid);
-            if (!channel || channel.type != "text") {
+            if (!channel || channel.type != "GUILD_TEXT") {
                 ep.reply("Target channel not found.");
                 return true;
             }
@@ -535,7 +535,7 @@ class ModReactionChannels extends Module {
             }
 
             let channel = env.server.channels.cache.get(targetchannelid);
-            if (!channel || channel.type != "text") {
+            if (!channel || channel.type != "GUILD_TEXT") {
                 ep.reply("Target channel not found.");
                 return true;
             }
@@ -611,7 +611,7 @@ class ModReactionChannels extends Module {
                     ep.reply("Category not found.");
                     return true;
                 }
-                if (category.type != "category") {
+                if (category.type != "GUILD_CATEGORY") {
                     ep.reply("This channel is not a category.");
                     return true;
                 }
@@ -788,7 +788,7 @@ class ModReactionChannels extends Module {
         let data = this.getChannel(channel.id);
         if (!data) throw {error: "Channel not found."};
 
-        await channel.updateOverwrite(member.id, {VIEW_CHANNEL: true}, reason);
+        await channel.permissionOverwrites.edit(member.id, {VIEW_CHANNEL: true}, reason);
         if (data.represent) {
             await member.roles.add(data.represent, reason);
         }
@@ -798,7 +798,7 @@ class ModReactionChannels extends Module {
         let data = this.getChannel(channel.id);
         if (!data) throw {error: "Channel not found."};
         
-        await channel.updateOverwrite(member.id, {VIEW_CHANNEL: null}, reason);
+        await channel.permissionOverwrites.edit(member.id, {VIEW_CHANNEL: null}, reason);
         if (data.represent) {
             member.roles.remove(data.represent, reason);
         }
@@ -806,7 +806,7 @@ class ModReactionChannels extends Module {
 
     isMemberInChannel(member, channel) {
         if (!member || !channel) return false;
-        return channel.members.get(member.id) && channel.permissionOverwrites.get(member.id)?.allow.has("VIEW_CHANNEL");
+        return channel.members.get(member.id) && channel.permissionOverwrites.cache.get(member.id)?.allow.has("VIEW_CHANNEL");
     }
 
     hasMemberChannelRequirements(member, channel) {

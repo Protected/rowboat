@@ -84,16 +84,16 @@ class ModDiscordPresenceTracker extends Module {
                 let info = this.actinfo(name);
 
                 if (!oldActivity && activity) {
-                    if (!this.isPendingOffline(presence.userID, name)) {
+                    if (!this.isPendingOffline(presence.userId, name)) {
                         this.activityStart(presence.member, info, activity);
                     }
-                    this.clearOffline(presence.userID, name);
+                    this.clearOffline(presence.userId, name);
                 }
                 if (oldActivity && activity) {
                     this.activityUpdate(presence.member, info, oldActivity, activity);
                 }
                 if (oldActivity && !activity) {
-                    this.scheduleOffline(presence.userID, name, now);
+                    this.scheduleOffline(presence.userId, name, now);
                 }
             }
 
@@ -180,7 +180,7 @@ class ModDiscordPresenceTracker extends Module {
         let embed = new MessageEmbed();
         
         if (!this.param("usewebhook")) {
-            embed.setAuthor(member.displayName, member.user.displayAvatarURL());
+            embed.setAuthor({name: member.displayName, iconURL: member.user.displayAvatarURL()});
         }
 
         embed.setColor(info.color);
@@ -205,7 +205,7 @@ class ModDiscordPresenceTracker extends Module {
         if (this.param("usewebhook")) {
             this.denv.getWebhook(this.announcechan, member).then((webhook) => webhook.send(embed));
         } else {
-            this.announcechan.send(embed);
+            this.denv.msg(this.announcechan, embed);
         }
     }
 
@@ -213,7 +213,7 @@ class ModDiscordPresenceTracker extends Module {
         let embed = new MessageEmbed();
         
         if (!this.param("usewebhook")) {
-            embed.setAuthor(member.displayName, member.user.displayAvatarURL());
+            embed.setAuthor({name: member.displayName, iconURL: member.user.displayAvatarURL()});
         }
 
         embed.setColor(info.color);
@@ -230,7 +230,7 @@ class ModDiscordPresenceTracker extends Module {
             if (this.param("usewebhook")) {
                 this.denv.getWebhook(this.announcechan, member).then((webhook) => webhook.send(embed));
             } else {
-                this.announcechan.send(embed);
+                this.denv.msg(this.announcechan, embed);
             }
         }
     }
@@ -239,7 +239,7 @@ class ModDiscordPresenceTracker extends Module {
         let embed = new MessageEmbed();
         
         if (!this.param("usewebhook")) {
-            embed.setAuthor(member.displayName, member.user.displayAvatarURL());
+            embed.setAuthor({name: member.displayName, iconURL: member.user.displayAvatarURL()});
         }
         
         embed.setDescription(info.offline);
@@ -247,7 +247,7 @@ class ModDiscordPresenceTracker extends Module {
         if (this.param("usewebhook")) {
             this.denv.getWebhook(this.announcechan, member).then((webhook) => webhook.send(embed));
         } else {
-            this.announcechan.send(embed);
+            this.denv.msg(this.announcechan, embed);
         }
     }
 

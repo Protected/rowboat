@@ -76,7 +76,7 @@ class ModDiscordChannels extends Module {
 
                         if (data.type == "voice") {
                             let channel = env.server.channels.cache.get(item.channelid);
-                            if (channel && channel.members.array().length) continue;
+                            if (channel && channel.members.size) continue;
                         }
                         
                         this.destroyTempChannel(env, item.channelid)
@@ -232,21 +232,12 @@ class ModDiscordChannels extends Module {
 
 
         let voiceStateUpdateHandler = (oldstate, newstate) => {
-            if (!newstate.channelID) return;
+            if (!newstate.channelId) return;
             let env = findEnvFromServer(oldstate.guild);
             if (!env || newstate.deaf) return;
-            if (!this.isChannelAttached(env, newstate.channelID)) return;
-            this.doTouchChannel(env, newstate.channelID);
+            if (!this.isChannelAttached(env, newstate.channelId)) return;
+            this.doTouchChannel(env, newstate.channelId);
         };
-
-
-        let guildMemberSpeakingHandler = (member, speaking) => {
-            if (!speaking || !member.voiceChannelID) return;
-            let env = findEnvFromServer(member.guild);
-            if (!env) return;
-            if (!this.isChannelAttached(env, member.voiceChannelID)) return;
-            this.doTouchChannel(env, member.voiceChannelID);
-        }
 
 
         let messageHandler = (env, type, message, authorid, channelid, messageObject) => {
@@ -266,7 +257,6 @@ class ModDiscordChannels extends Module {
                 env.client.on("roleDelete", roleDeleteHandler);
                 env.client.on("channelDelete", channelDeleteHandler);
                 env.client.on("voiceStateUpdate", voiceStateUpdateHandler);
-                env.client.on("guildMemberSpeaking", guildMemberSpeakingHandler);
                 env.on("message", messageHandler);
             });
         }
@@ -734,7 +724,7 @@ class ModDiscordChannels extends Module {
                 let channel = env.server.channels.cache.get(targetchannelid);
                 let accessrole = env.server.roles.cache.get(prevaccessroleid);
                 if (channel && accessrole) {
-                    for (let rolemember of accessrole.members.array()) {
+                    for (let rolemember of accessrole.members.values()) {
                         changeusers.push(channel.overwritePermissions(rolemember, {VIEW_CHANNEL: true}, "Propagating permission to access role members on removal"));
                     }
                 }
@@ -1481,7 +1471,7 @@ class ModDiscordChannels extends Module {
         } else {
             let channel = env.server.channels.cache.get(channelid);
             let member = env.server.members.cache.get(userid);
-            return !!channel.permissionOverwrites.filter((po) => po.id == member.id && po.type == 'member' && (po.allow & 0x00000400)).array().length;            
+            return !!channel.permissionOverwrites.cache.filter((po) => po.id == member.id && po.type == 'member' && (po.allow & 0x00000400)).size;
         }
     }
 
@@ -1511,7 +1501,7 @@ class ModDiscordChannels extends Module {
         let role = env.server.roles.cache.get(data.opsroleid);
         if (!role) return false;
         let results = [];
-        for (let member of role.members.array()) {
+        for (let member of role.members.values()) {
             results.push(member.id);
         }
         return results;
@@ -1524,15 +1514,15 @@ class ModDiscordChannels extends Module {
         if (data.accessroleid) {
             let role = env.server.roles.cache.get(data.accessroleid);
             if (!role) return false;
-            for (let member of role.members.array()) {
+            for (let member of role.members.values()) {
                 if (member.id == env.server.me.id) continue;
                 results.push(member.id);
             }
         } else {
             let channel = env.server.channels.cache.get(channelid);
-            for (let member of env.server.members.cache.array()) {
+            for (let member of env.server.members.cache.values()) {
                 if (member.id == env.server.me.id) continue;
-                if (!channel.permissionOverwrites.filter((po) => po.id == member.id && po.type == 'member' && (po.allow & 0x00000400)).array().length) continue;
+                if (!channel.permissionOverwrites.cache.filter((po) => po.id == member.id && po.type == 'member' && (po.allow & 0x00000400)).size) continue;
                 results.push(member.id);
             }
         }
@@ -1553,15 +1543,15 @@ class ModDiscordChannels extends Module {
         await this.doAssignRoleToUser(env, opsrole.id, creatorid, "Promoting channel owner to operator");
 
         await channel.overwritePermissions(env.server.me.id, {VIEW_CHANNEL: true}, "Attaching channel");
-        if (channel.type == "text") {
+        if (channel.type == "GUILD_TEXT") {
             await channel.overwritePermissions(opsrole, {VIEW_CHANNEL: true, MANAGE_CHANNELS: true, MANAGE_MESSAGES: true}, "Attaching channel (opsrole perms)");
         }
-        if (channel.type == "voice") {
+        if (channel.type == "GUILD_VOICE") {
             await channel.overwritePermissions(opsrole, {VIEW_CHANNEL: true, MANAGE_CHANNELS: true, MUTE_MEMBERS: true, DEAFEN_MEMBERS: true}, "Attaching channel (opsrole perms)");
         }
 
         //Only way to check for guild + VIEW_CHANNELS in 11.3.2
-        let ispublic = !channel.permissionOverwrites.filter((po) => po.id == env.server.id && po.type == 'role' && (po.deny & 0x00000400)).array().length;
+        let ispublic = !channel.permissionOverwrites.cache.filter((po) => po.id == env.server.id && po.type == 'role' && (po.deny & 0x00000400)).size;
 
         return this.doAttachChannel(env, channelid, channel.type, false, opsrole, roleid, creatorid, ispublic);
     }
@@ -1663,7 +1653,7 @@ class ModDiscordChannels extends Module {
         } else {
             let channel = env.server.channels.cache.get(channelid);
             if (!channel) return Promise.reject("Channel not found.");            
-            if (channel.permissionOverwrites.filter((po) => po.id == userid && po.type == 'member' && (po.allow & 0x00000400)).get(userid)) {
+            if (channel.permissionOverwrites.cache.filter((po) => po.id == userid && po.type == 'member' && (po.allow & 0x00000400)).get(userid)) {
                 return Promise.resolve({channeldata: channeldata, userid: userid});
             }
             return channel.overwritePermissions(env.server.members.cache.get(userid), {VIEW_CHANNEL: true}, "Granting channel access to user")
@@ -1685,7 +1675,7 @@ class ModDiscordChannels extends Module {
         } else {
             let channel = env.server.channels.cache.get(channelid);
             if (!channel) throw "Channel not found.";
-            let joinpermission = channel.permissionOverwrites.filter((po) => po.id == userid && po.type == 'member' && (po.allow & 0x00000400)).get(userid);
+            let joinpermission = channel.permissionOverwrites.cache.filter((po) => po.id == userid && po.type == 'member' && (po.allow & 0x00000400)).get(userid);
             if (joinpermission) return joinpermission.delete("Revoking channel access from user").then(() => ({channeldata: channeldata, userid: userid}));
             return {channeldata: channeldata, userid: userid};
         }
@@ -1801,7 +1791,7 @@ class ModDiscordChannels extends Module {
     }
 
     checkEnvUsable(env) {
-        return env.server.me.hasPermission("MANAGE_CHANNELS") && env.server.me.hasPermission("MANAGE_ROLES");
+        return env.server.me.permissions.has("MANAGE_CHANNELS") && env.server.me.permissions.has("MANAGE_ROLES");
     }
 
     checkSecsSinceLastUsed(env, channelid) {

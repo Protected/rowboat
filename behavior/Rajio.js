@@ -230,7 +230,7 @@ class ModRajio extends Module {
         if (me.voice.mute) return [];
         let dchan = this.dchan;
         if (!dchan) return [];
-        return dchan.members.filter((member) => member.id != me.id && !member.voice.deaf).array();
+        return [...dchan.members.filter((member) => member.id != me.id && !member.voice.deaf).values()];
     }
     
     get playing() {
@@ -294,7 +294,7 @@ class ModRajio extends Module {
             let dchanid = null;
             if (this.dchan) dchanid = this.dchan.id;
             
-            if (oldState.channelID != dchanid && state.channelID == dchanid) {
+            if (oldState.channelId != dchanid && state.channelId == dchanid) {
                 if (state.id == myid) {
                     if (llisteners) {
                         //I joined the channel
@@ -328,7 +328,7 @@ class ModRajio extends Module {
                 }
             }
             
-            if (oldState.channelID == dchanid && state.channelID != dchanid) {
+            if (oldState.channelId == dchanid && state.channelId != dchanid) {
                 if (state.id == myid) {
                     //I left the channel
                     if (!this._pause) this.stopSong();
@@ -366,7 +366,7 @@ class ModRajio extends Module {
                         this.dchan.leave();
                     }
                 } else if (oldState.deaf && !state.deaf) {
-                    if (this._skipper[state.id] && state.channelID == dchanid) {
+                    if (this._skipper[state.id] && state.channelId == dchanid) {
                         //Skipper tried to undeafen themselves... Nah
                         state.setDeaf(true);
                     } else if (llisteners == 1) {
@@ -388,12 +388,12 @@ class ModRajio extends Module {
             if (!oldPresence) return;
             
             if (oldPresence.status != "offline" && presence.status == "offline") {
-                this.withdraw(presence.userID);
+                this.withdraw(presence.userId);
             }
         });
         
         this.denv.client.on("guildMemberRemove", (member) => {
-            if (member.presence.status == "offline") return;
+            if (!member.presence || member.presence.status == "offline") return;
             if (member.guild.id != this.denv.server.id) return;
             this.withdraw(member.user.id);
         });
@@ -584,19 +584,19 @@ class ModRajio extends Module {
 
             if (args.channelid) {
                 let newchan = this.denv.server.channels.cache.get(args.channelid);
-                if (!newchan || newchan.type != "voice") {
+                if (!newchan || newchan.type != "GUILD_VOICE") {
                     ep.reply('There is no voice channel with the specified ID.');
                     return true;
                 }
                 this._channel = args.channelid;
             } else {
                 let me = this.denv.server.members.cache.get(userid);
-                if (me && me.voiceChannelID) {
-                    this._channel = me.voiceChannelID;
+                if (me && me.voice.channelId) {
+                    this._channel = me.voice.channelId;
                 }
             }
             
-            if (!this.dchan || this.dchan.type != "voice") {
+            if (!this.dchan || this.dchan.type != "GUILD_VOICE") {
                 ep.reply("The voice channel could not be found. Please specify the ID of an existing voice channel.");
                 return true;
             }
@@ -1194,7 +1194,7 @@ class ModRajio extends Module {
     joinDchan() {
         if (this._disabled) return Promise.reject("Rajio is disabled.");
         if (!this.listeners.length) return Promise.reject("No listeners.");
-        if (!this.dchan || this.dchan.type != "voice") return Promise.reject("Voice channel not found.");
+        if (!this.dchan || this.dchan.type != "GUILD_VOICE") return Promise.reject("Voice channel not found.");
         return this.dchan.join()
             .catch((reason) => {
                 this.log("error", "Error connecting to voice channel: " + reason)
