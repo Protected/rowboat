@@ -106,7 +106,7 @@ class EnvDiscord extends Environment {
                 
                 
                 this._localClient.on("guildMemberRemove", (member) => {
-                    if (member.user.presence.status == "offline") return;
+                    if (!member.user.presence || member.user.presence.status == "offline") return;
                     if (member.guild.id != this._server.id) return;
                     
                     let chans = this.findAccessChannels(member);
@@ -120,7 +120,7 @@ class EnvDiscord extends Environment {
                 
                 
                 this._localClient.on("guildMemberUpdate", (oldMember, newMember) => {
-                    if (newMember.user.presence.status == "offline") return;
+                    if (!newMember.user.presence || newMember.user.presence.status == "offline") return;
                     if (newMember.guild.id != this._server.id) return;
                 
                     //Channels
