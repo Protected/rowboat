@@ -2638,12 +2638,12 @@ class ModVRChat extends Module {
 
         if (vrcdata.last_login && vrcdata.status == "offline" && !person.pendingflip && !person.invisible) {
             if (person.latestflip) {
-                emb.setFooter("Last seen " + moment.unix(person.latestflip).from(now));
+                emb.setFooter({text: "Last seen " + moment.unix(person.latestflip).from(now)});
             } else if (vrcdata.last_login) {
-                emb.setFooter("Last logged in " + moment(vrcdata.last_login).from(now));
+                emb.setFooter({text: "Last logged in " + moment(vrcdata.last_login).from(now)});
             }
         } else {
-            emb.setFooter("");
+            emb.setFooter({text: ""});
         }
 
         let pr;
@@ -2850,7 +2850,7 @@ class ModVRChat extends Module {
             if (val) emb.addField(fieldcount ? "\u200b" : "In-world", val);
         }
 
-        emb.setFooter("Retrieved " + moment.unix(world.retrieved).from(now));
+        emb.setFooter({text: "Retrieved " + moment.unix(world.retrieved).from(now)});
 
         try {
             if (message) {

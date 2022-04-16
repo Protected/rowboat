@@ -250,10 +250,10 @@ class DiscordClient extends ModernEventEmitter {
             }
 
             pack.targetchan.send(realmessage)
-                .then(() => {
+                .then((msg) => {
                     //Resolve promises
                     for (let resolve of pack.resolves) {
-                        resolve();
+                        resolve(msg);
                     }
                 })
                 .catch((e) => {
