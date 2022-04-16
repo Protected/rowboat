@@ -64,6 +64,7 @@ class ModVRChat extends Module {
     get optionalParams() { return [
         "updatefreq",           //How often to run the main update function (s)
         "usewebsocket",         //Whether to connect to the VRChat websocket to receive faster updates
+        "localaddress",         //IP address of a local network interface
         "friendliststale",      //How long before the entire friend list should be refreshed by the update function (s)
         "bakestale",            //How long a baked status embed remains fresh and shouldn't be updated (s)
         "statuschan",           //ID of text channel for baked person status embeds
@@ -158,6 +159,7 @@ class ModVRChat extends Module {
      
         this._params["updatefreq"] = 180;
         this._params["usewebsocket"] = true;
+        this._params["localaddress"] = undefined;
         this._params["friendliststale"] = 179;
         this._params["bakestale"] = 29;
 
@@ -3564,7 +3566,7 @@ class ModVRChat extends Module {
         let buildWebsocket = () => {
             //Initialize websocket
             return new Promise((resolve, reject) => {
-                let ws = new WebSocket(WEBSOCKET + "?authToken=" + this._auth, {headers: {"User-Agent": HTTP_USER_AGENT}});
+                let ws = new WebSocket(WEBSOCKET + "?authToken=" + this._auth, {headers: {"User-Agent": HTTP_USER_AGENT}, localAddress: this.param("localAddress")});
                 
                 let connectionError = (err) => reject(err);
 
@@ -3675,7 +3677,7 @@ class ModVRChat extends Module {
         let options = {headers: {
             Cookie: [],
             "User-Agent": HTTP_USER_AGENT
-        }, returnFull: true};
+        }, returnFull: true, localAddress: this.param("localAddress")};
 
         if (this._config) options.headers.Cookie.push("apiKey=" + this._config.apiKey);
         if (this._auth) options.headers.Cookie.push("auth=" + this._auth);
@@ -3702,7 +3704,7 @@ class ModVRChat extends Module {
         let options = {headers: {
             Cookie: [],
             "User-Agent": HTTP_USER_AGENT
-        }, returnFull: true};
+        }, returnFull: true, localAddress: this.param("localAddress")};
         if (method) options.method = method;
 
         if (this._config) options.headers.Cookie.push("apiKey=" + this._config.apiKey);
