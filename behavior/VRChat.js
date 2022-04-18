@@ -3988,7 +3988,7 @@ class ModVRChat extends Module {
     }
 
     userInviteButton() {
-        return row.addComponents(
+        return new MessageActionRow().addComponents(
             new MessageButton()
                 .setCustomId("join")
                 .setStyle("PRIMARY")
