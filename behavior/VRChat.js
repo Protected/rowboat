@@ -461,7 +461,7 @@ class ModVRChat extends Module {
                                 buttonInteraction.update({components: [this.worldInviteButtons(true)]});
                             }
                         });
-                    this.setLatestDiscord(user.id);
+                    this.setLatestDiscord(buttonInteraction.user.id);
     
                 }
                 
