@@ -166,17 +166,17 @@ class ModVRChat extends Module {
                 .setCustomId("invitepublic")
                 .setStyle("SECONDARY")
                 .setEmoji(this.param("publicemoji"))
-                .setLabel("New public"),
+                .setLabel("Public new"),
             new MessageButton()
                 .setCustomId("invitefriendsplus")
                 .setStyle("SECONDARY")
                 .setEmoji(this.param("friendsplusemoji"))
-                .setLabel("New friends+"),
+                .setLabel("Friends+ new"),
             new MessageButton()
                 .setCustomId("invitefriends")
                 .setStyle("SECONDARY")
                 .setEmoji(this.param("friendsemoji"))
-                .setLabel("New friends")
+                .setLabel("Friends-only new")
         );
         return row;
     }
@@ -446,7 +446,7 @@ class ModVRChat extends Module {
         };
 
 
-        let buttonHandler = (buttonInteraction) => {
+        let buttonHandler = async (buttonInteraction) => {
 
             let channelid = buttonInteraction.message.channel.id;
 
@@ -477,6 +477,8 @@ class ModVRChat extends Module {
 
                     if (person && person.vrc && worldid) {
 
+                        buttonInteraction.deferReply({ephemeral: true});
+
                         if (buttonInteraction.customId == "invitepublic" || buttonInteraction.customId == "inviteany") {
                             this.getWorld(worldid, true)
                                 .then((world) => {
@@ -489,17 +491,24 @@ class ModVRChat extends Module {
                                         instance = this.generateInstanceFor(person.vrc, "public", null, instances.map(ci => ci.split("~")[0]));
                                     }
                                     this.vrcInvite(person.vrc, worldid, instance)
-                                        .then(() => { interaction.reply({ephemeral: true, content: "Invite sent."}); })
-                                        .catch(e => this.log("error", "Failed to invite " + user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
+                                        .then(() => { buttonInteraction.editReply("Invite sent."); })
+                                        .catch(e => {
+                                            this.log("error", "Failed to invite " + buttonInteraction.user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e));
+                                            buttonInteraction.deleteReply();
+                                        });
                                 })
                                 .catch((e) => {
                                     this.log("warn", "Failed to invite " + buttonInteraction.user.id + " to " + worldid + " because the world couldn't be retrieved.");
+                                    buttonInteraction.deleteReply();
                                 });
                         } else {
                             let instance = this.generateInstanceFor(person.vrc, buttonInteraction.customId == "invitefriendsplus" ? "friends+" : "friends");
                             this.vrcInvite(person.vrc, worldid, instance)
-                                .then(() => { interaction.reply({ephemeral: true, content: "Invite sent."}); })
-                                .catch(e => this.log("error", "Failed to invite " + buttonInteraction.user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
+                                .then(() => { buttonInteraction.editReply("Invite sent."); })
+                                .catch(e => {
+                                    this.log("error", "Failed to invite " + buttonInteraction.user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e));
+                                    buttonInteraction.deleteReply();
+                                });
                         }
 
                     }
