@@ -1,8 +1,8 @@
-/* Module: VRChat -- Show information about VRChat users on Discord. */
+ Module: VRChat -- Show information about VRChat users on Discord. */
 
 const moment = require('moment');
 const random = require('meteor-random');
-const { MessageEmbed, MessageActionRow, MessageButton, MessageButtonStyle } = require('discord.js');
+const { MessageEmbed, MessageActionRow, MessageButton } = require('discord.js');
 const WebSocket = require('ws');
 
 const Module = require('../Module.js');
@@ -150,7 +150,7 @@ class ModVRChat extends Module {
             row.addComponents(
                 new MessageButton()
                     .setCustomId("pin")
-                    .setStyle(MessageButtonStyle.PRIMARY)
+                    .setStyle("PRIMARY")
                     .setEmoji(this.param("pinnedemoji"))
                     .setLabel(pinnedmode ? "Pinned" : "Pin")
                     .setDisabled(pinnedmode)
@@ -159,22 +159,22 @@ class ModVRChat extends Module {
         row.addComponents(
             new MessageButton()
                 .setCustomId("inviteany")
-                .setStyle(MessageButtonStyle.PRIMARY)
+                .setStyle("PRIMARY")
                 .setEmoji(this.param("anyemoji"))
                 .setLabel("Invite to random"),
             new MessageButton()
                 .setCustomId("invitepublic")
-                .setStyle(MessageButtonStyle.SECONDARY)
+                .setStyle("SECONDARY")
                 .setEmoji(this.param("publicemoji"))
                 .setLabel("New public"),
             new MessageButton()
                 .setCustomId("invitefriendsplus")
-                .setStyle(MessageButtonStyle.SECONDARY)
+                .setStyle("SECONDARY")
                 .setEmoji(this.param("friendsplusemoji"))
                 .setLabel("New friends+"),
             new MessageButton()
                 .setCustomId("invitefriends")
-                .setStyle(MessageButtonStyle.SECONDARY)
+                .setStyle("SECONDARY")
                 .setEmoji(this.param("friendsemoji"))
                 .setLabel("New friends")
         );
