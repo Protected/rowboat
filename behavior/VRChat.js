@@ -453,7 +453,7 @@ class ModVRChat extends Module {
                     if (targetid) {
 
                         let target = this.getPerson(targetid);
-                        let person = this.getPerson(user.id);
+                        let person = this.getPerson(buttonInteraction.user.id);
                         if (person && person.vrc && target.latestlocation && !target.sneak && !target.invisible) {
                             this.vrcInvite(person.vrc, this.worldFromLocation(target.latestlocation), this.instanceFromLocation(target.latestlocation))
                                 .then(() => { buttonInteraction.editReply("Invite sent."); })
@@ -478,7 +478,7 @@ class ModVRChat extends Module {
                     let ids = this.findInstanceByMsg(buttonInteraction.message.id);
                     if (ids) {
                         let world = this.getCachedWorld(ids[0]);
-                        let person = this.getPerson(user.id);
+                        let person = this.getPerson(buttonInteraction.user.id);
                         if (person && person.vrc) {
                             this.vrcInvite(person.vrc, ids[0], world.instances[ids[1]].instance)
                                 .then(() => { buttonInteraction.editReply("Invite sent."); })
