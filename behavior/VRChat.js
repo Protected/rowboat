@@ -143,43 +143,7 @@ class ModVRChat extends Module {
     get pinnedchan() {
         return this.denv.server.channels.cache.get(this.param("pinnedchan"));
     }
-    
-    worldInviteButtons(pinnedmode) {
-        let row = new MessageActionRow();
-        if (pinnedmode === true || pinnedmode === false) {
-            row.addComponents(
-                new MessageButton()
-                    .setCustomId("pin")
-                    .setStyle("PRIMARY")
-                    .setEmoji(this.param("pinnedemoji"))
-                    .setLabel(pinnedmode ? "Pinned" : "Pin")
-                    .setDisabled(pinnedmode)
-            );
-        }
-        row.addComponents(
-            new MessageButton()
-                .setCustomId("inviteany")
-                .setStyle("PRIMARY")
-                .setEmoji(this.param("anyemoji"))
-                .setLabel("Invite to random"),
-            new MessageButton()
-                .setCustomId("invitepublic")
-                .setStyle("SECONDARY")
-                .setEmoji(this.param("publicemoji"))
-                .setLabel("Public new"),
-            new MessageButton()
-                .setCustomId("invitefriendsplus")
-                .setStyle("SECONDARY")
-                .setEmoji(this.param("friendsplusemoji"))
-                .setLabel("Friends+ new"),
-            new MessageButton()
-                .setCustomId("invitefriends")
-                .setStyle("SECONDARY")
-                .setEmoji(this.param("friendsemoji"))
-                .setLabel("Friends-only new")
-        );
-        return row;
-    }
+
 
     constructor(name) {
         super('VRChat', name);
@@ -383,45 +347,6 @@ class ModVRChat extends Module {
 
             let channelid = messageReaction.message.channel.id;
 
-            //Obtain public/friends location invite by reacting to user with inviteemoji
-            if (this.statuschan && channelid == this.statuschan.id) {
-
-                if (messageReaction.emoji.name == this.param("inviteemoji")) {
-                    let targetid = this.findPersonByMsg(messageReaction.message.id);
-                    if (targetid) {
-                        let target = this.getPerson(targetid);
-                        let person = this.getPerson(user.id);
-                        if (person && person.vrc && target.latestlocation && !target.sneak && !target.invisible) {
-                            this.vrcInvite(person.vrc, this.worldFromLocation(target.latestlocation), this.instanceFromLocation(target.latestlocation))
-                                .catch(e => this.log("error", "Failed to invite " + user.id + " to " + target.latestlocation + ": " + JSON.stringify(e)));
-                        }
-                    }
-                }
-
-                //Remove all reactions from status channel
-                messageReaction.users.remove(user.id);
-            }
-
-            //Obtain instance location invite by reacting with inviteemoji
-            if (this.instancechan && channelid == this.instancechan.id) {
-
-                if (messageReaction.emoji.name == this.param("inviteemoji")) {
-                    let ids = this.findInstanceByMsg(messageReaction.message.id);
-                    if (ids) {
-                        let world = this.getCachedWorld(ids[0]);
-                        let person = this.getPerson(user.id);
-                        if (person && person.vrc) {
-                            this.vrcInvite(person.vrc, ids[0], world.instances[ids[1]].instance)
-                                .catch(e => this.log("error", "Failed to invite " + user.id + " to " + ids[0] + ":" + ids[1] + ": " + JSON.stringify(e)));
-                        }
-                    }
-                }
-
-                //Remove all reactions from instance channel
-                messageReaction.users.remove(user.id);
-
-            }
-
             //Delete favorites
             if (this.pinnedchan && channelid == this.pinnedchan.id) {
 
@@ -515,6 +440,61 @@ class ModVRChat extends Module {
 
                 }
                 
+            }
+
+            if (buttonInteraction.customId == "join") {
+                
+                //Obtain public/friends location invite by reacting to user with inviteemoji
+                if (this.statuschan && channelid == this.statuschan.id) {
+
+                    buttonInteraction.deferReply({ephemeral: true});
+
+                    let targetid = this.findPersonByMsg(buttonInteraction.message.id);
+                    if (targetid) {
+
+                        let target = this.getPerson(targetid);
+                        let person = this.getPerson(user.id);
+                        if (person && person.vrc && target.latestlocation && !target.sneak && !target.invisible) {
+                            this.vrcInvite(person.vrc, this.worldFromLocation(target.latestlocation), this.instanceFromLocation(target.latestlocation))
+                                .then(() => { buttonInteraction.editReply("Invite sent."); })
+                                .catch(e => {
+                                    this.log("error", "Failed to invite " + user.id + " to " + target.latestlocation + ": " + JSON.stringify(e))
+                                    buttonInteraction.deleteReply();
+                                });
+                        } else {
+                            buttonInteraction.deleteReply();
+                        }
+                    } else {
+                        buttonInteraction.deleteReply();
+                    }
+
+                }
+
+                //Obtain instance location invite by reacting with inviteemoji
+                if (this.instancechan && channelid == this.instancechan.id) {
+
+                    buttonInteraction.deferReply({ephemeral: true});
+
+                    let ids = this.findInstanceByMsg(buttonInteraction.message.id);
+                    if (ids) {
+                        let world = this.getCachedWorld(ids[0]);
+                        let person = this.getPerson(user.id);
+                        if (person && person.vrc) {
+                            this.vrcInvite(person.vrc, ids[0], world.instances[ids[1]].instance)
+                                .then(() => { buttonInteraction.editReply("Invite sent."); })
+                                .catch(e => {
+                                    this.log("error", "Failed to invite " + user.id + " to " + ids[0] + ":" + ids[1] + ": " + JSON.stringify(e))
+                                    buttonInteraction.deleteReply();
+                                });
+                        } else {
+                            buttonInteraction.deleteReply();
+                        }
+                    } else {
+                        buttonInteraction.deleteReply();
+                    }
+
+                }
+
             }
 
         };
@@ -2709,22 +2689,20 @@ class ModVRChat extends Module {
             emb.setFooter({text: ""});
         }
 
+        let invitebutton = [];
+        if (person.latestlocation && !person.sneak && !person.invisible) {
+            invitebutton = [this.userInviteButton()];
+        }
+
         let pr;
         if (message) {
-            pr = message.edit({embeds: [emb]});
+            pr = message.edit({embeds: [emb], components: invitebutton});
         } else {
-            pr = this.statuschan.send({embeds: [emb]})
+            pr = this.statuschan.send({embeds: [emb], components: invitebutton})
                     .then(newmessage => { this.setPersonMsg(userid, newmessage); return newmessage; });
         }
 
         pr.then((msg) => {
-            let invite = msg.reactions.cache.find(r => r.emoji.name == this.param("inviteemoji"));
-            if ((person.latestlocation && !person.sneak && !person.invisible) && !invite) {
-                this.denv.react(msg, this.param("inviteemoji"));
-            }
-            if ((!person.latestlocation || person.sneak || person.invisible) && invite) {
-                invite.remove();
-            }
             this.setBaked(userid);
         });
 
@@ -2811,8 +2789,10 @@ class ModVRChat extends Module {
         if (!person || !person.msg) return false;
         let message = this.statuschan.messages.cache.get(person.msg);
         if (!message) return false;
-        let invite = message.reactions.cache.find(r => r.emoji.name == this.param("inviteemoji"));
-        if (invite) invite.remove();
+        if (message.components.length) {
+            message.edit({components: []});
+        }
+        return true;
     }
 
 
@@ -2978,8 +2958,10 @@ class ModVRChat extends Module {
             members.push(line);
         }
 
+        let invitebutton = [];
         if (url) {
             emb.setURL(url);
+            invitebutton = [this.userInviteButton()];
         }
 
         if (members.length) {
@@ -3004,18 +2986,15 @@ class ModVRChat extends Module {
         try {
             if (message) {
                 if (members.length) {
-                    return await message.edit({embeds: [emb]});
+                    return await message.edit({embeds: [emb], components: message.components});
                 } else {
                     this.clearInstance(worldid, instanceid);
                     return null;
                 }
             } else {
-                return await this.instancechan.send({embeds: [emb]})
+                return await this.instancechan.send({embeds: [emb], components: invitebutton})
                     .then(newmessage => {
                         this.setInstanceMsg(worldid, instanceid, newmessage);
-                        if (url) {
-                            this.denv.react(newmessage, this.param("inviteemoji"));
-                        }
                         return newmessage;
                     });
             }
@@ -3969,6 +3948,53 @@ class ModVRChat extends Module {
         label = label[0].toUpperCase() + label.slice(1);
 
         return icon + label;
+    }
+
+    worldInviteButtons(pinnedmode) {
+        let row = new MessageActionRow();
+        if (pinnedmode === true || pinnedmode === false) {
+            row.addComponents(
+                new MessageButton()
+                    .setCustomId("pin")
+                    .setStyle("PRIMARY")
+                    .setEmoji(this.param("pinnedemoji"))
+                    .setLabel(pinnedmode ? "Pinned" : "Pin")
+                    .setDisabled(pinnedmode)
+            );
+        }
+        row.addComponents(
+            new MessageButton()
+                .setCustomId("inviteany")
+                .setStyle("PRIMARY")
+                .setEmoji(this.param("anyemoji"))
+                .setLabel("Invite to random"),
+            new MessageButton()
+                .setCustomId("invitepublic")
+                .setStyle("SECONDARY")
+                .setEmoji(this.param("publicemoji"))
+                .setLabel("Public new"),
+            new MessageButton()
+                .setCustomId("invitefriendsplus")
+                .setStyle("SECONDARY")
+                .setEmoji(this.param("friendsplusemoji"))
+                .setLabel("Friends+ new"),
+            new MessageButton()
+                .setCustomId("invitefriends")
+                .setStyle("SECONDARY")
+                .setEmoji(this.param("friendsemoji"))
+                .setLabel("Friends-only new")
+        );
+        return row;
+    }
+
+    userInviteButton() {
+        return row.addComponents(
+            new MessageButton()
+                .setCustomId("join")
+                .setStyle("PRIMARY")
+                .setEmoji(this.param("inviteemoji"))
+                .setLabel("Join")
+        );
     }
 
     placeholderLocation(location, sneak, defaultcontents) {
