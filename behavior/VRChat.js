@@ -492,12 +492,12 @@ class ModVRChat extends Module {
                                         .catch(e => this.log("error", "Failed to invite " + user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
                                 })
                                 .catch((e) => {
-                                    this.log("warn", "Failed to invite " + user.id + " to " + worldid + " because the world couldn't be retrieved.");
+                                    this.log("warn", "Failed to invite " + buttonInteraction.user.id + " to " + worldid + " because the world couldn't be retrieved.");
                                 });
                         } else {
                             let instance = this.generateInstanceFor(person.vrc, buttonInteraction.customId == "invitefriendsplus" ? "friends+" : "friends");
                             this.vrcInvite(person.vrc, worldid, instance)
-                                .catch(e => this.log("error", "Failed to invite " + user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
+                                .catch(e => this.log("error", "Failed to invite " + buttonInteraction.user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
                         }
 
                     }
@@ -2906,9 +2906,9 @@ class ModVRChat extends Module {
 
         try {
             if (message) {
-                return await message.edit({embeds: [emb], components: [this.worldInviteButtons(this._pins[worldid])]});
+                return await message.edit({embeds: [emb], components: [this.worldInviteButtons(!!this._pins[worldid])]});
             } else {
-                return await this.worldchan.send({embeds: [emb], components: [this.worldInviteButtons(this._pins[worldid])]})
+                return await this.worldchan.send({embeds: [emb], components: [this.worldInviteButtons(!!this._pins[worldid])]})
                     .then(newmessage => {
                         this.setWorldMsg(worldid, newmessage);
                         return newmessage;
