@@ -1,4 +1,4 @@
- Module: VRChat -- Show information about VRChat users on Discord. */
+/* Module: VRChat -- Show information about VRChat users on Discord. */
 
 const moment = require('moment');
 const random = require('meteor-random');
