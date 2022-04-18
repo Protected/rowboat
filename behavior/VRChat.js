@@ -481,7 +481,7 @@ class ModVRChat extends Module {
                             this.getWorld(worldid, true)
                                 .then((world) => {
                                     if (!world) throw {};
-                                    let instances = world.instances.filter(ci => !ci[1] || ci[1] < world.capacity).map(ci => ci[0]);
+                                    let instances = Object.values(world.instances).filter(ci => !ci.members || Object.keys(ci.members).length < world.capacity).map(ci => ci.instance);
                                     let instance;
                                     if (buttonInteraction.customId == "inviteany") {
                                         instance = this.generateInstanceFor(person.vrc, "public", instances);
@@ -489,6 +489,7 @@ class ModVRChat extends Module {
                                         instance = this.generateInstanceFor(person.vrc, "public", null, instances.map(ci => ci.split("~")[0]));
                                     }
                                     this.vrcInvite(person.vrc, worldid, instance)
+                                        .then(() => { interaction.reply({ephemeral: true, content: "Invite sent."}); })
                                         .catch(e => this.log("error", "Failed to invite " + user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
                                 })
                                 .catch((e) => {
@@ -497,6 +498,7 @@ class ModVRChat extends Module {
                         } else {
                             let instance = this.generateInstanceFor(person.vrc, buttonInteraction.customId == "invitefriendsplus" ? "friends+" : "friends");
                             this.vrcInvite(person.vrc, worldid, instance)
+                                .then(() => { interaction.reply({ephemeral: true, content: "Invite sent."}); })
                                 .catch(e => this.log("error", "Failed to invite " + buttonInteraction.user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
                         }
 
@@ -3585,10 +3587,9 @@ class ModVRChat extends Module {
         if (!this.isValidWorld(worldid)) throw {error: "Invalid world ID."};
         let location = worldid + (instanceid ? ":" + instanceid : "");
         this.log("Sending invite to " + vrcuserid + " for " + location + ".");
-        return this.vrcpost("user/" + vrcuserid + "/notification", {
-            type: "invite",
-            message: message || "Here's your invitation.",
-            details: {worldId: location}
+        return this.vrcpost("invite/" + vrcuserid, {
+            instanceId: location,
+            messageSlot: 0
         });
     }
 
