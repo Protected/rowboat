@@ -21,7 +21,8 @@ const BRIDGE_EVENTS = [
     "channelDelete",
     "channelUpdate",
     "channelPinsUpdate",
-    "webhookUpdate"
+    "webhookUpdate",
+    "interactionCreate"
 ];
 
 const INTENTS = [

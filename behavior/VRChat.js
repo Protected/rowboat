@@ -2,7 +2,7 @@
 
 const moment = require('moment');
 const random = require('meteor-random');
-const { MessageEmbed } = require('discord.js');
+const { MessageEmbed, MessageActionRow, MessageButton, MessageButtonStyle } = require('discord.js');
 const WebSocket = require('ws');
 
 const Module = require('../Module.js');
@@ -97,9 +97,8 @@ class ModVRChat extends Module {
         "inactivity",           //How long can a known user not talk on Discord before they're automatically unassigned (d)
 
         "ddelay",               //Delay between actions in the delayed action queue (ms) [used to prevent rate limiting]
-        
+
         "pinnedemoji",          //Emoji used for pinning worlds
-        "pinokayemoji",         //Emoji used for okaying pins
         "inviteemoji",          //Emoji used for requesting an invitation
         "anyemoji",             //Emoji that represents any visible instance
         "publicemoji",          //Emoji that represents a public instance
@@ -145,13 +144,41 @@ class ModVRChat extends Module {
         return this.denv.server.channels.cache.get(this.param("pinnedchan"));
     }
     
-    get worldInviteButtons() {
-        return [
-            this.param("anyemoji"),
-            this.param("publicemoji"),
-            this.param("friendsplusemoji"),
-            this.param("friendsemoji")
-        ];
+    worldInviteButtons(pinnedmode) {
+        let row = new MessageActionRow();
+        if (pinnedmode === true || pinnedmode === false) {
+            row.addComponents(
+                new MessageButton()
+                    .setCustomId("pin")
+                    .setStyle(MessageButtonStyle.PRIMARY)
+                    .setEmoji(this.param("pinnedemoji"))
+                    .setLabel(pinnedmode ? "Pinned" : "Pin")
+                    .setDisabled(pinnedmode)
+            );
+        }
+        row.addComponents(
+            new MessageButton()
+                .setCustomId("inviteany")
+                .setStyle(MessageButtonStyle.PRIMARY)
+                .setEmoji(this.param("anyemoji"))
+                .setLabel("Invite to random"),
+            new MessageButton()
+                .setCustomId("invitepublic")
+                .setStyle(MessageButtonStyle.SECONDARY)
+                .setEmoji(this.param("publicemoji"))
+                .setLabel("New public"),
+            new MessageButton()
+                .setCustomId("invitefriendsplus")
+                .setStyle(MessageButtonStyle.SECONDARY)
+                .setEmoji(this.param("friendsplusemoji"))
+                .setLabel("New friends+"),
+            new MessageButton()
+                .setCustomId("invitefriends")
+                .setStyle(MessageButtonStyle.SECONDARY)
+                .setEmoji(this.param("friendsemoji"))
+                .setLabel("New friends")
+        );
+        return row;
     }
 
     constructor(name) {
@@ -189,7 +216,6 @@ class ModVRChat extends Module {
         this._params["ddelay"] = 250;
 
         this._params["pinnedemoji"] = "📌";
-        this._params["pinokayemoji"] = "👍";
         this._params["inviteemoji"] = "✉️";
         this._params["anyemoji"] = "🚪";
         this._params["publicemoji"] = "🌍";
@@ -357,68 +383,6 @@ class ModVRChat extends Module {
 
             let channelid = messageReaction.message.channel.id;
 
-            //Pin worlds to favorites by reacting to them with pinnedemoji
-            if (this.worldchan && channelid == this.worldchan.id) {
-
-                if (this.pinnedchan && messageReaction.emoji.name == this.param("pinnedemoji")) {
-                    this.potentialWorldPin(messageReaction.message, false, user.id)
-                        .then(result => {
-                            if (result) {
-                                let pinnedreaction = messageReaction.message.reactions.cache.find(r => r.emoji.name == this.param("pinnedemoji"));
-                                if (pinnedreaction) pinnedreaction.remove();
-                                this.denv.react(messageReaction.message, this.param("pinokayemoji"));
-                            }
-                        });
-                    this.setLatestDiscord(user.id);
-                }
-
-            }
-
-            //Invite to new world instances
-            if (this.worldchan && channelid == this.worldchan.id || this.pinnedchan && channelid == this.pinnedchan.id) {
-                
-                if (this.worldInviteButtons.includes(messageReaction.emoji.name)) {
-                    let worldid = this.extractWorldFromMessage(messageReaction.message);
-                    let person = this.getPerson(user.id);
-
-                    if (person && person.vrc && worldid) {
-                        if (messageReaction.emoji.name == this.param("publicemoji") || messageReaction.emoji.name == this.param("anyemoji")) {
-                            this.getWorld(worldid, true)
-                                .then((world) => {
-                                    if (!world) throw {};
-                                    let instances = world.instances.filter(ci => !ci[1] || ci[1] < world.capacity).map(ci => ci[0]);
-                                    let instance;
-                                    if (messageReaction.emoji.name == this.param("anyemoji")) {
-                                        instance = this.generateInstanceFor(person.vrc, "public", instances);
-                                    } else {
-                                        instance = this.generateInstanceFor(person.vrc, "public", null, instances.map(ci => ci.split("~")[0]));
-                                    }
-                                    this.vrcInvite(person.vrc, worldid, instance)
-                                        .catch(e => this.log("error", "Failed to invite " + user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
-                                })
-                                .catch((e) => {
-                                    this.log("warn", "Failed to invite " + user.id + " to " + worldid + " because the world couldn't be retrieved.");
-                                });
-                        } else {
-                            let instance = this.generateInstanceFor(person.vrc, messageReaction.emoji.name == this.param("friendsplusemoji") ? "friends+" : "friends");
-                            this.vrcInvite(person.vrc, worldid, instance)
-                                .catch(e => this.log("error", "Failed to invite " + user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
-                        }
-
-                    }
-
-                    if (this.pinnedchan && channelid == this.pinnedchan.id) {
-                        messageReaction.users.remove(user.id);
-                    }
-                }
-
-            }
-
-            //Removed all reactions from worlds channel (keep below worlds actions)
-            if (this.worldchan && channelid == this.worldchan.id) {
-                messageReaction.users.remove(user.id);
-            }
-
             //Obtain public/friends location invite by reacting to user with inviteemoji
             if (this.statuschan && channelid == this.statuschan.id) {
 
@@ -479,6 +443,73 @@ class ModVRChat extends Module {
                 this.setLatestDiscord(user.id);
             }
 
+        };
+
+
+        let buttonHandler = (buttonInteraction) => {
+
+            let channelid = buttonInteraction.message.channel.id;
+
+            if (buttonInteraction.customId == "pin") {
+                //Pin worlds to favorites channel
+
+                if (this.worldchan && channelid == this.worldchan.id && this.pinnedchan) {
+
+                    this.potentialWorldPin(buttonInteraction.message, false, buttonInteraction.user.id)
+                        .then(result => {
+                            if (result) {
+                                buttonInteraction.update({components: [this.worldInviteButtons(true)]});
+                            }
+                        });
+                    this.setLatestDiscord(user.id);
+    
+                }
+                
+            }
+
+            if (buttonInteraction.customId.match(/^invite/)) {
+                //Invite to world instances
+
+                if (this.worldchan && channelid == this.worldchan.id || this.pinnedchan && channelid == this.pinnedchan.id) {
+                    
+                    let worldid = this.extractWorldFromMessage(buttonInteraction.message);
+                    let person = this.getPerson(buttonInteraction.user.id);
+
+                    if (person && person.vrc && worldid) {
+
+                        if (buttonInteraction.customId == "invitepublic" || buttonInteraction.customId == "inviteany") {
+                            this.getWorld(worldid, true)
+                                .then((world) => {
+                                    if (!world) throw {};
+                                    let instances = world.instances.filter(ci => !ci[1] || ci[1] < world.capacity).map(ci => ci[0]);
+                                    let instance;
+                                    if (buttonInteraction.customId == "inviteany") {
+                                        instance = this.generateInstanceFor(person.vrc, "public", instances);
+                                    } else {
+                                        instance = this.generateInstanceFor(person.vrc, "public", null, instances.map(ci => ci.split("~")[0]));
+                                    }
+                                    this.vrcInvite(person.vrc, worldid, instance)
+                                        .catch(e => this.log("error", "Failed to invite " + user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
+                                })
+                                .catch((e) => {
+                                    this.log("warn", "Failed to invite " + user.id + " to " + worldid + " because the world couldn't be retrieved.");
+                                });
+                        } else {
+                            let instance = this.generateInstanceFor(person.vrc, buttonInteraction.customId == "invitefriendsplus" ? "friends+" : "friends");
+                            this.vrcInvite(person.vrc, worldid, instance)
+                                .catch(e => this.log("error", "Failed to invite " + user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e)));
+                        }
+
+                    }
+
+                }
+                
+            }
+
+        };
+
+        let interactionCreateHandler = (interaction) => {
+            if (interaction.isButton()) return buttonHandler(interaction);
         };
 
 
@@ -591,12 +622,6 @@ class ModVRChat extends Module {
                     let worldid = this.extractWorldFromMessage(message);
                     if (!worldid) return;
                     this._pins[worldid] = message;
-
-                    //Fix buttons
-                    for (let emoji of this.worldInviteButtons) {
-                        let r = message.reactions.cache.find(r => r.emoji.name == emoji);
-                        if (!r || !r.me) this.denv.react(message, emoji);
-                    }
                 });
 
             }
@@ -605,6 +630,7 @@ class ModVRChat extends Module {
             this.denv.client.on("messageDelete", messageDeleteHandler);
             this.denv.client.on("voiceStateUpdate", voiceStateUpdateHandler);
             this.denv.client.on("messageReactionAdd", messageReactionAddHandler);
+            this.denv.client.on("interactionCreate", interactionCreateHandler);
             this.denv.on("message", messageHandler);
         });
 
@@ -1799,7 +1825,7 @@ class ModVRChat extends Module {
 
                 if (changed) {
                     this.dqueue(function() {
-                        message.edit({embeds: [emb]});
+                        message.edit({embeds: [emb], components: [this.worldInviteButtons()]});
                     }.bind(this));
                 }
 
@@ -1876,6 +1902,32 @@ class ModVRChat extends Module {
             });
 
             ep.reply("Wait...");
+            return true;
+        });
+
+
+        this.mod('Commands').registerCommand(this, 'vrcfix removefavoritereacts', {
+            description: "Remove reactions from the favorites channel.",
+            permissions: [PERM_ADMIN]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (!this.pinnedchan) {
+                ep.reply("Favorites channel not found.");
+                return true;
+            }
+
+            this.denv.scanEveryMessage(this.pinnedchan, (message) => {
+                this.dqueue(function() {
+                    message.reactions.removeAll();
+                }.bind(this));
+            }, () => {
+                this.dqueue(function() {
+                    ep.reply("Done!");
+                }.bind(this));
+            });
+
+            ep.reply("Wait...");
+
             return true;
         });
 
@@ -2854,19 +2906,11 @@ class ModVRChat extends Module {
 
         try {
             if (message) {
-                return await message.edit({embeds: [emb]});
+                return await message.edit({embeds: [emb], components: [this.worldInviteButtons(this._pins[worldid])]});
             } else {
-                return await this.worldchan.send({embeds: [emb]})
+                return await this.worldchan.send({embeds: [emb], components: [this.worldInviteButtons(this._pins[worldid])]})
                     .then(newmessage => {
                         this.setWorldMsg(worldid, newmessage);
-                        if (this._pins[worldid]) {
-                            this.denv.react(newmessage, this.param("pinokayemoji"));
-                        } else {
-                            this.denv.react(newmessage, this.param("pinnedemoji"));
-                        }
-                        for (let emoji of this.worldInviteButtons) {
-                            this.denv.react(newmessage, emoji);
-                        }
                         return newmessage;
                     });
             }
@@ -3376,18 +3420,15 @@ class ModVRChat extends Module {
             try {
                 let member = await this.denv.server.members.fetch(userid);
                 let webhook = await this.denv.getWebhook(this.pinnedchan, member);
-                post = webhook.send({embeds: [emb]});
+                post = webhook.send({embeds: [emb], components: [this.worldInviteButtons()]});
             } catch (e) {}
         }
         if (!post) {
-            post = this.pinnedchan.send({embeds: [emb]});
+            post = this.pinnedchan.send({embeds: [emb], components: [this.worldInviteButtons()]});
         }
 
         return post.then(newmessage => {
                 this._pins[worldid] = newmessage;
-                for (let emoji of this.worldInviteButtons) {
-                    this.denv.react(newmessage, emoji);
-                }
                 return true;
             });
     }
