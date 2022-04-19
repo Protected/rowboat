@@ -231,7 +231,7 @@ class EnvDiscord extends Environment {
         if (msg) {
             if (typeof msg == "object") {
                 if (msg.fields !== undefined) options.embeds = [msg];
-                else if (msg.size !== undefined) options.files = [options];
+                else if (msg.size !== undefined || msg.attachment !== undefined) options.files = [msg];
                 else for (let key in msg) {
                     options[key] = msg[key];
                 }
