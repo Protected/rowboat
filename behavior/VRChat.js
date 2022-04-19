@@ -766,6 +766,10 @@ class ModVRChat extends Module {
         }
 
         startup.then(() => this.refreshFriends(true));
+        startup.catch((e) => {
+            this.log("error", "Failed to initialize VRChat module. Error:" + JSON.stringify(e));
+            process.exit(11);
+        });
             
 
         //# Start automation timers
