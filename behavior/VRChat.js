@@ -4047,16 +4047,16 @@ class ModVRChat extends Module {
         }
         if (vrcuserid) {
             if (type == "private" || type == "invite") {
-                return this.generateInstanceId(include, exclude) + regionpart + "~private(" + vrcuserid + ")~nonce(" + this.generateNonce() + ")";
+                return this.generateInstanceId(include, exclude) + "~private(" + vrcuserid + ")" + regionpart + "~nonce(" + this.generateNonce() + ")";
             }
             if (type == "invite+") {
-                return this.generateInstanceId(include, exclude) + regionpart + "~private(" + vrcuserid + ")~canRequestInvite~nonce(" + this.generateNonce() + ")";
+                return this.generateInstanceId(include, exclude) + "~private(" + vrcuserid + ")~canRequestInvite" + regionpart + "~nonce(" + this.generateNonce() + ")";
             }
             if (type == "friends") {
-                return this.generateInstanceId(include, exclude) + regionpart + "~friends(" + vrcuserid + ")~nonce(" + this.generateNonce() + ")";
+                return this.generateInstanceId(include, exclude) + "~friends(" + vrcuserid + ")" + regionpart + "~nonce(" + this.generateNonce() + ")";
             }
             if (type == "hidden" || type == "friends+") {
-                return this.generateInstanceId(include, exclude) + regionpart + "~hidden(" + vrcuserid + ")~nonce(" + this.generateNonce() + ")";
+                return this.generateInstanceId(include, exclude) + "~hidden(" + vrcuserid + ")" + regionpart + "~nonce(" + this.generateNonce() + ")";
             }
         }
         return this.generateInstanceId(include, exclude) + regionpart;
