@@ -403,6 +403,8 @@ class ModVRChat extends Module {
                     if (person && person.vrc && worldid) {
 
                         buttonInteraction.deferReply({ephemeral: true});
+                        
+                        let region = this.idealServerRegion(buttonInteraction.user.id);
 
                         if (buttonInteraction.customId == "invitepublic" || buttonInteraction.customId == "inviteany") {
                             this.getWorld(worldid, true)
@@ -411,9 +413,9 @@ class ModVRChat extends Module {
                                     let instances = Object.values(world.instances).filter(ci => !ci.members || Object.keys(ci.members).length < world.capacity).map(ci => ci.instance);
                                     let instance;
                                     if (buttonInteraction.customId == "inviteany") {
-                                        instance = this.generateInstanceFor(person.vrc, "public", instances);
+                                        instance = this.generateInstanceFor(person.vrc, "public", instances, undefined, region);
                                     } else {
-                                        instance = this.generateInstanceFor(person.vrc, "public", null, instances.map(ci => ci.split("~")[0]));
+                                        instance = this.generateInstanceFor(person.vrc, "public", null, instances.map(ci => ci.split("~")[0]), region);
                                     }
                                     this.vrcInvite(person.vrc, worldid, instance)
                                         .then(() => { buttonInteraction.editReply("Invite sent."); })
@@ -427,7 +429,7 @@ class ModVRChat extends Module {
                                     buttonInteraction.deleteReply();
                                 });
                         } else {
-                            let instance = this.generateInstanceFor(person.vrc, buttonInteraction.customId == "invitefriendsplus" ? "friends+" : "friends");
+                            let instance = this.generateInstanceFor(this._me.id, buttonInteraction.customId == "invitefriendsplus" ? "friends+" : "friends", undefined, undefined, region);
                             this.vrcInvite(person.vrc, worldid, instance)
                                 .then(() => { buttonInteraction.editReply("Invite sent."); })
                                 .catch(e => {
@@ -3885,12 +3887,22 @@ class ModVRChat extends Module {
     tagLabels(tags) {
         let labels = [];
         if (tags.includes("admin_moderator")) labels.push("🛡️ VRChat moderator");
-        if (tags.includes("system_legend") || tags.includes("system_trust_legend")) labels.push("🌟 Legendary");
         if (tags.includes("system_probable_troll")) labels.push("🚩 Suspected troll");
         if (tags.includes("system_troll")) labels.push("👹 Troll");
         if (tags.includes("system_supporter")) labels.push("➕ VRChat plus");
         if (tags.includes("system_early_adopter")) labels.push("🐈 Early supporter");
         return labels;
+    }
+    
+    idealServerRegion(userid) {
+        let utcOffset = null;
+        if (this._modTime && userid) {
+            utcOffset = this._modTime.getCurrentUtcOffsetByUserid(this.denv, userid);
+        }
+        if (utcOffset != null && utcOffset <= -300) return "us";
+        else if (utcOffset != null && utcOffset > 0 && utcOffset < 300) return "eu";
+        else if (utcOffset != null && utcOffset >= 300) return "jp";
+        return "use";
     }
 
     flags(tags, userid) {
@@ -4028,22 +4040,26 @@ class ModVRChat extends Module {
         return result;
     }
 
-    generateInstanceFor(vrcuserid, type, include, exclude) {
+    generateInstanceFor(vrcuserid, type, include, exclude, region) {
+        let regionpart = "";
+        if (region) {
+            regionpart = "~region(" + region + ")";
+        }
         if (vrcuserid) {
             if (type == "private" || type == "invite") {
-                return this.generateInstanceId(include, exclude) + "~private(" + vrcuserid + ")~nonce(" + this.generateNonce() + ")";
+                return this.generateInstanceId(include, exclude) + regionpart + "~private(" + vrcuserid + ")~nonce(" + this.generateNonce() + ")";
             }
             if (type == "invite+") {
-                return this.generateInstanceId(include, exclude) + "~private(" + vrcuserid + ")~canRequestInvite~nonce(" + this.generateNonce() + ")";
+                return this.generateInstanceId(include, exclude) + regionpart + "~private(" + vrcuserid + ")~canRequestInvite~nonce(" + this.generateNonce() + ")";
             }
             if (type == "friends") {
-                return this.generateInstanceId(include, exclude) + "~friends(" + vrcuserid + ")~nonce(" + this.generateNonce() + ")";
+                return this.generateInstanceId(include, exclude) + regionpart + "~friends(" + vrcuserid + ")~nonce(" + this.generateNonce() + ")";
             }
             if (type == "hidden" || type == "friends+") {
-                return this.generateInstanceId(include, exclude) + "~hidden(" + vrcuserid + ")~nonce(" + this.generateNonce() + ")";
+                return this.generateInstanceId(include, exclude) + regionpart + "~hidden(" + vrcuserid + ")~nonce(" + this.generateNonce() + ")";
             }
         }
-        return this.generateInstanceId(include, exclude);
+        return this.generateInstanceId(include, exclude) + regionpart;
     }
 
     randomEntry(map, filter) {
