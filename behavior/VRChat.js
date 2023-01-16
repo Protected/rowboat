@@ -794,6 +794,7 @@ class ModVRChat extends Module {
 
             let reallymissing = [];
             if (this.areFriendsStale(now)) {
+                await this.vrcMe();
                 let missing  = await this.refreshFriends();
                 reallymissing = await this.checkMissingPeopleIndividually(missing);
             }
@@ -2359,6 +2360,7 @@ class ModVRChat extends Module {
             let friendlist = await this.vrcFriendList();
             for (let friend of friendlist) {
                 if (friend.status != "offline" && (friend.location == "offline" || friend.location == "")) friend.status = "website";
+                if (STATUS_ONLINE.includes(friend.status) && this._me.activeFriends.includes(friend.id)) friend.status = "website";
                 this._friends[friend.id] = friend;
                 if (notupdated[friend.id]) delete notupdated[friend.id];
             }
