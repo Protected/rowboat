@@ -1,10 +1,8 @@
-# Pity instructions for our non-dev users
-
 Some instructions, ask if you need assistance. We WILL help.
 
 ## Installation
 
-You need **node.js** and **npm** installed.
+You need **node.js** (currently v16) and **npm** installed.
 
 Go to the directory inside which you want to clone the repository (note that this will create a subdirectory).
     
@@ -17,24 +15,6 @@ Go to the directory inside which you want to clone the repository (note that thi
 Ignore unmet optional dependencies.
     
 Next you need to add `config/config.json` as well as config files for environments and modules to the `config` directory.
-
-## Config with experimental Setup tool
-
-    node Setup.js --help
-
-Setup is meant to make the configuration process slightly less horrible. If you manage to make it work, skip the next section.
-
-For a new setup, I suggest something like this:
-
-    node Setup.js -u -e Discord,Discord;IRC,IRC Users;Commands;Random;FreeRoles,FreeRoles
-
-You can also try interactive mode instead:
-
-    node Setup.js -u -a -e
-    
-When you're done, go to the `config` directory and edit the config files (or not).
-
-To learn what each environment or module does, and what their config file parameters do, just open it and check the top of the file. Environments are in the files named `EnvNAME.js` and modules are in `ModNAME.js`.
 
 ## Config manually
 

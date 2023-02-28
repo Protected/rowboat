@@ -4,16 +4,21 @@ const moment = require('moment');
 const random = require('meteor-random');
 const { MessageEmbed, MessageActionRow, MessageButton } = require('discord.js');
 const WebSocket = require('ws');
+const Imap = require('imap');
 
 const Module = require('../Module.js');
 const { enableConsole } = require('../Logger.js');
+const { relativeTimeThreshold } = require('moment');
 
 const PERM_ADMIN = 'administrator';
+
+const MAIL_FROM = /(^|<)noreply@vrchat.com(>|$)/;
+const MAIL_OTP = /Your One-Time Code is ([0-9]+)/;
 
 const ENDPOINT = "https://api.vrchat.cloud/api/1/";
 const NO_AUTH = ["config", "time", "visits"];
 const WEBSOCKET = "wss://pipeline.vrchat.cloud/";
-const HTTP_USER_AGENT = "Protected/Rowboat";
+const HTTP_USER_AGENT = "Rowboat/0.0";
 const RATE_DELAY = 1000;
 
 const STATUS_ONLINE = ["active", "join me", "ask me"];
@@ -59,9 +64,17 @@ class ModVRChat extends Module {
         "env",
         "username",             //VRChat username
         "password",             //VRChat password
+        "imapUser",             //E-mail username for OTP
+        "imapPassword",         //E-mail password for OTP
+        "userAgentContact",     //E-mail address that identifies bot owner to VRChat
     ]; }
     
     get optionalParams() { return [
+        "imapHost",             //IMAP server hostname (defaults to localhost)
+        "imapPort",             //IMAP server port (143, 993 if remote)
+        "imapTLS",              //IMAP server TLS toggle (false, true if remote)
+        "otpTimeout",           //How long to wait for VRChat's OTP (s)
+
         "updatefreq",           //How often to run the main update function (s)
         "usewebsocket",         //Whether to connect to the VRChat websocket to receive faster updates
         "localaddress",         //IP address of a local network interface
@@ -147,6 +160,11 @@ class ModVRChat extends Module {
 
     constructor(name) {
         super('VRChat', name);
+
+        this._params["imapHost"] = "localhost";
+        this._params["imapPort"] = 143;
+        this._params["imapTLS"] = false;
+        this._params["otpTimeout"] = 60;
      
         this._params["updatefreq"] = 180;
         this._params["usewebsocket"] = true;
@@ -204,6 +222,7 @@ class ModVRChat extends Module {
 
         this._config = null;  //The full object returned by the "config" API. This API must be called before any other request.
         this._auth = null;  //The auth cookie
+        this._twofa = null;  //The 2FA cookie
         this._me = null;  //The bot user data
         this._ws = null;  //The websocket
         this._wstimeout = null;  //The websocket's ping timer
@@ -228,11 +247,18 @@ class ModVRChat extends Module {
         this._dtimer = null;  //Discord update queue timer
 
         this._lastAnnounceMessageId = null;  //Id of the last message in the announce channel
+
+        this._imap = null;  //Connection to the IMAP server
+        this._mailReaders = [];  //Callbacks for expected e-mails {subjectFilter, expires, callback, expiredCallback}
+        this._mtimer = null;  //Mail timer - Checks for expired callbacks
+
+        this._otpPromise = null;  //A promise that will resolve when the OTP is validated
     }
     
     
     initialize(opt) {
         if (!super.initialize(opt)) return false;
+
 
         opt.moduleRequest('Time', (time) => { this._modTime = time; });
         opt.moduleRequest('ReactionRoles', (reactionRoles) => { this._modReactionRoles = reactionRoles; });
@@ -276,6 +302,86 @@ class ModVRChat extends Module {
                 this.dqueue(next);
             }
         });
+
+
+        //# IMAP connection
+
+        this._imap = new Imap({
+            user: this.param("imapUser"),
+            password: this.param("imapPassword"),
+            host: this.param("imapHost"),
+            port: this.param("imapPort"),
+            tls: this.param("imapTLS"),
+            autotls: "always",
+            tlsOptions: {
+                rejectUnauthorized: false
+            }
+        });
+
+        this._imap.once('ready', () => {
+
+            this._imap.openBox('INBOX', false, (err, mailbox) => {
+                if (err) {
+                    this.log("error", "Failed to connect to IMAP server: " + err);
+                    return;
+                }
+                this._imap.on('mail', (amount) => {
+                    let fetch = this._imap.seq.fetch(`${mailbox.messages.total - amount + 1}:*`, {
+                        bodies: 'HEADER.FIELDS (FROM SUBJECT)',
+                        markSeen: true
+                    });
+                    fetch.on('message', (message) => {
+
+                        message.on('body', (stream) => {
+                            let buffer = '';
+                            stream.on('data', (chunk) => {
+                                buffer += chunk.toString('utf8');
+                            });
+                            stream.once('end', () => {
+                                let headers = Imap.parseHeader(buffer);
+                                for (let key in headers) {
+                                    headers[key] = headers[key][0];
+                                }
+
+                                this.log("An e-mail has arrived:" + JSON.stringify(headers));
+
+                                let now = moment().unix();
+
+                                for (let i = 0; i < this._mailReaders.length; i++) {
+                                    let mailReader = this._mailReaders[i];
+                                    if (mailReader.expires <= now) continue;
+                                    if (!mailReader.subjectFilter.exec(headers.subject)) continue;
+                                    mailReader.callback(headers, mailReader);
+                                    this._mailReaders.splice(i, 1);
+                                }
+
+                            });
+                        });
+
+                    });
+                });
+            });
+
+            this._mtimer = setInterval(function() {
+
+                let now = moment().unix();
+
+                for (let i = 0; i < this._mailReaders.length; i++) {
+                    let mailReader = this._mailReaders[i];
+                    if (mailReader.expires <= now) {
+                        if (mailReader.expiredCallback) {
+                            mailReader.expiredCallback(mailReader);
+                        }
+                        this._mailReaders.splice(i, 1);
+                        i -= 1;
+                    }
+                }
+
+            }.bind(this), 5000);
+            
+        });
+        
+        this._imap.connect();
 
         
         //# Register Discord callbacks
@@ -3519,7 +3625,7 @@ class ModVRChat extends Module {
 
     async vrcUser(vrcuser) {
         if (!this.isValidUser(vrcuser)) return null;
-        return this.vrcget("users/" + get);
+        return this.vrcget("users/" + vrcuser);
     }
 
     async vrcFriendList(state) {
@@ -3590,7 +3696,7 @@ class ModVRChat extends Module {
         let buildWebsocket = () => {
             //Initialize websocket
             return new Promise((resolve, reject) => {
-                let ws = new WebSocket(WEBSOCKET + "?authToken=" + this._auth, {headers: {"User-Agent": HTTP_USER_AGENT}, localAddress: this.param("localAddress")});
+                let ws = new WebSocket(WEBSOCKET + "?authToken=" + this._auth, {headers: {"User-Agent": HTTP_USER_AGENT + " " + this.param("userAgentContact")}, localAddress: this.param("localAddress")});
                 
                 let connectionError = (err) => reject(err);
 
@@ -3653,6 +3759,13 @@ class ModVRChat extends Module {
         return buildWebsocket();
     }
 
+    vrcEmailOtpVerify(code) {
+        this.log("OTP verification with code " + code);
+        return this.vrcpost("auth/twofactorauth/emailotp/verify", {
+            code: code
+        });
+    }
+
 
     //Low level api methods
 
@@ -3661,7 +3774,12 @@ class ModVRChat extends Module {
             for (let cookie of result.cookies) {
                 let parts = cookie.split(";")[0].split("=");
                 if (parts[0] == "auth") {
+                    this.log("Setting authentication cookie.");
                     this._auth = parts[1];
+                }
+                if (parts[0] == "twoFactorAuth") {
+                    this.log("Setting two factor authentication cookie.");
+                    this._twofa = parts[1];
                 }
             }
         }
@@ -3700,10 +3818,11 @@ class ModVRChat extends Module {
         if (!path || !NO_AUTH.includes(path) && !this._config) return null;
         let options = {headers: {
             Cookie: [],
-            "User-Agent": HTTP_USER_AGENT
+            "User-Agent": HTTP_USER_AGENT + " " + this.param("userAgentContact")
         }, returnFull: true, localAddress: this.param("localAddress")};
 
         if (this._config) options.headers.Cookie.push("apiKey=" + this._config.apiKey);
+        if (this._twofa) options.headers.Cookie.push("twoFactorAuth=" + this._twofa)
         if (this._auth) options.headers.Cookie.push("auth=" + this._auth);
         else options.auth = this.param("username") + ':' + this.param("password");
 
@@ -3715,23 +3834,19 @@ class ModVRChat extends Module {
             return null;
         }
 
-        if (result.statusCode == 401 && this._auth) {
-            //Expired session
-            this._auth = null;
-            return this.vrcget(path);
-        }
-        return this.setCookies(result);
+        return this.vrcrequestchecks(result, () => this.vrcget(path));
     }
 
     async vrcpost(path, fields, method) {
         if (!path || !this._config) return null;
         let options = {headers: {
             Cookie: [],
-            "User-Agent": HTTP_USER_AGENT
+            "User-Agent": HTTP_USER_AGENT + " " + this.param("userAgentContact")
         }, returnFull: true, localAddress: this.param("localAddress")};
         if (method) options.method = method;
 
         if (this._config) options.headers.Cookie.push("apiKey=" + this._config.apiKey);
+        if (this._twofa) options.headers.Cookie.push("twoFactorAuth=" + this._twofa)
         if (this._auth) options.headers.Cookie.push("auth=" + this._auth);
         else options.auth = this.param("username") + ':' + this.param("password");
 
@@ -3743,11 +3858,52 @@ class ModVRChat extends Module {
             return null;
         }
         
+        return this.vrcrequestchecks(result, () => this.vrcpost(path, fields, method));
+    }
+
+    async vrcrequestchecks(result, redo) {
+
         if (result.statusCode == 401 && this._auth) {
             //Expired session
             this._auth = null;
-            return this.vrcpost(path, fields, method);
+            return redo();
         }
+
+        if (result.body.requiresTwoFactorAuth && result.body.requiresTwoFactorAuth.find(method => method == "emailOtp")) {
+            //Wait for OTP E-mail
+            this.setCookies(result);
+            this.log("Awaiting OTP E-mail.");
+
+            if (!this._otpPromise) {
+                
+                this._otpPromise = new Promise((resolve, reject) => {
+                    this._mailReaders.push({
+                        subjectFilter: MAIL_OTP,
+                        callback: (headers) => {
+                            if (!headers.from.match(MAIL_FROM)) return;
+                            let extract = headers.subject.match(MAIL_OTP);
+                            resolve(this.vrcEmailOtpVerify(extract[1])
+                                .then(() => {
+                                    this.log("OTP Verification successful.");
+                                    this._otpPromise = null;
+                                })
+                                .then(() => redo()));
+                        },
+                        expires: moment().unix() + this.param("otpTimeout"),
+                        expiredCallback: () => {
+                            this.log("error", "Timeout before receiving OTP e-mail.");
+                            reject("Timeout before receiving OTP e-mail.")
+                        }
+                    });
+                });
+
+                return this._otpPromise;
+            } else {
+
+                return this._otpPromise.then(() => redo());
+            }
+        }
+        
         return this.setCookies(result);
     }
 
