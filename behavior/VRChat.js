@@ -635,7 +635,7 @@ class ModVRChat extends Module {
                     if (this._pins[worldid]) {
                         let worldname = this.getCachedWorld(worldid)?.name || worldid;
                         this.announce("<@" + authorid + "> The world " + worldname + " is already pinned.");
-                        return true;
+                        continue;
                     }
 
                     this.dqueue(function() {

@@ -485,7 +485,7 @@ class EnvDiscord extends Environment {
                 }
                 if (!endNow) {
                     scanning = messagesarr[messagesarr.length - 1].id;
-                    setTimeout(scanner, 250);
+                    setTimeout(scanner, 500);
                 } else if (onEnd) {
                     onEnd(channel);
                 }
