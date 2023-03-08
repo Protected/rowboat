@@ -495,6 +495,23 @@ class EnvDiscord extends Environment {
     }
 
 
+    extractRoleId(roleid) {
+        if (!roleid) return null;
+        if (roleid.match(/^[0-9]+$/)) return roleid;
+        let extr = roleid.match(/<@&([0-9]+)>/);
+        if (extr) return extr[1];
+        return null;
+    }
+
+    extractChannelId(channelid) {
+        if (!channelid) return null;
+        if (channelid.match(/^[0-9]+$/)) return channelid;
+        let extr = channelid.match(/<#([0-9]+)>/);
+        if (extr) return extr[1];
+        return null;
+    }
+
+
     //Temporary webhooks that simulate members
 
     async getWebhook(channel, member) {

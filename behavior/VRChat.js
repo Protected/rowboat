@@ -14,6 +14,7 @@ const PERM_ADMIN = 'administrator';
 
 const MAIL_FROM = /(^|<)noreply@vrchat.com(>|$)/;
 const MAIL_OTP = /Your One-Time Code is ([0-9]+)/;
+const TWOFA_DURATION = 2419200;  //28 days
 
 const ENDPOINT = "https://api.vrchat.cloud/api/1/";
 const NO_AUTH = ["config", "time", "visits"];
@@ -253,6 +254,9 @@ class ModVRChat extends Module {
         this._mtimer = null;  //Mail timer - Checks for expired callbacks
 
         this._otpPromise = null;  //A promise that will resolve when the OTP is validated
+
+        this._connectCallbacks = [];
+        this._websocketCallbacks = {};
     }
     
     
@@ -278,6 +282,14 @@ class ModVRChat extends Module {
             pronounscolor: null,
             statusrolegroups: []
         }, {quiet: true});
+
+        if (this._misc.twofactorauth) {
+            if (this._misc.twofactorauth.expires > moment().unix()) {
+                this._twofa = this._misc.twofactorauth.twofa;
+            } else {
+                this.setTwoFactorAuth();
+            }
+        }
 
         this.resetAllPersons();
 
@@ -863,7 +875,7 @@ class ModVRChat extends Module {
         let startup = this.vrcConfig();
 
         if (this.param("usewebsocket")) {
-            startup.then(() => this.vrcInitialize())
+            startup = startup.then(() => this.vrcInitialize())
                 .then(handlers => {
                     handlers.friendStateChange = friendStateChangeHandler;
                     handlers.friendLocationChange = friendLocationChangeHandler;
@@ -873,11 +885,12 @@ class ModVRChat extends Module {
                 })
         }
 
-        startup.then(() => this.refreshFriends(true));
-        startup.catch((e) => {
-            this.log("error", "Failed to initialize VRChat module. Error:" + JSON.stringify(e));
-            process.exit(11);
-        });
+        startup = startup.then(() => this.refreshFriends(true))
+            .then(() => this.executeConnectCallbacks())
+            .catch((e) => {
+                this.log("error", "Failed to initialize VRChat module. Error:" + JSON.stringify(e));
+                process.exit(11);
+            });
             
 
         //# Start automation timers
@@ -1023,7 +1036,7 @@ class ModVRChat extends Module {
                     let member = this.denv.server.members.cache.get(userid);
                     if (member && member.displayName.toLowerCase() != this._friends[person.vrc].displayName.toLowerCase()) {
                         member.setNickname(this._friends[person.vrc].displayName, "Synchronizing nickname with VRChat.")
-                            .catch(e => this.log("error", "Error setting nickname of " + member.displayName + " to " + this._friends[person.vrc].displayName + ": " + e));
+                            .catch(e => this.log("warn", "Error setting nickname of " + member.displayName + " to " + this._friends[person.vrc].displayName + ": " + e));
                     }
                 }
 
@@ -2115,6 +2128,16 @@ class ModVRChat extends Module {
         return true;
     }
 
+    setTwoFactorAuth(twofactorauth, duration) {
+        if (twofactorauth) {
+            this._misc.twofactorauth = {twofa: twofactorauth, expires: moment().unix() + (duration || 0)};
+        } else if (this._misc.twofactorauth) {
+            delete this._misc.twofactorauth;
+        }
+        this._misc.save();
+        return true;
+    }
+
 
     //Manipulate index of known users (people)
 
@@ -2423,6 +2446,11 @@ class ModVRChat extends Module {
         return this.randomEntry(this._people, makefilter ? makefilter(this._people) : undefined);
     }
 
+    getFriend(vrcuserid) {
+        //For external use
+        return this._friends[vrcuserid];
+    }
+
 
     //Manipulate known users role
 
@@ -2490,7 +2518,7 @@ class ModVRChat extends Module {
                         reallymissing.push(userid);
                     }
                 } catch (e) {
-                    this.log("error", "Attempting to retrieve missing friend: " + e + " (Assigned to " + userid + ")");
+                    this.log("error", "Attempting to retrieve missing friend: " + JSON.stringify(e) + " (Assigned to " + userid + ")");
                     continue;
                 }
             }
@@ -2532,7 +2560,9 @@ class ModVRChat extends Module {
                 if (!dontcache) this._worlds[worldid] = data;
                 return data;
             })
-            .catch((e) => {});
+            .catch((e) => {
+                this.log('warn', "Unable to retrieve world " + worldid + ": " + JSON.stringify(e));
+            });
     }
 
     getCachedWorld(worldid) {
@@ -3012,8 +3042,14 @@ class ModVRChat extends Module {
                     });
             }
         } catch (e) {
-            if (mode == "normal") return this.bakeWorld(worldid, now.unix(), "stark");
-            if (mode == "stark") return this.bakeWorld(worldid, now.unix(), "text");
+            if (mode == "normal") {
+                this.log("warn", "Failed to bake " + worldid + " in normal mode: " + JSON.stringify(e));
+                return this.bakeWorld(worldid, now.unix(), "stark");
+            }
+            if (mode == "stark") {
+                this.log("warn", "Failed to bake " + worldid + " in stark mode: " + JSON.stringify(e));
+                return this.bakeWorld(worldid, now.unix(), "text");
+            }
             this.log("warn", "Failed to bake " + worldid + " in text mode: " + JSON.stringify(e));
         };
 
@@ -3105,7 +3141,6 @@ class ModVRChat extends Module {
                     });
             }
         } catch (e) {
-            console.log("Bake instance:", e);
             this.log("warn", "Failed to bake " + worldid + ":" + instanceid + " : " + JSON.stringify(e));
         };
 
@@ -3601,6 +3636,17 @@ class ModVRChat extends Module {
     }
 
 
+    //Groups
+
+    async getMyGroupMemberships() {
+        return this.vrcUserGroupMemberships(this._me.id);
+    }
+
+    async amInGroup(vrcgroupid) {
+        return this.vrcIsUserGroupMember(this._me.id, vrcgroupid);
+    }
+
+
     //High level api methods
 
     async vrcConfig() {
@@ -3682,6 +3728,52 @@ class ModVRChat extends Module {
     }
 
 
+    async vrcUserGroupMemberships(vrcuserid) {
+        return this.vrcget("users/" + vrcuserid + "/groups");
+    }
+
+    async vrcGroupJoin(vrcgroupid) {
+        return this.vrcpost("groups/" + vrcgroupid + "/join");
+    }
+
+    async vrcGroupLeave(vrcgroupid) {
+        return this.vrcpost("groups/" + vrcgroupid + "/leave");
+    }
+
+    async vrcGroupInvite(vrcgroupid, vrcuserid) {
+        return this.vrcpost("groups/" + vrcgroupid + "/invites", {
+            userId: vrcuserid
+        });
+    }
+
+    async vrcGroup(vrcgroupid, includeRoles) {
+        return this.vrcget("groups/" + vrcgroupid + "?includeRoles=" + (includeRoles || false));
+    }
+
+    async vrcGroupMembers(vrcgroupid) {
+        return this.vrcget("groups/" + vrcgroupid + "/members?n=100");
+    }
+
+    async vrcGroupRoles(vrcgroupid) {
+        return this.vrcget("groups/" + vrcgroupid + "/roles");
+    }
+
+    async vrcGroupAnnouncement(vrcgroupid) {
+        return this.vrcget("groups/" + vrcgroupid + "/announcement");
+    }
+
+    async vrcIsUserGroupMember(vrcgroupid, vrcuserid) {
+        try {
+            let groupMember = await this.vrcget("groups/" + vrcgroupid + "/members/" + vrcuserid);
+            if (!groupMember) return false;
+            if (groupmember?.error?.statusCode != 403) return true;
+            return false;
+        } catch (e) {
+            return null;
+        }
+    }
+
+
     async vrcInitialize() {
         await this.vrcMe();  //Login
 
@@ -3722,6 +3814,7 @@ class ModVRChat extends Module {
                         let content = JSON.parse(message.content);
                         if (handlers.friendStateChange && ["friend-active", "friend-online", "friend-offline"].includes(message.type)) {
                             handlers.friendStateChange(content.userId, message.type.split("-")[1], content.user);
+                            this.executeWebsocketCallbacks("friend-state-change", Object.assign({messageType: message.type}, content));
                         }
                         if (handlers.friendLocationChange && message.type == "friend-location") {
                             handlers.friendLocationChange(content.userId, content.user, content.world, content.instance, content.location);
@@ -3735,8 +3828,9 @@ class ModVRChat extends Module {
                         if (handlers.friendUpdate && message.type == "friend-update") {
                             handlers.friendUpdate(content.userId, content.user);
                         }
+                        this.executeWebsocketCallbacks(message.type, content);
                     } catch (e) {
-                        this.log("warn", "Could not parse websocket message: " + message.content);
+                        this.log("warn", "Could not parse websocket message " + message.type + ": " + message.content + " (" + JSON.stringify(e) + ")");
                     }
                 });
 
@@ -3744,9 +3838,18 @@ class ModVRChat extends Module {
                 this._wstimeout = setInterval(() => {
                     if (moment().unix() - this._wsping[1] < 30) return;
                     if (this._wsping[0] > 2) {
-                        this._ws.terminate();
+                        
+                        this.log("warn", "Recreating websocket (ping timeout).")
+                        this._ws.close();
+
+                        setTimeout(() => {
+                            if ([ws.OPEN, ws.CLOSING].includes(this._ws.readyState)) {
+                                this._ws.terminate();
+                            }
+                            buildWebsocket();
+                        }, 10000);
+
                         clearInterval(this._wstimeout);
-                        buildWebsocket();
                     } else {
                         this._ws.ping(this._wsping[0]);
                         this._wsping[0] += 1;
@@ -3780,13 +3883,14 @@ class ModVRChat extends Module {
                 if (parts[0] == "twoFactorAuth") {
                     this.log("Setting two factor authentication cookie.");
                     this._twofa = parts[1];
+                    this.setTwoFactorAuth(this._twofa, moment().unix() + TWOFA_DURATION);
                 }
             }
         }
         return result.body;
     }
 
-    handleVrcApiError(e) {
+    handleVrcApiError(e, path) {
         if (!e.statusCode) {
             if (e.error && e.error.code == "ENOTFOUND") {
                 this.log("warn", "DNS lookup failure: " + e.error.hostname);
@@ -3800,6 +3904,7 @@ class ModVRChat extends Module {
                 this.log("warn", "Oh no, gateway errors (" + e.statusCode + ")...");
             }
             if (e.statusCode != 401) {
+                //this.log("warn", "API rejection at " + path + ": " + JSON.stringify(e));
                 throw e;
             }
         }
@@ -3826,11 +3931,13 @@ class ModVRChat extends Module {
         if (this._auth) options.headers.Cookie.push("auth=" + this._auth);
         else options.auth = this.param("username") + ':' + this.param("password");
 
+        //this.log("vrcget: " + path + " (" + JSON.stringify(options) + ")");
+
         let result;
         try {
             result = await this.jsonget(ENDPOINT + path, options)
         } catch (e) {
-            this.handleVrcApiError(e);
+            this.handleVrcApiError(e, path);
             return null;
         }
 
@@ -3850,11 +3957,13 @@ class ModVRChat extends Module {
         if (this._auth) options.headers.Cookie.push("auth=" + this._auth);
         else options.auth = this.param("username") + ':' + this.param("password");
 
+        //this.log("vrcpost: " + path + " (" + JSON.stringify(options) + ")");
+
         let result;
         try {
             result = await this.jsonpost(ENDPOINT + path, fields, options);
         } catch (e) {
-            this.handleVrcApiError(e);
+            this.handleVrcApiError(e, path);
             return null;
         }
         
@@ -3908,6 +4017,42 @@ class ModVRChat extends Module {
     }
 
 
+    //VRChat callbacks
+
+    registerConnectCallback(callback) {
+        this._connectCallbacks.push(callback);
+    }
+
+    unregisterConnectCallback(callback) {
+        this._connectCallbacks = this._connectCallbacks.filter(eachcallback => eachcallback != callback);
+    }
+
+    executeConnectCallbacks() {
+        for (let callback of this._connectCallbacks) {
+            callback();
+        }
+    }
+
+    registerWebsocketCallback(event, callback) {
+        if (!this._websocketCallbacks[event]) {
+            this._websocketCallbacks[event] = [];
+        }
+        this._websocketCallbacks[event].push(callback);
+    }
+
+    unregisterWebsocketCallback(event, callback) {
+        if (this._websocketCallbacks[event]) {
+            this._websocketCallbacks[event] = this._websocketCallbacks[event].filter(eachcallback => eachcallback != callback);
+        }
+    }
+
+    executeWebsocketCallbacks(event, params) {
+        for (let callback of this._websocketCallbacks[event] || []) {
+            callback(params);
+        }
+    }
+
+
     //Helpers
 
     dqueue(func) {
@@ -3935,6 +4080,10 @@ class ModVRChat extends Module {
 
     isValidAvatar(avatarid) {
         return avatarid && avatarid.match(/^avtr_[0-9a-f-]+$/);
+    }
+
+    isStatusOnline(status) {
+        return STATUS_ONLINE.includes(status);
     }
 
     worldFromLocation(location) {
