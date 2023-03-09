@@ -1103,7 +1103,7 @@ class ModVRChat extends Module {
                 let world = this.getCachedWorld(worldid);
                 if (world.emptysince && now - world.emptysince > this.param("worldexpiration") * 3600
                         || !world.emptysince && !this.worldMemberCount(worldid)) {
-                    worldclears.push(this.clearWorld(worldid));
+                    worldclears.push(this.clearWorld(worldid, true));
                 }
             }
 
@@ -2659,22 +2659,21 @@ class ModVRChat extends Module {
         return true;
     }
 
-    async clearWorld(worldid) {
+    async clearWorld(worldid, dontsave) {
         if (!this._worlds[worldid]) return true;
         if (this._worlds[worldid].msg && this.worldchan) {
-            this.dqueue(function() {
-                try{ 
-                    this.worldchan.messages.fetch(this._worlds[worldid].msg)
-                        .then(message => message.delete())
-                        .catch(() => {})
-                        .finally(() => { delete this._worlds[worldid]; this._worlds.save(); });
-                } catch (e) {
-                    //World no longer exists locally
-                }
-            }.bind(this));
+            try { 
+                let message = await this.worldchan.messages.fetch(this._worlds[worldid].msg);
+                message.delete();
+            } catch (e) {
+                //World no longer exists locally
+            } finally {
+                delete this._worlds[worldid];
+                if (!dontsave) this._worlds.save();
+            }
         } else {
             delete this._worlds[worldid];
-            this._worlds.save();
+            if (!dontsave) this._worlds.save();
         }
         return true;
     }
@@ -2946,7 +2945,7 @@ class ModVRChat extends Module {
         let message = null, emb = null;
         if (world.msg) {
             try {
-                message = await this.worldchan.messages.fetch(world.msg)
+                message = await this.worldchan.messages.fetch(world.msg);
             } catch (e) {}
             if (message && !world.prevmembercount && membercount) {
                 //Force reset if transition is no members -> members
