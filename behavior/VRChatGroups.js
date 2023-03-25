@@ -155,7 +155,7 @@ class ModVRChatGroups extends Module {
         });
 
         this.vrchat.registerWebsocketCallback("friend-state-change", (content) => {
-            for (let vrcgroupid of this._groupChannels) {
+            for (let vrcgroupid in this._groupChannels) {
                 if (this._groups[vrcgroupid].members?.find(member => member.userId == content.userId)) {
                     this.dqueue(function() {
                         this.bakeMember(vrcgroupid, vrcuserid);
@@ -1055,7 +1055,7 @@ class ModVRChatGroups extends Module {
         emb.setDescription(announcement.text);
         emb.setThumbnail(announcement.imageUrl);
         emb.setColor(this.param("colannounceactive"));
-        emb.setURL("https://vrchat.com/home/group/" + group.id);
+        emb.setAuthor({name: group.name, url: "https://vrchat.com/home/group/" + group.id, iconURL: group.iconURL || undefined});
         emb.setFooter({text: "Posted " + moment(announcement.createdAt).from(now)});
 
         try {
@@ -1085,7 +1085,8 @@ class ModVRChatGroups extends Module {
             if (!message || !message.embeds[0]) continue;
             let emb = message.embeds[0];
             if (emb.hexColor != this.makeHexColor(this.param("colannounceold"))) {
-                emb.color = this.param("colannounceold");
+                emb.setColor(this.param("colannounceold"));
+                emb.setFooter({text: "Removed " + moment().format("YYYYYY-MM-DD HH:mm")});
                 this.dqueue(function() {
                     message.edit({embeds: [emb]})
                         .catch((e) => { 
