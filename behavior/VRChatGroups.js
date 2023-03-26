@@ -158,7 +158,7 @@ class ModVRChatGroups extends Module {
             for (let vrcgroupid in this._groupChannels) {
                 if (this._groups[vrcgroupid].members?.find(member => member.userId == content.userId)) {
                     this.dqueue(function() {
-                        this.bakeMember(vrcgroupid, vrcuserid);
+                        this.bakeMember(vrcgroupid, content.userId);
                     }.bind(this));
                 }
             }
