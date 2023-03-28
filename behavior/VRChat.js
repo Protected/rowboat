@@ -846,7 +846,7 @@ class ModVRChat extends Module {
 
             if (!this._friends[vrcuserid]) this._friends[vrcuserid] = {};
 
-            if (this.param("statedebug")) {
+            if (this.param("statedebug") && userid) {
                 let person = this.getPerson(userid);
                 for (let key in userdata) {
                     if (this._friends[vrcuserid][key] != userdata[key]) {
@@ -857,7 +857,7 @@ class ModVRChat extends Module {
 
             Object.assign(this._friends[vrcuserid], userdata);
 
-            if (this.statuschan && this.isBakeStale(userid)) {
+            if (this.statuschan && userid && this.isBakeStale(userid)) {
                 this.dqueue(function() {
                     this.bakeStatus(userid, this._friends[vrcuserid]);
                     if (this._friends[vrcuserid].location) {
