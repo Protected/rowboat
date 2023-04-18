@@ -2,6 +2,7 @@
 
 const Module = require('../Module.js');
 const moment = require('moment');
+const { ChannelType, OverwriteType } = require('discord.js');
 
 const PERM_ADMIN = "administrator";
 
@@ -184,7 +185,7 @@ class ModDiscordChannels extends Module {
                     let channel = env.server.channels.cache.get(item.channelid);
                     if (channel) {
                         promises.push(
-                            this.doCreateOpsRole(env, item.name, channel.type)
+                            this.doCreateOpsRole(env, item.name)
                                 .then((opsrole) => {
                                     data.opsroleid = opsrole.id;
                                     return this.doAssignRoleToUser(env, opsrole.id, data.creatorid, "Promoting channel owner to operator");
@@ -725,7 +726,7 @@ class ModDiscordChannels extends Module {
                 let accessrole = env.server.roles.cache.get(prevaccessroleid);
                 if (channel && accessrole) {
                     for (let rolemember of accessrole.members.values()) {
-                        changeusers.push(channel.overwritePermissions(rolemember, {VIEW_CHANNEL: true}, "Propagating permission to access role members on removal"));
+                        changeusers.push(channel.permissionOverwrites.create(rolemember, {ViewChannel: true}, {reason: "Propagating permission to access role members on removal"}));
                     }
                 }
                 promise = Promise.all(changeusers);
@@ -1158,7 +1159,7 @@ class ModDiscordChannels extends Module {
             args: ["channel", "key"],
             minArgs: 1,
             environments: ["Discord"]
-        }, joinChannelHandler(this.createTempTextChannel.bind(this), "text", this.param('defaulttopublic')));
+        }, joinChannelHandler(this.createTempTextChannel.bind(this), ChannelType.GuildText, this.param('defaulttopublic')));
 
         this.mod('Commands').registerCommand(this, 'vjoin', {
             description: "Join an attached, open voice channel or create a new temporary voice channel.",
@@ -1166,7 +1167,7 @@ class ModDiscordChannels extends Module {
             args: ["channel", "key"],
             minArgs: 1,
             environments: ["Discord"]
-        }, joinChannelHandler(this.createTempVoiceChannel.bind(this), "voice", this.param('defaulttopublic')));
+        }, joinChannelHandler(this.createTempVoiceChannel.bind(this), ChannelType.GuildVoice, this.param('defaulttopublic')));
 
         this.mod('Commands').registerCommand(this, 'join public', {
             description: "Join an attached, open text channel or create a new temporary text channel.",
@@ -1177,7 +1178,7 @@ class ModDiscordChannels extends Module {
             args: ["channel"],
             minArgs: 1,
             environments: ["Discord"]
-        }, joinChannelHandler(this.createTempTextChannel.bind(this), "text", true));
+        }, joinChannelHandler(this.createTempTextChannel.bind(this), ChannelType.GuildText, true));
 
         this.mod('Commands').registerCommand(this, 'vjoin public', {
             description: "Join an attached, open voice channel or create a new temporary voice channel.",
@@ -1188,7 +1189,7 @@ class ModDiscordChannels extends Module {
             args: ["channel"],
             minArgs: 1,
             environments: ["Discord"]
-        }, joinChannelHandler(this.createTempVoiceChannel.bind(this), "voice", true));
+        }, joinChannelHandler(this.createTempVoiceChannel.bind(this), ChannelType.GuildVoice, true));
 
         this.mod('Commands').registerCommand(this, 'join private', {
             description: "Join an attached, open text channel or create a new temporary text channel.",
@@ -1199,7 +1200,7 @@ class ModDiscordChannels extends Module {
             args: ["channel", "key"],
             minArgs: 1,
             environments: ["Discord"]
-        }, joinChannelHandler(this.createTempTextChannel.bind(this), "text", false));
+        }, joinChannelHandler(this.createTempTextChannel.bind(this), ChannelType.GuildText, false));
 
         this.mod('Commands').registerCommand(this, 'vjoin private', {
             description: "Join an attached, open voice channel or create a new temporary voice channel.",
@@ -1210,7 +1211,7 @@ class ModDiscordChannels extends Module {
             args: ["channel", "key"],
             minArgs: 1,
             environments: ["Discord"]
-        }, joinChannelHandler(this.createTempVoiceChannel.bind(this), "voice", false));
+        }, joinChannelHandler(this.createTempVoiceChannel.bind(this), ChannelType.GuildVoice, false));
 
 
 
@@ -1471,7 +1472,7 @@ class ModDiscordChannels extends Module {
         } else {
             let channel = env.server.channels.cache.get(channelid);
             let member = env.server.members.cache.get(userid);
-            return !!channel.permissionOverwrites.cache.filter((po) => po.id == member.id && po.type == 'member' && (po.allow & 0x00000400)).size;
+            return !!channel.permissionOverwrites.cache.filter((po) => po.id == member.id && po.type == OverwriteType.Member && po.allow.has("ViewChannel")).size;
         }
     }
 
@@ -1515,14 +1516,14 @@ class ModDiscordChannels extends Module {
             let role = env.server.roles.cache.get(data.accessroleid);
             if (!role) return false;
             for (let member of role.members.values()) {
-                if (member.id == env.server.me.id) continue;
+                if (member.id == env.server.members.me.id) continue;
                 results.push(member.id);
             }
         } else {
             let channel = env.server.channels.cache.get(channelid);
             for (let member of env.server.members.cache.values()) {
-                if (member.id == env.server.me.id) continue;
-                if (!channel.permissionOverwrites.cache.filter((po) => po.id == member.id && po.type == 'member' && (po.allow & 0x00000400)).size) continue;
+                if (member.id == env.server.members.me.id) continue;
+                if (!channel.permissionOverwrites.cache.filter((po) => po.id == member.id && po.type == OverwriteType.Member && po.allow.has("ViewChannel")).size) continue;
                 results.push(member.id);
             }
         }
@@ -1539,19 +1540,18 @@ class ModDiscordChannels extends Module {
         let channel = env.server.channels.cache.get(channelid);
         if (!channel) throw "Channel not found.";
 
-        let opsrole = await this.doCreateOpsRole(env, channel.name, channel.type);
+        let opsrole = await this.doCreateOpsRole(env, channel.name);
         await this.doAssignRoleToUser(env, opsrole.id, creatorid, "Promoting channel owner to operator");
 
-        await channel.overwritePermissions(env.server.me.id, {VIEW_CHANNEL: true}, "Attaching channel");
-        if (channel.type == "GUILD_TEXT") {
-            await channel.overwritePermissions(opsrole, {VIEW_CHANNEL: true, MANAGE_CHANNELS: true, MANAGE_MESSAGES: true}, "Attaching channel (opsrole perms)");
+        await channel.permissionOverwrites.create(env.server.members.me.id, {ViewChannel: true}, {reason: "Attaching channel"});
+        if (channel.type == ChannelType.GuildText) {
+            await channel.permissionOverwrites.create(opsrole, {ViewChannel: true, ManageChannels: true, ManageMessages: true}, {reason: "Attaching channel (opsrole perms)"});
         }
-        if (channel.type == "GUILD_VOICE") {
-            await channel.overwritePermissions(opsrole, {VIEW_CHANNEL: true, MANAGE_CHANNELS: true, MUTE_MEMBERS: true, DEAFEN_MEMBERS: true}, "Attaching channel (opsrole perms)");
+        if (channel.type == ChannelType.GuildVoice) {
+            await channel.permissionOverwrites.create(opsrole, {ViewChannel: true, ManageChannels: true, MuteMembers: true, DeafenMembers: true}, {reason: "Attaching channel (opsrole perms)"});
         }
 
-        //Only way to check for guild + VIEW_CHANNELS in 11.3.2
-        let ispublic = !channel.permissionOverwrites.cache.filter((po) => po.id == env.server.id && po.type == 'role' && (po.deny & 0x00000400)).size;
+        let ispublic = !channel.permissionOverwrites.cache.filter((po) => po.id == env.server.id && po.type == OverwriteType.Role && po.deny.has("ViewChannel")).size;
 
         return this.doAttachChannel(env, channelid, channel.type, false, opsrole, roleid, creatorid, ispublic);
     }
@@ -1610,7 +1610,7 @@ class ModDiscordChannels extends Module {
         if (!this._data[env.name] || !this._data[env.name][channelid]) throw "Channel not attached.";
         let channel = env.server.channels.cache.get(channelid);
         if (!channel) throw "Channel not found.";
-        await channel.overwritePermissions(env.server.id, {VIEW_CHANNEL: true}, "Changing channel to public");
+        await channel.permissionOverwrites.create(env.server.id, {ViewChannel: true}, {reason: "Changing channel to public"});
         this._data[env.name][channelid].public = true;
         this._data.save();
         return true;
@@ -1620,7 +1620,7 @@ class ModDiscordChannels extends Module {
         if (!this._data[env.name] || !this._data[env.name][channelid]) throw "Channel not attached.";
         let channel = env.server.channels.cache.get(channelid);
         if (!channel) throw "Channel not found.";
-        await channel.overwritePermissions(env.server.id, {VIEW_CHANNEL: false}, "Changing channel to private");
+        await channel.permissionOverwrites.create(env.server.id, {ViewChannel: false}, {reason: "Changing channel to private"});
         this._data[env.name][channelid].public = false;
         this._data.save();
         return true;
@@ -1653,10 +1653,10 @@ class ModDiscordChannels extends Module {
         } else {
             let channel = env.server.channels.cache.get(channelid);
             if (!channel) return Promise.reject("Channel not found.");            
-            if (channel.permissionOverwrites.cache.filter((po) => po.id == userid && po.type == 'member' && (po.allow & 0x00000400)).get(userid)) {
+            if (channel.permissionOverwrites.cache.filter((po) => po.id == userid && po.type == OverwriteType.Member && po.allow.has("ViewChannel")).get(userid)) {
                 return Promise.resolve({channeldata: channeldata, userid: userid});
             }
-            return channel.overwritePermissions(env.server.members.cache.get(userid), {VIEW_CHANNEL: true}, "Granting channel access to user")
+            return channel.permissionOverwrites.create(env.server.members.cache.get(userid), {ViewChannel: true}, {reason: "Granting channel access to user"})
                 .then(() => ({channeldata: channeldata, userid: userid}));
         }
     }
@@ -1675,7 +1675,7 @@ class ModDiscordChannels extends Module {
         } else {
             let channel = env.server.channels.cache.get(channelid);
             if (!channel) throw "Channel not found.";
-            let joinpermission = channel.permissionOverwrites.cache.filter((po) => po.id == userid && po.type == 'member' && (po.allow & 0x00000400)).get(userid);
+            let joinpermission = channel.permissionOverwrites.cache.filter((po) => po.id == userid && po.type == OverwriteType.Member && po.allow.has("ViewChannel")).get(userid);
             if (joinpermission) return joinpermission.delete("Revoking channel access from user").then(() => ({channeldata: channeldata, userid: userid}));
             return {channeldata: channeldata, userid: userid};
         }
@@ -1683,16 +1683,16 @@ class ModDiscordChannels extends Module {
 
     async createTempTextChannel(env, name, creatorid, ispublic) {
         if (env.envName != "Discord") throw "Invalid environment type.";
-        let role = await this.doCreateOpsRole(env, name, "text");
+        let role = await this.doCreateOpsRole(env, name);
         await this.doAssignRoleToUser(env, role.id, creatorid, "Promoting channel owner to operator");
-        let perms = [{id: env.server.me.id, allow: ['VIEW_CHANNEL']}];
+        let perms = [{id: env.server.members.me.id, allow: ['ViewChannel']}];
         if (ispublic) {
-            perms.push({id: env.server.id, allow: ['VIEW_CHANNEL']});
+            perms.push({id: env.server.id, allow: ['ViewChannel']});
         } else {
-            perms.push({id: env.server.id, deny: ['VIEW_CHANNEL']});
+            perms.push({id: env.server.id, deny: ['ViewChannel']});
         }
-        perms.push({id: role.id, allow: ['VIEW_CHANNEL', 'MANAGE_CHANNELS', 'MANAGE_MESSAGES']});
-        let channel = await env.server.createChannel(name, "text", perms, "Temporary text channel");
+        perms.push({id: role.id, allow: ['ViewChannel', 'ManageChannels', 'ManageMessages']});
+        let channel = await env.server.channels.create({name: name, type: ChannelType.GuildText, permissionOverwrites: perms, reason: "Temporary text channel"});
         if (this.param("textcategory")) {
             let category = env.server.channels.cache.get(this.param("textcategory"));
             if (category) {
@@ -1704,16 +1704,16 @@ class ModDiscordChannels extends Module {
 
     async createTempVoiceChannel(env, name, creatorid, ispublic) {
         if (env.envName != "Discord") throw "Invalid environment type.";
-        let role = await this.doCreateOpsRole(env, name, "voice");
+        let role = await this.doCreateOpsRole(env, name);
         await this.doAssignRoleToUser(env, role.id, creatorid, "Promoting channel owner to operator");
-        let perms = [{id: env.server.me.id, allow: ['VIEW_CHANNEL']}];
+        let perms = [{id: env.server.members.me.id, allow: ['ViewChannel']}];
         if (ispublic) {
-            perms.push({id: env.server.id, allow: ['VIEW_CHANNEL']});
+            perms.push({id: env.server.id, allow: ['ViewChannel']});
         } else {
-            perms.push({id: env.server.id, deny: ['VIEW_CHANNEL']});
+            perms.push({id: env.server.id, deny: ['ViewChannel']});
         }
-        perms.push({id: role.id, allow: ['VIEW_CHANNEL', 'MANAGE_CHANNELS', 'MUTE_MEMBERS', 'DEAFEN_MEMBERS']});
-        let channel = await env.server.createChannel(name, "voice", perms, "Temporary voice channel");
+        perms.push({id: role.id, allow: ['ViewChannel', 'ManageChannels', 'MuteMembers', 'DeafenMembers']});
+        let channel = await env.server.channels.create({name: name, type: ChannelType.GuildVoice, permissionOverwrites: perms, reason: "Temporary voice channel"});
         if (this.param("voicecategory")) {
             let category = env.server.channels.cache.get(this.param("voicecategory"));
             if (category) {
@@ -1743,10 +1743,14 @@ class ModDiscordChannels extends Module {
     doAttachChannel(env, channelid, type, temp, opsrole, accessroleid, creatorid, ispublic) {
         if (!this._data[env.name]) this._data[env.name] = {};
         if (this._data[env.name][channelid]) return false;
+        let datatype = "text";
+        if (type == ChannelType.GuildVoice || type == ChannelType.GuildStageVoice) {
+            datatype = "voice";
+        }
         this._data[env.name][channelid] = {
             env: env.name,
             channelid: channelid,
-            type: type,
+            type: datatype,
             creatorid: creatorid,
             accessroleid: (accessroleid ? accessroleid : null),
             opsroleid: opsrole.id,
@@ -1767,7 +1771,7 @@ class ModDiscordChannels extends Module {
         return true;
     }
 
-    doCreateOpsRole(env, name, type) {
+    doCreateOpsRole(env, name) {
         return env.server.createRole({name: name + ":ops", color: this.param("opscolor"), permissions: [], mentionable: false}, "Ops role for temporary voice channel '" + name + "'");
     }
 
@@ -1791,7 +1795,7 @@ class ModDiscordChannels extends Module {
     }
 
     checkEnvUsable(env) {
-        return env.server.me.permissions.has("MANAGE_CHANNELS") && env.server.me.permissions.has("MANAGE_ROLES");
+        return env.server.members.me.permissions.has("MANAGE_CHANNELS") && env.server.members.me.permissions.has("MANAGE_ROLES");
     }
 
     checkSecsSinceLastUsed(env, channelid) {

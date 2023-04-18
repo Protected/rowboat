@@ -1,6 +1,6 @@
 /* Module: ReactionRoles -- Assign roles to users based on message reactions, one message per role color. */
 
-const { MessageEmbed } = require('discord.js');
+const { EmbedBuilder, ChannelType } = require('discord.js');
 
 const Module = require('../Module.js');
 
@@ -104,7 +104,7 @@ class ModReactionRoles extends Module {
         };
 
         let messageReactionAddHandler = async (messageReaction, user) => {
-            if (user.id == this.denv.server.me.id) return;
+            if (user.id == this.denv.server.members.me.id) return;
 
             let color = this.getGroupColorByMessage(messageReaction.message.channel.id, messageReaction.message.id);
             if (!color) return;
@@ -337,7 +337,7 @@ class ModReactionRoles extends Module {
                 let checkedroles = await Promise.all(checkroles)
                 roles = checkedroles.map(role => role.name);
             } catch (e) {}
-            embed.addField(label, roles.join(", "));
+            embed.addFields({name: label, value: roles.join(", ")});
         };
         
         this.mod('Commands').registerCommand(this, 'rrole info', {
@@ -355,7 +355,7 @@ class ModReactionRoles extends Module {
 
             let role = await env.server.roles.fetch(roleid);
 
-            let embed = new MessageEmbed();
+            let embed = new EmbedBuilder();
 
             embed.setTitle(role.name);
             embed.setColor(role.color);
@@ -452,7 +452,7 @@ class ModReactionRoles extends Module {
                 return true;
             }
 
-            let embed = new MessageEmbed();
+            let embed = new EmbedBuilder();
 
             embed.setTitle(group.label);
             embed.setColor(color);
@@ -503,7 +503,7 @@ class ModReactionRoles extends Module {
             }
 
             let channel = env.server.channels.cache.get(targetchannelid);
-            if (!channel || channel.type != "GUILD_TEXT") {
+            if (!channel || channel.type != ChannelType.GuildText) {
                 ep.reply("Text channel not found.");
                 return true;
             }
@@ -545,7 +545,7 @@ class ModReactionRoles extends Module {
             }
 
             let channel = env.server.channels.cache.get(targetchannelid);
-            if (!channel || channel.type != "GUILD_TEXT") {
+            if (!channel || channel.type != ChannelType.GuildText) {
                 ep.reply("Text channel not found.");
                 return true;
             }
@@ -953,7 +953,7 @@ class ModReactionRoles extends Module {
         let env = this.denv;
         let group = this.getGroup(color);
 
-        let embed = new MessageEmbed();
+        let embed = new EmbedBuilder();
 
         embed.setTitle(group.label);
         embed.setColor(color);

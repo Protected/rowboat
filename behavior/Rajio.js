@@ -5,6 +5,7 @@ const moment = require('moment');
 const random = require('meteor-random');
 const fs = require('fs');
 const emoji = require('emojione');
+const { ActivityType, ChannelType } = require('discord.js');
 
 const PERM_ADMIN = 'administrator';
 const PERM_MOD = 'moderator';
@@ -222,11 +223,11 @@ class ModRajio extends Module {
     }
 
     get vc() {
-        return this.denv.server.me.voice.connection;
+        return this.denv.server.members.me.voice.connection;
     }
     
     get listeners() {
-        let me = this.denv.server.me;
+        let me = this.denv.server.members.me;
         if (me.voice.mute) return [];
         let dchan = this.dchan;
         if (!dchan) return [];
@@ -289,7 +290,7 @@ class ModRajio extends Module {
         this.denv.client.on("voiceStateUpdate", (oldState, state) => {
             if (state.guild.id != this.denv.server.id) return;
             
-            let myid = this.denv.server.me.id;
+            let myid = this.denv.server.members.me.id;
             let llisteners = this.listeners.length;
             let dchanid = null;
             if (this.dchan) dchanid = this.dchan.id;
@@ -584,7 +585,7 @@ class ModRajio extends Module {
 
             if (args.channelid) {
                 let newchan = this.denv.server.channels.cache.get(args.channelid);
-                if (!newchan || newchan.type != "GUILD_VOICE") {
+                if (!newchan || newchan.type != ChannelType.GuildVoice) {
                     ep.reply('There is no voice channel with the specified ID.');
                     return true;
                 }
@@ -596,7 +597,7 @@ class ModRajio extends Module {
                 }
             }
             
-            if (!this.dchan || this.dchan.type != "GUILD_VOICE") {
+            if (!this.dchan || this.dchan.type != ChannelType.GuildVoice) {
                 ep.reply("The voice channel could not be found. Please specify the ID of an existing voice channel.");
                 return true;
             }
@@ -1194,7 +1195,7 @@ class ModRajio extends Module {
     joinDchan() {
         if (this._disabled) return Promise.reject("Rajio is disabled.");
         if (!this.listeners.length) return Promise.reject("No listeners.");
-        if (!this.dchan || this.dchan.type != "GUILD_VOICE") return Promise.reject("Voice channel not found.");
+        if (!this.dchan || this.dchan.type != ChannelType.GuildVoice) return Promise.reject("Voice channel not found.");
         return this.dchan.join()
             .catch((reason) => {
                 this.log("error", "Error connecting to voice channel: " + reason)
@@ -1205,7 +1206,7 @@ class ModRajio extends Module {
     //Internal playback control
     
     playSong(song, seek) {
-        if (!this.vc || this.playing || this.denv.server.me.voice.mute || !this.listeners.length || this._disabled) {
+        if (!this.vc || this.playing || this.denv.server.members.me.voice.mute || !this.listeners.length || this._disabled) {
             return false;
         }
         
@@ -1273,7 +1274,7 @@ class ModRajio extends Module {
         }
         
         if (this.param('usestatus')) {
-            this.denv.client.realClient.user.setActivity(song.name + (song.author ? " (" + song.author + ")" : ""), {type: 'PLAYING'});
+            this.denv.client.realClient.user.setActivity(song.name + (song.author ? " (" + song.author + ")" : ""), {type: ActivityType.Playing});
         }
         
         let att = 1.0;
@@ -1372,7 +1373,7 @@ class ModRajio extends Module {
         this.log('Pausing song: ' + this._play.hash + ' at ' + pausetime);
         
         if (this.param('usestatus')) {
-            this.denv.client.realClient.user.setActivity("*Paused*", {type: 'PLAYING'});
+            this.denv.client.realClient.user.setActivity("*Paused*", {type: ActivityType.Playing});
         }
         
         this._pause = [this._play, pausetime];

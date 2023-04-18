@@ -3,6 +3,7 @@
 const Module = require('../Module.js');
 const cd = require('color-difference');
 const diff = require('diff');
+const { ChannelType } = require('discord.js');
 
 var emoji = require('emojione');
 emoji.ascii = true;
@@ -82,7 +83,7 @@ class ModBridgeDiscordIRC extends Module {
         
         this.discord.on('connected', (env) => {
             env.client.on('messageUpdate', (oldMessage, newMessage) => {
-                if (oldMessage.channel.type == "DM") return;
+                if (oldMessage.channel.type == ChannelType.DM) return;
                 if (oldMessage.channel.guild.id != env.server.id) return;
                 if (this.param('discordBlacklist').indexOf(oldMessage.channel.id) > -1) return;
                 if (oldMessage.content == newMessage.content) return;

@@ -2,7 +2,7 @@
 
 const moment = require('moment');
 const random = require('meteor-random');
-const { MessageEmbed } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const pngextract = require('png-chunks-extract');
 const fs = require('fs');
 
@@ -92,7 +92,7 @@ class ModVRChatPhotos extends Module {
         //# Register Discord callbacks
 
         let messageReactionAddHandler = async (messageReaction, user) => {
-            if (user.id == this.denv.server.me.id) return;
+            if (user.id == this.denv.server.members.me.id) return;
 
             if (this.photochan && messageReaction.message.channel.id == this.photochan.id) {
 
@@ -354,7 +354,7 @@ class ModVRChatPhotos extends Module {
                 channel = env.server.channels.cache.get(channelid);
             }
 
-            let pickembed = new MessageEmbed();
+            let pickembed = new EmbedBuilder();
             pickembed.setImage(data.image);
 
             env.msg(channel, this.getPhotoMsgURL(message.id), pickembed);
@@ -489,7 +489,7 @@ class ModVRChatPhotos extends Module {
     messageHasPhotos(message) {
         if (!message) return false;
         for (let embed of message.embeds) {
-            if (embed.type == "rich" && embed.image) return true;
+            if (embed.image) return true;
         }
         for (let attachment of message.attachments.values()) {
             if (attachment.width) return true;
@@ -516,7 +516,7 @@ class ModVRChatPhotos extends Module {
         if (!message || !onPhoto) return null;
 
         for (let embed of message.embeds) {
-            if (embed.type != "rich" && embed.type != "image" || !embed.image) continue;
+            if (!embed.image) continue;
 
             return this.urlget(embed.image.url, {buffer: true})
                 .then((data) => onPhoto(embed.image, data))
@@ -530,7 +530,7 @@ class ModVRChatPhotos extends Module {
         if (!message) return {};
 
         for (let embed of message.embeds) {
-            if (embed.type == "rich" && embed.image) {
+            if (embed.image) {
 
                 let data = this.extractParticipantNamesFromPicture(message);
 
@@ -644,7 +644,7 @@ class ModVRChatPhotos extends Module {
 
         let sharedBy = this.denv.idToDisplayName(member.id);
 
-        let emb = new MessageEmbed();
+        let emb = new EmbedBuilder();
 
         if (metadata) {
             let sbperson = vrchat.getPerson(member.id);
@@ -680,20 +680,20 @@ class ModVRChatPhotos extends Module {
                         val = newval;
                         continue;
                     }
-                    emb.addField(fieldcount ? ZWSP : "With", val);
+                    emb.addFields({name: fieldcount ? ZWSP : "With", value: val});
                     fieldcount += 1;
                     val = person;
                 }
-                if (val) emb.addField(fieldcount ? ZWSP : "With", val);
+                if (val) emb.addFields({name: fieldcount ? ZWSP : "With", value: val});
             }
 
-            emb.addField("Location", "[" + metadata.world.name + "](https://vrchat.com/home/world/" + metadata.world.id + ")", true);
+            emb.addFields({name: "Location", value: "[" + metadata.world.name + "](https://vrchat.com/home/world/" + metadata.world.id + ")", inline: true});
         }
 
         if (sharedBy) {
             let msgurl = vrchat.getPersonMsgURL(member.id);
             if (msgurl) sharedBy = "[" + sharedBy + "](" + msgurl + ")";
-            emb.addField("Shared by", sharedBy, true);
+            emb.addFields({name: "Shared by", value: sharedBy, inline: true});
         }
 
         emb.setImage("attachment://" + encodeURI(name));
@@ -717,13 +717,13 @@ class ModVRChatPhotos extends Module {
 
         let emb = null;
         for (let checkembed of message.embeds) {
-            if (checkembed.type == "rich") {
+            if (checkembed.image) {
                 emb = checkembed;
                 break;
             }
         }
         
-        if (!emb || !emb.image) {
+        if (!emb) {
             
             for (let attachment of message.attachments.values()) {
                 if (attachment.width) {
@@ -762,12 +762,12 @@ class ModVRChatPhotos extends Module {
 
         let emb = null;
         for (let checkembed of message.embeds) {
-            if (checkembed.type == "rich") {
+            if (checkembed.image) {
                 emb = checkembed;
                 break;
             }
         }
-        if (!emb || !emb.image) return null;
+        if (!emb) return null;
 
         let results = {};
         for (let field of emb.fields) {
@@ -836,40 +836,35 @@ class ModVRChatPhotos extends Module {
         if (!nominate) return null;
 
         let emb;
-        if (existing) {
-            for (let checkembed of existing.embeds) {
-                if (checkembed.type == "rich") {
-                    emb = checkembed;
-                    break;
-                }
-            }
+        if (existing && existing.embeds?.length) {
+            emb = EmbedBuilder.from(existing.embeds[0]);
         }
 
         let nominatedfield = null;
         if (emb) {
             nominatedfield = this.embedFieldByName(emb, "Nominated by");
         } else {
-            emb = new MessageEmbed();
+            emb = new EmbedBuilder();
         }
 
-        emb.fields = [];
+        emb.data.fields = [];
 
         let msgurl = vrchat.getPersonMsgURL(nominate);
         if (msgurl) {
-            emb.addField(label, "[" + this.denv.idToDisplayName(nominate) + "](" + msgurl + ")", true);
+            emb.addFields({name: label, value: "[" + this.denv.idToDisplayName(nominate) + "](" + msgurl + ")", inline: true});
         } else {
-            emb.addField(label, this.denv.idToDisplayName(nominate), true);
+            emb.addFields({name: label, value: this.denv.idToDisplayName(nominate), inline: true});
         }
 
         if (member) {
             msgurl = vrchat.getPersonMsgURL(member.id);
             if (msgurl) {
-                emb.addField("Nominated by", "[" + this.denv.idToDisplayName(member.id) + "](" + msgurl + ")", true);
+                emb.addFields({name: "Nominated by", value: "[" + this.denv.idToDisplayName(member.id) + "](" + msgurl + ")", inline: true});
             } else {
-                emb.addField("Nominated by", this.denv.idToDisplayName(member.id), true);
+                emb.addFields({name: "Nominated by", value: this.denv.idToDisplayName(member.id), inline: true});
             }
         } else if (nominatedfield) {
-            emb.addField("Nominated by", nominatedfield.value, true);
+            emb.addFields({name: "Nominated by", value: nominatedfield.value, inline: true});
         }
 
         emb.setImage(fields.image);
@@ -894,14 +889,13 @@ class ModVRChatPhotos extends Module {
 
         let emb = null;
         for (let checkembed of message.embeds) {
-            if (checkembed.type == "rich") {
+            if (checkembed.image) {
                 emb = checkembed;
                 break;
             }
         }
-        if (!emb || !emb.image) return null;
+        if (!emb) return null;
 
-        let results = {};
         for (let field of emb.fields) {
             if (field.name.match(/^nominated by$/i)) {
                 let extrs = field.value.match(/\[[^\]]+\]\(https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)\)/);
@@ -938,7 +932,7 @@ class ModVRChatPhotos extends Module {
 
     embedFieldByName(emb, name) {
         if (!emb || !name) return null;
-        for (let field of emb.fields) {
+        for (let field of emb.data.fields) {
             if (field.name.toLowerCase() == name.toLowerCase()) {
                 return field;
             }

@@ -3,12 +3,10 @@
 const Module = require('../Module.js');
 
 const random = require('meteor-random');
-const e = require('express');
-const { MessageEmbed } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 
 class ModDiscordThemedChannels extends Module {
 
-    //Channel types: https://discord.js.org/#/docs/main/master/class/MessageEmbed?scrollTo=type
     //If redirect is present, rejected messages will be deleted and posted in the target channel by the bot (new messages only)
 
     get requiredParams() { return [
@@ -145,14 +143,14 @@ class ModDiscordThemedChannels extends Module {
                 return true;
             }
 
-            let embeds = pickmsg.embeds.filter(embed => chansets.types.includes(embed.type));
+            let embeds = pickmsg.embeds.values();
             let pickembed = embeds[Math.floor(random.fraction() * embeds.length)];
 
             if (!pickembed && chansets.types.includes("image")) {
                 let attachments = [...pickmsg.attachments.values()].filter(att => att.width);
                 let pickatt = attachments[Math.floor(random.fraction() * attachments.length)];
                 if (pickatt) {
-                    pickembed = new MessageEmbed().setImage(pickatt.url);
+                    pickembed = new EmbedBuilder().setImage(pickatt.url);
                 }
             }
 
@@ -197,16 +195,13 @@ class ModDiscordThemedChannels extends Module {
 
         let inctypes = false, notypes = false;
 
-        for (let embed of embeds) {
-            if (types.includes(embed.type)) {
-                inctypes = true;
-            } else {
-                notypes = true;
-            }
+        if (embeds.length) {
+            inctypes = true;
         }
 
+        //TODO fix this
         for (let att of attachments.values()) {
-            if (att.width && types.includes("image")) {
+            if (att.width && types.includes("image") || types.includes(att.contentType)) {
                 inctypes = true;
             }
             if (!att.width && types.find(type => type != "image")) {

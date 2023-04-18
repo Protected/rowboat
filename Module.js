@@ -190,6 +190,15 @@ class Module {
         return text.replace(/__(.*?)__/g, "\\_\\_$1\\_\\_").replace(/\*\*(.*?)\*\*/g, "\\*\\*$1\\*\\*").replace(/\*(.*?)\*/g, "\\*$1\\*");
     }
 
+    
+    makeHexColor(color) {
+        if (Array.isArray(color)) {
+            return "#" + color.map(element => element.toString(16).padStart(2, '0')).join("");
+        } else {
+            return '#' + color.toString(16).padStart(6, '0')
+        }
+    }
+
 
     /* JSON datastores */
     

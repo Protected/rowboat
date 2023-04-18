@@ -3,8 +3,10 @@
 const Module = require('../Module.js');
 const DDG = require('node-ddg-api').DDG;
 
+const BASIC_URL = "https://duckduckgo.com/";
+
 try {
-    var discord = require('discord.js');
+    var { EmbedBuilder } = require('discord.js');
 } catch (err) {}
 
 class ModDuckDuckGo extends Module {
@@ -50,7 +52,7 @@ class ModDuckDuckGo extends Module {
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let ddg = new DDG("Rowboat");
-            let isDiscord = (env.envName == "Discord" && discord);
+            let isDiscord = (env.envName == "Discord");
             let query = args.query.join(" ");
             let strict = /^\+(.*)/.exec(query);
             if (strict) query = strict[1];
@@ -76,7 +78,7 @@ class ModDuckDuckGo extends Module {
                     attrib += " and " + answ.AbstractSource;
                 }
 
-                let url = "https://duckduckgo.com/";
+                let url = BASIC_URL;
                 if (answ.AbstractURL) {
                     url = answ.AbstractURL;
                 }
@@ -97,18 +99,18 @@ class ModDuckDuckGo extends Module {
                         text += "\n[" + result.Text + "](" + result.FirstURL + ")";
                     }
 
-                    let re = new discord.MessageEmbed()
+                    let re = new EmbedBuilder()
                         .setColor(text ? [102, 204, 51] : [222, 88, 51])
-                        .setImage(answ.Image)
-                        .setTitle(answ.Heading)
-                        .setDescription(text)
+                        .setImage(answ.Image ? BASIC_URL + answ.Image : null)
+                        .setTitle(answ.Heading || null)
+                        .setDescription(text || null)
                         .setURL(url)
                         .setFooter({text: attrib});
 
                     if (answ.Infobox && answ.Infobox.content) {
                         for (let infoitem of answ.Infobox.content) {
                             if (infoitem.data_type == "string") {
-                                re.addField(infoitem.label, infoitem.value, true);
+                                re.addFields({name: infoitem.label, value: infoitem.value, inline: true});
                             }
                         }
                     }
@@ -119,7 +121,7 @@ class ModDuckDuckGo extends Module {
 
                     if (strict) return true;
 
-                    let more = new discord.MessageEmbed()
+                    let more = new EmbedBuilder()
                         .setColor([253, 210, 10])
                         .setTitle(text ? "See also" : "Disambiguation");
 
@@ -128,23 +130,21 @@ class ModDuckDuckGo extends Module {
                     for (let i = 0; i < answ.RelatedTopics.length && i < this.param("relatedTopics"); i++) {
                         let rel = answ.RelatedTopics[i];
                         if (rel.Name) {
-                            if (more.fields.length >= this.param("relatedCategories")) continue;
+                            if (more.data.fields?.length >= this.param("relatedCategories")) continue;
                             let subsee = "";
                             for (let j = 0; j < rel.Topics.length && j < this.param("relatedSubtopics"); j++) {
                                 let subrel = rel.Topics[j];
                                 subsee += "[" + subrel.Text + "](" + subrel.FirstURL + ")\n";
                             }
-                            more.addField(rel.Name, subsee);
+                            more.addFields({name: rel.Name, value: subsee});
                         } else {
                             seealso += "[" + rel.Text + "](" + rel.FirstURL + ")\n";
                         }
                     }
 
-                    if (seealso || more.fields.length) {
+                    if (seealso || more.data.fields?.length) {
                         more.setDescription(seealso);
-                        try {
-                            ep.reply(more);
-                        } catch (e) {}
+                        ep.reply(more);
                     }
 
                 } else {

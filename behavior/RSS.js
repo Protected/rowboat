@@ -6,7 +6,7 @@ const FeedParser = require('feedparser');
 const striptags = require('striptags');
 
 try {
-    var discord = require('discord.js');
+    var { EmbedBuilder } = require('discord.js');
 } catch (err) {}
 
 const RESULT_SUCCESS = "success";
@@ -28,8 +28,8 @@ class ModRSS extends Module {
         'timer',                //Timer interval (s)
         'timeout',              //Timeout for HTTP requests (ms)
         'timestampformat',      //Display format for timestamps
-        'richembed',            //Whether to use messageembeds in Discord environments
-        'color',                //Default color hint for feeds (Discord richembeds only)
+        'richembed',            //Whether to use embeds in Discord environments
+        'color',                //Default color hint for feeds (Discord embeds only)
     ]; }
 
     get requiredModules() { return [
@@ -365,21 +365,25 @@ class ModRSS extends Module {
             let msg;
 
             if (env.envName == "Discord" && this.param("richembed")) {
-                msg = new discord.MessageEmbed();
+                msg = new EmbedBuilder();
 
                 msg.setColor(feed.color || this.param("color"));
                 msg.setTitle(feed.name);
                 msg.setURL(feed.url);
 
-                msg.addField("Update frequency (s)", feed.frequency || this.param("frequency"));
-                msg.addField("Environment", feed.env);
-                msg.addField("Creator", feedenv ? feedenv.idToDisplayName(feed.creatorid) : feed.creatorid);
+                msg.addFields(
+                    {name: "Update frequency (s)", value: feed.frequency || this.param("frequency")},
+                    {name: "Environment", value: feed.env},
+                    {name: "Creator", value: feedenv ? feedenv.idToDisplayName(feed.creatorid) : feed.creatorid}
+                );
                 if (feed.channelid) {
-                    msg.addField("Announce channel", feedenv ? feedenv.channelIdToDisplayName(feed.channelid) : feed.channelid);
+                    msg.addFields({name: "Announce channel", value: feedenv ? feedenv.channelIdToDisplayName(feed.channelid) : feed.channelid});
                 }
                 if (feed.latest) {
-                    msg.addField("Latest sync", moment(feed.latest * 1000).fromNow() + " (" + feed.latestresult + ")");
-                    msg.addField("Seen entries", feed.data.length);
+                    msg.addFields(
+                        {name: "Latest sync", value: moment(feed.latest * 1000).fromNow() + " (" + feed.latestresult + ")"},
+                        {name: "Seen entries", value: feed.data.length}
+                    );
                 }
 
             } else {
@@ -591,10 +595,10 @@ class ModRSS extends Module {
 
         if (env.envName == "Discord" && this.param("richembed")) {
 
-            msg = new discord.MessageEmbed();
+            msg = new EmbedBuilder();
             msg.setColor(feed.color || this.param("color"));
             msg.setTitle(entry.title);
-            msg.setAuthor(feed.name);
+            msg.setAuthor({name: feed.name});
             msg.setURL(entry.link);
 
             if (entry.pubDate) {
@@ -623,7 +627,7 @@ class ModRSS extends Module {
             }
 
             if (entry.author) {
-                msg.setFooter(entry.author);
+                msg.setFooter({text: entry.author});
             }            
 
         } else {

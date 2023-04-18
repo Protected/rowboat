@@ -1,7 +1,7 @@
 /* Module: VRChatGroups -- Allows the bot to be in VRChat groups and provides group-related features. */
 
 const moment = require('moment');
-const { MessageEmbed } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 
 const Module = require('../Module.js');
 
@@ -1045,10 +1045,10 @@ class ModVRChatGroups extends Module {
 
         let emb = null, message = await this.getAnnouncementMessage(group.id, announcement.id);
         if (message && message.embeds[0]) {
-            emb = message.embeds[0];
+            emb = EmbedBuilder.from(message.embeds[0]);
         }
         if (!emb) {
-            emb = new MessageEmbed();
+            emb = new EmbedBuilder();
         }
 
         emb.setTitle(announcement.title);
@@ -1083,10 +1083,10 @@ class ModVRChatGroups extends Module {
             if (except && except.includes(vrcpostid)) continue;
             let message = await this.getAnnouncementMessage(group.id, vrcpostid);
             if (!message || !message.embeds[0]) continue;
-            let emb = message.embeds[0];
-            if (emb.hexColor != this.makeHexColor(this.param("colannounceold"))) {
+            let emb = EmbedBuilder.from(message.embeds[0]);
+            if (emb.data.hexColor != this.makeHexColor(this.param("colannounceold"))) {
                 emb.setColor(this.param("colannounceold"));
-                emb.setFooter({text: "Removed " + moment().format("YYYYYY-MM-DD HH:mm")});
+                emb.setFooter({text: "Removed " + moment().format("Y-MM-DD HH:mm")});
                 this.dqueue(function() {
                     message.edit({embeds: [emb]})
                         .catch((e) => { 
@@ -1114,10 +1114,10 @@ class ModVRChatGroups extends Module {
 
         let emb = null, message = await this.getMemberMessage(group.id, member.userId);
         if (message && message.embeds[0]) {
-            emb = message.embeds[0];
+            emb = EmbedBuilder.from(message.embeds[0]);
         }
         if (!emb) {
-            emb = new MessageEmbed();
+            emb = new EmbedBuilder();
         }
 
         emb.setTitle(member.user?.displayName || person?.name || member.userId);
@@ -1128,7 +1128,7 @@ class ModVRChatGroups extends Module {
         let color = this.vrchat.param("coloroffline");
         if (!person?.invisible && this.vrchat.isStatusOnline(friend?.status)) {
             if (member.isRepresenting) {
-                color = this.vrchat.param("colrepresenting");
+                color = this.param("colrepresenting");
             } else {
                 color = this.vrchat.param("coloronline");
             }
@@ -1187,9 +1187,9 @@ class ModVRChatGroups extends Module {
         for (let vrcuserid in this._groupChannels[vrcgroupid].memberMsgs) {
             let message = await this.getMemberMessage(vrcgroupid, vrcuserid);
             if (!message || !message.embeds[0]) continue;
-            let emb = message.embeds[0];
-            if (emb.hexColor != this.makeHexColor(this.vrchat.param("coloroffline"))) {
-                emb.color = this.vrchat.param("coloroffline");
+            let emb = EmbedBuilder.from(message.embeds[0]);
+            if (this.makeHexColor(emb.data.color) != this.makeHexColor(this.vrchat.param("coloroffline"))) {
+                emb.setColor(this.vrchat.param("coloroffline"));
                 this.dqueue(async function () {
                     await message.edit({embeds: [emb]})
                         .catch((e) => { 
@@ -1236,10 +1236,6 @@ class ModVRChatGroups extends Module {
         if (!achan || !msg) return false;
         this.denv.msg(achan.id, msg);
         return true;
-    }
-
-    makeHexColor(color) {
-        return "#" + color.map(element => element.toString(16)).join("");
     }
 
 }

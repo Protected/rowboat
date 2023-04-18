@@ -1,6 +1,6 @@
 /* Module: DictionaryGame -- Play a game for guessing translations of dictionary entries. */
 
-//Install 'node-gd' to have images through Discord MessageEmbeds.
+//Install 'node-gd' to have images through Discord Embeds.
 
 const Module = require('../Module.js');
 const sqlite3 = require('sqlite3');
@@ -10,7 +10,7 @@ const diff = require('diff');
 
 try {
     var gd = require('node-gd');
-    var discord = require('discord.js');
+    var { EmbedBuilder } = require('discord.js');
 } catch (err) {}
 
 const PERM_ADMIN = 'administrator';
@@ -939,7 +939,7 @@ class ModDictionaryGame extends Module {
             //Fancy (png image of rendered font): Requires gd, node-gd and Discord
             let png = this.createPngFromText(query, this.param('fancyFont'), this.param('fancySize'),
                     this.param('fancyColor'), this.param('fancyBgcolor'));
-            let re = new discord.MessageEmbed()
+            let re = new EmbedBuilder()
                 .setImage("attachment://query.png");
             if (this._showCategory) re.setDescription(this._current.category);
             env.msg(this._channelid, {embeds: [re], files: [{name: "query.png", attachment: png}]});

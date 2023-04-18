@@ -3,37 +3,41 @@
 const discord = require('discord.js');
 const ModernEventEmitter = require('../ModernEventEmitter.js');
 
+const Events = discord.Events;
+const Intents = discord.IntentsBitField.Flags;
+
 const BRIDGE_EVENTS = [
-    "messageCreate",
-    "messageUpdate",
-    "messageDelete",
-    "guildMemberAdd",
-    "guildMemberRemove",
-    "guildMemberUpdate",
-    "presenceUpdate",
-    "roleCreate",
-    "roleDelete",
-    "roleUpdate",
-    "voiceStateUpdate", 
-    "messageReactionAdd",
-    "messageReactionRemove",
-    "channelCreate",
-    "channelDelete",
-    "channelUpdate",
-    "channelPinsUpdate",
-    "webhookUpdate",
-    "interactionCreate"
+    Events.MessageCreate,
+    Events.MessageUpdate,
+    Events.MessageDelete,
+    Events.GuildMemberAdd,
+    Events.GuildMemberRemove,
+    Events.GuildMemberUpdate,
+    Events.PresenceUpdate,
+    Events.GuildRoleCreate,  //'roleCreate'
+    Events.GuildRoleDelete,  //'roleDelete'
+    Events.GuildRoleUpdate,  //'roleUpdate'
+    Events.VoiceStateUpdate,
+    Events.MessageReactionAdd,
+    Events.MessageReactionRemove,
+    Events.ChannelCreate,
+    Events.ChannelDelete,
+    Events.ChannelUpdate,
+    Events.ChannelPinsUpdate,
+    Events.WebhooksUpdate,
+    Events.InteractionCreate
 ];
 
 const INTENTS = [
-    "GUILDS",
-    "GUILD_MEMBERS",
-    "GUILD_WEBHOOKS",
-    "GUILD_VOICE_STATES",
-    "GUILD_PRESENCES",
-    "GUILD_MESSAGES",
-    "GUILD_MESSAGE_REACTIONS",
-    "DIRECT_MESSAGES"
+    Intents.Guilds,
+    Intents.GuildMembers,
+    Intents.GuildWebhooks,
+    Intents.GuildVoiceStates,
+    Intents.GuildPresences,
+    Intents.GuildMessages,
+    Intents.GuildMessageReactions,
+    Intents.DirectMessages,
+    Intents.MessageContent
 ];
 
 const MAXIMUM_EMBEDS = 10;
@@ -83,7 +87,7 @@ class DiscordClient extends ModernEventEmitter {
         this._token = token;
         
         this._realClient = new discord.Client({
-            partials: Object.values(discord.Constants.PartialTypes),
+            partials: Object.values(discord.Partials),
             intents: INTENTS
         });
         

@@ -2,7 +2,7 @@
 
 const moment = require('moment');
 const random = require('meteor-random');
-const { MessageEmbed, MessageActionRow, MessageButton } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const WebSocket = require('ws');
 const Imap = require('imap');
 
@@ -461,7 +461,7 @@ class ModVRChat extends Module {
 
 
         let messageReactionAddHandler = async (messageReaction, user) => {
-            if (user.id == this.denv.server.me.id) return;
+            if (user.id == this.denv.server.members.me.id) return;
 
             let channelid = messageReaction.message.channel.id;
 
@@ -1890,8 +1890,8 @@ class ModVRChat extends Module {
 
                 let emb = null;
                 for (let checkembed of message.embeds) {
-                    if (checkembed.type == "rich") {
-                        emb = checkembed;
+                    if (checkembed.image) {
+                        emb = EmbedBuilder.from(checkembed);
                         break;
                     }
                 }
@@ -1900,12 +1900,12 @@ class ModVRChat extends Module {
                 let changed = false;
 
                 //Fix basic
-                if (emb.title != world.name) {
+                if (emb.data.title != world.name) {
                     emb.setTitle(world.name);
                     changed = true;
                 }
 
-                if (emb.image != world.imageUrl) {
+                if (emb.data.image?.url != world.imageUrl) {
                     emb.setImage(world.imageUrl);
                     changed = true;
                 }
@@ -1914,7 +1914,7 @@ class ModVRChat extends Module {
                 let body = [];
                 body.push(world.description);
                 body = body.join("\n\n");
-                if (emb.description != body) {
+                if (emb.data.description != body) {
                     emb.setDescription(body);
                     changed = true;
                 }
@@ -1927,7 +1927,7 @@ class ModVRChat extends Module {
                         field.value = tagsToDisplay;
                         changed = true;
                     } else if (!field) {
-                        emb.addField("Tags", tagsToDisplay);
+                        emb.addFields({name: "Tags", value: tagsToDisplay});
                         changed = true;
                     }
                 }
@@ -1966,7 +1966,7 @@ class ModVRChat extends Module {
             let pinned = 0;
 
             this.denv.scanEveryMessage(this.pinnedchan, (message) => {
-                if (message.author?.id == this.denv.server.me.id) return;
+                if (message.author?.id == this.denv.server.members.me.id) return;
 
                 let worldid = this.extractWorldFromMessage(message);
                 if (worldid) worldids.push([worldid, message.author?.id]);
@@ -2753,20 +2753,15 @@ class ModVRChat extends Module {
             message = this.statuschan.messages.cache.get(person.msg);
         }
 
-        if (message) {
-            for (let checkembed of message.embeds) {
-                if (checkembed.type == "rich") {
-                    emb = checkembed;
-                    break;
-                }
-            }
+        if (message && message.embeds?.length) {
+            emb = EmbedBuilder.from(message.embeds[0]);
         }
 
         let previouslocationcontents = null;
         if (!emb) {
-            emb = new MessageEmbed();
+            emb = new EmbedBuilder();
         } else {
-            previouslocationcontents = emb.fields.find(field => field.name == "Location");
+            previouslocationcontents = this.embedFieldByName(emb, "Location");
             if (previouslocationcontents) previouslocationcontents = previouslocationcontents.value;
         }
 
@@ -2774,26 +2769,26 @@ class ModVRChat extends Module {
         let pronouns = this.userEmbedPronouns(userid);
         if (pronouns) title += " " + pronouns;
 
-        emb.setTitle(title);
+        emb.setTitle(title || "?");
         emb.setThumbnail(person.latestpic);
         emb.setColor(!person.invisible && STATUS_ONLINE.includes(vrcdata.status) ? this.param("coloronline") : this.param("coloroffline"));
         emb.setURL("https://vrchat.com/home/user/" + vrcdata.id);
-        emb.fields = [];
+        emb.data.fields = [];
 
         let trust = this.highestTrustLevel(vrcdata.tags);
-        emb.addField("Trust", this.trustLevelIcon(trust) + " " + this.trustLevelLabel(trust), true);
+        emb.addFields({name: "Trust", value: this.trustLevelIcon(trust) + " " + this.trustLevelLabel(trust), inline: true});
 
-        emb.addField("Status", this.statusLabel(person.invisible ? "offline" : vrcdata.status), true);
+        emb.addFields({name: "Status", value: this.statusLabel(person.invisible ? "offline" : vrcdata.status), inline: true});
 
         if (vrcdata.location) {
-            emb.addField("Location", person.invisible ? this.placeholderLocation("offline") : this.placeholderLocation(vrcdata.location, person.sneak, previouslocationcontents), true);
+            emb.addFields({name: "Location", value: person.invisible ? this.placeholderLocation("offline") : this.placeholderLocation(vrcdata.location, person.sneak, previouslocationcontents), inline: true});
         }
 
         if (this._modReactionRoles && this._misc.statusrolegroups) {
             for (let rolecolor of this._misc.statusrolegroups) {
                 let group = this._modReactionRoles.getGroup(rolecolor);
                 let block = this.userEmbedRoleBlock(userid, rolecolor);
-                emb.addField(group.label, block + ZWSP /*mobile layout fix*/, true);
+                emb.addFields({name: group.label, value: block + ZWSP /*mobile layout fix*/, inline: true});
             }
         }
 
@@ -2821,7 +2816,7 @@ class ModVRChat extends Module {
                 emb.setFooter({text: "Last logged in " + moment(vrcdata.last_login).from(now)});
             }
         } else {
-            emb.setFooter({text: ""});
+            emb.setFooter(null);
         }
 
         let invitebutton = [];
@@ -2897,23 +2892,16 @@ class ModVRChat extends Module {
                 message = await this.statuschan.messages.fetch(person.msg);
             } catch (e) {}
         }
-        if (message) {
-            for (let checkembed of message.embeds) {
-                if (checkembed.type == "rich") {
-                    emb = checkembed;
-                    break;
-                }
-            }
+        if (message && message.embeds?.length) {
+            emb = EmbedBuilder.from(message.embeds[0]);
         }
         if (!emb) return false;
-        for (let field of emb.fields) {
-            if (field.name == "Status") {
-                field.value = this.statusLabel("offline");
-            }
-            if (field.name == "Location") {
-                field.value = "-";
-            }
-        }
+
+        let field = this.embedFieldByName(emb, "Status");
+        if (field) field.value = this.statusLabel("offline");
+        field = this.embedFieldByName(emb, "Location");
+        if (field) field.value = "-";
+
         emb.setColor(this.param("coloroffline"));
         message.edit({embeds: [emb]});
         return true;
@@ -2954,17 +2942,12 @@ class ModVRChat extends Module {
             }
         }
 
-        if (message) {
-            for (let checkembed of message.embeds) {
-                if (checkembed.type == "rich") {
-                    emb = checkembed;
-                    break;
-                }
-            }
+        if (message && message.embeds?.length) {
+            emb = EmbedBuilder.from(message.embeds[0]);
         }
 
         if (!emb) {
-            emb = new MessageEmbed();
+            emb = new EmbedBuilder();
         }
 
         emb.setTitle(world.name);
@@ -2972,16 +2955,18 @@ class ModVRChat extends Module {
         emb.setColor(membercount ? this.param("coloronline") : this.param("coloroffline"));
         emb.setURL("https://vrchat.com/home/world/" + worldid);
 
-        emb.fields = [];
+        emb.data.fields = [];
         if (mode == "normal") {
             let tags = this.formatWorldTags(world.tags);
             if (tags.length) {
-                emb.addField("Tags", tags.join(", "));
+                emb.addFields({name: "Tags", value: tags.join(", ")});
             }
 
-            emb.addField("Players", String(world.publicOccupants || "0"), true);
-            emb.addField("Private", String(world.privateOccupants || "0"), true);
-            emb.addField("Popularity",  "`" + ("#".repeat(world.popularity || 0) || "-") +  "`", true);
+            emb.addFields(
+                {name: "Players", value: String(world.publicOccupants || "0"), inline: true},
+                {name: "Private", value: String(world.privateOccupants || "0"), inline: true},
+                {name: "Popularity", value: "`" + ("#".repeat(world.popularity || 0) || "-") +  "`", inline: true}
+            );
         }
         
         let body = [];
@@ -3021,11 +3006,11 @@ class ModVRChat extends Module {
                     val = newval;
                     continue;
                 }
-                emb.addField(fieldcount ? "\u200b" : "In-world", val);
+                emb.addFields({name: fieldcount ? "\u200b" : "In-world", value: val});
                 fieldcount += 1;
                 val = line;
             }
-            if (val) emb.addField(fieldcount ? "\u200b" : "In-world", val);
+            if (val) emb.addFields({name: fieldcount ? "\u200b" : "In-world", value: val});
         }
 
         emb.setFooter({text: "Retrieved " + moment.unix(world.retrieved).from(now)});
@@ -3069,17 +3054,12 @@ class ModVRChat extends Module {
             } catch (e) {}
         }
 
-        if (message) {
-            for (let checkembed of message.embeds) {
-                if (checkembed.type == "rich") {
-                    emb = checkembed;
-                    break;
-                }
-            }
+        if (message && message.embeds?.length) {
+            emb = EmbedBuilder.from(message.embeds[0]);
         }
 
         if (!emb) {
-            emb = new MessageEmbed();
+            emb = new EmbedBuilder();
         }
 
         emb.setTitle(world.name + "  (" + instanceid + ")");
@@ -3089,7 +3069,7 @@ class ModVRChat extends Module {
         }
         
         let url = null;
-        emb.fields = [];
+        emb.data.fields = [];
 
         let members = [];
         for (let userid in instance.members) {
@@ -3117,11 +3097,11 @@ class ModVRChat extends Module {
                     val = newval;
                     continue;
                 }
-                emb.addField(fieldcount ? "\u200b" : "In-world", val);
+                emb.addFields({name: fieldcount ? "\u200b" : "In-world", value: val});
                 fieldcount += 1;
                 val = line;
             }
-            if (val) emb.addField(fieldcount ? "\u200b" : "In-world", val);
+            if (val) emb.addFields({name: fieldcount ? "\u200b" : "In-world", value: val});
         }
 
         try {
@@ -3156,14 +3136,11 @@ class ModVRChat extends Module {
         } catch (e) {}
         if (!message) return false;
         let emb = null;
-        for (let checkembed of message.embeds) {
-            if (checkembed.type == "rich") {
-                emb = checkembed;
-                break;
-            }
+        if (message.embeds?.length) {
+            emb = EmbedBuilder.from(message.embeds[0]);
         }
         if (!emb) return false;
-        let field = emb.fields.find(field => field.name == "Location");
+        let field = this.embedFieldByName(emb, "Location");
         if (!field) return false;
         let oldvalue = field.value;
         if (instancemsg) {
@@ -3518,22 +3495,22 @@ class ModVRChat extends Module {
             }
         }
 
-        let emb = new MessageEmbed();
+        let emb = new EmbedBuilder();
 
         emb.setTitle(world.name);
         emb.setImage(world.imageUrl);
         emb.setURL("https://vrchat.com/home/world/" + worldid);
 
-        emb.fields = [];
+        emb.data.fields = [];
         let tags = this.formatWorldTags(world.tags);
         if (tags.length) {
-            emb.addField("Tags", tags.join(", "), true);
+            emb.addFields({name: "Tags", value: tags.join(", "), inline: true});
         }
 
         if (sharedBy) {
             let msgurl = this.getPersonMsgURL(userid);
             if (msgurl) sharedBy = "[" + sharedBy + "](" + msgurl + ")";
-            emb.addField("Pinned by", sharedBy, true);
+            emb.addFields({name: "Pinned by", value: sharedBy, inline: true});
         }
 
         let body = [];
@@ -3566,11 +3543,8 @@ class ModVRChat extends Module {
     extractWorldFromMessage(message, verbose) {
         if (!message) return null;
         let emb = null;
-        for (let checkembed of message.embeds) {
-            if (checkembed.type == "rich") {
-                emb = checkembed;
-                break;
-            }
+        if (message.embeds?.length) {
+            emb = message.embeds[0];
         }
         if (!emb || !emb.url) return null;
         let match = emb.url.match(/wrld_[0-9a-f-]+/);
@@ -3605,11 +3579,8 @@ class ModVRChat extends Module {
     extractOwnersFromPin(message) {
         if (!message) return null;
         let emb = null;
-        for (let checkembed of message.embeds) {
-            if (checkembed.type == "rich") {
-                emb = checkembed;
-                break;
-            }
+        if (message.embeds?.length) {
+            emb = message.embeds[0];
         }
         if (!emb) return null;
         let results = [];
@@ -4259,36 +4230,36 @@ class ModVRChat extends Module {
     }
 
     worldInviteButtons(pinnedmode) {
-        let row = new MessageActionRow();
+        let row = new ActionRowBuilder();
         if (pinnedmode === true || pinnedmode === false) {
             row.addComponents(
-                new MessageButton()
+                new ButtonBuilder()
                     .setCustomId("pin")
-                    .setStyle("PRIMARY")
+                    .setStyle(ButtonStyle.Primary)
                     .setEmoji(this.param("pinnedemoji"))
                     .setLabel(pinnedmode ? "Pinned" : "Pin")
                     .setDisabled(pinnedmode)
             );
         }
         row.addComponents(
-            new MessageButton()
+            new ButtonBuilder()
                 .setCustomId("inviteany")
-                .setStyle("PRIMARY")
+                .setStyle(ButtonStyle.Primary)
                 .setEmoji(this.param("anyemoji"))
                 .setLabel("Invite to random"),
-            new MessageButton()
+            new ButtonBuilder()
                 .setCustomId("invitepublic")
-                .setStyle("SECONDARY")
+                .setStyle(ButtonStyle.Secondary)
                 .setEmoji(this.param("publicemoji"))
                 .setLabel("Public new"),
-            new MessageButton()
+            new ButtonBuilder()
                 .setCustomId("invitefriendsplus")
-                .setStyle("SECONDARY")
+                .setStyle(ButtonStyle.Secondary)
                 .setEmoji(this.param("friendsplusemoji"))
                 .setLabel("Friends+ new"),
-            new MessageButton()
+            new ButtonBuilder()
                 .setCustomId("invitefriends")
-                .setStyle("SECONDARY")
+                .setStyle(ButtonStyle.Secondary)
                 .setEmoji(this.param("friendsemoji"))
                 .setLabel("Friends-only new")
         );
@@ -4296,10 +4267,10 @@ class ModVRChat extends Module {
     }
 
     userInviteButton() {
-        return new MessageActionRow().addComponents(
-            new MessageButton()
+        return new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
                 .setCustomId("join")
-                .setStyle("PRIMARY")
+                .setStyle(ButtonStyle.Primary)
                 .setEmoji(this.param("inviteemoji"))
                 .setLabel("Join")
         );
@@ -4369,7 +4340,7 @@ class ModVRChat extends Module {
 
     embedFieldByName(emb, name) {
         if (!emb || !name) return null;
-        for (let field of emb.fields) {
+        for (let field of emb.data.fields) {
             if (field.name.toLowerCase() == name.toLowerCase()) {
                 return field;
             }

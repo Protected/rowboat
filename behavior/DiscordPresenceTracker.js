@@ -1,7 +1,7 @@
 /* Module: DiscordPresenceTracker -- Announces updates to user presence in a Discord channel. */
 
 const moment = require('moment');
-const { MessageEmbed } = require('discord.js');
+const { EmbedBuilder, ActivityType } = require('discord.js');
 
 const Module = require('../Module.js');
 
@@ -46,7 +46,7 @@ class ModDiscordPresenceTracker extends Module {
         this._params["actinfo"] = {
             twitch: {
                 //Match every field in Activity to identify this activity
-                filter: {name: "Twitch", type: "STREAMING"},
+                filter: {name: "Twitch", type: ActivityType.Streaming},
                 //Activity title
                 fieldTitle: "details",
                 //Used Activity fields and their display labels
@@ -177,7 +177,7 @@ class ModDiscordPresenceTracker extends Module {
     }
     
     activityStart(member, info, activity) {
-        let embed = new MessageEmbed();
+        let embed = new EmbedBuilder();
         
         if (!this.param("usewebhook")) {
             embed.setAuthor({name: member.displayName, iconURL: member.user.displayAvatarURL()});
@@ -197,7 +197,7 @@ class ModDiscordPresenceTracker extends Module {
 
         for (let field in info.fieldLabels) {
             if (field == info.fieldTitle) continue;
-            embed.addField(info.fieldLabels[field], activity[field]);
+            embed.addFields({name: info.fieldLabels[field], value: activity[field]});
         }
 
         embed.setDescription(info.online);
@@ -210,7 +210,7 @@ class ModDiscordPresenceTracker extends Module {
     }
 
     activityUpdate(member, info, oldActivity, activity) {
-        let embed = new MessageEmbed();
+        let embed = new EmbedBuilder();
         
         if (!this.param("usewebhook")) {
             embed.setAuthor({name: member.displayName, iconURL: member.user.displayAvatarURL()});
@@ -236,7 +236,7 @@ class ModDiscordPresenceTracker extends Module {
     }
 
     activityEnd(member, info) {
-        let embed = new MessageEmbed();
+        let embed = new EmbedBuilder();
         
         if (!this.param("usewebhook")) {
             embed.setAuthor({name: member.displayName, iconURL: member.user.displayAvatarURL()});

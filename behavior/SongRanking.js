@@ -282,7 +282,7 @@ class ModSongRanking extends Module {
                 emojiname = extr[1];
                 if (LIKEABILITY_REACTIONS[emojiname] === undefined) return;
 
-                if (messageReaction.message.author?.id == env.server.me.id) {
+                if (messageReaction.message.author?.id == env.server.members.me.id) {
                     let hashes = this.grabber.extractHashes(messageReaction.message.content);
                     for (let hash of hashes) {
                         this.setSongLikeability(hash, user.id, LIKEABILITY_REACTIONS[emojiname]);

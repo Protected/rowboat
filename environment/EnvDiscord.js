@@ -3,7 +3,7 @@
 const moment = require('moment');
 
 const Environment = require('../Environment.js');
-const discord = require('discord.js');
+const { verifyString, ChannelType } = require('discord.js');
 
 const MAXIMUM_MSG_LENGTH = 2000;
 
@@ -81,7 +81,7 @@ class EnvDiscord extends Environment {
                     let type = "regular";
                     let channelid = message.channel.id;
                     
-                    if (message.channel.type == "DM") {
+                    if (message.channel.type == ChannelType.DM) {
                         if (!this.param('privatemessages')) return;
                         type = "private";
                         channelid = message.author.id;
@@ -230,7 +230,7 @@ class EnvDiscord extends Environment {
 
         if (msg) {
             if (typeof msg == "object") {
-                if (msg.fields !== undefined) options.embeds = [msg];
+                if (msg.data !== undefined) options.embeds = [msg];
                 else if (msg.size !== undefined || msg.attachment !== undefined) options.files = [msg];
                 else for (let key in msg) {
                     options[key] = msg[key];
@@ -240,7 +240,7 @@ class EnvDiscord extends Environment {
                     let code = msg.trim().match(/^```[a-z]?/i);
                     if (!msg.trim().match(/```$/)) code = undefined;
                     let partPromises = [];
-                    for (let part of discord.Util.splitMessage(msg, {
+                    for (let part of this.splitMessage(msg, {
                         maxLength: MAXIMUM_MSG_LENGTH,
                         prepend: code ? code[0] : undefined,
                         append: code ? '```' : undefined
@@ -322,10 +322,10 @@ class EnvDiscord extends Environment {
         let targetchan = this.getActualChanFromTarget(channel);
         if (!targetchan) return [];
         
-        if (targetchan.type == "DM" || !targetchan.type) return [targetchan.recipient.id];
+        if (targetchan.type == ChannelType.DM || !targetchan.type) return [targetchan.recipient.id];
         
         let ids = [];
-        if (targetchan.type == "GUILD_TEXT") {
+        if (targetchan.type == ChannelType.GuildText || targetchan.type == ChannelType.GuildAnnouncement || targetchan.type == ChannelType.GuildForum) {
             for (let member of targetchan.members.values()) {
                 ids.push(member.id);
             }
@@ -356,7 +356,7 @@ class EnvDiscord extends Environment {
     channelIdToType(channelid) {
         let chan = this.getActualChanFromTarget(channelid);
         if (!chan) return "unknown";
-        if (!chan.type || chan.type == "DM") return "private";
+        if (!chan.type || chan.type == ChannelType.DM) return "private";
         return "regular";
     }
     
@@ -416,13 +416,13 @@ class EnvDiscord extends Environment {
 
         if (typeof targetid == "string") {
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == "GUILD_TEXT").get(targetid);
+                this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == ChannelType.GuildText).get(targetid);
             }
             if (!this._channels[targetid]) {
                 this._channels[targetid] = this._server.members.cache.get(targetid);
             }
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == "GUILD_TEXT").find(channel => channel.name == targetid);
+                this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == ChannelType.GuildText).find(channel => channel.name == targetid);
             }
             if (!this._channels[targetid]) {
                 this._channels[targetid] = this._server.members.cache.find(channel => channel.name == targetid);
@@ -445,7 +445,7 @@ class EnvDiscord extends Environment {
         for (let channel of member.guild.channels.cache.values()) {
             let pfm = channel.permissionsFor(member);
             if (!pfm || !pfm.has) continue;
-            if (pfm.has("VIEW_CHANNEL")) {
+            if (pfm.has("ViewChannel")) {
                 channels.push(channel);
             }
         }
@@ -512,6 +512,37 @@ class EnvDiscord extends Environment {
     }
 
 
+    //Written by the djs contributors
+    splitMessage(text, { maxLength = 2_000, char = '\n', prepend = '', append = '' } = {}) {
+        text = verifyString(text);
+        if (text.length <= maxLength) return [text];
+        let splitText = [text];
+        if (Array.isArray(char)) {
+            while (char.length > 0 && splitText.some(elem => elem.length > maxLength)) {
+                const currentChar = char.shift();
+                if (currentChar instanceof RegExp) {
+                    splitText = splitText.flatMap(chunk => chunk.match(currentChar));
+                } else {
+                    splitText = splitText.flatMap(chunk => chunk.split(currentChar));
+                }
+            }
+        } else {
+            splitText = text.split(char);
+        }
+        if (splitText.some(elem => elem.length > maxLength)) throw new RangeError('SPLIT_MAX_LEN');
+        const messages = [];
+        let msg = '';
+        for (const chunk of splitText) {
+            if (msg && (msg + char + chunk + append).length > maxLength) {
+                messages.push(msg + append);
+                msg = prepend;
+            }
+            msg += (msg && msg !== prepend ? char : '') + chunk;
+        }
+        return messages.concat(msg).filter(m => m);
+    }
+
+
     //Temporary webhooks that simulate members
 
     async getWebhook(channel, member) {
@@ -545,7 +576,7 @@ class EnvDiscord extends Environment {
             await this.removeWebhook(oldest.channelid, oldest.userid);
         }
 
-        let webhook = await channel.createWebhook(member.displayName, {avatar: member.user.displayAvatarURL(), reason: "User simulation."});
+        let webhook = await channel.createWebhook({name: member.displayName, avatar: member.user.displayAvatarURL(), reason: "User simulation."});
         if (!this._webhooks[channel.id]) this._webhooks[channel.id] = {};
         this._webhooks[channel.id][member.id] = {channelid: channel.id, userid: member.id, webhook: webhook, ts: moment().unix(), cleartimer: null};
         this.setWebhookCleanupTimer(channel.id, member.id);
