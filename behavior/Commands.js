@@ -671,7 +671,7 @@ class ModCommands extends Module {
             if (!descriptor.callback[targetmod](env, type, authorid, channelid, command, passargs, handle, {
                     reply: function(msg) {
                         let options = {};
-                        if (env.name == "Discord") {
+                        if (env.envName == "Discord") {
                             options.reply = {
                                 messageReference: rawobject.id,
                                 failIfNotExists: false
