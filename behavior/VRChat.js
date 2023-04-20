@@ -215,6 +215,8 @@ class ModVRChat extends Module {
         this._worlds = null;  //The worlds cache {WORLDID: {..., see getWorld}, ...}
         this._misc = null;  //Dynamic settings
 
+        this._worldsinprogress = {};  //Locks for world message updates {WORLDID: Promise, ...}
+
         this._friends = null;  //The transient status cache {updated, VRCUSERID: {...}, ...}
         this._frupdated = null;
 
@@ -1122,13 +1124,14 @@ class ModVRChat extends Module {
                 let retrieved = world?.retrieved;
                 world = await this.getWorld(worldid);
 
-                if (!world) continue;
+                if (!world || this._worldsinprogress[worldid]) continue;
                 if (world.retrieved != retrieved) refreshed += 1;
 
                 if (hasWorldchan) {
                     this.dqueue(function() {
+                        if (this._worldsinprogress[worldid]) return;
                         let oldmsgid = world.msg;
-                        this.bakeWorld(worldid, now)
+                        this._worldsinprogress[worldid] = this.bakeWorld(worldid, now)
                             .then(worldmsg => {
                                 //Update user links only if world message was reemitted
                                 if (worldmsg && worldmsg.id != oldmsgid && !this.instancechan) {
@@ -1138,6 +1141,9 @@ class ModVRChat extends Module {
                                         }.bind(this));
                                     }
                                 }
+                            })
+                            .finally(() => {
+                                delete this._worldsinprogress[worldid];
                             })
                     }.bind(this));
                 }
@@ -3162,20 +3168,26 @@ class ModVRChat extends Module {
         now = now || moment().unix();
         for (let worldid in affectedworlds) {
             this.dqueue(function() {
-                this.bakeWorld(worldid, now)
-                    .then(worldmsg => {
-                        if (!worldmsg || this.instancechan) return;
-                        //Always update user links - world.members changed
-                        let world = this.getCachedWorld(worldid);
-                        for (let userid in world.members) {
-                            this.dqueue(function() {
-                                this.setWorldLink(userid, world.name, worldmsg);
-                            }.bind(this));
-                        }
-                    })
-                    .catch((e) => {
-                        this.log("warn", "Update affected worlds: " + JSON.stringify(e));
-                    });
+                let before = this._worldsinprogress[worldid];
+                if (!before) before = Promise.resolve();
+                this._worldsinprogress[worldid] = before.then(() => this.bakeWorld(worldid, now)
+                        .then(worldmsg => {
+                            if (!worldmsg || this.instancechan) return;
+                            //Always update user links - world.members changed
+                            let world = this.getCachedWorld(worldid);
+                            for (let userid in world.members) {
+                                this.dqueue(function() {
+                                    this.setWorldLink(userid, world.name, worldmsg);
+                                }.bind(this));
+                            }
+                        })
+                        .catch((e) => {
+                            this.log("warn", "Update affected worlds: " + JSON.stringify(e));
+                        })
+                        .finally(() => {
+                            delete this._worldsinprogress[worldid];
+                        })
+                    );
             }.bind(this));
         }
     }    
