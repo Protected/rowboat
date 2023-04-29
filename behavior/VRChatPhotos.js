@@ -569,12 +569,13 @@ class ModVRChatPhotos extends Module {
 
             let metadata = null;
             if (attachment.name && attachment.name.match(/\.png$/i)) {
-                metadata = pngextract(data)
+                let rawmetadata = pngextract(data)
                     .filter(chunk => chunk.name == "tEXt" || chunk.name == "iTXt")
                     .map(chunk => chunk.name == "tEXt" ? this.pngDecodetEXt(chunk.data) : this.pngDecodeiTXt(chunk.data))
-                    .find(text => text.keyword == "Description" && text.text.match(/^lfs|2|/));
-                if (metadata) {
-                    metadata = this.lfsMetadataToObject(metadata.text);
+                    .find(text => text.keyword == "Description");
+                if (rawmetadata) {
+                    metadata = this.lfsMetadataToObject(rawmetadata.text);
+                    if (!metadata) metadata = this.vrcxMetadataToObject(rawmetadata.text);
                 } else if (!this.param("embedwithoutmeta")) {
                     this._index[message.id] = message;
                     return;
@@ -594,14 +595,16 @@ class ModVRChatPhotos extends Module {
         let handleDownloadedPhoto = (filename, data) => {
             let metadata = null;
             if (filename && filename.match(/\.png$/i)) {
+                let rawmetadata;
                 try {
-                    metadata = pngextract(data)
+                    rawmetadata = pngextract(data)
                         .filter(chunk => chunk.name == "tEXt" || chunk.name == "iTXt")
                         .map(chunk => chunk.name == "tEXt" ? this.pngDecodetEXt(chunk.data) : this.pngDecodeiTXt(chunk.data))
-                        .find(text => text.keyword == "Description" && text.text.match(/^lfs|2|/));
+                        .find(text => text.keyword == "Description");
                 } catch (e) {}
-                if (metadata) {
-                    metadata = this.lfsMetadataToObject(metadata.text);
+                if (rawmetadata) {
+                    metadata = this.lfsMetadataToObject(rawmetadata.text);
+                    if (!metadata) metadata = this.vrcxMetadataToObject(rawmetadata.text);
                 }
             }
 
@@ -654,12 +657,16 @@ class ModVRChatPhotos extends Module {
 
             let people = metadata.players
                 .sort((a, b) => {
-                    if (a.z > 0 && b.z < 0) return -1;
-                    if (a.z < 0 && b.z > 0) return 1;
+                    if (a.z && b.z) {
+                        if (a.z > 0 && b.z < 0) return -1;
+                        if (a.z < 0 && b.z > 0) return 1;
+                    }
+                    if (a.x === undefined || a.y === undefined || a.z === undefined
+                            || b.x === undefined || b.y === undefined || b.z === undefined) return 0;
                     return a.x - b.x || a.y - b.y || a.z - b.z;
                 })
                 .map(player => {
-                    let result = player.name;
+                    let result = player.name.replace(/(\_|\*|\~|\`|\||\\|\<|\>|\:|\!)/g, "\\$1");
                     if (player.id == metadata.author.id) result = "__" + result + "__";
                     if (player.z < 0) result = "*" + result + "*";
                     let playeruserid = vrchat.getUseridByVrc(player.id);
@@ -963,8 +970,9 @@ class ModVRChatPhotos extends Module {
         if (!metadata) return null;
         let raw = metadata.match(/^lfs\|([0-9]+)\|(.*)$/u);
         if (!raw) return null;
-        let result = {};
+        let result = null;
         if (raw[1] == 2) {
+            result = {};
             for (let pair of raw[2].split("|")) {
                 let kv = pair.split(":");
                 if (kv[0] == "author") {
@@ -990,6 +998,27 @@ class ModVRChatPhotos extends Module {
             }
         }
         return result;
+    }
+    
+    vrcxMetadataToObject(metadata) {
+        if (!metadata) return null;
+        try {
+            let json = JSON.parse(metadata);
+            if (json.application != "VRCX" || json.version != 1) return null;
+            let result = {};
+            if (json.author) {
+                result.author = {id: json.author.id, name: json.author.displayName};
+            }
+            if (json.world) {
+                result.world = json.world;
+            }
+            if (json.players) {
+                result.players = json.players.map(entry => ({id: entry.id, name: entry.displayName}));
+            }
+            return result;
+        } catch (e) {
+            return null;
+        }
     }
 
     pngDecodetEXt(data) {
