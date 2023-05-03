@@ -1084,7 +1084,7 @@ class ModVRChatGroups extends Module {
             let message = await this.getAnnouncementMessage(group.id, vrcpostid);
             if (!message || !message.embeds[0]) continue;
             let emb = EmbedBuilder.from(message.embeds[0]);
-            if (emb.data.hexColor != this.makeHexColor(this.param("colannounceold"))) {
+            if (this.makeHexColor(emb.data.color) != this.makeHexColor(this.param("colannounceold"))) {
                 emb.setColor(this.param("colannounceold"));
                 emb.setFooter({text: "Removed " + moment().format("Y-MM-DD HH:mm")});
                 this.dqueue(function() {

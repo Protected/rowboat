@@ -194,8 +194,10 @@ class Module {
     makeHexColor(color) {
         if (Array.isArray(color)) {
             return "#" + color.map(element => element.toString(16).padStart(2, '0')).join("");
-        } else {
+        } else if (color) {
             return '#' + color.toString(16).padStart(6, '0')
+        } else {
+            return '#000000';
         }
     }
 
