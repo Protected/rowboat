@@ -1921,7 +1921,7 @@ class ModVRChat extends Module {
                 body.push(world.description);
                 body = body.join("\n\n");
                 if (emb.data.description != body) {
-                    emb.setDescription(body);
+                    emb.setDescription(body || null);
                     changed = true;
                 }
 
@@ -2813,7 +2813,7 @@ class ModVRChat extends Module {
         let taglabels = this.tagLabels(vrcdata.tags).join("\n");
         if (taglabels) body.push(taglabels);
 
-        emb.setDescription(body.join("\n\n"));
+        emb.setDescription(body.join("\n\n") || null);
 
         if (vrcdata.last_login && vrcdata.status == "offline" && !person.pendingflip && !person.invisible) {
             if (person.latestflip) {
@@ -2982,7 +2982,7 @@ class ModVRChat extends Module {
         }
         
         if (body.length) {
-            emb.setDescription(body.join("\n\n"));
+            emb.setDescription(body.join("\n\n") || null);
         }
 
         let members = [];
@@ -3529,7 +3529,7 @@ class ModVRChat extends Module {
 
         body.push(world.description);
 
-        emb.setDescription(body.join("\n\n"));
+        emb.setDescription(body.join("\n\n") || null);
 
         this._pins[worldid] = true;
 

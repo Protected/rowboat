@@ -1052,7 +1052,7 @@ class ModVRChatGroups extends Module {
         }
 
         emb.setTitle(announcement.title);
-        emb.setDescription(announcement.text);
+        emb.setDescription(announcement.text || null);
         emb.setThumbnail(announcement.imageUrl);
         emb.setColor(this.param("colannounceactive"));
         emb.setAuthor({name: group.name, url: "https://vrchat.com/home/group/" + group.id, iconURL: group.iconURL || undefined});
@@ -1161,7 +1161,7 @@ class ModVRChatGroups extends Module {
             body.push(roles.join(", "));
         }
 
-        emb.setDescription(body.join("\n\n"));
+        emb.setDescription(body.join("\n\n") || null);
 
         try {
             if (message) {
