@@ -3879,8 +3879,8 @@ class ModVRChat extends Module {
             } else {
                 //Unexpected error
                 this.log("error", JSON.stringify(e));
+                throw e;
             }
-            throw e;
         } else {
             if (e.statusCode == 502 || e.statusCode == 504) {
                 this.log("warn", "Oh no, gateway errors (" + e.statusCode + ")...");
