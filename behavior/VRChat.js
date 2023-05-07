@@ -2567,7 +2567,12 @@ class ModVRChat extends Module {
                 return data;
             })
             .catch((e) => {
-                this.log('warn', "Unable to retrieve world " + worldid + ": " + JSON.stringify(e));
+                if (e.statusCode == 404) {
+                    this.clearWorld(worldid);
+                    return null;
+                } else {
+                    this.log('warn', "Unable to retrieve world " + worldid + ": " + JSON.stringify(e));
+                }
             });
     }
 
