@@ -2776,7 +2776,7 @@ class ModVRChat extends Module {
         if (pronouns) title += " " + pronouns;
 
         emb.setTitle(title || "?");
-        emb.setThumbnail(person.latestpic);
+        emb.setThumbnail(person.latestpic || null);
         emb.setColor(!person.invisible && STATUS_ONLINE.includes(vrcdata.status) ? this.param("coloronline") : this.param("coloroffline"));
         emb.setURL("https://vrchat.com/home/user/" + vrcdata.id);
         emb.data.fields = [];
