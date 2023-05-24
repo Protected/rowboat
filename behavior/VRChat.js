@@ -3984,7 +3984,7 @@ class ModVRChat extends Module {
 
     embedFieldByName(emb, name) {
         if (!emb || !name) return null;
-        for (let field of emb.data.fields) {
+        for (let field of (emb.data ? emb.data.fields : emb.fields)) {
             if (field.name.toLowerCase() == name.toLowerCase()) {
                 return field;
             }
