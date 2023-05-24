@@ -2929,6 +2929,8 @@ class ModVRChat extends Module {
         let match = emb.url.match(/wrld_[0-9a-f-]+/);
         if (match) {
             if (verbose) {
+
+                emb = EmbedBuilder.from(emb);
                 
                 let tags = [];
                 let tagfield = this.embedFieldByName(emb, "Tags");
@@ -2963,10 +2965,10 @@ class ModVRChat extends Module {
 
                 return {
                     worldid: match[0],
-                    title: emb.title,
-                    url: emb.url,
-                    image: emb.image,
-                    description: emb.description,
+                    title: emb.data.title,
+                    url: emb.data.url,
+                    image: emb.data.image,
+                    description: emb.data.description,
                     tags: tags,
                     sharedById: authorid,
                     sharedBy: authorname
@@ -3982,9 +3984,9 @@ class ModVRChat extends Module {
         return tags.filter(tag => tag.match(/^author_tag/)).map(tag => tag.replace(/author_tag_/, "").replace(/_/g, ""));
     }
 
-    embedFieldByName(emb, name) {
+    embedFieldByName(emb, name) {  //For EmbedBuilders
         if (!emb || !name) return null;
-        for (let field of (emb.data ? emb.data.fields : emb.fields)) {
+        for (let field of emb.data.fields) {
             if (field.name.toLowerCase() == name.toLowerCase()) {
                 return field;
             }
