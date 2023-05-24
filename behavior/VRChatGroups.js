@@ -850,7 +850,7 @@ class ModVRChatGroups extends Module {
 
         if (Object.keys(knownMemberUserids).length) {
             try {
-                //Prefetch in bulk for efficience
+                //Prefetch in bulk for efficiency
                 await this.denv.server.members.fetch(Object.values(knownMemberUserids));
             } catch (e) {
                 this.log("warn", "Failed to retrieve users for known " + vrcgroupid + " members: " + JSON.stringify(e));

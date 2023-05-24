@@ -24,7 +24,7 @@ class ModVRChatPhotos extends Module {
     ]; }
     
     get optionalParams() { return [
-        "name",                 //Album name override
+        "name",                 //Album name override (unique between this module and VRChatFavorites)
         "deleteemoji",          //Emoji for deleting things
         "backuppath",           //Subdirectory for backups
 
@@ -53,6 +53,10 @@ class ModVRChatPhotos extends Module {
 
     get denv() {
         return this.env(this.param('env'));
+    }
+
+    get vrchat() {
+        return this.mod("VRChat");
     }
 
     get photochan() {
@@ -261,7 +265,7 @@ class ModVRChatPhotos extends Module {
 
         this.mod('Commands').registerRootExtension(this, 'VRChat', 'vrcfix');
 
-        this.mod('Commands').registerCommand(this, 'vrcfix process' + this.param("name"), {
+        this.mod('Commands').registerCommand(this, 'vrcfix ' + this.param("name") + ' process', {
             description: "Process an unprocessed photo message as if it had just been sent.",
             args: ["messageid"],
             permissions: [PERM_ADMIN]
@@ -279,7 +283,7 @@ class ModVRChatPhotos extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'vrcfix recandidate' + this.param("name"), {
+        this.mod('Commands').registerCommand(this, 'vrcfix ' + this.param("name") + ' recandidate', {
             description: "Re-bakes a contest candidate message (edits the original).",
             args: ["messageid"],
             permissions: [PERM_ADMIN]
@@ -643,14 +647,12 @@ class ModVRChatPhotos extends Module {
     async bakePicture(name, data, member, metadata) {
         if (!name || !data || !data.length || !member) return null;
 
-        let vrchat = this.mod("VRChat");
-
         let sharedBy = this.denv.idToDisplayName(member.id);
 
         let emb = new EmbedBuilder();
 
         if (metadata) {
-            let sbperson = vrchat.getPerson(member.id);
+            let sbperson = this.vrchat.getPerson(member.id);
             if (this.param("usewebhook") || sbperson && metadata.author.id == sbperson.vrc) {
                 sharedBy = null;
             }
@@ -669,8 +671,8 @@ class ModVRChatPhotos extends Module {
                     let result = player.name.replace(/(\_|\*|\~|\`|\||\\|\<|\>|\:|\!)/g, "\\$1");
                     if (player.id == metadata.author.id) result = "__" + result + "__";
                     if (player.z < 0) result = "*" + result + "*";
-                    let playeruserid = vrchat.getUseridByVrc(player.id);
-                    if (playeruserid) result = "[" + result + "](" + vrchat.getPersonMsgURL(playeruserid) + ")";
+                    let playeruserid = this.vrchat.getUseridByVrc(player.id);
+                    if (playeruserid) result = "[" + result + "](" + this.vrchat.getPersonMsgURL(playeruserid) + ")";
                     return result;
                 });
                 
@@ -698,7 +700,7 @@ class ModVRChatPhotos extends Module {
         }
 
         if (sharedBy) {
-            let msgurl = vrchat.getPersonMsgURL(member.id);
+            let msgurl = this.vrchat.getPersonMsgURL(member.id);
             if (msgurl) sharedBy = "[" + sharedBy + "](" + msgurl + ")";
             emb.addFields({name: "Shared by", value: sharedBy, inline: true});
         }
@@ -719,8 +721,6 @@ class ModVRChatPhotos extends Module {
 
     extractOwnersFromPicture(message) {
         if (!message) return null;
-
-        let vrchat = this.mod("VRChat");
 
         let emb = null;
         for (let checkembed of message.embeds) {
@@ -748,14 +748,14 @@ class ModVRChatPhotos extends Module {
             if (field.name.match(/^shared by$/i)) {
                 let extrs = field.value.match(/\[[^\]]+\]\(https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)\)/);
                 if (extrs) {
-                    let person = vrchat.findPersonByMsg(extrs[1]);
+                    let person = this.vrchat.findPersonByMsg(extrs[1]);
                     if (person) results.sharedBy = person;
                 }
             }
             if (field.name.match(/^with$/i)) {
                 let extrs = field.value.match(/\[[^\]]*__[^\]]+__[^\]]*\]\(https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)\)/);
                 if (extrs) {
-                    let person = vrchat.findPersonByMsg(extrs[1]);
+                    let person = this.vrchat.findPersonByMsg(extrs[1]);
                     if (person) results.author = person;
                 }
             }
@@ -829,8 +829,6 @@ class ModVRChatPhotos extends Module {
     async bakeCandidate(member, owners, fields, messageurl, existing) {
         if (!member && !existing || !owners || !fields || Object.keys(owners).length < 1) return null;
 
-        let vrchat = this.mod("VRChat");
-
         let nominate, label;
         if (owners.author) {
             nominate = owners.author;
@@ -856,7 +854,7 @@ class ModVRChatPhotos extends Module {
 
         emb.data.fields = [];
 
-        let msgurl = vrchat.getPersonMsgURL(nominate);
+        let msgurl = this.vrchat.getPersonMsgURL(nominate);
         if (msgurl) {
             emb.addFields({name: label, value: "[" + this.denv.idToDisplayName(nominate) + "](" + msgurl + ")", inline: true});
         } else {
@@ -864,7 +862,7 @@ class ModVRChatPhotos extends Module {
         }
 
         if (member) {
-            msgurl = vrchat.getPersonMsgURL(member.id);
+            msgurl = this.vrchat.getPersonMsgURL(member.id);
             if (msgurl) {
                 emb.addFields({name: "Nominated by", value: "[" + this.denv.idToDisplayName(member.id) + "](" + msgurl + ")", inline: true});
             } else {
@@ -892,8 +890,6 @@ class ModVRChatPhotos extends Module {
     extractContestantFromPicture(message) {
         if (!message) return null;
 
-        let vrchat = this.mod("VRChat");
-
         let emb = null;
         for (let checkembed of message.embeds) {
             if (checkembed.image) {
@@ -907,7 +903,7 @@ class ModVRChatPhotos extends Module {
             if (field.name.match(/^nominated by$/i)) {
                 let extrs = field.value.match(/\[[^\]]+\]\(https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)\)/);
                 if (extrs) {
-                    let person = vrchat.findPersonByMsg(extrs[1]);
+                    let person = this.vrchat.findPersonByMsg(extrs[1]);
                     if (person) return person;
                 }
             }
