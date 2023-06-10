@@ -976,7 +976,7 @@ class ModVRChat extends Module {
                 //Synchronize nickname with vrchat username
                 if (person.syncnick) {
                     let member = this.denv.server.members.cache.get(userid);
-                    if (member && member.displayName.toLowerCase() != this._friends[person.vrc].displayName.toLowerCase()) {
+                    if (member && member.displayName != this._friends[person.vrc].displayName) {
                         member.setNickname(this._friends[person.vrc].displayName, "Synchronizing nickname with VRChat.")
                             .catch(e => this.log("warn", "Error setting nickname of " + member.displayName + " to " + this._friends[person.vrc].displayName + ": " + e));
                     }
