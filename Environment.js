@@ -34,7 +34,7 @@ class Environment extends ModernEventEmitter {
     get configfile() { return "config/" + this._name.toLowerCase() + "." + this._envName.toLowerCase() + ".env.json"; }
     
     
-    initialize(sharedInstances) {
+    initialize(opt) {
         let params = {};
         
         //Load and check parameters

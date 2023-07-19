@@ -67,9 +67,9 @@ class EnvDiscord extends Environment {
         this.log(`Connecting to ${params.server}`);
 
         return this._localClient.prepareClient(this, this.param('token'), this.param('sendDelay'))
-            .then((client) => {
+            .then(async (client) => {
                 this._client = client;
-                this._server = client.guilds.cache.get(params.server);
+                this._server = await client.guilds.fetch(params.server);
                 
                 if (!this._server) {
                     this.log('error', "Could not obtain server object.");

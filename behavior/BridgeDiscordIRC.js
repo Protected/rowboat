@@ -1,7 +1,7 @@
 /* Module: BridgeDiscordIRC -- This module was designed to bridge a multi-channel Discord server with a single IRC channel. */
 
 const Module = require('../Module.js');
-const cd = require('color-difference');
+const { closest } = require('color-diff');
 const diff = require('diff');
 const { ChannelType } = require('discord.js');
 
@@ -60,6 +60,11 @@ class ModBridgeDiscordIRC extends Module {
         
         this._params['discordBlacklist'] = [];
         this._params['discordOneWay'] = [];
+
+        this._convertedColorMap = [];
+        for (let color of colormap) {
+            this._convertedColorMap.push(this.hexToObjectRGB(color || {R: 0, G: 0, B: 0}));
+        }
     }
 
 
@@ -264,16 +269,23 @@ class ModBridgeDiscordIRC extends Module {
         return null;
     }
 
+    hexToObjectRGB(hexrgb) {
+        let ext = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(hexrgb);
+        if (!ext) return null;
+        return {
+            R: parseInt(ext[1], 16),
+            G: parseInt(ext[2], 16),
+            B:parseInt(ext[3], 16)
+        };
+    }
+
+    sameObjectRGB(rgba, rgbb) {
+        return rgba.R === rgbb.R && rgba.G === rgbb.G && rgba.B === rgbb.B;
+    }
+
     closestTtyColor(hexrgb) {
-        let distance = 101;
-        let color = 0;
-        for (let i = 0; i < colormap.length; i++) {
-            let r = cd.compare(hexrgb, colormap[i]);
-            if (r < distance) {
-                distance = r;
-                color = i;
-            }
-        }
+        let pick = closest(this.hexToObjectRGB(hexrgb), this._convertedColorMap);
+        let color = this._convertedColorMap.findIndex(color => this.sameObjectRGB(pick, color));
         color = color.toString();
         if (color.length < 2) color = "0" + color;
         return color;
