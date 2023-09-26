@@ -1,49 +1,45 @@
-/* Module: Logger -- Event logging for environments and modules; log searches. */
+/* EventLogger -- Event logging for environments and behaviors; log searches. */
 
-const Module = require('../Module.js');
-const winston = require('winston');
-const moment = require('moment');
-const fs = require('fs');
-const cp = require('child_process');
+import winston from 'winston';
+import moment from 'moment';
+import fs from 'fs';
+import cp from 'child_process';
 
-const { MESSAGE } = require('triple-beam');
+import Behavior from '../src/Behavior.js';
 
-const PERM_ADMIN = 'administrator';
-const PERM_MODERATOR = 'moderator';
-
+import { MESSAGE } from 'triple-beam';
 
 const logFormat = winston.format((info, opts) => {
     info[MESSAGE] = info.message;
     return info;
 });
 
+export default class EventLogger extends Behavior {
 
-class ModLogger extends Module {
-
-    
-    get requiredParams() { return [
-        'basePath',             //Path to the logs directory
-        'logs'                  //List of: {outputFile: TEMPLATE, channels: [LOGCHANNEL, ...]} where the outputFiles are moment templates relative to basePath (must end in .log)
-    ]; }
-    
-    get optionalParams() { return [
-        'templateJoin',         //Template for join event logs. Placeholders: %(MOMENT_FORMAT)% %env% %userid% %user% %channelid% %channel%
-        'templatePart',         //Template for part event logs. Placeholders: %(MOMENT_FORMAT)% %env% %userid% %user% %channelid% %channel% %reason%
-        'templateMessage',      //Template for message event logs. Placeholders: %(MOMENT_FORMAT)% %env% %userid% %user% %channelid% %channel% %type% %message%
-        'maxResults'            //Maximum results per search
+    get params() { return [
+        {n: 'basePath', d: "Path to the logs directory"},
+        {n: 'logs', d: "List of: {outputFile: TEMPLATE, channels: [LOGCHANNEL, ...]} where the outputFile is a moment template relative to basePath (must end in .log)"},
+        {n: 'templateJoin', d: "Template for join event logs. Placeholders: %(MOMENT_FORMAT)% %env% %userid% %user% %channelid% %channel%"},
+        {n: 'templatePart', d: "Template for part event logs. Placeholders: %(MOMENT_FORMAT)% %env% %userid% %user% %channelid% %channel% %reason%"},
+        {n: 'templateMessage', d: "Template for message event logs. Placeholders: %(MOMENT_FORMAT)% %env% %userid% %user% %channelid% %channel% %type% %message%"},
+        {n: 'maxResults', d: "Maximum results per search"}
     ]; }
 
-    get requiredModules() { return [
-        'Commands'
-    ]; }
+    get defaults() { return {
+        basePath: 'eventlogs',
+        templateJoin: "%(HH:mm:ss)% {%env%} [%channel%] * Joins: %user% (%userid%)",
+        templatePart: "%(HH:mm:ss)% {%env%} [%channel%] * Parts: %user% (%userid%) - %reason%",
+        templateMessage: "%(HH:mm:ss)% {%env%} [%channel%] <%user%> %message%",
+        maxResults: 5
+    }; }
+
+    get requiredBehaviors() { return {
+        Users: 'Users',
+        Commands: 'Commands'
+    }; }
 
     constructor(name) {
-        super('Logger', name);
-        
-        this._params['templateJoin'] = '%(YYYY-MM-DD HH:mm:ss)% {%env%} [%channelid%] * Joins: %userid%';
-        this._params['templatePart'] = '%(YYYY-MM-DD HH:mm:ss)% {%env%} [%channelid%] * Parts: %userid% (%reason%)';
-        this._params['templateMessage'] = '%(YYYY-MM-DD HH:mm:ss)% {%env%} [%channelid%] <%userid%> %message%';
-        this._params['maxResults'] = 5;
+        super('EventLogger', name);
         
         this._logs = [];  //Initialized with param('logs') but each item also contains logger (points to winston logger).
         this._channels = {};        
@@ -72,21 +68,17 @@ class ModLogger extends Module {
             }
         }
 
-      
         //Register callbacks
         
-        for (let envname in opt.envs) {
-            opt.envs[envname].on('join', this.onJoin, this);
-            opt.envs[envname].on('part', this.onPart, this);
-            opt.envs[envname].on('message', this.onMessage, this);
-        }
+        this.env().on('join', this.onJoin, this);
+        this.env().on('part', this.onPart, this);
+        this.env().on('message', this.onMessage, this);
         
-        
-        this.mod('Commands').registerCommand(this, 'grep', {
+        this.be('Commands').registerCommand(this, 'grep', {
             description: "Search the event logs.",
             args: ["pattern", "results", "filepattern"],
             minArgs: 1,
-            permissions: [PERM_ADMIN, PERM_MODERATOR]
+            permissions: [this.be("Users").defaultPermAdmin, this.be("Users").defaultPermMod]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let filepattern = null;
@@ -282,11 +274,3 @@ class ModLogger extends Module {
     
 
 }
-
-
-function escapeShell(cmd) {
-    return '"' + cmd.replace(/(["\s'$`\\])/g, '\\$1') + '"';
-};
-
-
-module.exports = ModLogger;

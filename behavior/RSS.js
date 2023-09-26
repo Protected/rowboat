@@ -1,13 +1,15 @@
-/* Module: RSS -- Keep track of RSS feeds. */
+/* RSS -- Keep track of RSS/Atom feeds. */
 
-const Module = require('../Module.js');
-const moment = require('moment');
-const FeedParser = require('feedparser');
-const striptags = require('striptags');
+import moment from 'moment';
+import FeedParser from 'feedparser';
+import striptags from 'striptags';
 
+var EmbedBuilder;
 try {
-    var { EmbedBuilder } = require('discord.js');
+    EmbedBuilder = await import('discord.js').then(ns => ns.EmbedBuilder);
 } catch (err) {}
+
+import Behavior from '../src/Behavior.js';
 
 const RESULT_SUCCESS = "success";
 const RESULT_SERVERERR = "servererr"
@@ -15,39 +17,41 @@ const RESULT_NOTFOUND = "notfound";
 const RESULT_ERROR = "error";
 const RESULT_INVALID = "invalidfeed";
 
-const PERM_ADMIN = "administrator";
+export default class RSS extends Behavior {
 
-
-class ModRSS extends Module {
-
-    get optionalParams() { return [
-        'datafile',
-        'envs',                 //List of allowed environments, or null for all
-        'minfrequency',         //Minimum update frequency (s)
-        'frequency',            //Default update frequency (s)
-        'timer',                //Timer interval (s)
-        'timeout',              //Timeout for HTTP requests (ms)
-        'timestampformat',      //Display format for timestamps
-        'richembed',            //Whether to use embeds in Discord environments
-        'color',                //Default color hint for feeds (Discord embeds only)
+    get params() { return [
+        {n: 'datafile', d: "Customize the name of the default data file"},
+        {n: 'envs', d: "List of allowed environments, or null for all"},
+        {n: 'minfrequency', d: "Minimum update frequency (s)"},
+        {n: 'frequency', d: "Default update frequency (s)"},
+        {n: 'timer', d: "Timer interval (s)"},
+        {n: 'timeout', d: "Timeout for HTTP requests (ms)"},
+        {n: 'timestampformat', d: "Display format for timestamps"},
+        {n: 'richembed', d: "Whether to use embeds in Discord environments"},
+        {n: 'color', d: "Default color hint for feeds in Discord embeds ([R, G, B])"}
     ]; }
 
-    get requiredModules() { return [
-        'Commands'
-    ]; }
+    get defaults() { return {
+        datafile: null,
+        envs: null,
+        minfrequency: 30,
+        frequency: 300,
+        timer: 15,
+        timeout: 5000,
+        timestampformat: "YYYY-MM-DD HH:mm",
+        richembed: false,
+        color: [0, 30, 120]
+    }; }
+
+    get requiredBehaviors() { return {
+        Users: 'Users',
+        Commands: 'Commands'
+    }; }
 
     constructor(name) {
         super('RSS', name);
         
-        this._params['datafile'] = null;
-        this._params['envs'] = null;
-        this._params['minfrequency'] = 30;
-        this._params['frequency'] = 300;
-        this._params['timer'] = 15;
-        this._params['timeout'] = 5000;
-        this._params['timestampformat'] = "YYYY-MM-DD HH:mm";
-        this._params['richembed'] = false;
-        this._params['color'] = [0, 30, 120];
+        this._envProxy = null;
 
         //{feed: {name, url, frequency, env, channelid, creatorid, latest, latestresult, data: [entries, ...]}}
         this._data = {};
@@ -60,6 +64,8 @@ class ModRSS extends Module {
     
     initialize(opt) {
         if (!super.initialize(opt)) return false;
+
+        this._envProxy = opt.envProxy;
 
         this._data = this.loadData(null, {}, {quiet: true});
         if (this._data === false) return false;
@@ -85,7 +91,9 @@ class ModRSS extends Module {
       
         //Register callbacks
         
-        this.mod('Commands').registerRootDetails(this, 'rss', {description: 'Control RSS feeds.'});
+        const permAdmin = this.be('Users').defaultPermAdmin;
+
+        this.be('Commands').registerRootDetails(this, 'rss', {description: 'Control RSS feeds.'});
 
 
         let create = (announce) => (env, type, userid, channelid, command, args, handle, ep) => {
@@ -130,23 +138,23 @@ class ModRSS extends Module {
             return true;
         };
         
-        this.mod('Commands').registerCommand(this, 'rss create', {
+        this.be('Commands').registerCommand(this, 'rss create', {
             description: "Register a new RSS feed.",
             args: ["url", "name", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, create(false));
 
-        this.mod('Commands').registerCommand(this, 'rss createhere', {
+        this.be('Commands').registerCommand(this, 'rss createhere', {
             description: "Register a new RSS feed that announces to the current channel.",
             args: ["url", "name", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, create(true));
 
 
-        this.mod('Commands').registerCommand(this, 'rss destroy', {
+        this.be('Commands').registerCommand(this, 'rss destroy', {
             description: "Destroy an RSS feed. All saved data will be lost.",
             args: ["name", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let feedid = args.name.join("").toLowerCase();
@@ -167,10 +175,10 @@ class ModRSS extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rss set name', {
+        this.be('Commands').registerCommand(this, 'rss set name', {
             description: "Rename an existing RSS feed.",
             args: ["name", "newname"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let feedid = args.name.split(" ").join("").toLowerCase();
@@ -199,10 +207,10 @@ class ModRSS extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rss set url', {
+        this.be('Commands').registerCommand(this, 'rss set url', {
             description: "Change the URL of an existing RSS feed.",
             args: ["name", "url"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let feedid = args.name.split(" ").join("").toLowerCase();
@@ -225,12 +233,12 @@ class ModRSS extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rss set frequency', {
+        this.be('Commands').registerCommand(this, 'rss set frequency', {
             description: "Set an update frequency for an RSS feed, overriding the default.",
             details: ["If the frequency argument is not provided, the feed will be reassigned to the default frequency."],
             args: ["name", "frequency"],
             minArgs: 1,
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let feedid = args.name.split(" ").join("").toLowerCase();
@@ -253,13 +261,13 @@ class ModRSS extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rss set channelid', {
+        this.be('Commands').registerCommand(this, 'rss set channel', {
             description: "Set a channel to which feed updates are automatically sent.",
             details: ["If the channel argument is not provided, updates will no longer be sent to any channel."],
             args: ["name", "channelid"],
             minArgs: 1,
-            permissions: [PERM_ADMIN]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            permissions: [permAdmin]
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
         
             let feedid = args.name.split(" ").join("").toLowerCase();
             if (!this._data[feedid]) {
@@ -268,20 +276,25 @@ class ModRSS extends Module {
             }
 
             if (args.channelid) {
-                
-                let feedenv = this.env(this._data[feedid].env);
+
+                let feedenv = this._envProxy(this._data[feedid].env);
                 if (!feedenv) {
                     ep.reply("This feed's environment is currently unavailable, so the announcement channel can't be set.");
                     return true;
                 }
 
-                let channeltype = feedenv.channelIdToType(args.channelid);
+                let channelid = args.channelid;
+                if (feedenv.type == "Discord") {
+                    channelid = feedenv.extractChannelId(channelid);
+                }
+
+                let channeltype = await feedenv.channelIdToType(channelid);
                 if (channeltype != "regular") {
                     ep.reply("Please provide the valid ID of a public channel.");
                     return true;
                 }
 
-                this._data[feedid].channelid = args.channelid;
+                this._data[feedid].channelid = channelid;
                 ep.reply("Announcement channel for feed updates successfully set.");
 
             } else {
@@ -295,11 +308,11 @@ class ModRSS extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rss set color', {
+        this.be('Commands').registerCommand(this, 'rss set color', {
             description: "Set a color hint for displaying updates in supported environment types.",
             args: ["name", "red", "green", "blue"],
             minArgs: 1,
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let feedid = args.name.split(" ").join("").toLowerCase();
@@ -332,7 +345,7 @@ class ModRSS extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rss list', {
+        this.be('Commands').registerCommand(this, 'rss list', {
             description: "Lists existing RSS feeds.",
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
@@ -349,10 +362,10 @@ class ModRSS extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rss info', {
+        this.be('Commands').registerCommand(this, 'rss info', {
             description: "Displays information on an RSS feed.",
             args: ["name", true]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
         
             let feedid = args.name.join("").toLowerCase();
             if (!this._data[feedid]) {
@@ -361,10 +374,10 @@ class ModRSS extends Module {
             }
 
             let feed = this._data[feedid];
-            let feedenv = this.env(feed.env);
+            let feedenv = this._envProxy(feed.env);
             let msg;
 
-            if (env.envName == "Discord" && this.param("richembed")) {
+            if (env.type == "Discord" && this.param("richembed")) {
                 msg = new EmbedBuilder();
 
                 msg.setColor(feed.color || this.param("color"));
@@ -374,10 +387,10 @@ class ModRSS extends Module {
                 msg.addFields(
                     {name: "Update frequency (s)", value: feed.frequency || this.param("frequency")},
                     {name: "Environment", value: feed.env},
-                    {name: "Creator", value: feedenv ? feedenv.idToDisplayName(feed.creatorid) : feed.creatorid}
+                    {name: "Creator", value: feedenv ? await feedenv.idToDisplayName(feed.creatorid) : feed.creatorid}
                 );
                 if (feed.channelid) {
-                    msg.addFields({name: "Announce channel", value: feedenv ? feedenv.channelIdToDisplayName(feed.channelid) : feed.channelid});
+                    msg.addFields({name: "Announce channel", value: feedenv ? await feedenv.channelIdToDisplayName(feed.channelid) : feed.channelid});
                 }
                 if (feed.latest) {
                     msg.addFields(
@@ -391,9 +404,9 @@ class ModRSS extends Module {
                 msg = "**" + feed.name + "** - " + feed.url + "\n";
                 msg += "Update frequency (s): " + (feed.frequency || this.param("frequency")) + "\n";
                 msg += "Environment: " + feed.env + "\n";
-                msg += "Creator: " + (feedenv ? feedenv.idToDisplayName(feed.creatorid) : feed.creatorid) + "\n";
+                msg += "Creator: " + (feedenv ? await feedenv.idToDisplayName(feed.creatorid) : feed.creatorid) + "\n";
                 if (feed.channelid) {
-                    msg += "Announce channel: " + (feedenv ? feedenv.channelIdToDisplayName(feed.channelid) : feed.channelid) + "\n";
+                    msg += "Announce channel: " + (feedenv ? await feedenv.channelIdToDisplayName(feed.channelid) : feed.channelid) + "\n";
                 }
                 if (feed.latest) {
                     msg += "Latest sync: " + (moment(feed.latest * 1000).fromNow() + " (" + feed.latestresult + ")") + "\n";
@@ -408,10 +421,10 @@ class ModRSS extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rss update', {
+        this.be('Commands').registerCommand(this, 'rss update', {
             description: "Attempt to sync a feed immediately.",
             args: ["name", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
             let feedid = args.name.join("").toLowerCase();
@@ -435,7 +448,7 @@ class ModRSS extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rss check', {
+        this.be('Commands').registerCommand(this, 'rss check', {
             description: "Shows the latest entry in a feed.",
             args: ["name", true]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -496,7 +509,7 @@ class ModRSS extends Module {
 
     updateFeed(feedid) {
         let feed = this._data[feedid];
-        let env = this.env(feed.env);
+        let env = this._envProxy(feed.env);
 
         return new Promise((resolve, reject) => {
             let req = this.streamget(feed.url, {timeout: this.param("timeout")});
@@ -549,33 +562,35 @@ class ModRSS extends Module {
             });
             
             parser.on("end", () => {
-                if (received.length) {
-                    let bootstrap = !feed.data.length;
+                (async () => {
+                    if (received.length) {
+                        let bootstrap = !feed.data.length;
 
-                    received.reverse();
+                        received.reverse();
 
-                    if (received[0].pubDate) {
-                        received.sort((a, b) => {
-                            if (this.rssPubDate(a.pubDate).isAfter(this.rssPubDate(b.pubDate))) return 1;
-                            return -1;
-                        });
-                    }
+                        if (received[0].pubDate) {
+                            received.sort((a, b) => {
+                                if (this.rssPubDate(a.pubDate).isAfter(this.rssPubDate(b.pubDate))) return 1;
+                                return -1;
+                            });
+                        }
 
-                    for (let entry of received) {
-                        feed.data.push(entry);
-                        this._index[feedid][this.rssId(entry)] = entry;
-        
-                        if (env && feed.channelid && !bootstrap) {
-                            this.outputFeedEntry(env, feed.channelid, feed, entry);
+                        for (let entry of received) {
+                            feed.data.push(entry);
+                            this._index[feedid][this.rssId(entry)] = entry;
+            
+                            if (env && feed.channelid && !bootstrap) {
+                                await this.outputFeedEntry(env, feed.channelid, feed, entry);
+                            }
                         }
                     }
-                }
 
-                feed.latest = moment().unix();
-                feed.latestresult = RESULT_SUCCESS;
-                this._data.save();
+                    feed.latest = moment().unix();
+                    feed.latestresult = RESULT_SUCCESS;
+                    this._data.save();
 
-                resolve(received);
+                    resolve(received);
+                })();
             });
 
         });
@@ -587,13 +602,13 @@ class ModRSS extends Module {
     }
 
 
-    outputFeedEntry(env, channelid, feed, entry) {
+    async outputFeedEntry(env, channelid, feed, entry) {
         let msg;
 
-        let channeltype = env.channelIdToType(channelid);
+        let channeltype = await env.channelIdToType(channelid);
         if (channeltype != "regular") return false;
 
-        if (env.envName == "Discord" && this.param("richembed")) {
+        if (env.type == "Discord" && this.param("richembed")) {
 
             msg = new EmbedBuilder();
             msg.setColor(feed.color || this.param("color"));
@@ -623,7 +638,9 @@ class ModRSS extends Module {
                 if (description.length > 2048) {
                     description = description.substr(0, 2044) + "...";
                 }
-                msg.setDescription(description);
+                if (description) {
+                    msg.setDescription(description);
+                }
             }
 
             if (entry.author) {
@@ -645,6 +662,3 @@ class ModRSS extends Module {
     }
 
 }
-
-
-module.exports = ModRSS;

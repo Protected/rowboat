@@ -1,10 +1,9 @@
-/* Module: DuckDuckGo -- Adds a command, "duck", which performs a DuckDuckGo query. */
+/* DuckDuckGo -- Adds a command, "duck", which performs a DuckDuckGo query. */
 
-const Module = require('../Module.js');
-const DDG = require('duck-duck-scrape');
-const moment = require('moment');
+import DDG from 'duck-duck-scrape';
+import moment from 'moment';
 
-const BASIC_URL = "https://duckduckgo.com/";
+import Behavior from '../src/Behavior.js';
 
 const COLORS = {
     main: [222, 88, 51],
@@ -14,31 +13,31 @@ const COLORS = {
     image: [141, 157, 227]
 };
 
+var EmbedBuilder;
 try {
-    var { EmbedBuilder } = require('discord.js');
+    EmbedBuilder = await import('discord.js').then(ns => ns.EmbedBuilder);
 } catch (err) {}
 
-class ModDuckDuckGo extends Module {
+export default class DuckDuckGo extends Behavior {
 
-    get requiredParams() { return [
-    ]; }
-    
-    get optionalParams() { return [
-        'results',              //Amount of returned results by default
-        'maxResults'            //Maximum amount of returned results using --count
+    get params() { return [
+        {n: 'results', d: "Amount of returned results by default"},
+        {n: 'maxResults', d: "Maximum amount of returned results using --count"}
     ]; }
 
-    get requiredModules() { return [
-        'Commands'
-    ]; }
+    get defaults() { return {
+        results: 1,
+        maxResults: 5
+    }; }
+
+    get requiredBehaviors() { return {
+        Commands: 'Commands'
+    }; }
 
     constructor(name) {
         super('DuckDuckGo', name);
         
-        this._params['results'] = 1;
-        this._params['maxResults'] = 5;
     }
-    
     
     initialize(opt) {
         if (!super.initialize(opt)) return false;
@@ -46,25 +45,9 @@ class ModDuckDuckGo extends Module {
       
         //Register callbacks
         
-        this.mod('Commands').registerCommand(this, 'duck', {
-            description: "DuckDuckGo query.",
-            args: ["query", true],
-            details: [
-                "Prefix the query with these parameters to modify your search:",
-                "--type normal|images|news|videos : Change the search type (default is normal).",
-                "--safe strict|moderate|off : Change the safesearch setting (default is moderate).",
-                "--time a|y|m|w|d : Restrict the time range of the results (default is a).",
-                "--count N : Change the amount of returned results (default is " + this.param("results") + ")",
-                "--imgType all|photo|clipart|gif|transparent",
-                "--imgSize all|small|medium|large|wallpaper",
-                "--imgLayout all|square|tall|wide",
-                "--vidDefinition any|high|standard",
-                "--vidDuration any|short|medium|long"
-            ],
-            types: ["regular"]
-        }, async (env, type, userid, channelid, command, args, handle, ep) => {
+        const duckCommand = async (env, type, userid, channelid, command, args, handle, ep) => {
         
-            let isDiscord = (env.envName == "Discord");
+            let isDiscord = (env.type == "Discord");
             let options = this.parseQuery(args.query);
 
             if (options.error) {
@@ -133,6 +116,51 @@ class ModDuckDuckGo extends Module {
             }
         
             return true;
+        };
+        
+        this.be('Commands').registerCommand(this, 'duck', {
+            description: "DuckDuckGo query.",
+            args: ["query", true],
+            details: [
+                "Prefix the query with these parameters to modify your search:",
+                "--type normal|images|news|videos : Change the search type (default is normal).",
+                "--safe strict|moderate|off : Change the safesearch setting (default is moderate).",
+                "--time a|y|m|w|d : Restrict the time range of the results (default is a).",
+                "--count N : Change the amount of returned results (default is " + this.param("results") + ")",
+                "--imgType all|photo|clipart|gif|transparent",
+                "--imgSize all|small|medium|large|wallpaper",
+                "--imgLayout all|square|tall|wide",
+                "--vidDefinition any|high|standard",
+                "--vidDuration any|short|medium|long"
+            ],
+            types: ["regular"]
+        }, duckCommand);
+
+        this.be('Commands').registerCommand(this, 'duck images', {
+            description: "Alias for !duck --type images",
+            args: ["query", true],
+            types: ["regular"]
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
+            args.query.unshift("--type", "images");
+            return await duckCommand(env, type, userid, channelid, command, args, handle, ep);
+        });
+
+        this.be('Commands').registerCommand(this, 'duck news', {
+            description: "Alias for !duck --type news",
+            args: ["query", true],
+            types: ["regular"]
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
+            args.query.unshift("--type", "news");
+            return await duckCommand(env, type, userid, channelid, command, args, handle, ep);
+        });
+
+        this.be('Commands').registerCommand(this, 'duck videos', {
+            description: "Alias for !duck --type videos",
+            args: ["query", true],
+            types: ["regular"]
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
+            args.query.unshift("--type", "videos");
+            return await duckCommand(env, type, userid, channelid, command, args, handle, ep);
         });
       
         return true;
@@ -419,6 +447,3 @@ class ModDuckDuckGo extends Module {
     }
 
 }
-
-
-module.exports = ModDuckDuckGo;

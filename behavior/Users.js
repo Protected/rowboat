@@ -1,31 +1,49 @@
-/* Module: Users -- Manage "known" user accounts and permission flags. */
+/* Users -- Manage "known" user accounts and permission flags. */
 
-const Module = require('../Module.js');
+import Behavior from '../src/Behavior.js';
 
-const PERM_ADMIN = 'administrator';
-const PERM_MOD = 'moderator';
+export default class Users extends Behavior {
 
-class ModUsers extends Module {
-
-
-    get optionalParams() { return [
-        'datafile'
+    get params() { return [
+        {n: 'datafile', d: "Customize the name of the default data file"},
+        {n: 'bootstrap', d: "Provides static permissions when setting up {handle, environment, idpattern, [permissions...]}"},
+        {n: 'defaultpermadmin', d: "A default permission name behaviors can use for gating admin (full permissions) features."},
+        {n: 'defaultpermmod', d: "A default permission name behaviors can use for gating moderator features."},
     ]; }
+
+    get defaults() { return {
+        datafile: null,
+        bootstrap: null,
+        defaultpermadmin: 'administrator',
+        defaultpermmod: 'moderator'
+    }; }
+
+    get optionalBehaviors() { return {
+        Commands: "Commands"
+    }; }
 
     constructor(name) {
         super('Users', name);
         
-        this._params['datafile'] = null;
-        
+        this._envExists = null;
+        this._envProxy = null;
+
         this._userdata = [];
         this._userhandles = {};
         this._permissionProviders = [];
     }
 
 
+    get defaultPermAdmin() { return this.param("defaultpermadmin"); }
+    get defaultPermMod() { return this.param("defaultpermmod"); }
+
+
     initialize(opt) {
         if (!super.initialize(opt)) return false;
        
+        this._envProxy = opt.envProxy;
+        this._envExists = opt.envExists;
+
         //Load data
         
         this._userdata = this.loadData(null, []);
@@ -36,11 +54,25 @@ class ModUsers extends Module {
             this._userhandles[eachuser.handle] = eachuser;
         }
 
+
+        //Bootstrap
+
+        let bootstrap = this.param("bootstrap");
+        if (bootstrap && typeof bootstrap === "object") {
+            let warning = "!!WARNING!! Behavior " + this._name + " is running with bootstrap permissions for " + bootstrap.handle + ", identified by: {" + bootstrap.environment + "} " + bootstrap.idpattern + " . Remove and restart before normal use.";
+            console.log(warning);
+            this.log("warn", warning);
+
+            this.addUser(bootstrap.handle);
+            this.addId(bootstrap.handle, bootstrap.environment, bootstrap.idpattern);
+            this.addPerms(bootstrap.handle, bootstrap.permissions);
+        }
+
         
         //Register callbacks
-        
-        opt.moduleRequest('Commands', (commands) => {
-        
+
+        if (this.optBeExists("Commands")) {
+            const commands = this.be("Commands");
         
             commands.registerRootDetails(this, 'user', {description: "View and manipulate user accounts."});
             commands.registerRootDetails(this, 'id', {description: "Manipulate identification patterns associated with user accounts."});
@@ -51,7 +83,7 @@ class ModUsers extends Module {
             commands.registerCommand(this, 'user add', {
                 args: ["handle"],
                 description: "Create a new empty user account with the given handle.",
-                permissions: [PERM_ADMIN]
+                permissions: [this.defaultPermAdmin]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 if (this.addUser(args.handle)) {
@@ -68,8 +100,8 @@ class ModUsers extends Module {
                 args: ["user", "handle"],
                 minArgs: 1,
                 description: "Create a user account for the given user in the current environment with the given handle.",
-                permissions: [PERM_ADMIN]
-            }, (env, type, userid, channelid, command, args, handle, ep) => {
+                permissions: [this.defaultPermAdmin]
+            }, async (env, type, userid, channelid, command, args, handle, ep) => {
             
                 let targetid = env.displayNameToId(args.user);
                 if (!targetid) {
@@ -77,7 +109,7 @@ class ModUsers extends Module {
                     return true;
                 }
             
-                let handles = this.getHandlesById(env.name, targetid);
+                let handles = await this.getHandlesById(env.name, targetid);
                 let checkhandle = (handles.length ? handles[0] : null);
                 if (checkhandle) {
                     ep.reply("This user already has an account: " + checkhandle + ".");
@@ -118,7 +150,7 @@ class ModUsers extends Module {
             commands.registerCommand(this, 'user del', {
                 args: ["handle"],
                 description: "Delete an existing user account identified by the given handle.",
-                permissions: [PERM_ADMIN]
+                permissions: [this.defaultPermAdmin]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 if (this.delUser(args.handle)) {
@@ -134,7 +166,7 @@ class ModUsers extends Module {
             commands.registerCommand(this, 'user rename', {
                 args: ["fromhandle", "tohandle"],
                 description: "Rename an existing account.",
-                permissions: [PERM_ADMIN]
+                permissions: [this.defaultPermAdmin]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
 
                 if (this.renameUser(args.fromhandle, args.tohandle)) {
@@ -150,10 +182,10 @@ class ModUsers extends Module {
             commands.registerCommand(this, 'user find', {
                 args: ["environment", "id"],
                 description: "List the handles of the user accounts that match the given id and environment.",
-                permissions: [PERM_ADMIN, PERM_MOD]
-            }, (env, type, userid, channelid, command, args, handle, ep) => {
+                permissions: [this.defaultPermAdmin, this.defaultPermMod]
+            }, async (env, type, userid, channelid, command, args, handle, ep) => {
             
-                let handles = this.getHandlesById(args.environment, args.id);
+                let handles = await this.getHandlesById(args.environment, args.id);
                 if (!handles.length) {
                     ep.reply("No handles were found matching the given environment and id.");
                     return true;
@@ -174,7 +206,7 @@ class ModUsers extends Module {
                 args: ["perms", true],
                 minArgs: 0,
                 description: "Lists the handles of the user accounts that have the given permissions.",
-                permissions: [PERM_ADMIN, PERM_MOD]
+                permissions: [this.defaultPermAdmin, this.defaultPermMod]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
 
                 let handles = this.getHandlesByPerms(args.perms);
@@ -197,11 +229,11 @@ class ModUsers extends Module {
             commands.registerCommand(this, 'id add', {
                 args: ["handle", "environment", "idpattern"],
                 description: "Add an ID pattern (regex) to authenticate the user account identified by the handle in the specified environment.",
-                permissions: [PERM_ADMIN]
+                permissions: [this.defaultPermAdmin]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 args.idpattern = "^" + args.idpattern + "$";
-                if (!this._environments[args.environment]) {
+                if (!this._envExists(args.environment)) {
                     ep.reply("There is no environment named " + args.environment + " at this time.");
                     return true;
                 }
@@ -219,7 +251,7 @@ class ModUsers extends Module {
             commands.registerCommand(this, 'id del', {
                 args: ["handle", "environment", "idpattern"],
                 description: "Remove an existing ID pattern from a user such that it will no longer authenticate the user account identified by the handle.",
-                permissions: [PERM_ADMIN]
+                permissions: [this.defaultPermAdmin]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
                 
                 args.idpattern = "^" + args.idpattern + "$";
@@ -238,7 +270,7 @@ class ModUsers extends Module {
                 args: ["handle", "permissions", true],
                 minArgs: 2,
                 description: "Add one or more permissions to the user account identified by the handle.",
-                permissions: [PERM_ADMIN]
+                permissions: [this.defaultPermAdmin]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 if (this.addPerms(args.handle, args.permissions)) {
@@ -255,7 +287,7 @@ class ModUsers extends Module {
                 args: ["handle", "permissions", true],
                 minArgs: 2,
                 description: "Remove one or more permissions from the user account identified by the handle.",
-                permissions: [PERM_ADMIN]
+                permissions: [this.defaultPermAdmin]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 if (this.delPerms(args.handle, args.permissions)) {
@@ -272,7 +304,7 @@ class ModUsers extends Module {
                 args: ["handle", "key", "value", true],
                 minArgs: 2,
                 description: "Set a metadata key in the user account identified by the handle.",
-                permissions: [PERM_ADMIN]
+                permissions: [this.defaultPermAdmin]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 let value = args.value.join(" ");
@@ -293,7 +325,7 @@ class ModUsers extends Module {
                 details: [
                     "Note that removing keys created by modules may impact module functionality."
                 ],
-                permissions: [PERM_ADMIN]
+                permissions: [this.defaultPermAdmin]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 if (this.delMeta(args.handle, args.key)) {
@@ -309,7 +341,7 @@ class ModUsers extends Module {
             commands.registerCommand(this, 'meta get', {
                 args: ["handle", "key"],
                 description: "Read a metadata key from the user account identified by the handle.",
-                permissions: [PERM_ADMIN]
+                permissions: [this.defaultPermAdmin]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 let value = this.getMeta(args.handle, args.key);
@@ -327,7 +359,7 @@ class ModUsers extends Module {
                 args: ["handle", "full"],
                 minArgs: 1,
                 description: "Describe the user account identified by the handle.",
-                permissions: [PERM_ADMIN, PERM_MOD]
+                permissions: [this.defaultPermAdmin, this.defaultPermMod]
             }, (env, type, userid, channelid, command, args, handle, ep) => {
             
                 let account = this.getUser(args.handle);
@@ -368,7 +400,7 @@ class ModUsers extends Module {
             });
         
         
-        });
+        }
         
         return true;
     }
@@ -394,8 +426,8 @@ class ModUsers extends Module {
         return wanthandle;
     }
 
-    getEnvUser(env, userid) {  //Implicit registration
-        let handles = this.getHandlesById(env, userid, true);
+    async getEnvUser(env, userid) {  //Implicit registration
+        let handles = await this.getHandlesById(env, userid, true);
         if (handles.length) return this.getUser(handles[0]);
 
         let handle = this.handleSuggestion(env, userid);
@@ -516,11 +548,10 @@ class ModUsers extends Module {
         );
     }
 
-    isIdHandle(handle, env, id, strict) {
+    async isIdHandle(handle, env, id, strict) {
         if (strict) {
-            if (!this._environments[env].idIsSecured(id) || !this._environments[env].idIsAuthenticated(id)) {
-                return false;
-            }
+            if (!await this._envProxy(env).idIsSecured(id)) return false;
+            if (!await this._envProxy(env).idIsAuthenticated(id)) return false;
         }
         
         let ids = this.getIds(handle, env);
@@ -534,11 +565,11 @@ class ModUsers extends Module {
         return false;
     }
 
-    getHandlesById(env, id, strict) {
+    async getHandlesById(env, id, strict) {
         let result = [];
         
         for (let eachuser of this._userdata) {
-            if (this.isIdHandle(eachuser.handle, env, id, strict)) {
+            if (await this.isIdHandle(eachuser.handle, env, id, strict)) {
                 result.push(eachuser.handle);
             }
         }
@@ -709,7 +740,7 @@ class ModUsers extends Module {
     
 
     //Programmatic permission providers (not persisted)
-    //callback(env, userid, channelid, permissions) -- Return a subset of permissions that the user has (empty for none).
+    //async callback(env, userid, channelid, permissions) -- Return a subset of permissions that the user has (empty for none).
     //  channelid is optional.
 
     registerPermissionProvider(func, self) {
@@ -722,7 +753,7 @@ class ModUsers extends Module {
     }
 
 
-    testPermissions(env, userid, channelid, permissions, requireall, handle) {  //env is an environment NAME; channelid is optional
+    async testPermissions(env, userid, channelid, permissions, requireall, handle) {  //env is an environment NAME; channelid is optional
 
         let removeduplicates = {};
         for (let perm of permissions) {
@@ -736,9 +767,9 @@ class ModUsers extends Module {
         for (let provider of this._permissionProviders) {
             let subset = [];
             if (typeof provider == "function") {
-                subset = provider.apply(this, [env, userid, channelid, permissions]);
+                subset = await provider.call(this, {env, userid, channelid, permissions});
             } else {
-                subset = provider[0].apply(provider[1], [env, userid, channelid, permissions]);
+                subset = await provider[0].call(provider[1], {env, userid, channelid, permissions});
             }
             for (let perm of subset) {
                 ascertained[perm] = true;
@@ -747,7 +778,7 @@ class ModUsers extends Module {
 
         //From account
 
-        let handles = this.getHandlesById(env, userid, true);
+        let handles = await this.getHandlesById(env, userid, true);
         if (!handle) {
             handle = (handles.length ? handles[0] : null);
         } else {
@@ -778,4 +809,29 @@ class ModUsers extends Module {
 }
 
 
-module.exports = ModUsers;
+//This template can be extended by behaviors that contain a single permission provider
+export class PermissionProvider extends Behavior {
+
+    get requiredBehaviors() { return {
+        Users: 'Users'
+    }; }
+
+    constructor(typesuffix, name) {
+        super('Permission' + typesuffix, name);
+    }
+
+    initialize(opt) {
+        if (!super.initialize(opt)) return false;
+        
+        this.be('Users').registerPermissionProvider(async (args) => {
+            args.env = opt.envProxy(args.env);
+            return this.permissionProvider(args);
+        }, this);
+
+        return true;
+    }
+
+    //Override in implementation
+    async permissionProvider(args) { return []; }
+
+}

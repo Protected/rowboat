@@ -1,34 +1,32 @@
-/* Module: Google -- Adds a command, "google", which performs a google search. */
+/* Google -- Adds a command, "google", which performs a google search. */
 
-const Module = require('../Module.js');
+import Behavior from "../src/Behavior.js";
 
-class ModGoogle extends Module {
+export default class Google extends Behavior {
 
-    get requiredParams() { return [
-        'apikey',               //Create project, enable google CS API and get a key from https://console.developers.google.com/apis/api/
-        'cx'                    //Create a CSE and get the cx from the embed code at https://cse.google.com/cse/
+    get params() { return [
+        {n: 'apikey', d: "Create project, enable google CS API and get a key from https://console.developers.google.com/apis/api/"},
+        {n: 'cx', d: "Create a CSE and get the cx from the embed code at https://cse.google.com/cse/"},
+        {n: 'results', d: "Maximum amount of returned results (1 to 10)"},
+        {n: 'safesearch', d: "Enable safesearch"},
+        {n: 'googleparams', d: "List of google API parameters allowed as arguments"}
     ]; }
     
-    get optionalParams() { return [
-        'results',              //Maximum amount of returned results (1 to 10)
-        'safesearch',           //Enable safesearch
-        'googleparams'          //List of allowed google API parameters. Syntax: !google --param=value ... searchstring
-    ]; }
+    get defaults() { return {
+        results: 3,
+        safesearch: false,
+        googleparams: ['c2coff','cr','dateRestrict','exactTerms','excludeTerms','fileType','gl','highRange','hq',
+            'imgColorType','imgSize','imgType','lowRange','relatedSite','searchType','rights','sort','start']
+    }; }
 
-    get requiredModules() { return [
-        'Commands'
-    ]; }
+    get requiredBehaviors() { return {
+        Commands: 'Commands'
+    }; }
 
     constructor(name) {
         super('Google', name);
         
-        this._params['results'] = 3;
-        this._params['safesearch'] = false;
-        this._params['googleparams'] = ['c2coff','cr','dateRestrict','exactTerms','excludeTerms','fileType','gl','highRange','hq',
-                'imgColorType','imgSize','imgType','lowRange','relatedSite','searchType','rights','sort','start'];
-        
     }
-    
     
     initialize(opt) {
         if (!super.initialize(opt)) return false;
@@ -36,7 +34,7 @@ class ModGoogle extends Module {
       
         //Register callbacks
         
-        this.mod('Commands').registerCommand(this, 'google', {
+        this.be('Commands').registerCommand(this, 'google', {
             description: "Let me google that for you.",
             args: ["string", true],
             details: [
@@ -45,7 +43,7 @@ class ModGoogle extends Module {
                 "For details on each parameter: https://developers.google.com/custom-search/json-api/v1/reference/cse/list#parameters"
             ],
             types: ["regular"]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
         
             let url = 'https://www.googleapis.com/customsearch/v1?key=' + this.param('apikey') + '&cx=' + this.param('cx')
                     + '&num=' + this.param('results')
@@ -93,22 +91,23 @@ class ModGoogle extends Module {
             if (search) url += '&q=' + encodeURI(search);
             
             //Perform API request
-        
-            this.jsonget(url)
-                .then((body) => {
-                    let items = body.items;
-                    if (!items || !items.length) {
-                        ep.reply("No results found!");
-                    } else {
-                        for (let j = 0; j < items.length && j < this.param('results'); j++) {
-                            ep.reply(items[j]['title'] + ' - ' + items[j]['link']);
-                        }
+
+            try {
+                let body = await this.jsonget(url);
+
+                let items = body.items;
+                if (!items || !items.length) {
+                    ep.reply("No results found!");
+                } else {
+                    for (let j = 0; j < items.length && j < this.param('results'); j++) {
+                        ep.reply(items[j]['title'] + ' - ' + items[j]['link']);
                     }
-                })
-                .catch((error) => {
-                    this.log('warn', error);
-                });
-        
+                }
+            } catch (e) {
+                this.log('warn', e);
+                ep.reply("There was an error while attempting to query the Google API.");
+            }
+
             return true;
         });
       
@@ -116,7 +115,4 @@ class ModGoogle extends Module {
     };
 
 }
-
-
-module.exports = ModGoogle;
 

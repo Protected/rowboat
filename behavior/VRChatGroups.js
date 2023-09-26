@@ -1,64 +1,58 @@
-/* Module: VRChatGroups -- Allows the bot to be in VRChat groups and provides group-related features. */
+/* VRChatGroups -- Allows the bot to be in VRChat groups and provides group-related features. */
 
-const moment = require('moment');
-const { EmbedBuilder } = require('discord.js');
+import moment from 'moment';
+import { EmbedBuilder } from 'discord.js';
 
-const Module = require('../Module.js');
+import Behavior from '../src/Behavior.js';
 
-const PERM_ADMIN = 'administrator';
+export default class VRChatGroups extends Behavior {
 
+    get params() { return [
+        {n: "memberfreq", d: "How often to check group members (s)"},
+        {n: "announcefreq", d: "How often to check group announcements (s)"},
+        {n: "rolefreq", d: "How often to check group roles (s)"},
+        {n: "ddelay", d: "Delay between actions in the delayed action queue (ms) [used to prevent rate limiting]"},
 
-class ModVRChatGroups extends Module {
+        {n: "colannounceactive", d: "Color for active announcements"},
+        {n: "colannounceold", d: "Color for old announcements"},
+        {n: "colrepresenting", d: "Color for members who are online and representing"},
 
-    get requiredParams() { return [
-        "env"
+        {n: "inemoji", d: "Emoji for new members"},
+        {n: "outemoji", d: "Emoji for departed members"}
     ]; }
 
-    get optionalParams() { return [
-        "memberfreq",           //How often to check group members (s)
-        "announcefreq",         //How often to check group announcements (s)
-        "rolefreq",             //How often to check group roles (s)
-        "ddelay",               //Delay between actions in the delayed action queue (ms) [used to prevent rate limiting]
+    get defaults() { return {
+        memberfreq: 300,
+        announcefreq: 160,
+        rolefreq: 1805,
+        ddelay: 500,
+        colannounceactive: [255, 40, 30],
+        colannounceold: [200, 200, 200],
+        colrepresenting: [255, 120, 244],
+        inemoji: "📥",
+        outemoji: "📤"
+    }; }
 
-        "colannounceactive",    //Color for active announcements
-        "colannounceold",        //Color for old announcements
-        "colrepresenting",      //Color for members who are online and representing
+    get requiredEnvironments() { return {
+        Discord: 'Discord'
+    }; }
 
-        "inemoji",              //Emoji for new members
-        "outemoji"              //Emoji for departed members
-    ]; }
-
-    get requiredEnvironments() { return [
-        'Discord'
-    ]; }
-
-    get requiredModules() { return [
-        'Commands',
-        'VRChat'
-    ]; }
+    get requiredBehaviors() { return {
+        Users: "Users",
+        Commands: "Commands",
+        VRChat: "VRChat"
+    }; }
 
     get vrchat() {
-        return this.mod("VRChat");
+        return this.be("VRChat");
     }
 
     get denv() {
-        return this.env(this.param('env'));
+        return this.env("Discord");
     }
 
     constructor(name) {
         super('VRChatGroups', name);
-
-        this._params["memberfreq"] = 300;
-        this._params["announcefreq"] = 160;
-        this._params["rolefreq"] = 1805;
-        this._params["ddelay"] = 500;
-
-        this._params["colannounceactive"] = [255, 40, 30];
-        this._params["colannounceold"] = [200, 200, 200];
-        this._params["colrepresenting"] = [255, 120, 244];
-
-        this._params["inemoji"] = "📥";
-        this._params["outemoji"] = "📤";
 
         this._active = false;
         this._awaitActive = null;
@@ -104,7 +98,7 @@ class ModVRChatGroups extends Module {
         //# Register VRChat callbacks
 
         this._awaitActive = new Promise((resolve, reject) => {
-            this.vrchat.registerConnectCallback(async () => {
+            this.vrchat.on("connect", async () => {
                 try {
                     let groupMemberships = await this.vrchat.getMyGroupMemberships();
                     for (let groupMembership of groupMemberships) {
@@ -129,7 +123,7 @@ class ModVRChatGroups extends Module {
             });
         });
 
-        this.vrchat.registerWebsocketCallback("group-joined", async (content) => {
+        this.vrchat.on("groupJoined", async (content) => {
             if (!this._groups[content.groupId]) {
                 let group = await this.vrchat.vrcGroup(content.groupId, true);
                 this._groups[group.id] = group;
@@ -137,10 +131,10 @@ class ModVRChatGroups extends Module {
                 this._nameIndex[group.name.toLowerCase()] = group.id;
             }
 
-            ep.reply("I am now a member of " + this._groups[content.groupId].name + ".");
+            this.vrchat.announce("I am now a member of " + this._groups[content.groupId].name + ".");
         });
 
-        this.vrchat.registerWebsocketCallback("group-left", (content) => {
+        this.vrchat.on("groupLeft", (content) => {
             let name = content.groupId;
             if (this._groups[content.groupId]) {
                 name = this._groups[content.groupId].name;
@@ -154,11 +148,11 @@ class ModVRChatGroups extends Module {
             this.vrchat.announce("I am no longer in the group " + name + ".");
         });
 
-        this.vrchat.registerWebsocketCallback("friend-state-change", (content) => {
+        this.vrchat.on("friendStateChange", (userdata) => {
             for (let vrcgroupid in this._groupChannels) {
-                if (this._groups[vrcgroupid].members?.find(member => member.userId == content.userId)) {
+                if (this._groups[vrcgroupid].members?.find(member => member.userId == userdata.id)) {
                     this.dqueue(function() {
-                        this.bakeMember(vrcgroupid, content.userId);
+                        this.bakeMember(vrcgroupid, userdata.id);
                     }.bind(this));
                 }
             }
@@ -167,7 +161,7 @@ class ModVRChatGroups extends Module {
 
         //# Cleanup handler
 
-        opt.pushCleanupHandler((next) => {
+        opt.pushShutdownHandler((next) => {
             for (let vrcgroupid in this._groupChannels) {
                 this.dqueue(function () {
                     this.toggleMembersOff(vrcgroupid);
@@ -330,10 +324,12 @@ class ModVRChatGroups extends Module {
 
         //# Register commands
 
-        this.mod('Commands').registerCommand(this, 'vrcgroup join', {
+        const permAdmin = this.be("Users").defaultPermAdmin;
+
+        this.be('Commands').registerCommand(this, 'vrcgroup join', {
             description: "Joins a group.",
             args: ["groupid"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             if (!this._active) {
@@ -366,10 +362,10 @@ class ModVRChatGroups extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'vrcgroup leave', {
+        this.be('Commands').registerCommand(this, 'vrcgroup leave', {
             description: "Leaves a group.",
             args: ["group", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             if (!this._active) {
@@ -410,7 +406,7 @@ class ModVRChatGroups extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'vrcgroup invite', {
+        this.be('Commands').registerCommand(this, 'vrcgroup invite', {
             description: "Invites the user to a group.",
             args: ["group", true]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
@@ -453,13 +449,13 @@ class ModVRChatGroups extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'vrcgroup announcements', {
+        this.be('Commands').registerCommand(this, 'vrcgroup announcements', {
             description: "Set/unset a discord channel for displaying group announcements.",
             details: [
                 "Use '-' instead of a channel to unset the channel."
             ],
             args: ["channel", "group", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let group = args.group.join(" ");
@@ -482,13 +478,13 @@ class ModVRChatGroups extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'vrcgroup members', {
+        this.be('Commands').registerCommand(this, 'vrcgroup members', {
             description: "Set/unset a discord channel for displaying group members.",
             details: [
                 "Use '-' instead of a channel to unset the channel."
             ],
             args: ["channel", "group", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let group = args.group.join(" ");
@@ -511,13 +507,13 @@ class ModVRChatGroups extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'vrcgroup greet', {
+        this.be('Commands').registerCommand(this, 'vrcgroup greet', {
             description: "Set/unset a discord channel for announcing when members join/leave a group.",
             details: [
                 "Use '-' instead of a channel to unset the channel."
             ],
             args: ["channel", "group", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let group = args.group.join(" ");
@@ -541,7 +537,7 @@ class ModVRChatGroups extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'vrcgroup role', {
+        this.be('Commands').registerCommand(this, 'vrcgroup role', {
             description: "Automatically synchronize a discord role with a group role.",
             details: [
                 "Use '-' instead of the group role to remove the assignment.",
@@ -549,7 +545,7 @@ class ModVRChatGroups extends Module {
             ],
             args: ["role", "group", "grouprole", true],
             minArgs: 2,
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let group = args.group;
@@ -601,7 +597,6 @@ class ModVRChatGroups extends Module {
 
         return true;
     };
-
 
 
     // # Module code below this line #
@@ -656,8 +651,8 @@ class ModVRChatGroups extends Module {
     }
 
     unindexRole(roleid, vrcgroupid) {
-        if (!this.grouproleIndex[vrcgroupid]) return;
-        this.grouproleIndex[vrcgroupid] = this.grouproleIndex[vrcgroupid].filter(check => check != roleid);
+        if (!this._grouproleIndex[vrcgroupid]) return;
+        this._grouproleIndex[vrcgroupid] = this._grouproleIndex[vrcgroupid].filter(check => check != roleid);
     }
 
 
@@ -843,7 +838,7 @@ class ModVRChatGroups extends Module {
 
         let knownMemberUserids = {};
         for (let member of newMembers.concat(goneMembers).concat(stayingMembers)) {
-            let userid = this.vrchat.getUseridByVrc(member.userId);
+            let userid = await this.vrchat.getUseridByVrc(member.userId);
             if (!userid) continue;
             knownMemberUserids[member.userId] = userid;
         }
@@ -1106,8 +1101,8 @@ class ModVRChatGroups extends Module {
         let member = group.members.find(check => check.userId == vrcuserid);
         if (!member) return;
         
-        let person = this.vrchat.getPersonByVrc(vrcuserid);
-        let friend = this.vrchat.getFriend(vrcuserid);
+        let person = await this.vrchat.getPersonByVrc(vrcuserid);
+        let friend = await this.vrchat.getFriend(vrcuserid);
 
         if (now) now = moment.unix(now);
         else now = moment();
@@ -1125,20 +1120,20 @@ class ModVRChatGroups extends Module {
             emb.setThumbnail(member.user?.thumbnailUrl);
         }
 
-        let color = this.vrchat.param("coloroffline");
-        if (!person?.invisible && this.vrchat.isStatusOnline(friend?.status)) {
+        let color = await this.vrchat.param("coloroffline");
+        if (!person?.invisible && await this.vrchat.isStatusOnline(friend?.status)) {
             if (member.isRepresenting) {
                 color = this.param("colrepresenting");
             } else {
-                color = this.vrchat.param("coloronline");
+                color = await this.vrchat.param("coloronline");
             }
         }
         emb.setColor(color);
 
         let url;
         if (person) {
-            let userid = this.vrchat.getUseridByVrc(vrcuserid);
-            url = this.vrchat.getPersonMsgURL(userid);
+            let userid = await this.vrchat.getUseridByVrc(vrcuserid);
+            url = await this.vrchat.getPersonMsgURL(userid);
         }
         if (!url) {
             url = "https://vrchat.com/home/user/" + vrcuserid;
@@ -1188,8 +1183,8 @@ class ModVRChatGroups extends Module {
             let message = await this.getMemberMessage(vrcgroupid, vrcuserid);
             if (!message || !message.embeds[0]) continue;
             let emb = EmbedBuilder.from(message.embeds[0]);
-            if (this.makeHexColor(emb.data.color) != this.makeHexColor(this.vrchat.param("coloroffline"))) {
-                emb.setColor(this.vrchat.param("coloroffline"));
+            if (this.makeHexColor(emb.data.color) != this.makeHexColor(await this.vrchat.param("coloroffline"))) {
+                emb.setColor(await this.vrchat.param("coloroffline"));
                 this.dqueue(async function () {
                     await message.edit({embeds: [emb]})
                         .catch((e) => { 
@@ -1239,5 +1234,3 @@ class ModVRChatGroups extends Module {
     }
 
 }
-
-module.exports = ModVRChatGroups;

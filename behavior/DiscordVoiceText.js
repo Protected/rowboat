@@ -1,26 +1,22 @@
-/* Module: DiscordVoiceText -- Adds voice channel users to a text channel only while they're connected. */
+/* DiscordVoiceText -- Adds voice channel users to a text channel only while they're connected. */
 
-const Module = require('../Module.js');
+import Behavior from "../src/Behavior.js";
 
-class ModDiscordVoiceText extends Module {
+export default class DiscordVoiceText extends Behavior {
+
+    get params() { return [
+        {n: "voicechannelid", d: "ID of the Discord voice channel to observe."},
+        {n: "textchannelid", d: "ID of the Discord text channel to show to users who connect to the voice channel."}
+    ]; }
+
+    get requiredEnvironments() { return {
+        Discord: 'Discord'
+    }; }
 
     get isMultiInstanceable() { return true; }
-
-    get requiredParams() { return [
-        "env",
-        "voicechannelid",
-        "textchannelid"
-    ]; }
-
-    get requiredEnvironments() { return [
-        'Discord'
-    ]; }
-
-    get requiredModules() { return [
-    ]; }
     
     get denv() {
-        return this.env(this.param('env'));
+        return this.env('Discord');
     }
 
     constructor(name) {
@@ -89,10 +85,4 @@ class ModDiscordVoiceText extends Module {
     // # Module code below this line #
     
 
-
-
 }
-
-
-module.exports = ModDiscordVoiceText;
-

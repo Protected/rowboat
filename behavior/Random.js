@@ -1,16 +1,18 @@
-/* Module: Random -- Adds randomizer, shuffle and dice roll commands. */
+/* Random -- Adds randomizer, shuffle and dice roll commands. */
 
-const Module = require('../Module.js');
-const random = require('meteor-random');
+import random from 'meteor-random';
 
-class ModRandom extends Module {
+import Behavior from '../src/Behavior.js';
 
-    get requiredModules() { return [
-        'Commands'
-    ]; }
+export default class Random extends Behavior {
+
+    get requiredBehaviors() { return {
+        Commands: 'Commands'
+    }; }
 
     constructor(name) {
         super('Random', name);
+
     }
     
     initialize(opt) {
@@ -19,7 +21,7 @@ class ModRandom extends Module {
       
         //Register callbacks
         
-        this.mod('Commands').registerCommand(this, 'random', {
+        this.be('Commands').registerCommand(this, 'random', {
             description: "Generates a random number using a cryptographically secure source of randomness.",
             args: ["max", "pub"],
             details: [
@@ -53,7 +55,7 @@ class ModRandom extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'shuffle', {
+        this.be('Commands').registerCommand(this, 'shuffle', {
             description: "Knuth shuffles a list or a deck of cards using a cryptographically secure source of randomness.",
             args: ["items", true],
             details: [
@@ -72,7 +74,7 @@ class ModRandom extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'pick', {
+        this.be('Commands').registerCommand(this, 'pick', {
             description: "Picks a random item from a set using a cryptographically secure source of randomness.",
             args: ["items", true],
             details: [
@@ -84,14 +86,14 @@ class ModRandom extends Module {
         }, (env, type, userid, channelid, command, args, handle, ep) => {
             
             let items = this.cleanupItems(args.items);
-            items = this.shuffle(items);
-            ep.reply(env.idToDisplayName(userid) + ": " + items[0]);
+            let pick = items[Math.floor(random.fraction() * items.length)];
+            ep.reply(env.idToDisplayName(userid) + ": " + pick);
             
             return true;
         });
         
         
-        this.mod('Commands').registerCommand(this, 'roll', {
+        this.be('Commands').registerCommand(this, 'roll', {
             description: "Generates a dice roll using a cryptographically secure source of randomness.",
             args: ["expr", true],
             details: [
@@ -243,7 +245,3 @@ class ModRandom extends Module {
 
 
 }
-
-
-module.exports = ModRandom;
-

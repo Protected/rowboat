@@ -1,115 +1,142 @@
-/* Module: Rajio -- Grabber add-on for playing songs on discord audio channels. */
+/* Radio -- Grabber add-on for playing songs on discord audio channels. */
 
-const Module = require('../Module.js');
-const moment = require('moment');
-const random = require('meteor-random');
-const fs = require('fs');
-const emoji = require('emojione');
-const { ActivityType, ChannelType } = require('discord.js');
+import moment from 'moment';
+import random from 'meteor-random';
+import emoji from 'emoji-toolkit';
+import { ActivityType, ChannelType } from 'discord.js';
+import prism from 'prism-media';
+import { createAudioPlayer, AudioPlayerStatus, AudioResource,
+    getVoiceConnection, joinVoiceChannel, VoiceConnectionStatus } from '@discordjs/voice';
 
-const PERM_ADMIN = 'administrator';
-const PERM_MOD = 'moderator';
+import Behavior from '../src/Behavior.js';
 
+const FFMPEG_PCM_ARGUMENTS = ['-analyzeduration', '0', '-loglevel', '0', '-f', 's16le', '-ar', '48000', '-ac', '2'];
 
-class ModRajio extends Module {
+function createAudioResourceAndSeek(input, options) {
 
+    let ffmpegArguments = [...FFMPEG_PCM_ARGUMENTS];
     
-    get isMultiInstanceable() { return true; }
+    if (options.seekTo) {
+        ffmpegArguments = ['-ss', options.seekTo, ...ffmpegArguments];
+    }
+
+    const edgeArbitraryToRaw = {
+        type: 'ffmpeg pcm with seek',
+        to: null,  //Not actually using TransformerGraph
+        cost: 2,
+        transformer: (input) =>
+            new prism.FFmpeg({
+                args: ['-i', input, ...ffmpegArguments],
+            }),
+    };
+
+    const volumeTransformer = {  //Unmodified
+        type: 'volume transformer',
+        to: null,  //Not actually using TransformerGraph
+        cost: 0.5,
+        transformer: () => new prism.VolumeTransformer({ type: 's16le' }),
+    }
+
+    const edgeRawToOpus = {  //Unmodified
+        type: 'opus encoder',
+        to: null,  //Not actually using TransformerGraph
+        cost: 1.5,
+        transformer: () => new prism.opus.Encoder({ rate: 48_000, channels: 2, frameSize: 960 }),
+    }
+
+    const transformerPipeline = [edgeArbitraryToRaw];
+    if (options.inlineVolume) transformerPipeline.push(volumeTransformer);
+    transformerPipeline.push(edgeRawToOpus);
+
+    const streams = transformerPipeline.map((edge) => edge.transformer(input));
+
+    return new AudioResource(
+        transformerPipeline,
+        streams,
+        options.metadata ?? null,
+        options.silencePaddingFrames ?? 5,
+    );
+}
+
+
+export default class Radio extends Behavior {
     
-    get requiredParams() { return [
-        'env',                  //Name of the Discord environment to be used
-        'grabber'               //Name of the ModGrabber to piggyback on (required because the grabber is multi-instanceable)
-    ]; }
-    
-    get optionalParams() { return [
-        'datafile',
+    get params() { return [
+        {n: 'datafile', d: "Customize the name of the default data file"},
         
-        'channel',              //ID of a Discord audio channel to join by default
-        'songrank',             //Name of the ModSongRank to obtain user preferences from
-        'leadin',               //Length of silence, in seconds, before each new song is played
-        'pause',                //Maximum amount of time in seconds to keep the current song paused when the module loses all listeners
-        'autowithdraw',         //How long in seconds before a user withdraws from the queue if they are online but not a listener
-        'queuesize',            //Maximum amount of songs in the request queue
-        'historysize',          //Maximum amount of recently played songs to remember
-        'referenceloudness',    //Negative decibels; Play youtube songs with higher loudness at a lower volume to compensate (non-normalized entries only)
-        'volume',               //Global volume multipler; Defaults to 1.0 and can be changed via command
-        'fec',                  //Forward error correction (true/false)
+        {n: 'channel', d: "ID of a Discord audio channel to join by default"},
+        {n: 'leadin', d: "Length of silence, in seconds, before each new song is played"},
+        {n: 'pause', d: "Maximum amount of time in seconds to keep the current song paused when the module loses all listeners"},
+        {n: 'autowithdraw', d: "How long in seconds before a user withdraws from the queue if they are online but not a listener"},
+        {n: 'queuesize', d: "Maximum amount of songs in the request queue"},
+        {n: 'historysize', d: "Maximum amount of recently played songs to remember"},
+        {n: 'referenceloudness', d: "Negative decibels; Play youtube songs with higher loudness at a lower volume to compensate (non-normalized entries only)"},
+        {n: 'volume', d: "Global volume multipler; Defaults to 1.0 and can be changed via command"},
+        {n: 'fec', d: "Forward error correction (true/false)"},
         
-        'announcechannel',      //ID of a Discord text channel to announce rajio status information to
-        'announcedelay',        //Minimum seconds between song announces
-        'announcesongs',        //Announce when a song starts playing (true/false)
-        'announcejoins',        //Announce when people start/stop listening (true/false)
-        'announceskips',        //Announce skipped songs (true/false)
+        {n: 'announcechannel', d: "ID of a Discord text channel to announce radio status information to"},
+        {n: 'announcedelay', d: "Minimum seconds between song announces"},
+        {n: 'announcesongs', d: "Announce when a song starts playing (true/false)"},
+        {n: 'announcejoins', d: "Announce when people start/stop listening (true/false)"},
+        {n: 'announceskips', d: "Announce skipped songs (true/false)"},
 
-        'usestatus',            //Announce current song in bot's game (true/false)
+        {n: 'usestatus', d: "Announce current song in bot's game (true/false)"},
         
-        'pri.base',             //Base priority
-        'pri.rank',             //Global song rank priority component
-        'pri.listen',           //Unbiased listener rank priority component
-        'pri.listen.nopos',     //Attenuate listener priority for songs with no positive preference keywords associated
-        'pri.listen.yesneg',    //Attenuate listener priority for songs with negative preference keywords associated
-        'pri.listen.skiprange', //(s) For how long after a song last skipped its positive listener rank is mitigated
-        'pri.listen.skipbias',  //Exponent/bias for skip mitigation (1 will make it linear, otherwise weight towards early or late in period)
-        'pri.listen.skipfact',  //Minimum (most impactful) coefficient applied by skipping (if song was just skipped)
-        'pri.listen.slide',     //Weight of listener bias on rank, if applicable
-        'pri.listen.history',   //Weight of history position bias on slide, if applicable
-        'pri.listen.historysc', //Multiplier for history position bias
-        'pri.length',           //Ideal length priority component
-        'pri.length.minlen',    //(s) Minimum ideal song length
-        'pri.length.maxlen',    //(s) Maximum ideal song length
-        'pri.length.maxexcs',   //(s) Song length after which priority bonus is 0)
-        'pri.lowplays',         //Low plays priority component
-        'pri.lowplays.max',     //Maximum amount of plays to receive this bonus
-        'pri.mitigatedslice',   //[0-1] Position of the plays-sorted library where priority multiplier is 1
-        'pri.recent',           //(s) For how long after a song last played its priority is mitigated (on a linear gradient)
-        'pri.unanimous.meh',    //[0-1] Multiplier for priority if not all listeners hate the song, but all of them hate or dislike the song (<= -1)
-        'pri.unanimous.hate',   //[0-1] Multiplier for priority if all listeners hate the song (-2)
-        'pri.queue.chance',     //[0-1] Odds that only a queued song will not have 0 priority, if there are queued songs
-        'pri.novelty.chance',   //[0-1] Odds that only a novelty will not have 0 priority, if there are novelties
-        'pri.novelty.duration', //(s) For how long a new song is considered a novelty
-        'pri.novelty.breaker',  //Maximum amount of plays above which a novelty is not treated as one
+        {n: 'pri.base', d: "Base priority"},
+        {n: 'pri.rank', d: "Global song rank priority component"},
+        {n: 'pri.listen', d: "Unbiased listener rank priority component"},
+        {n: 'pri.listen.nopos', d: "Attenuate listener priority for songs with no positive preference keywords associated"},
+        {n: 'pri.listen.yesneg', d: "Attenuate listener priority for songs with negative preference keywords associated"},
+        {n: 'pri.listen.skiprange', d: "(s) For how long after a song last skipped its positive listener rank is mitigated"},
+        {n: 'pri.listen.skipbias', d: "Exponent/bias for skip mitigation (1 will make it linear, otherwise weight towards early or late in period)"},
+        {n: 'pri.listen.skipfact', d: "Minimum (most impactful) coefficient applied by skipping (if song was just skipped)"},
+        {n: 'pri.listen.slide', d: "Weight of listener bias on rank, if applicable"},
+        {n: 'pri.listen.history', d: "Weight of history position bias on slide, if applicable"},
+        {n: 'pri.listen.historysc', d: "Multiplier for history position bias"},
+        {n: 'pri.length', d: "Ideal length priority component"},
+        {n: 'pri.length.minlen', d: "(s) Minimum ideal song length"},
+        {n: 'pri.length.maxlen', d: "(s) Maximum ideal song length"},
+        {n: 'pri.length.maxexcs', d: "(s) Song length after which priority bonus is 0)"},
+        {n: 'pri.lowplays', d: "Low plays priority component"},
+        {n: 'pri.lowplays.max', d: "Maximum amount of plays to receive this bonus"},
+        {n: 'pri.mitigatedslice', d: "[0-1] Position of the plays-sorted library where priority multiplier is 1"},
+        {n: 'pri.recent', d: "(s) For how long after a song last played its priority is mitigated (on a linear gradient)"},
+        {n: 'pri.unanimous.meh', d: "[0-1] Multiplier for priority if not all listeners hate the song, but all of them hate or dislike the song (<= -1)"},
+        {n: 'pri.unanimous.hate', d: "[0-1] Multiplier for priority if all listeners hate the song (-2)"},
+        {n: 'pri.queue.chance', d: "[0-1] Odds that only a queued song will not have 0 priority, if there are queued songs"},
+        {n: 'pri.novelty.chance', d: "[0-1] Odds that only a novelty will not have 0 priority, if there are novelties"},
+        {n: 'pri.novelty.duration', d: "(s) For how long a new song is considered a novelty"},
+        {n: 'pri.novelty.breaker', d: "Maximum amount of plays above which a novelty is not treated as one"},
 
-        'pref.maxcurators',     //Maximum amount of curators per player
-        'pref.maxkeywords',     //Maximum amount of keywords per player
-
-    ]; }
-    
-    get requiredEnvironments() { return [
-        'Discord'
+        {n: 'pref.maxcurators', d: "Maximum amount of curators per player"},
+        {n: 'pref.maxkeywords', d: "Maximum amount of keywords per player"}
     ]; }
 
-    get requiredModules() { return [
-        'Commands'
-    ]; }
+    get defaults() { return { 
+        datafile: null,
+        
+        channel: null,
+        leadin: 5,
+        pause: 900,
+        autowithdraw: 120,
+        queuesize: 10,
+        historysize: 20,
+        referenceloudness: -20,
+        volume: 1.0,
+        fec: false,
+        
+        announcechannel: null,
+        announcedelay: 0,
+        announcesongs: true,
+        announcejoins: true,
+        announceskips: true,
 
-    constructor(name) {
-        super('Rajio', name);
-        
-        this._params['datafile'] = null;
-        
-        this._params['channel'] = null;
-        this._params['songrank'] = null;
-        this._params['leadin'] = 2;
-        this._params['pause'] = 900;
-        this._params['autowithdraw'] = 120;
-        this._params['queuesize'] = 10;
-        this._params['historysize'] = 20;
-        this._params['referenceloudness'] = -20;
-        this._params['volume'] = 1.0;
-        this._params['fec'] = false;
-        
-        this._params['announcechannel'] = null;
-        this._params['announcedelay'] = 0;
-        this._params['announcesongs'] = true;
-        this._params['announcejoins'] = true;
-        this._params['announceskips'] = true;
-
-        this._params['usestatus'] = true;
+        usestatus: true,
 
         /*
             LISTENER_CURATORS_RANK = Sum_[curator](-1? * CURATOR_RANK)/curators
 
-            KWPREF_FACTOR: If "+" exist and none present, * pri.listen.nopos ; If "-" exist and present, * pri.listen.yesneg
+            KWPREF_FACTOR: If "+" exist and none present, * pri.listen.nopos ,If "-" exist and present, * pri.listen.yesneg
 
             SKIP_FACTOR: If listener rank is positive but listener skipped song in last pri.listen.skiprange seconds,
                         (ELAPSED_TIME / pri.listen.skiprange) ^ pri.listen.skipbias * (1-pri.listen.skipfact) + pri.listen.skipfact, otherwise 1
@@ -134,27 +161,27 @@ class ModRajio extends Module {
                 * (unanimous_hate ? pri.unanimous.hate : (unanimous_dislike ? pri.unanimous.meh : 1))
         */
 
-        this._params['pri.base'] = 10.0;
-        this._params['pri.rank'] = 10.0;
-        this._params['pri.listen'] = 50.0;
-        this._params['pri.listen.nopos'] = 0.75;
-        this._params['pri.listen.yesneg'] = 0.10;
-        this._params['pri.listen.skiprange'] = 259200;
-        this._params['pri.listen.skipbias'] = 2;
-        this._params['pri.listen.skipfact'] = 0.1;
-        this._params['pri.listen.slide'] = 0.5;
-        this._params['pri.listen.history'] = 0.3;
-        this._params['pri.listen.historysc'] = 3;
-        this._params['pri.length'] = 10.0;
-        this._params['pri.length.minlen'] = 180;
-        this._params['pri.length.maxlen'] = 600;
-        this._params['pri.length.maxexcs'] = 900;
-        this._params['pri.lowplays'] = 30.0;
-        this._params['pri.lowplays.max'] = 3;
-        this._params['pri.mitigatedslice'] = 0.1;
-        this._params['pri.recent'] = 86400;
-        this._params['pri.unanimous.meh'] = 0.65;
-        this._params['pri.unanimous.hate'] = 0.05;
+        "pri.base": 10.0,
+        "pri.rank": 10.0,
+        "pri.listen": 50.0,
+        "pri.listen.nopos": 0.75,
+        "pri.listen.yesneg": 0.10,
+        "pri.listen.skiprange": 259200,
+        "pri.listen.skipbias": 2,
+        "pri.listen.skipfact": 0.1,
+        "pri.listen.slide": 0.5,
+        "pri.listen.history": 0.3,
+        "pri.listen.historysc": 3,
+        "pri.length": 10.0,
+        "pri.length.minlen": 180,
+        "pri.length.maxlen": 600,
+        "pri.length.maxexcs": 900,
+        "pri.lowplays": 30.0,
+        "pri.lowplays.max": 3,
+        "pri.mitigatedslice": 0.1,
+        "pri.recent": 86400,
+        "pri.unanimous.meh": 0.65,
+        "pri.unanimous.hate": 0.05,
 
         /*
             If there are queued songs:
@@ -163,7 +190,7 @@ class ModRajio extends Module {
                 : SONG_PRIORITY
         */
 
-        this._params['pri.queue.chance'] = 0.9;
+        "pri.queue.chance": 0.9,
 
         /*
             If there are novelties (novelty is defined as: song shared less than pri.novelty.duration seconds ago and with less than pri.novelty.breaker plays)
@@ -172,16 +199,36 @@ class ModRajio extends Module {
                 : SONG_PRIORITY
         */
 
-        this._params['pri.novelty.chance'] = 0.05;
-        this._params['pri.novelty.duration'] = 691200;  //8 days
-        this._params['pri.novelty.breaker'] = 8;
+        "pri.novelty.chance": 0.05,
+        "pri.novelty.duration": 691200, //8 days
+        "pri.novelty.breaker": 8,
 
-        this._params['pref.maxcurators'] = 3;
-        this._params['pref.maxkeywords'] = 8;
+        "pref.maxcurators": 3,
+        "pref.maxkeywords": 8
+    }; }
+    
+    get requiredEnvironments() { return {
+        Discord: 'Discord'
+    }; }
+
+    get requiredBehaviors() { return {
+        Users: 'Users',
+        Commands: 'Commands',
+        Grabber: 'Grabber'
+    }; }
+
+    get optionalBehaviors() { return {
+        SongRanking: 'SongRanking'
+    }; }
+
+    get isMultiInstanceable() { return true; }
+
+    constructor(name) {
+        super('Radio', name);
         
         this._userdata = {};  // {userid: {curators: {userid: boolean, ...}, keywords: {keyword: rating, ...}, saved: {profilename: {...}}}}
         
-        this._announced = null;
+        this._announced = null;  //Song announcement timestamp
         this._history = [];  //[song, song, ...]
         this._playscache = {};  //{hash: plays, ...}
         
@@ -196,26 +243,28 @@ class ModRajio extends Module {
         this._nopreference = {};  //{userid: true, ...} Users have disabled impact of their preferences in priority calculations
         this._userlistened = {};  //{userid: songs, ...} Amount of songs each user has listened to in current listening session
         this._userremaining = {};  //{userid: songs, ...} Amount of songs before a user will be automatically disconnected
+
+        this._audioPlayer = null;  //AudioPlayer instance which manages audio streams being played
+        this._audioPlayerStatus = AudioPlayerStatus.Idle;  //Tracks AudioPlayher status
+        this._audioPlayerPlayTime = null;  //Timestamp when the player last went into Playing status.
         
         this._play = null;  //Song being played
-        this._seek = 0;  //Starting time of the song being played, for time calculation purposes
+        this._seek = 0;  //Starting time of the song being played, for time calculation purposes (s)
         this._pending = null;  //Timer that will start the next song
         this._pause = null;  //[song, seek] for resuming paused song
         this._expirepause = null;  //Timer that will expire (stop) a paused song
     }
     
-    
     get grabber() {
-        return this.mod(this.param('grabber'));
+        return this.be('Grabber');
     }
     
     get songrank() {
-        if (!this.param('songrank')) return null;
-        return this.mod(this.param('songrank'));
+        return this.be('SongRanking') || null;
     }
     
     get denv() {
-        return this.env(this.param('env'));
+        return this.env("Discord");
     }
     
     get dchan() {
@@ -223,7 +272,7 @@ class ModRajio extends Module {
     }
 
     get vc() {
-        return this.denv.server.members.me.voice.connection;
+        return getVoiceConnection(this.denv.server.id);
     }
     
     get listeners() {
@@ -235,31 +284,24 @@ class ModRajio extends Module {
     }
     
     get playing() {
-        return this.vc && this.vc.dispatcher || this._pending;
+        return !!this.vc && this._audioPlayerStatus === AudioPlayerStatus.Playing || this._pending;
     }
     
     get strictlyPlaying() {
-        return this.vc && this.vc.dispatcher;
+        return !!this.vc && this._audioPlayerStatus === AudioPlayerStatus.Playing;
+    }
+
+    get playTime() {
+        return this.playing ? moment().unix() - this._audioPlayerPlayTime : 0;
     }
 
     get metaprefix() {
-        return 'rajio.' + this.name.toLowerCase();
+        return 'radio.' + this.name.toLowerCase();
     }
     
     
     initialize(opt) {
-        if (!super.initialize(opt)) return false;
-
-        if (!this.grabber || this.grabber.modName != 'Grabber') {
-            this.log('error', "Grabber not found.");
-            return false;
-        }
-        
-        if (!this.denv || this.denv.envName != 'Discord') {
-            this.log('error', "Environment not found or not Discord.");
-            return false;
-        }
-        
+        if (!super.initialize(opt)) return false;        
         
         this._userdata = this.loadData();
         if (this._userdata === false) return false;
@@ -272,22 +314,25 @@ class ModRajio extends Module {
         //Prepare player
         
         this.denv.on("connected", () => {
+
+            this._audioPlayer = createAudioPlayer();
+            this._audioPlayer.on("stateChange", (oldState, newState) => {
+                this._audioPlayerStatus = newState.status;
+            })
+
             this.joinDchan()
-                .then(() => {
-                    this.playSong();
-                })
+                .then(() => this.playSong())
                 .catch((reason) => {
-                    this.log('Did not join voice channel on connect: ' + reason);
-                })
+                    this.log('Did not join voice channel on connect: ' + reason + " " + (reason.stack || ""));
+                });
+
         });
             
         
         
         //Register Discord callbacks
-
-        var self = this;
         
-        this.denv.client.on("voiceStateUpdate", (oldState, state) => {
+        this.denv.client.on("voiceStateUpdate", async (oldState, state) => {
             if (state.guild.id != this.denv.server.id) return;
             
             let myid = this.denv.server.members.me.id;
@@ -299,7 +344,7 @@ class ModRajio extends Module {
                 if (state.id == myid) {
                     if (llisteners) {
                         //I joined the channel
-                        this.resumeSong() || this.playSong();
+                        await this.resumeSong() || await this.playSong();
                     }
                 } else {
                     if (this._skipper[state.id] && !state.deaf) {
@@ -308,7 +353,7 @@ class ModRajio extends Module {
                     } else {
 
                         if (this.param('announcejoins')) {
-                            this.announce('__Arrived__: ' + this.denv.idToDisplayName(state.id));
+                            this.announce('__Arrived__: ' + await this.denv.idToDisplayName(state.id));
                         }
 
                         if (this._undeafen[state.id]) {
@@ -332,11 +377,11 @@ class ModRajio extends Module {
             if (oldState.channelId == dchanid && state.channelId != dchanid) {
                 if (state.id == myid) {
                     //I left the channel
-                    if (!this._pause) this.stopSong();
+                    if (!this._pause) await this.stopSong();
                 } else {
 
                     if (this.param('announcejoins')) {
-                        this.announce('__Departed__: ' + this.denv.idToDisplayName(state.id));
+                        this.announce('__Departed__: ' + await this.denv.idToDisplayName(state.id));
                     }
 
                     this.autowithdraw(state.id);
@@ -345,7 +390,7 @@ class ModRajio extends Module {
                     if (!llisteners) {
                         //Last listener left the channel
                         this.pauseSong();
-                        this.dchan.leave();
+                        this.vc.disconnect();
                     }
                 }
             }
@@ -357,14 +402,14 @@ class ModRajio extends Module {
                 }
                 if (oldState.mute && !state.mute) {
                     //I was unmuted
-                    this.resumeSong() || this.playSong();
+                    await this.resumeSong() || await this.playSong();
                 }
             } else {
                 if (!oldState.deaf && state.deaf) {
                     if (!llisteners) {
                         //Last listener was deafened
                         this.pauseSong();
-                        this.dchan.leave();
+                        this.vc.disconnect();
                     }
                 } else if (oldState.deaf && !state.deaf) {
                     if (this._skipper[state.id] && state.channelId == dchanid) {
@@ -402,29 +447,29 @@ class ModRajio extends Module {
         
         //Register module integrations
         
-        this.grabber.registerParserFilter(/^[$]([0-9]+)?$/, (str, match, userid) => {
+        this.grabber.registerParserFilter("$NUMBER", /^[$]([0-9]+)?$/, (str, match, userid) => {
             if ((!match[1] || match[1] == "0") && this._play) return this._play.hash;
             if (match[1] && this._history[match[1] - 1]) {
                 return this._history[match[1] - 1].hash;
             }
             return null;
-        }, this);
+        }, "References the latest played song or a recently played song (NUMBER songs ago).");
 
-        opt.envs[this.param('env')].on('connected', () => {
+        this.denv.on('connected', () => {
             this.grabber.setAdditionalStats(this.metaprefix + '.latestnovelties', []);
         }, this);
         
 
         //Register commands
 
-        this.mod("Commands").registerRootDetails(this, 'rajio', {
-            description: 'Commands for controlling the radio queue and playback.',
-            details: [
-                'This feature adds the $NUMBER expansion to song library hash arguments, representing the currently playing song or a recently played song.'
-            ]
+        const permAdmin = this.be("Users").defaultPermAdmin;
+        const permMod = this.be("Users").defaultPermMod;
+
+        this.be("Commands").registerRootDetails(this, 'radio', {
+            description: 'Commands for controlling the radio queue and playback.'
         });
 
-        this.mod('Commands').registerCommand(this, 'rajio now', {
+        this.be('Commands').registerCommand(this, 'radio now', {
             description: 'Displays the name and hash of the song currently being played.'
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
@@ -442,21 +487,21 @@ class ModRajio extends Module {
                 }
             } else {
                 ep.reply('**[Playing]** ' + '`' + this._play.hash + ' ' + this._play.name + (this._play.author ? ' (' + this._play.author + ')' : '')
-                    + ' <' + (this.strictlyPlaying ? this.secondsToHms(Math.round((this._seek + this.vc.dispatcher.streamTime) / 1000.0)) + ' / ' : '') + this.secondsToHms(this._play.length) + '>`');
+                    + ' <' + (this.strictlyPlaying ? this.secondsToHms(this._seek + this.playTime) + ' / ' : '') + this.secondsToHms(this._play.length) + '>`');
             }
         
             return true;
         });
         
         
-        this.mod('Commands').registerCommand(this, 'rajio skip', {
+        this.be('Commands').registerCommand(this, 'radio skip', {
             description: 'Vote to skip the current song.',
             details: [
                 "When a listener calls this command, if there are no listeners who haven't called it, the current song is skipped.",
                 "Otherwise, the listener is deafened until the end of the song.",
                 "If the listener leaves the channel or undeafens himself, his skip vote is revoked."
             ]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (!this.playing || this._skipper[userid] || !this.islistener(userid)) return true;
             
@@ -476,27 +521,25 @@ class ModRajio extends Module {
             this._skipper[userid] = true;
             
             if (cskippers >= clisteners - 1) {
-                let skipdata = this.grabber.getSongMeta(this._play.hash, this.metaprefix + ".skipped");
+                let skipdata = await this.grabber.getSongMeta(this._play.hash, this.metaprefix + ".skipped");
                 if (!skipdata) skipdata = {};
                 
                 let now = moment().unix();
                 skipdata[now] = Object.keys(this._skipper);
-                this.grabber.setSongMeta(this._play.hash, this.metaprefix + ".skipped", skipdata);
+                await this.grabber.setSongMeta(this._play.hash, this.metaprefix + ".skipped", skipdata);
 
-                let skips = this.grabber.getSongMeta(this._play.hash, this.metaprefix + ".skips");
+                let skips = await this.grabber.getSongMeta(this._play.hash, this.metaprefix + ".skips");
                 if (!skips) skips = 1; else skips += 1;
-                this.grabber.setSongMeta(this._play.hash, this.metaprefix + ".skips", skips);
+                await this.grabber.setSongMeta(this._play.hash, this.metaprefix + ".skips", skips);
 
                 let song = this._play;
 
-                this.stopSong();
+                await this.stopSong();
 
                 if (this.param('announceskips')) {
                     this.announce('**[Skipped]** ' + '`' + song.hash + ' ' + song.name + (song.author ? ' (' + song.author + ')' : '') + '`');
                 }
 
-                //this.playSong(); No need; The ender will play the next song normally
-                    
                 return true;
             }
                         
@@ -506,7 +549,7 @@ class ModRajio extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'rajio end', {
+        this.be('Commands').registerCommand(this, 'radio end', {
             description: 'Automatically end listening session.',
             args: ['counter'],
             minArgs: 0,
@@ -548,10 +591,10 @@ class ModRajio extends Module {
         
         
 
-        this.mod('Commands').registerCommand(this, 'rajio off', {
+        this.be('Commands').registerCommand(this, 'radio off', {
             description: 'Disable the radio. This will stop it from playing music.',
-            permissions: [PERM_ADMIN, PERM_MOD]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            permissions: [permAdmin, permMod]
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (this._disabled) {
                 ep.reply('The radio is already disabled.');
@@ -559,10 +602,10 @@ class ModRajio extends Module {
             }
             
             this._disabled = true;
-            this.stopSong();
+            await this.stopSong();
             
-            if (this.dchan) {
-                this.dchan.leave();
+            if (this.vc) {
+                this.vc.disconnect();
             }
             
             ep.reply('The radio has now been disabled.');
@@ -571,11 +614,11 @@ class ModRajio extends Module {
         });
 
         
-        this.mod('Commands').registerCommand(this, 'rajio on', {
+        this.be('Commands').registerCommand(this, 'radio on', {
             description: 'Enable or re-enable the radio in an existing voice channel.',
             args: ['channelid'],
             minArgs: 0,
-            permissions: [PERM_ADMIN, PERM_MOD]
+            permissions: [permAdmin, permMod]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (!this._disabled) {
@@ -617,13 +660,13 @@ class ModRajio extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'rajio volume', {
+        this.be('Commands').registerCommand(this, 'radio volume', {
             description: 'Adjust the master volume attenuation.',
             args: ['volume'],
             details: [
                 "Use a value between 0.0 (no sound) and 1.0 (maximum)."
             ],
-            permissions: [PERM_ADMIN, PERM_MOD]
+            permissions: [permAdmin, permMod]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let volume = parseFloat(args.volume);
@@ -639,28 +682,28 @@ class ModRajio extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'rajio another', {
+        this.be('Commands').registerCommand(this, 'radio another', {
             description: 'End playback of the current song and play the next one in the queue.',
-            permissions: [PERM_ADMIN, PERM_MOD]
+            permissions: [permAdmin, permMod]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (this._disabled) return true;
         
             this.stopSong();
-            //this.playSong(); No need; The ender will play the next song normally
+            //By just ending the current song, the next song is played normally
             
             return true;
         });
         
         
-        let requestcommand = (demand) => (env, type, userid, channelid, command, args, handle, ep) => {
+        let requestcommand = (demand) => async (env, type, userid, channelid, command, args, handle, ep) => {
         
             let arg = args.hashoroffset.join(" ");
             if (args.hashoroffset.length > 1 && !arg.match(/^\(.*\)$/)) {
                 arg = '(' + arg + ')';
             }
         
-            let hash = this.grabber.bestSongForHashArg(arg, userid);
+            let hash = await this.grabber.bestSongForHashArg(arg, userid);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -672,7 +715,7 @@ class ModRajio extends Module {
                 return true;
             }
             
-            let song = this.grabber.hashSong(hash);
+            let song = await this.grabber.hashSong(hash);
             if (!this.enqueue(song, userid, demand)) {
                 ep.reply('The queue is full or the song is already in the queue.');
                 return true;
@@ -687,19 +730,19 @@ class ModRajio extends Module {
             return true;
         }
         
-        this.mod('Commands').registerCommand(this, 'rajio request', {
+        this.be('Commands').registerCommand(this, 'radio request', {
             description: 'Requests playback of a song in the library, which will be added to the queue if possible.',
             args: ['hashoroffset', true]
         }, requestcommand(false));
         
-        this.mod('Commands').registerCommand(this, 'rajio demand', {
+        this.be('Commands').registerCommand(this, 'radio demand', {
             description: 'Puts a song from the library at the top of the queue.',
             args: ['hashoroffset', true],
-            permissions: [PERM_ADMIN, PERM_MOD]
+            permissions: [permAdmin, permMod]
         }, requestcommand(true));
         
         
-        this.mod('Commands').registerCommand(this, 'rajio withdraw', {
+        this.be('Commands').registerCommand(this, 'radio withdraw', {
             description: 'Withdraws all your requests from the queue.'
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
@@ -714,7 +757,7 @@ class ModRajio extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'rajio queue', {
+        this.be('Commands').registerCommand(this, 'radio queue', {
             description: 'Show a summary of the contents of the queue.'
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
@@ -739,7 +782,7 @@ class ModRajio extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'rajio history', {
+        this.be('Commands').registerCommand(this, 'radio history', {
             description: 'Show a list of recently played songs.'
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
@@ -760,7 +803,7 @@ class ModRajio extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'rajio neutral', {
+        this.be('Commands').registerCommand(this, 'radio neutral', {
             description: 'Toggle whether my likes and priorities will affect song selection while I\'m listening.'
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
@@ -781,14 +824,14 @@ class ModRajio extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'rajio apriority', {
+        this.be('Commands').registerCommand(this, 'radio apriority', {
             description: 'Analyze a song\'s current priority value.',
             args: ['hashoroffset', true]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
         
             let arg = args.hashoroffset.join(" ");
             
-            let hash = this.grabber.bestSongForHashArg(arg);
+            let hash = await this.grabber.bestSongForHashArg(arg);
             if (hash === false) {
                 ep.reply('Offset not found in recent history.');
                 return true;
@@ -800,7 +843,7 @@ class ModRajio extends Module {
                 return true;
             }
             
-            let prioritycomponents = this.songPriority(this.grabber.hashSong(hash), this.listeners.map(listener => listener.id), false, false, true);
+            let prioritycomponents = await this.songPriority(await this.grabber.hashSong(hash), this.listeners.map(listener => listener.id), false, false, true);
             
             for (let cname in prioritycomponents) {
                 ep.reply('`' + cname + ' = ' + prioritycomponents[cname] + '`');
@@ -811,7 +854,7 @@ class ModRajio extends Module {
                 ep.reply('`Queued in position ' + queuepos + ' .`');
             }
 
-            if (this.isNovelty(hash)) {
+            if (await this.isNovelty(hash)) {
                 ep.reply('`This song can play as a novelty.`');
             }
 
@@ -819,17 +862,17 @@ class ModRajio extends Module {
         });
 
 
-        this.mod("Commands").registerRootDetails(this, 'rpref', {
-            description: 'Commands for modifying your personal rajio preferences.',
+        this.be("Commands").registerRootDetails(this, 'rpref', {
+            description: 'Commands for modifying your personal radio preferences.',
             details: [
                 'These preferences determine how songs are selected for you when you are listening.',
                 'When there are multiple listeners, all listeners will have equal weight.',
-                'See the rajio command for more information on this module.'
+                'See the radio command for more information on this module.'
             ]
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rpref curator list', {
+        this.be('Commands').registerCommand(this, 'rpref curator list', {
             description: "Lists whose preferences influence songs selected for you.",
             details: [
                 "The likes of users whose names are prefixed with a `+` have a positive influence on your selections.",
@@ -861,7 +904,7 @@ class ModRajio extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rpref curator +', {
+        this.be('Commands').registerCommand(this, 'rpref curator +', {
             description: "Adds someone's preferences to your curator list.",
             args: ["targetuser", true],
             details: [
@@ -892,7 +935,7 @@ class ModRajio extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rpref curator -', {
+        this.be('Commands').registerCommand(this, 'rpref curator -', {
             description: "Adds someone's inverse preferences to your curator list.",
             args: ["targetuser", true],
             details: [
@@ -924,7 +967,7 @@ class ModRajio extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rpref curator remove', {
+        this.be('Commands').registerCommand(this, 'rpref curator remove', {
             description: "Remove someone from your curator list.",
             args: ["targetuser", true],
             details: [
@@ -948,14 +991,14 @@ class ModRajio extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rpref curator set', {
+        this.be('Commands').registerCommand(this, 'rpref curator set', {
             description: "Replace your entire curator list.",
             args: ["newlist", true],
             minArgs: 0,
             details: [
-                "Please provide a list in the same format that is returned by rajio pref curator list (users separated by `;` ). `+` will be assumed for unprefixed names.",
+                "Please provide a list in the same format that is returned by radio pref curator list (users separated by `;` ). `+` will be assumed for unprefixed names.",
                 "If you don't specify a list, it will be reset to default (you will be your own sole, positive curator).",
-                "To clear the list entirely (your presence as a listener will have no effect on song selection) use `rajio pref curator set -` or remove yourself using rajio pref curator remove."
+                "To clear the list entirely (your presence as a listener will have no effect on song selection) use `radio pref curator set -` or remove yourself using radio pref curator remove."
             ]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
@@ -1015,7 +1058,7 @@ class ModRajio extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rpref kw list', {
+        this.be('Commands').registerCommand(this, 'rpref kw list', {
             description: "Lists keywords that influence songs selected for you.",
             details: [
                 "Positive influence (liked) keywords: Songs will be penalized for not having that keyword in any field when being selected for you.",
@@ -1044,7 +1087,7 @@ class ModRajio extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rpref kw +', {
+        this.be('Commands').registerCommand(this, 'rpref kw +', {
             description: "Adds a positive influence (liked) keyword to your preferences.",
             args: ["keyword", true]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -1061,7 +1104,7 @@ class ModRajio extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rpref kw -', {
+        this.be('Commands').registerCommand(this, 'rpref kw -', {
             description: "Adds a negative influence (disliked) keyword to your preferences.",
             args: ["keyword", true]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -1078,7 +1121,7 @@ class ModRajio extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rpref kw remove', {
+        this.be('Commands').registerCommand(this, 'rpref kw remove', {
             description: "Removes a keyword from your preferences.",
             args: ["keyword", true]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -1093,7 +1136,7 @@ class ModRajio extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rpref kw clear', {
+        this.be('Commands').registerCommand(this, 'rpref kw clear', {
             description: "Removes every keyword from your preferences."
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
@@ -1104,7 +1147,7 @@ class ModRajio extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rpref profile list', {
+        this.be('Commands').registerCommand(this, 'rpref profile list', {
             description: "Lists your saved profiles."
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
@@ -1126,7 +1169,7 @@ class ModRajio extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rpref profile save', {
+        this.be('Commands').registerCommand(this, 'rpref profile save', {
             description: "Creates a snapshot of your current preferences which can be restored later.",
             args: ["name"]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -1144,7 +1187,7 @@ class ModRajio extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rpref profile load', {
+        this.be('Commands').registerCommand(this, 'rpref profile load', {
             description: "Restores a previously created snapshot of your preferences.",
             args: ["name"]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -1159,7 +1202,7 @@ class ModRajio extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rpref profile erase', {
+        this.be('Commands').registerCommand(this, 'rpref profile erase', {
             description: "Deletes a previously created snapshot of your preferences.",
             args: ["name"]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -1191,28 +1234,42 @@ class ModRajio extends Module {
         return true;
     }
 
-
     joinDchan() {
-        if (this._disabled) return Promise.reject("Rajio is disabled.");
+        if (this._disabled) return Promise.reject("Radio is disabled.");
         if (!this.listeners.length) return Promise.reject("No listeners.");
         if (!this.dchan || this.dchan.type != ChannelType.GuildVoice) return Promise.reject("Voice channel not found.");
-        return this.dchan.join()
-            .catch((reason) => {
-                this.log("error", "Error connecting to voice channel: " + reason)
+        return new Promise((resolve, reject) => {
+            let voiceConnection = joinVoiceChannel({
+                adapterCreator: this.denv.server.voiceAdapterCreator,
+                guildId: this.denv.server.id,
+                channelId: this.dchan.id,
+                selfMute: false,
+                selfDeaf: false
             });
+            voiceConnection.on(VoiceConnectionStatus.Ready, () => {
+                voiceConnection.subscribe(this._audioPlayer);
+                resolve(voiceConnection);
+            });
+            voiceConnection.on(VoiceConnectionStatus.Disconnected, (oldState, newState) => {
+                reject(newState.reason || "Unknown reason.");
+            })
+            voiceConnection.on("error", (error) => {
+                this.log("error", "Voice channel error: " + error);
+            });
+        });
     }
 
     
     //Internal playback control
     
-    playSong(song, seek) {
+    async playSong(song, seek) {
         if (!this.vc || this.playing || this.denv.server.members.me.voice.mute || !this.listeners.length || this._disabled) {
             return false;
         }
         
         let userid = null;
         if (!song) {
-            song = this.dequeue(true);
+            song = await this.dequeue(true);
             if (!song) return false;
             userid = song[1];
             song = song[0];
@@ -1225,14 +1282,14 @@ class ModRajio extends Module {
         if (this.param('announcesongs') && (!this._announced || moment().unix() > this._announced + this.param('announcedelay'))) {
             let reqby = '';
             if (userid) {
-                reqby = ' ** Requested by __' + this.denv.idToDisplayName(userid) + '__';
+                reqby = ' ** Requested by __' + await this.denv.idToDisplayName(userid) + '__';
             }
 
             //This block is for displaying likes in the announcement channel
             let likespart = '';
             let songrank = this.songrank;
             if (songrank) {
-                let likes = songrank.getAllSongLikes(song.hash);
+                let likes = await songrank.getAllSongLikes(song.hash);
                 if (Object.keys(likes).length > 0) {
                     let listeners = this.listeners.map((member) => member.id);
                     let listenerlikes = [];
@@ -1288,17 +1345,26 @@ class ModRajio extends Module {
         }
         let volume = this._volume * att;
         
+        /*
         let options = {
             volume: (volume != 1 ? volume : false),
-            seek: (seek ? Math.round(seek / 1000.0) : 0),
+            seek: seek || 0,
             highWaterMark: 64,
             fec: this.param('fec')
-        };
+        };*/
+
+        let audioResource = createAudioResourceAndSeek(await this.grabber.songPathByHash(song.hash), {
+            inlineVolume: volume != 1,
+            metadata: { hash: song.hash },
+            seekTo: seek || undefined
+        });
+
+        if (volume != 1) audioResource.volume.setVolume(volume);
         
-        this.grabber.setAdditionalStats(this.metaprefix + '.playing', song.hash);
+        await this.grabber.setAdditionalStats(this.metaprefix + '.playing', song.hash);
         this._play = song;
         this._seek = seek || 0;
-        this._pending = setTimeout(() => {
+        this._pending = setTimeout(() => (async () => {
         
             this.abortskip();
         
@@ -1319,25 +1385,21 @@ class ModRajio extends Module {
                 
             };
             
-            if (song.format == 'pcm') {
-                options.type = 'converted';
-                this.vc.play(fs.createReadStream(this.grabber.songPathByHash(song.hash)), options).once("close", ender);
-            } else {
-                this.vc.play(this.grabber.songPathByHash(song.hash), options).once("close", ender);
-            }
+            this._audioPlayer.play(audioResource);
+            this._audioPlayer.once(AudioPlayerStatus.Idle, ender);
+            this._audioPlayerPlayTime = moment().unix();
             
             this._pending = null;
-        }, this.param('leadin') > 0 ? this.param('leadin') * 1000 : 1);
+        })(), this.param('leadin') > 0 ? this.param('leadin') * 1000 : 1);
         
         return true;
     }
     
-    stopSong() {
+    async stopSong() {
         this.log('Stopping song' + (this._play ? ': ' + this._play.hash : '.'));
-        this.grabber.setAdditionalStats(this.metaprefix + '.playing', null);
+        await this.grabber.setAdditionalStats(this.metaprefix + '.playing', null);
         
         if (this.param('usestatus')) {
-            //this.denv.client.realClient.user.setActivity(null);  BROKEN IN discord.js 2021/06
             this.denv.client.realClient.user.setPresence({ activities: [] });
         }
         
@@ -1355,7 +1417,7 @@ class ModRajio extends Module {
             this._play = null;
             this._seek = 0;
             this._pause = true;  //Hack to stop the end event from playing next song
-            this.vc.dispatcher.destroy();
+            this._audioPlayer.stop();
         }
         
         this._pause = null;
@@ -1363,12 +1425,12 @@ class ModRajio extends Module {
         this.abortskip();
     }
     
-    pauseSong() {
+    async pauseSong() {
         if (!this.strictlyPlaying) {
             return this.stopSong();
         }
         
-        let pausetime = this._seek + this.vc.dispatcher.streamTime;
+        let pausetime = this._seek + this.playTime;
         
         this.log('Pausing song: ' + this._play.hash + ' at ' + pausetime);
         
@@ -1379,16 +1441,16 @@ class ModRajio extends Module {
         this._pause = [this._play, pausetime];
         this._play = null;
         this._seek = 0;
-        this.vc.dispatcher.destroy();
+        this._audioPlayer.stop();
         
-        this._expirepause = setTimeout(() => {
+        this._expirepause = setTimeout(() => (async () => {
             this.log('Expiring paused song: ' + this._pause[0].hash);
-            this.stopSong();
+            await this.stopSong();
             this._expirepause = null;
-        }, this.param('pause') > 0 ? this.param('pause') * 1000 : 1);
+        })(), this.param('pause') > 0 ? this.param('pause') * 1000 : 1);
     }
     
-    resumeSong() {
+    async resumeSong() {
         if (!this._pause) return false;
         
         this.log('Preparing to resume song: ' + this._pause[0].hash + ' at ' + this._pause[1]);
@@ -1398,12 +1460,12 @@ class ModRajio extends Module {
         
         this._pause = null;
         
-        if (!this.grabber.hashSong(song.hash)) {
+        if (!await this.grabber.hashSong(song.hash)) {
             this.log('The song no longer exists.');
             return this.stopSong();
         }
         
-        this.playSong(song, seek);
+        await this.playSong(song, seek);
         
         if (this._expirepause) {
             clearTimeout(this._expirepause);
@@ -1459,21 +1521,21 @@ class ModRajio extends Module {
         return true;
     }
     
-    dequeue(getrequester) {
+    async dequeue(getrequester) {
         let listeners = this.listeners.map((listener) => listener.id);
     
         let usequeue = (this._queue.length ? random.fraction() < this.param('pri.queue.chance') : false);
-        let novelties = this.isThereANovelty(listeners);
+        let novelties = await this.isThereANovelty(listeners);
         let usenovelty = (novelties ? random.fraction() < this.param('pri.novelty.chance') : false);
 
         let priorities = {};
-        for (let hash of this.grabber.everySong()) {
-            let priority = this.songPriority(this.grabber.hashSong(hash), listeners, usequeue, usenovelty);
+        for (let hash of await this.grabber.everySong()) {
+            let priority = await this.songPriority(await this.grabber.hashSong(hash), listeners, usequeue, usenovelty);
             priorities[hash] = priority;
         }
 
-        this.grabber.setAdditionalStats(this.metaprefix + '.latestpriorities', priorities);
-        this.grabber.setAdditionalStats(this.metaprefix + '.latestnovelties', novelties || []);
+        await this.grabber.setAdditionalStats(this.metaprefix + '.latestpriorities', priorities);
+        await this.grabber.setAdditionalStats(this.metaprefix + '.latestnovelties', novelties || []);
         
         let sum = 0;
         let candidates = [];
@@ -1501,11 +1563,11 @@ class ModRajio extends Module {
             userid = this._queue[index].userid;
             this._lastreq[hash] = moment().unix();
             this._queue.splice(index, 1);
-            this.grabber.setAdditionalStats(this.metaprefix + '.queue', this._queue);
+            await this.grabber.setAdditionalStats(this.metaprefix + '.queue', this._queue);
         }
         
         if (getrequester) {
-            return [this.grabber.hashSong(hash), userid];
+            return [await this.grabber.hashSong(hash), userid];
         }
         
         return this.grabber.hashSong(hash);
@@ -1591,7 +1653,7 @@ class ModRajio extends Module {
     
     //Remember played song
     
-    remember(song) {
+    async remember(song) {
         this._history.unshift(song);
         if (this._history.length > this.param('historysize')) {
             this._history = this._history.slice(0, this.param('historysize'));
@@ -1600,10 +1662,10 @@ class ModRajio extends Module {
         let plays = (this.grabber.getSongMeta(song.hash, this.metaprefix + ".plays") || 0) + 1;
         let now = moment().unix();
 
-        this.grabber.setSongMeta(song.hash, this.metaprefix + ".lastplayed", now);
-        this.grabber.setSongMeta(song.hash, this.metaprefix + ".plays", plays);
+        await this.grabber.setSongMeta(song.hash, this.metaprefix + ".lastplayed", now);
+        await this.grabber.setSongMeta(song.hash, this.metaprefix + ".plays", plays);
 
-        let skipdata = this.grabber.getSongMeta(song.hash, this.metaprefix + ".skipped");
+        let skipdata = await this.grabber.getSongMeta(song.hash, this.metaprefix + ".skipped");
         if (skipdata) {
             for (let ts in skipdata) {
                 if (now - ts > this.param('pri.listen.skiprange')) {
@@ -1614,7 +1676,7 @@ class ModRajio extends Module {
                 skipdata = null;
             }
         }
-        this.grabber.setSongMeta(song.hash, this.metaprefix + ".skipped", skipdata);
+        await this.grabber.setSongMeta(song.hash, this.metaprefix + ".skipped", skipdata);
 
         this._playscache[song.hash] = plays;
 
@@ -1649,10 +1711,10 @@ class ModRajio extends Module {
     }
     
     
-    unanimousOpinion(hash, listeners, likeability) {
+    async unanimousOpinion(hash, listeners, likeability) {
         if (!this.songrank) return false;
         for (let listener of listeners) {
-            let listenerlik = this.songrank.getSongLikeability(hash, listener);
+            let listenerlik = await this.songrank.getSongLikeability(hash, listener);
             if (listenerlik === null || listenerlik === undefined || likeability > 0 && listenerlik < likeability || likeability < 0 && listenerlik > likeability) {
                 return false;
             }
@@ -1660,7 +1722,7 @@ class ModRajio extends Module {
         return true;
     }
 
-    calculateListenerSlide(listener) {
+    async calculateListenerSlide(listener) {
         if (!this.songrank) return 0;
         let userhistory = this._history.slice(0, this._userlistened[listener] || 0);
 
@@ -1675,7 +1737,7 @@ class ModRajio extends Module {
             let comp = 0;
             if (Object.keys(curators).length) {
                 for (let curator in curators) {
-                    comp += (this.songrank.computeSongRank(song.hash, [curator]) || 0) * (curators[curator] ? 1 : -1);
+                    comp += (await this.songrank.computeSongRank(song.hash, [curator]) || 0) * (curators[curator] ? 1 : -1);
                 }
                 comp /= Object.keys(curators).length;
             }
@@ -1687,12 +1749,12 @@ class ModRajio extends Module {
         return slide;
     }
 
-    playsRank(hash) {
-        let songs = this.grabber.everySong();
+    async playsRank(hash) {
+        let songs = await this.grabber.everySong();
         if (Object.keys(this._playscache).length != songs.length) {
             for (let songhash of songs) {
                 if (!this._playscache[songhash]) {
-                    this._playscache[songhash] = (this.grabber.getSongMeta(songhash, this.metaprefix + ".plays") || 0);
+                    this._playscache[songhash] = (await this.grabber.getSongMeta(songhash, this.metaprefix + ".plays") || 0);
                 }
             }
         }
@@ -1706,8 +1768,8 @@ class ModRajio extends Module {
         return rank;
     }
 
-    calculateSkipMitigation(hash, listener, skipdata, now) {
-        if (!skipdata) skipdata = this.grabber.getSongMeta(hash, this.metaprefix + ".skipped") || {};
+    async calculateSkipMitigation(hash, listener, skipdata, now) {
+        if (!skipdata) skipdata = await this.grabber.getSongMeta(hash, this.metaprefix + ".skipped") || {};
         if (!now) now = moment().unix();
         
         let mostrecent = 0;
@@ -1722,25 +1784,25 @@ class ModRajio extends Module {
         return Math.pow((now - mostrecent) / this.param('pri.listen.skiprange'), this.param('pri.listen.skipbias')) * (1 - this.param('pri.listen.skipfact')) + this.param('pri.listen.skipfact');
     }
 
-    isNovelty(hash, songcount) {
-        if (!songcount) songcount = this.grabber.everySong().length;
-        let seen = this.grabber.getSongMeta(hash, "seen");
+    async isNovelty(hash, songcount) {
+        if (!songcount) songcount = (await this.grabber.everySong()).length;
+        let seen = await this.grabber.getSongMeta(hash, "seen");
         if (!seen || moment().unix() - seen[0] > this.param('pri.novelty.duration')) return false;
-        if ((this.grabber.getSongMeta(hash, this.metaprefix + ".plays") || 0) > this.param("pri.novelty.breaker")) return false;
+        if ((await this.grabber.getSongMeta(hash, this.metaprefix + ".plays") || 0) > this.param("pri.novelty.breaker")) return false;
         return true;
     }
 
-    isThereANovelty(listeners) {
-        let everysong = this.grabber.everySong();
+    async isThereANovelty(listeners) {
+        let everysong = await this.grabber.everySong();
         let songrank = this.songrank;
         let novelties = [];
         for (let hash of everysong) {
-            if (this.isNovelty(hash, everysong.length)) {
+            if (await this.isNovelty(hash, everysong.length)) {
 
                 let voted = 0;
                 if (songrank && listeners) {
                     for (let listenerid of listeners) {
-                        if (songrank.getSongLikeability(hash, listenerid)) {
+                        if (await songrank.getSongLikeability(hash, listenerid)) {
                             voted += 1;
                         }
                     }
@@ -1768,10 +1830,10 @@ class ModRajio extends Module {
     }
 
     
-    songPriority(song, listeners, usequeue, usenovelty, trace) {
+    async songPriority(song, listeners, usequeue, usenovelty, trace) {
         let priority = this.param('pri.base');
         let components = {base: priority};
-        let songcount = this.grabber.everySong().length;
+        let songcount = (await this.grabber.everySong()).length;
         let now = moment().unix();
         
         let prelisteners = (listeners || []);
@@ -1781,7 +1843,7 @@ class ModRajio extends Module {
             listeners.push(userid);
         }
 
-        let skipdata = this.grabber.getSongMeta(song.hash, this.metaprefix + ".skipped") || {};
+        let skipdata = await this.grabber.getSongMeta(song.hash, this.metaprefix + ".skipped") || {};
         
         
         //Rank-based components
@@ -1790,7 +1852,7 @@ class ModRajio extends Module {
         
         if (songrank) {
             //Global rank
-            let calcrank = songrank.computeSongRank(song.hash, null, true);
+            let calcrank = await songrank.computeSongRank(song.hash, null, true);
             let crank = (calcrank.rank || 0);
             if (calcrank.users.length) crank /= calcrank.users.length;
             crank *= this.param('pri.rank');
@@ -1811,7 +1873,7 @@ class ModRajio extends Module {
                     if (!Object.keys(curators).length) continue;
 
                     for (let curator in curators) {
-                        curated += (songrank.computeSongRank(song.hash, [curator]) || 0) * (curators[curator] ? 1 : -1);
+                        curated += (await songrank.computeSongRank(song.hash, [curator]) || 0) * (curators[curator] ? 1 : -1);
                     }
                     curated /= Object.keys(curators).length;
                     curated *= this.param('pri.listen');
@@ -1844,7 +1906,7 @@ class ModRajio extends Module {
 
                     //Skip attenuation
                     if (curated > 0) {
-                        let skipfactor = this.calculateSkipMitigation(song.hash, listener, skipdata, now);
+                        let skipfactor = await this.calculateSkipMitigation(song.hash, listener, skipdata, now);
                         curated *= skipfactor;
                         if (trace && skipfactor < 1) components["withskips." + listener] = curated;
                     }
@@ -1854,7 +1916,7 @@ class ModRajio extends Module {
 
                 //Slide
                 for (let listener of listeners) {
-                    let slide = this.calculateListenerSlide(listener);
+                    let slide = await this.calculateListenerSlide(listener);
                     if (trace) components["slide." + listener] = slide;
                     clisten *= (slide > 1 ? Math.pow(slide, this.param('pri.listen.slide')) : 1);
                 }
@@ -1891,7 +1953,7 @@ class ModRajio extends Module {
 
         if (priority < 0) priority = 0;
         if (trace) components.baseabsolute = priority;
-        let playsrank = this.playsRank(song.hash);
+        let playsrank = await this.playsRank(song.hash);
         let playsfactor = Math.log(playsrank + 1) / Math.log(1 + songcount * this.param('pri.mitigatedslice'));
         if (trace) components.playsfactor = playsfactor;
         priority = Math.pow(priority, playsfactor);
@@ -1909,11 +1971,11 @@ class ModRajio extends Module {
         
         if (listeners.length) {
             let upenalty = null;
-            if (this.unanimousOpinion(song.hash, listeners, -2)) {
+            if (await this.unanimousOpinion(song.hash, listeners, -2)) {
                 upenalty = priority * (1 - this.param('pri.unanimous.hate'));
                 priority -= upenalty;
                 if (trace) components.unanimoushate = upenalty;
-            } else if (this.unanimousOpinion(song.hash, listeners, -1)) {
+            } else if (await this.unanimousOpinion(song.hash, listeners, -1)) {
                 upenalty = priority * (1 - this.param('pri.unanimous.meh'));
                 priority -= upenalty;
                 if (trace) components.unanimousdislike = upenalty;
@@ -1938,7 +2000,7 @@ class ModRajio extends Module {
 
         //Novelty
 
-        if (usenovelty && !this.isNovelty(song.hash, songcount)) {
+        if (usenovelty && !await this.isNovelty(song.hash, songcount)) {
             priority = 0;
             if (trace) components.noveltyreset = priority;
         }
@@ -2071,6 +2133,3 @@ class ModRajio extends Module {
     
     
 }
-
-
-module.exports = ModRajio;

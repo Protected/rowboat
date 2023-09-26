@@ -1,43 +1,39 @@
-/* Module: DiscordTimeRoles -- A Time addon that sets Discord roles based on timezone offsets. */
+/* DiscordTimeRoles -- A Time addon that sets Discord roles based on timezone offsets. */
 
-const Module = require('../Module.js');
+import moment from 'moment';
 
-const moment = require('moment');
+import Behavior from '../src/Behavior.js';
 
-class ModDiscordTimeRoles extends Module {
+export default class DiscordTimeRoles extends Behavior {
 
-    get requiredParams() { return [
-        'env',
-        'roles'                 //A map of {ROLEID: {MIN, MAX}, ...} where MIN and MAX are timezone offsets in minutes.
+    get params() { return [
+        {n: 'roles', d: "A map of {ROLEID: {MIN, MAX}, ...} where MIN and MAX are timezone offsets in minutes."},
+        {n: 'strict', d: "If true, removes incorrect roles on startup."}
     ]; }
 
-    get optionalParams() { return [
-        'strict'                //If true, removes incorrect roles on startup.
-    ]; }
+    get defaults() { return {
+        strict: false
+    }; }
     
-    get requiredEnvironments() { return [
-        'Discord'
-    ]; }
+    get requiredEnvironments() { return {
+        Discord: 'Discord'
+    }; }
 
-    get requiredModules() { return [
-        'Time'
-    ]; }
+    get requiredBehaviors() { return {
+        Time: 'Time'
+    }; }
 
     get denv() {
-        return this.env(this.param('env'));
+        return this.env('Discord');
     }
-
 
     constructor(name) {
         super('DiscordTimeRoles', name);
 
-        this._params['strict'] = false;
     }
     
     initialize(opt) {
         if (!super.initialize(opt)) return false;
-
-        if (this.denv.envName != "Discord") return false;
 
 
         //Register handlers
@@ -45,7 +41,7 @@ class ModDiscordTimeRoles extends Module {
         this.denv.on("connected", async () => {
 
             for (let member of this.denv.server.members.cache.values()) {
-                let utcOffset = this.mod("Time").getCurrentUtcOffsetByUserid(this.denv, member.id);
+                let utcOffset = await this.be("Time").getCurrentUtcOffsetByUserid(this.denv.name, member.id);
                 if (utcOffset == null && !this.param("strict")) continue;
                 
                 //Modify assignments on startup
@@ -59,10 +55,10 @@ class ModDiscordTimeRoles extends Module {
 
         //Modify assignments on timezone change
 
-        this.mod("Time").registerTimezoneCallback((env, userid, handle, tzinfo) => {
-            if (env.name != this.denv.name) return false;
+        this.be("Time").registerTimezoneCallback((envname, userid, handle, tzinfo) => {
+            if (envname != this.denv.name) return false;
 
-            this.addAndRemoveRoles(env.server.members.cache.get(userid), moment().tz(tzinfo.name).utcOffset(), true);
+            this.addAndRemoveRoles(this.denv.server.members.cache.get(userid), moment().tz(tzinfo.name).utcOffset(), true);
 
         });
 
@@ -100,6 +96,3 @@ class ModDiscordTimeRoles extends Module {
 
 
 }
-
-
-module.exports = ModDiscordTimeRoles;

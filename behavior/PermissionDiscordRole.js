@@ -1,51 +1,29 @@
-/* Module: PermissionDiscordRole -- This module is a permissions provider that turns Discord role names into ModUsers permissions. */
+/* PermissionDiscordRole -- Permissions provider that turns Discord role names into permissions. */
 
-const Module = require('../Module.js');
+//WARNING: Any user allowed to rename their own roles or to create and assign themselves roles will be able to give themselves permissions.
 
-class ModPermissionDiscordRole extends Module {
+import { PermissionProvider } from "./Users.js";
 
-    get requiredEnvironments() { return [
-        'Discord'
-    ]; }
-
-    get requiredModules() { return [
-        'Users'
-    ]; }
+export default class PermissionDiscordRole extends PermissionProvider {
 
     constructor(name) {
-        super('PermissionDiscordRole', name);
+        super('DiscordRole', name);
     }
     
-    
-    initialize(opt) {
-        if (!super.initialize(opt)) return false;
-        
-        
-        //Register callbacks
-        
-        this.mod('Users').registerPermissionProvider((passedname, userid, channelid, permissions) => {
-            let env = opt.envs[passedname];
-            if (env.envName != 'Discord') return [];
-        
-            let member = env.server.members.cache.get(userid);
-            if (!member) return [];
-            
-            let result = [];
-        
-            for (let permission of permissions) {
-                let role = member.roles.cache.find(r => r.name == permission);
-                if (role) result.push(permission);
-            }
-        
-            return result;
-        }, this);
-        
-        
-        return true;
-    }
+    async permissionProvider({env, userid, permissions}) {
+        if (env.type != "Discord") return [];
 
+        let member = env.server.members.cache.get(userid);
+        if (!member) return [];
+
+        let result = [];
+    
+        for (let permission of permissions) {
+            let role = member.roles.cache.find(r => r.name == permission);
+            if (role) result.push(permission);
+        }
+    
+        return result;
+    }
 
 }
-
-
-module.exports = ModPermissionDiscordRole;

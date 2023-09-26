@@ -1,37 +1,45 @@
 /* Environment: Discord -- This environment connects to a Discord server/guild. */
 
-const moment = require('moment');
+import moment from 'moment';
+import { verifyString, ChannelType } from 'discord.js';
 
-const Environment = require('../Environment.js');
-const { verifyString, ChannelType } = require('discord.js');
+import Environment from '../src/Environment.js';
 
 const MAXIMUM_MSG_LENGTH = 2000;
 
-class EnvDiscord extends Environment {
+export default class EnvDiscord extends Environment {
 
-    get requiredParams() { return [
-        'token',                //Discord application token
-        'server',               //Server ID to operate on (application must have been previously added to server)
-        'privatemessages'       //Environment will receive private messages to the bot
+    get params() { return [
+
+        {n: 'token', d: "Discord application token"},
+        {n: 'server', d: "Server ID to operate on (application must have been previously added to server)"},
+
+        {n: 'privatemessages', d: "Environment will receive private messages to the bot"},
+        {n: 'senddelay', d: "Message queue send delay (ms)"},
+        {n: 'webhooklifetime', d: "How long to keep a webhook (s)"},
+        {n: 'maxwebhooks', d: "Maximum total simultaneous webhooks"}
+
     ]; }
         
-    get optionalParams() { return [
-        'senddelay',            //Message queue send delay (ms)
-        'webhooklifetime',      //How long to keep a webhook (s)
-        'maxwebhooks'           //Maximum total simultaneous webhooks
-    ]; }
+    get defaults() { return {
+        privatemessages: false,
+        senddelay: 500,
+        webhooklifetime: 60,
+        maxwebhooks: 5
+    }; }
     
     get sharedModules() { return [
         'DiscordClient'
     ]; }
 
+    //Replace with @decorators once they become available
+    get synchronousMethods() { 
+        return super.synchronousMethods.concat(["extractRoleId", "extractChannelId", "extractRoleIdsFromCollection"]);
+    }
+
     constructor(name) {
         super('Discord', name);
 
-        this._params['senddelay'] = 500;
-        this._params["webhooklifetime"] = 60;
-        this._params["maxwebhooks"] = 5;
-        
         this._localClient = null;  //DiscordClient (manages shared discord.js Client object)
         this._client = null;  //Actual discord.js Client object
         this._server = null;  //discord.js Guild object (formerly Server) for the server identified by this environment's 'server' ID.
@@ -46,7 +54,7 @@ class EnvDiscord extends Environment {
 
         this._localClient = opt.sharedInstances.DiscordClient;
 
-        opt.pushCleanupHandler((next) => {
+        opt.pushShutdownHandler((next) => {
             let promises = [];
             for (let channelid in this._webhooks) {
                 for (let userid in this._webhooks[channelid]) {
@@ -59,17 +67,15 @@ class EnvDiscord extends Environment {
         return true;
     }
     
-    
+
     connect() {
 
-        let params = this.params;
-
-        this.log(`Connecting to ${params.server}`);
+        this.log(`Connecting to ${this.param('server')}`);
 
         return this._localClient.prepareClient(this, this.param('token'), this.param('sendDelay'))
             .then(async (client) => {
                 this._client = client;
-                this._server = await client.guilds.fetch(params.server);
+                this._server = await client.guilds.fetch(this.param('server'));
                 
                 if (!this._server) {
                     this.log('error', "Could not obtain server object.");
@@ -212,7 +218,7 @@ class EnvDiscord extends Environment {
     
     
     disconnect() {
-        this._localClient.detachFromClient(this)
+        return this._localClient.detachFromClient(this)
             .then(() => {
                 this._client = null;
                 this._server = null;
@@ -272,9 +278,9 @@ class EnvDiscord extends Environment {
 
     idToDisplayName(id) {
         let member = this._server.members.cache.get(id);
-        if (member) return (member.nickname ? member.nickname : member.user.username);
+        if (member) return member.displayName;
         let user = this._client.users.cache.get(id);
-        if (user) return user.username;
+        if (user) return user.displayName;
         return id;
     }
     
@@ -282,17 +288,14 @@ class EnvDiscord extends Environment {
     displayNameToId(displayname) {
         let refuser = null;
 
-        let parts = displayname.split("#");
-        
-        if (parts[1]) {
-            refuser = this._server.members.cache.filter(member => member.user.username == parts[0]).find(member => member.user.discriminator == parts[1]);
-        } else {
-            let cache = this._server.members.cache.filter(member => member.user.username == displayname);
+        refuser = this._server.members.cache.get(displayname);  //By ID
+        if (!refuser) {
+            let cache = this._server.members.cache.filter(member => member.user?.username === displayname);  //By exact username
             if (cache.size == 1) {
                 refuser = cache[0];
             } else {
                 displayname = displayname.toLowerCase();
-                refuser = this._server.members.cache.find(member => member.nickname && member.nickname.toLowerCase() == displayname);
+                refuser = this._server.members.cache.find(member => member.displayName?.toLowerCase() === displayname); //By display name
             }
         }
 
@@ -322,7 +325,7 @@ class EnvDiscord extends Environment {
         let targetchan = this.getActualChanFromTarget(channel);
         if (!targetchan) return [];
         
-        if (targetchan.type == ChannelType.DM || !targetchan.type) return [targetchan.recipient.id];
+        if (targetchan.type == ChannelType.DM) return [targetchan.recipient?.id];
         
         let ids = [];
         if (targetchan.type == ChannelType.GuildText || targetchan.type == ChannelType.GuildAnnouncement || targetchan.type == ChannelType.GuildForum) {
@@ -356,7 +359,7 @@ class EnvDiscord extends Environment {
     channelIdToType(channelid) {
         let chan = this.getActualChanFromTarget(channelid);
         if (!chan) return "unknown";
-        if (!chan.type || chan.type == ChannelType.DM) return "private";
+        if (chan.type === undefined || chan.type == ChannelType.DM) return "private";
         return "regular";
     }
     
@@ -386,7 +389,7 @@ class EnvDiscord extends Environment {
         text = text.replace(/<@!?([0-9]+)>/g, (match, id) => {
             let user = this._server.members.cache.get(id);
             if (!user) return "";
-            return "@" + (user.nickname ? user.nickname : user.user.username);
+            return "@" + user.displayName;
         });
         
         text = text.replace(/<#([0-9]+)>/g, (match, id) => {
@@ -511,6 +514,11 @@ class EnvDiscord extends Environment {
         return null;
     }
 
+    extractRoleIdsFromCollection(roleids) {
+        if (!roleids) return [];
+        return roleids.map(roleid => this.extractRoleId(roleid)).filter(checkroleid => !!checkroleid);
+    }
+
 
     //Written by the djs contributors
     splitMessage(text, { maxLength = 2_000, char = '\n', prepend = '', append = '' } = {}) {
@@ -600,6 +608,3 @@ class EnvDiscord extends Environment {
     
     
 };
-
-
-module.exports = EnvDiscord;

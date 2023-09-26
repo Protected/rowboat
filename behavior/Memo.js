@@ -1,36 +1,37 @@
-/* Module: Memo -- Save a public message for another user to be auto-delivered on activity. */
+/* Memo -- Save a public message for another user to be auto-delivered on activity. */
 
-const Module = require('../Module.js');
-const moment = require('moment');
+import moment from 'moment';
 
-const PERM_ADMIN = 'administrator';
+import Behavior from '../src/Behavior.js';
 
-class ModMemo extends Module {
+export default class Memo extends Behavior {
 
-
-    get optionalParams() { return [
-        'datafile',
-        'outboxSize',           //Maximum undelivered memos
-        'inboxDisplaySize',     //Maximum recent memos to display
-        'inboxTsCutoff',        //How recent memos must be to be in the inbox (seconds)
-        'tsFormat',             //How to format timestamps (moment.js)
-        'permissionAdmin'       //Override admin permission
+    get params() { return [
+        {n: 'datafile', d: "Customize the name of the default data file"},
+        {n: 'outboxSize', d: "Maximum amount of undelivered memos"},
+        {n: 'inboxDisplaySize', d: "Maximum amount of recent memos to display"},
+        {n: 'inboxTsCutoff', d: "How recent memos must be to be in the inbox (seconds)"},
+        {n: 'tsFormat', d: "How to format timestamps (moment.js)"}
     ]; }
+
+    get defaults() { return {
+        datafile: null,
+        outboxSize: 10,
+        inboxDisplaySize: 10,
+        inboxTsCutoff: 2592000,  //30 days
+        tsFormat: "ddd MMM D HH:mm:ss"
+    }; }
     
-    get requiredModules() { return [
-        'Users',
-        'Commands'
-    ]; }
+    get requiredBehaviors() { return {
+        Users: 'Users',
+        Commands: 'Commands'
+    }; }
 
     constructor(name) {
         super('Memo', name);
-        
-        this._params['datafile'] = null;
-        this._params['outboxSize'] = 10;
-        this._params['inboxDisplaySize'] = 10;
-        this._params['inboxTsCutoff'] = 2592000;  //30 days
-        this._params['tsFormat'] = "ddd MMM D HH:mm:ss";
-        this._params['permissionAdmin'] = PERM_ADMIN;
+
+        this._envExists = null;
+        this._envProxy = null;
         
         //Main: Map of #: {id: #, ts, from: {env, handle, display, userid}, to: [{env, handle, display, userid, auth}, ...], strong: true/false, msg: "text"}
         this._memo = {};
@@ -48,6 +49,9 @@ class ModMemo extends Module {
     initialize(opt) {
         if (!super.initialize(opt)) return false;
        
+        this._envExists = opt.envExists;
+        this._envProxy = opt.envProxy;
+
         //Load data
         
         this._memo = this.loadData();
@@ -71,14 +75,12 @@ class ModMemo extends Module {
 
         //Register callbacks
         
-        for (let envname in opt.envs) {
-            opt.envs[envname].on('join', this.onJoin, this);
-            opt.envs[envname].on('message', this.onMessage, this);
-        }
+        this.env().on('join', this.onJoin, this);
+        this.env().on('message', this.onMessage, this);
         
-        
-        this.mod("Commands").registerRootDetails(this, 'memo', {description: 'Commands for writing, reading and canceling messages for other users.'});
+        this.be("Commands").registerRootDetails(this, 'memo', {description: 'Commands for writing, reading and canceling messages for other users.'});
 
+        const permAdmin = this.be("Users").defaultPermAdmin;
         
         let ssoptions = {
             description: "Leaves a message for another user.",
@@ -94,15 +96,15 @@ class ModMemo extends Module {
             unobtrusive: true
         };
         
-        let sscallback = (strong) => (env, type, userid, channelid, command, args, handle, ep) => {
-            if (!env.idIsAuthenticated(userid)) {
+        let sscallback = (strong) => async (env, type, userid, channelid, command, args, handle, ep) => {
+            if (!await env.idIsAuthenticated(userid)) {
                 ep.reply("Your environment (" + env.name + ") ID is not authenticated. Only authenticated users can use this command.");
                 return true;
             }
             
             //Send a memo to one or more recipients
         
-            let elements = this.parseDescriptor(env.name, args.args);
+            let elements = await this.parseDescriptor(env.name, args.args);
             
             if (elements.error) {
                 if (elements.error == 1) {
@@ -132,14 +134,14 @@ class ModMemo extends Module {
                 from: {
                     env: env.name,
                     handle: handle,
-                    display: env.idToDisplayName(userid),
+                    display: await env.idToDisplayName(userid),
                     userid: userid
                 },
                 to: elements.to,
                 strong: strong,
                 msg: elements.message
             };
-            
+
             this._memo[register.id] = register;
             this.indexFromHandle(register);
             this.indexFromUserid(register);
@@ -155,18 +157,18 @@ class ModMemo extends Module {
             return true;
         };
         
-        this.mod("Commands").registerCommand(this, 'memo save', ssoptions, sscallback(false));
-        this.mod("Commands").registerCommand(this, 'memo strongsave', ssoptions, sscallback(true));
+        this.be("Commands").registerCommand(this, 'memo save', ssoptions, sscallback(false));
+        this.be("Commands").registerCommand(this, 'memo strongsave', ssoptions, sscallback(true));
 
                 
-        this.mod("Commands").registerCommand(this, 'memo cancel', {
+        this.be("Commands").registerCommand(this, 'memo cancel', {
             description: "Cancels an undelivered message pending delivery to a user.",
             args: ["id"],
             details: [
                 "Deletes a pending message. Use the ID you received when you sent the message.",
                 "If at least one recipient already received the message, this command will only remove all pending recipients and the message will not be deleted."
             ]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
             //Cancel a memo or remove all undelivered recipients
         
             let id = parseInt(args.id);
@@ -179,7 +181,7 @@ class ModMemo extends Module {
             if (!register
                     || (register.from.env != env.name || register.from.userid != userid)
                         && (!register.from.handle || register.from.handle != handle)
-                        && !this.mod("Users").testPermissions(env.name, userid, channelid, [this.param('permissionAdmin')], false, handle)) {
+                        && !await this.be("Users").testPermissions(env.name, userid, channelid, [permAdmin], false, handle)) {
                 ep.priv("You do not have a message with the ID " + id);
                 return true;
             }
@@ -205,7 +207,7 @@ class ModMemo extends Module {
         });
         
         
-        this.mod("Commands").registerCommand(this, 'memo outbox', {
+        this.be("Commands").registerCommand(this, 'memo outbox', {
             description: "Shows information about messages you have left for other users.",
             args: ["id", true],
             details: [
@@ -213,7 +215,7 @@ class ModMemo extends Module {
                 "Alternatively, pass an ID to see the details of a specific message you have sent."
             ],
             minArgs: 0
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
             //Obtain information on memos I sent
         
             let id = parseInt(args.id[0]);
@@ -223,7 +225,7 @@ class ModMemo extends Module {
                 let target_userid = userid;
                 let target_handle = handle;
                 
-                if (this.mod("Users").testPermissions(env.name, userid, channelid, [this.param('permissionAdmin')], false, handle) && args.id.length > 1) {
+                if (await this.be("Users").testPermissions(env.name, userid, channelid, [permAdmin], false, handle) && args.id.length > 1) {
                     target_userid = args.id[1];
                     target_envname = args.id[2] || env.name;
                     target_handle = args.id[3];
@@ -244,7 +246,7 @@ class ModMemo extends Module {
                 if (!register
                         || (register.from.env != env.name || register.from.userid != userid)
                             && (!register.from.handle || register.from.handle != handle)
-                            && !this.mod("Users").testPermissions(env.name, userid, channelid, [this.param('permissionAdmin')], false, handle)) {
+                            && !await this.be("Users").testPermissions(env.name, userid, channelid, [permAdmin], false, handle)) {
                     ep.priv("You have not sent a message with the ID " + id);
                     return true;
                 }
@@ -267,7 +269,7 @@ class ModMemo extends Module {
         });
         
         
-        this.mod("Commands").registerCommand(this, 'memo inbox', {
+        this.be("Commands").registerCommand(this, 'memo inbox', {
             description: "Shows information about messages you have received from other users.",
             args: ["id"],
             details: [
@@ -275,12 +277,12 @@ class ModMemo extends Module {
                 "Alternatively, pass an ID to see the details of a message you have received."
             ],
             minArgs: 0
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
             //Obtain information on memos I received
         
             let changes = 0;
-            let display = env.idToDisplayName(userid);
-            let isauth = env.idIsAuthenticated(userid);
+            let display = await env.idToDisplayName(userid);
+            let isauth = await env.idIsAuthenticated(userid);
 
         
             let id = parseInt(args.id);
@@ -519,7 +521,7 @@ class ModMemo extends Module {
     
     //Descriptor parser - Input is "[<delay>] [{env}] (=handle|[+]displayname|[+]id) [& ...] message ...", return {delay: seconds, to: [{env, handle, display, userid, auth}, ...], message}
     
-    parseDescriptor(currentenv, descriptor) {
+    async parseDescriptor(currentenv, descriptor) {
         let result = {
             delay: 0,
             to: [],
@@ -555,7 +557,7 @@ class ModMemo extends Module {
         
             let checkenv = recipient.match(/^\{(.*)\}$/);
             if (checkenv) {
-                env = (this.env(checkenv[1]) ? checkenv[1] : null);
+                env = (this._envExists(checkenv[1]) ? checkenv[1] : null);
                 recipient = descriptor.shift();
             }
             
@@ -568,7 +570,7 @@ class ModMemo extends Module {
                 //=handle
             
                 let handle = checkhandle[1];
-                if (!this.mod('Users').getUser(handle)) return {error: 2, subject: handle};
+                if (!await this.be('Users').getUser(handle)) return {error: 2, subject: handle};
                 
                 result.to.push({
                     env: env,
@@ -605,10 +607,10 @@ class ModMemo extends Module {
                     done: 0
                 };
                 
-                let envobj = this.env(env);
+                let envobj = this._envProxy(env);
                 
-                let otherid = envobj.displayNameToId(recipient);
-                let otherdisplay = envobj.idToDisplayName(recipient);
+                let otherid = await envobj.displayNameToId(recipient);
+                let otherdisplay = await envobj.idToDisplayName(recipient);
                 
                 item.display = otherdisplay || recipient;
                 item.userid = otherid || recipient;
@@ -733,13 +735,13 @@ class ModMemo extends Module {
         return changed;
     }
     
-    deliverMemo(register, envobj, targetid, channelid) {
-        let targetdisplay = envobj.idToMention(targetid);
+    async deliverMemo(register, envobj, targetid, channelid) {
+        let targetdisplay = await envobj.idToMention(targetid);
         let delaypart = '';
         if (register.delay) {
             delaypart = ' (w/ ' + this.userFriendlyDelay(register.delay) + ' delay)';
         }
-        envobj.msg(channelid, envobj.applyFormatting('Message from **' + (register.from.display || register.from.userid) + '** to **' + (targetdisplay || targetid) + '** sent on ' + moment.unix(register.ts).format(this.param('tsFormat')) + delaypart + ':'));
+        await envobj.msg(channelid, await envobj.applyFormatting('Message from **' + (register.from.display || register.from.userid) + '** to **' + (targetdisplay || targetid) + '** sent on ' + moment.unix(register.ts).format(this.param('tsFormat')) + delaypart + ':'));
         envobj.msg(channelid, '    ' + register.msg);
     }
     
@@ -751,10 +753,10 @@ class ModMemo extends Module {
         this.triggerMemoDelivery(env, authorid, channelid, true);
     }
     
-    triggerMemoDelivery(env, authorid, channelid, strong) {
-        let handles = this.mod('Users').getHandlesById(env.name, authorid, true);
-        let display = env.idToDisplayName(authorid);
-        let isauth = env.idIsAuthenticated(authorid);
+    async triggerMemoDelivery(env, authorid, channelid, strong) {
+        let handles = await this.be('Users').getHandlesById(env.name, authorid, true);
+        let display = await env.idToDisplayName(authorid);
+        let isauth = await env.idIsAuthenticated(authorid);
         let receive = {};
         
         let now = moment().unix();
@@ -795,7 +797,7 @@ class ModMemo extends Module {
         for (let register of receive) {
             let deliveries = this.markMemoAsDelivered(register, env.name, authorid, display, handles[0], isauth);
             if (deliveries) {
-                this.deliverMemo(register, env, authorid, channelid);
+                await this.deliverMemo(register, env, authorid, channelid);
                 this.log('Delivered message ' + register.id + ' to ' + authorid + ' on environment ' + env.name + ' and channel ' + channelid);
                 changed += deliveries;
             }
@@ -806,6 +808,3 @@ class ModMemo extends Module {
     
     
 }
-
-
-module.exports = ModMemo;

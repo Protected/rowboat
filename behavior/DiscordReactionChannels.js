@@ -1,52 +1,51 @@
-/* Module: ReactionChannels -- Add users to channels based on message reactions. */
+/* DiscordReactionChannels -- Add users to channels based on message reactions. */
 
-const { EmbedBuilder, ChannelType } = require('discord.js');
+import { EmbedBuilder, ChannelType } from 'discord.js';
 
-const Module = require('../Module.js');
+import Behavior from '../src/Behavior.js';
 
-const PERM_ADMIN = 'administrator';
 const CREATE_TYPES = {'text': ChannelType.GuildText, 'voice': ChannelType.GuildVoice};
 const NEUTRAL_COLOR = "#808080";
 
-class ModReactionChannels extends Module {
+export default class DiscordReactionChannels extends Behavior {
 
-    get isMultiInstanceable() { return true; }
-
-    get requiredParams() { return [
-        "env"
+    get params() { return [
+        {n: "channelemojis", d: "Map of emoji for channel type representations"}
     ]; }
 
-    get optionalParams() { return [
-        "channelemojis"         //Map of emoji for channel type representations
-    ]; }
-
-    get requiredEnvironments() { return [
-        'Discord'
-    ]; }
-
-    get requiredModules() { return [
-        'Commands'
-    ]; }
-    
-    get denv() {
-        return this.env(this.param('env'));
-    }
-
-    constructor(name) {
-        super('ReactionChannels', name);
-
-        this._params["channelemojis"] =  {
+    get defaults() { return {
+        channelemojis: {
             [ChannelType.GuildText]: "",
             [ChannelType.GuildVoice]: "🔈",
             [ChannelType.GuildStageVoice] : "🎙️",
             [ChannelType.GuildCategory] : "",
-            [ChannelType.GuildAnnouncement]: "📰",
+            [ChannelType.GuildAnnouncement]: "📣",
             [ChannelType.GuildForum]: "📌"
-        };
+        }
+    }; }
+
+    get requiredEnvironments() { return {
+        Discord: 'Discord'
+    }; }
+
+    get requiredBehaviors() { return {
+        Users: 'Users',
+        Commands: 'Commands'
+    }; }
+
+    get isMultiInstanceable() { return true; }
+    
+    get denv() {
+        return this.env('Discord');
+    }
+
+    constructor(name) {
+        super('DiscordReactionChannels', name);
 
         this._data = null;  //{channels: {CHANNELID: {emoji, represent, require}, ...}, embed: {label, color, channel, message}, parent, defs}
         this._emoji = {};  //Index of registered channels by emoji
     }
+
 
     initialize(opt) {
         if (!super.initialize(opt)) return false;
@@ -195,8 +194,10 @@ class ModReactionChannels extends Module {
         
         //Register commands
 
-        
-        this.mod('Commands').registerRootDetails(this, 'rchan', {
+        const permAdmin = this.be('Users').defaultPermAdmin;
+
+
+        this.be('Commands').registerRootDetails(this, 'rchan', {
             description: "Manage reaction-based channel access assignment.",
             details: [
                 "Register channels to associate them with an emoji (for reactions). Channel access can also require roles and provide roles.",
@@ -205,7 +206,7 @@ class ModReactionChannels extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rchan create', {
+        this.be('Commands').registerCommand(this, 'rchan create', {
             description: "Create a managed channel.",
             args: ["name", "emoji", "type"],
             minArgs: 2
@@ -271,13 +272,13 @@ class ModReactionChannels extends Module {
 
         });
 
-        this.mod('Commands').registerCommand(this, 'rchan set', {
+        this.be('Commands').registerCommand(this, 'rchan set', {
             description: "Registers an existing channel.",
             args: ["channelid", "emoji"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
     
-            let targetchannelid = this.extractChannelId(args.channelid);
+            let targetchannelid = this.denv.extractChannelId(args.channelid);
 
             let emoji = args.emoji;
             if (!this.isEmoji(emoji)) {
@@ -313,13 +314,13 @@ class ModReactionChannels extends Module {
             return true;
         });
     
-        this.mod('Commands').registerCommand(this, 'rchan unset', {
+        this.be('Commands').registerCommand(this, 'rchan unset', {
             description: "Unregisters a channel.",
             args: ["channelid"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
     
-            let targetchannelid = this.extractChannelId(args.channelid);
+            let targetchannelid = this.denv.extractChannelId(args.channelid);
 
             let channeldata = this.getChannel(targetchannelid);
             if (this._emoji[channeldata.emoji]) {
@@ -337,8 +338,8 @@ class ModReactionChannels extends Module {
 
 
         let relateMultipleRoles = (env, args, ep, relateMethod) => {
-            let channelid = this.extractChannelId(args.channelid);
-            let targetroleids = this.extractRoleIdsFromCollection(args.targetroleid);
+            let channelid = env.extractChannelId(args.channelid);
+            let targetroleids = env.extractRoleIdsFromCollection(args.targetroleid);
             let checkroles = targetroleids.slice();
             checkroles = checkroles.map(checkroleid => env.server.roles.fetch(checkroleid));
             Promise.all(checkroles)
@@ -361,33 +362,33 @@ class ModReactionChannels extends Module {
             return true;
         }
 
-        this.mod('Commands').registerCommand(this, 'rchan relate represent', {
+        this.be('Commands').registerCommand(this, 'rchan relate represent', {
             description: "When the user joins the channel, the target role is added.",
             details: [
                 "When the user leaves the channel, the target role is removed.",
                 "The role is not kept even if it's also granted by other channels."
             ],
             args: ["channelid", "targetroleid", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => relateMultipleRoles(env, args, ep, this.channelRoleRelateRepresent));
 
-        this.mod('Commands').registerCommand(this, 'rchan relate require', {
+        this.be('Commands').registerCommand(this, 'rchan relate require', {
             description: "The channel can only be joined if the user has the target role.",
             details: [
                 "The loss of the target role results in leaving the channel."
             ],
             args: ["channelid", "targetroleid", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => relateMultipleRoles(env, args, ep, this.channelRoleRelateRequire));
 
-        this.mod('Commands').registerCommand(this, 'rchan unrelate', {
+        this.be('Commands').registerCommand(this, 'rchan unrelate', {
             description: "Removes the relationship between the channel and the target role (if any).",
             args: ["channelid", "targetroleid", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let targetchannelid = this.extractChannelId(args.channelid);
-            let targetroleids = this.extractRoleIdsFromCollection(args.targetroleid);
+            let targetchannelid = this.denv.extractChannelId(args.channelid);
+            let targetroleids = this.denv.extractRoleIdsFromCollection(args.targetroleid);
 
             if (this.channelRoleUnrelate(targetchannelid, targetroleids)) {
                 ep.ok(); 
@@ -410,12 +411,12 @@ class ModReactionChannels extends Module {
             embed.addFields({name: label, value: roles.join(", ")});
         };
         
-        this.mod('Commands').registerCommand(this, 'rchan info', {
+        this.be('Commands').registerCommand(this, 'rchan info', {
             description: "Shows information associated with a registered channel.",
             args: ["channelid"]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let targetchannelid = this.extractChannelId(args.channelid);
+            let targetchannelid = this.denv.extractChannelId(args.channelid);
             let chandata = this.getChannel(targetchannelid);
             if (!chandata) {
                 ep.reply("Channel not known.");
@@ -442,9 +443,9 @@ class ModReactionChannels extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rchan list', {
+        this.be('Commands').registerCommand(this, 'rchan list', {
             description: "Lists all the currently registered channels.",
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let channels = this.allChannels();
@@ -466,7 +467,7 @@ class ModReactionChannels extends Module {
                 description += "\n\n[Go to message](" + url + ")"; 
             }
 
-            embed.setDescription(description);
+            embed.setDescription(description || "No channels.");
             
             if (description) {
                 ep.reply(embed);
@@ -478,13 +479,13 @@ class ModReactionChannels extends Module {
         });
 
         
-        this.mod('Commands').registerCommand(this, 'rchan message create', {
+        this.be('Commands').registerCommand(this, 'rchan message create', {
             description: "Creates a new message for accessing registered channels in the specified channel.",
             args: ["targetchannelid", "color", "label", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let targetchannelid = this.extractChannelId(args.targetchannelid) || channelid;
+            let targetchannelid = this.denv.extractChannelId(args.targetchannelid) || channelid;
 
             let color = args.color;
             if (!this.isValidColor(color)) {
@@ -515,13 +516,13 @@ class ModReactionChannels extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rchan message assign', {
+        this.be('Commands').registerCommand(this, 'rchan message assign', {
             description: "Uses an existing message for accessing registered channels.",
             args: ["targetchannelid", "messageid", "color", "label", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let targetchannelid = this.extractChannelId(args.targetchannelid) || channelid;
+            let targetchannelid = this.denv.extractChannelId(args.targetchannelid) || channelid;
 
             let color = args.color;
             if (!this.isValidColor(color)) {
@@ -557,9 +558,9 @@ class ModReactionChannels extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rchan message update', {
+        this.be('Commands').registerCommand(this, 'rchan message update', {
             description: "Updates the access message.",
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let embeddata = this.getEmbedMessage();
@@ -578,12 +579,12 @@ class ModReactionChannels extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rchan message unassign', {
+        this.be('Commands').registerCommand(this, 'rchan message unassign', {
             description: "Detaches the channel access message (if any).",
             details: [
                 "The message will not be deleted automatically."
             ],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
             let embeddata = this.getEmbedMessage();
@@ -599,11 +600,11 @@ class ModReactionChannels extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rchan config parent', {
+        this.be('Commands').registerCommand(this, 'rchan config parent', {
             description: "Set the parent category for new channels created by this module.",
             args: ["categoryid"],
             minArgs: 0,
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
             let category = null;
@@ -630,13 +631,13 @@ class ModReactionChannels extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rchan config required', {
+        this.be('Commands').registerCommand(this, 'rchan config required', {
             description: "Set the default required roles for new channels created by this module.",
             details: [
                 "Required roles can be changed individually for each channel using rchan relate/unrelate."
             ],
             args: ["roleids", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
             if (!args.roleids.length) {
@@ -645,7 +646,7 @@ class ModReactionChannels extends Module {
                 return true;
             }
 
-            let targetroleids = this.extractRoleIdsFromCollection(args.roleids);
+            let targetroleids = this.denv.extractRoleIdsFromCollection(args.roleids);
             let checkroles = targetroleids.slice();
             checkroles = checkroles.map(checkroleid => env.server.roles.fetch(checkroleid));
             Promise.all(checkroles)
@@ -968,27 +969,6 @@ class ModReactionChannels extends Module {
 
 
     //Helpers
-
-    extractRoleId(roleid) {
-        if (!roleid) return null;
-        if (roleid.match(/^[0-9]+$/)) return roleid;
-        let extr = roleid.match(/<@&([0-9]+)>/);
-        if (extr) return extr[1];
-        return null;
-    }
-
-    extractChannelId(channelid) {
-        if (!channelid) return null;
-        if (channelid.match(/^[0-9]+$/)) return channelid;
-        let extr = channelid.match(/<#([0-9]+)>/);
-        if (extr) return extr[1];
-        return null;
-    }
-
-    extractRoleIdsFromCollection(roleids) {
-        if (!roleids) return [];
-        return roleids.map(roleid => this.extractRoleId(roleid)).filter(checkroleid => !!checkroleid);
-    }
     
     emojiFromReaction(reaction) {
         //Returns the string that produces the emoji or emote in the actual message
@@ -1007,7 +987,3 @@ class ModReactionChannels extends Module {
 
 
 }
-
-
-module.exports = ModReactionChannels;
-

@@ -1,78 +1,88 @@
-/* Module: Commands -- Framework for providing responses to triggers in a standardized format. */
+/* Commands -- Framework for providing responses to triggers in a standardized format. */
 
-//If ModLogger is present, will log to channel "command" using "templateCommand". Placeholders: %(MOMENT_FORMAT)% %env% %userid% %user% %channelid% %channel% %message%
+import Behavior from '../src/Behavior.js';
 
-const Module = require('../Module.js');
-
-const PERM_ADMIN = 'administrator';
+const DISCORD_ENVIRONMENT = "Discord";  //Type match for specific behavior
 const OK_EMOJI = '✅';
 
-class ModCommands extends Module {
+export default class Commands extends Behavior {
 
-
-    get optionalParams() { return [
-        'defaultprefix',        //Default prefix for commands
-        'allowedenvs',          //List of environments to activate this module on
-        'prefixes',             //Per-environment command prefixes
-        'permissions',          //Map of permissions to override hardcoded Module defaults for each command
-        'aliases',              //Map of aliases (alternative names) for commands registered by Modules.
+    get params() { return [
+        {n: 'defaultprefix', d: "Default prefix for text commands"},
+        {n: 'allowedenvs', d: "List of environments to activate this behavior on (null means all)"},
+        {n: 'prefixes', d: "Map of per-environment command prefixes {name: prefix, ...}"},
+        {n: 'permissions', d: "Map of permission overrides {command: [permission, ...], ...}"},
+        {n: 'aliases', d: "Map of command aliases {command: [alias, ...], ...}"},
+        {n: 'logTemplateCommand', d: "Template for the EventLogger behavior, if present (the channel will be 'command')"}
     ]; }
+
+    get defaults() { return {
+        
+        defaultprefix: "!",
+        allowedenvs: null,  //All of them
+        prefixes: {},
+
+        //{command: [permission, ...], ...} Also supports: true (always allow) and false (disable command)
+        permissions: {},
+
+        //{command: [alias, ...], ...} Note: Permission overrides for commands do not propagate to their aliases.
+        //You can rename a command by disabling it using a permission override and then providing an alias for it.
+        //You can also independently provide permission overrides for aliases.
+        aliases: {},
+
+        //The following placeholders can be used: %(MOMENT_FORMAT)% %env% %userid% %user% %channelid% %channel% %message%
+        logTemplateCommand: "%(HH:mm:ss)% {%env%} [%channel%] !! %user% %message%"
+
+    }; }
     
+    get requiredBehaviors() { return {
+        Users: "Users"
+    }; }
+
+    get optionalBehaviors() { return {
+        EventLogger: "EventLogger"
+    }; }
+
     get isRootAccess() { return true; }
-    
-    get requiredModules() { return [
-        'Users'
-    ]; }
 
     constructor(name) {
         super('Commands', name);
-        
-        this._params['defaultprefix'] = '!';
-        this._params['allowedenvs'] = null;  //All of them
-        this._params['prefixes'] = {};
-        
-        //{command => [permission, ...], ...} Also supports: true (always allow) and false (disable command)
-        this._params['permissions'] = {};
-
-        //{command => [alias, ...], ...} Note: Permission overrides for commands do not propagate to their aliases.
-        //You can rename a command by disabling it using a permission override and then providing an alias for it.
-        //However, you can independentlhy provide permission overrides for aliases.
-        this._params['aliases'] = {};
     
+        this._config = null;
+        this._root = null;
+
         this._commands = [];
         this._index = {};
         this._rootDetails = {};
         
-        this._modLogger = null;
     }
 
 
     initialize(opt) {
         if (!super.initialize(opt)) return false;
 
-        if (!this.param('allowedenvs')) {
-            this._params['allowedenvs'] = Object.keys(opt.envs);
-        }
-        
-        
-        opt.moduleRequest('Logger', (logger) => {
-            this._modLogger = logger;
-        });
+        this._config = opt.config;
+        this._root = opt.root;
 
-        
+
         //Register callbacks
         
-        for (let envname of this.param('allowedenvs')) {
-            this.env(envname).on('message', this.onCommandMessage, this);
+        if (!this.param('allowedenvs')) {
+            this.env().on('message', this.onCommandMessage, this);
+        } else {
+            for (let name of allowedenvs) {
+                opt.envProxy(name).on('message', this.onCommandMessage, this);
+            }
         }
-        
+
+        const permAdmin = this.be("Users").defaultPermAdmin;
         
         this.registerCommand(this, 'help', {
             description: "Obtain a list of commands or information about a specific command.",
             args: ["command", true],
             minArgs: 0,
             unobtrusive: true
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (args.command.length > 0) {
                 let command = args.command.join(" ");
@@ -143,7 +153,7 @@ class ModCommands extends Module {
                     ep.reply('    __Subcommands:__');
                     for (let subcommand of subcommands) {
                         
-                        if (subcommand.environments && subcommand.environments.indexOf(env.envName) < 0) {
+                        if (subcommand.environments && subcommand.environments.indexOf(env.type) < 0) {
                             continue;
                         }
                         
@@ -152,7 +162,7 @@ class ModCommands extends Module {
                         }
                         
                         if (subcommand.permissions) {
-                            if (!this.mod('Users').testPermissions(env.name, userid, channelid, subcommand.permissions, subcommand.requireAllPermissions)) {
+                            if (!await this.be('Users').testPermissions(env.name, userid, channelid, subcommand.permissions, subcommand.requireAllPermissions)) {
                                 continue;
                             }
                         }
@@ -173,7 +183,7 @@ class ModCommands extends Module {
                 
                 for (let descriptor of commands) {
                 
-                    if (descriptor.environments && descriptor.environments.indexOf(env.envName) < 0) {
+                    if (descriptor.environments && descriptor.environments.indexOf(env.type) < 0) {
                         continue;
                     }
                     
@@ -182,7 +192,7 @@ class ModCommands extends Module {
                     }
                     
                     if (descriptor.permissions) {
-                        if (!this.mod('Users').testPermissions(env.name, userid, channelid, descriptor.permissions, descriptor.requireAllPermissions)) {
+                        if (!await this.be('Users').testPermissions(env.name, userid, channelid, descriptor.permissions, descriptor.requireAllPermissions)) {
                             continue;
                         }
                     }
@@ -220,37 +230,36 @@ class ModCommands extends Module {
 
 
         this.registerCommand(this, 'reload', {
-            description: "Reload this application. All environments and modules will be reloaded.",
+            description: "Reload this application. All environments and behaviors will be reloaded.",
             types: ["private"],
-            permissions: [PERM_ADMIN]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            permissions: [permAdmin]
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
         
-            setTimeout(() => {
-                ep.reply('Reloading...');
-                this.log('Reloading Rowboat by request from ' + handle + ' in ' + env.name);
-                
-                if (!this.mod('root').loadMasterConfig()) {
-                    ep.reply('Failed to load master config.');
-                    process.exit(1);
-                }
-                
-                this.mod('root').stopEnvironments(); //Note: Invalidates reply callback
-                this.mod('root').resetContext();
-                
-                if (!this.mod('root').loadEnvironments()) {
-                    this.log('error','Failed to load environments.');
-                    process.exit(1);
-                }
-                
-                if (!this.mod('root').loadModules()) {
-                    this.log('error','Failed to load modules.');
-                    process.exit(1);
-                }
-                
-                this.mod('root').runEnvironments();
+            ep.reply('Reloading...');
+            this.log('Reloading Rowboat by request from ' + handle + ' in ' + env.name);
             
-                this.log('Reload successful.');
-            }, 1);
+            await this._root.stopEnvironments(); //Note: Invalidates reply callback
+
+            if (!this._config.loadMasterConfig()) {
+                this.log('error','Failed to load master config.');
+                process.exit(2);
+            }
+            
+            this._root.resetContext();
+            
+            if (!await this._root.loadEnvironments()) {
+                this.log('error','Failed to load environments.');
+                process.exit(3);
+            }
+            
+            if (!await this._root.loadBehaviors()) {
+                this.log('error','Failed to load behaviors.');
+                process.exit(4);
+            }
+            
+            await this._root.runEnvironments();
+        
+            this.log('Reload successful.');
         
             return true;
         });
@@ -258,10 +267,10 @@ class ModCommands extends Module {
         
         this.registerCommand(this, 'environments', {
             description: "Lists the configured enviroments.",
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            let allenvs = this.mod('root').getAllEnvironments();
+            let allenvs = this._root.getAllEnvironments();
             if (!allenvs || !Object.keys(allenvs).length) {
                 ep.reply ("No environments found.");
                 return true;
@@ -269,43 +278,43 @@ class ModCommands extends Module {
             
             for (let name in allenvs) {
                 let thatenv = allenvs[name];
-                ep.reply ("  {**" + name + "**} - " + thatenv.envName);
+                ep.reply ("  {**" + name + "**} - " + thatenv.type);
             }
         
             return true;
         });
         
         
-        this.registerCommand(this, 'modules', {
-            description: "Lists the configured modules.",
-            permissions: [PERM_ADMIN]
+        this.registerCommand(this, 'behaviors', {
+            description: "Lists the configured behaviors.",
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            let allmods = this.mod('root').getAllModules();
-            if (!allmods || !Object.keys(allmods).length) {
-                ep.reply ("No modules found.");
+            let allbes = this._root.getAllBehaviors();
+            if (!allbes || !Object.keys(allbes).length) {
+                ep.reply ("No behaviors found.");
                 return true;
             }
             
             let display = {};
             
-            for (let name in allmods) {
-                let thatmod = allmods[name];
-                if (!display[thatmod.modName]) {
-                    display[thatmod.modName] = [];
+            for (let name in allbes) {
+                let thatbe = allbes[name];
+                if (!display[thatbe.type]) {
+                    display[thatbe.type] = [];
                 }
-                display[thatmod.modName].push(thatmod);
+                display[thatbe.type].push(thatbe);
             }
             
-            for (let modName in display) {
-                if (!display[modName][0].isMultiInstanceable) {
-                    ep.reply ("  |**" + modName + "**|");
+            for (let type in display) {
+                if (!display[type][0].isMultiInstanceable) {
+                    ep.reply ("  |**" + type + "**|");
                 } else {
                     let line = [];
-                    for (let mod of display[modName]) {
-                        line.push("|" + mod.name + "|");
+                    for (let be of display[type]) {
+                        line.push("|" + be.name + "|");
                     }
-                    ep.reply ("  **" + modName + "**: " + line.join(", "));
+                    ep.reply ("  **" + type + "**: " + line.join(", "));
                 }
             }
         
@@ -321,7 +330,7 @@ class ModCommands extends Module {
 
 
     //Register a command that can be invoked by users.
-    registerCommand(mod, command, options, callback) {
+    registerCommand(behavior, command, options, callback) {
         if (arguments.length == 3) {
             callback = options;
             options = {};
@@ -343,33 +352,33 @@ class ModCommands extends Module {
             return false;
         }
 
-        let aliases = this._params['aliases'][commandid];
+        let aliases = this.param('aliases')[commandid];
         if (Array.isArray(aliases)) {
             for (let alias of aliases) {
                 this.log('-> Registering alias for the command ID "' + commandid +'": "' + alias + '"');
-                this.registerCommand(mod, alias, options, callback);
+                this.registerCommand(behavior, alias, options, callback);
             }
         }
         
         let descriptor = {
-            modName: mod.modName,
+            behavior: behavior.type,
             command: command,
             commandroot: commandroot,
             commandtail: commandtail,
             callback: {},                       //callback(env, type, userid, channelid, command, args, handle, ep)
-                                                //  -- userid is the environment-side id; args is a list; handle is from ModUsers; ep.reply/pub/priv are msg functions for context, public and private reply respectively.
+                                                //  -- userid is the environment-side id; args is a list; handle is from Users; ep.reply/pub/priv are msg functions for context, public and private reply respectively.
             args: [],                           //List of argument names. If the last element of the list is the boolean 'true', all additional arguments will be listed in the previous argument.
             minArgs: null,                      //Minimum amount of arguments that must be passed for the callback to be invoked, or 'null' for all arguments.
             description: "",                    //Short description for the new command displayed by the list of commands in "help".
             details: [],                        //List of additional instructions displayed by "help COMMAND" (each item is one line).
-            environments: null,                 //List of environment names the command can be invoked from, or null for all loaded environments.
+            environments: null,                 //List of environment types the command can be invoked from, or null for all loaded environments.
             types: null,                        //List of message types the command can be invoked from, or null for all message types (onMessage environment callback only).
-            permissions: null,                  //List of individual sufficient permissions required for invoking this command, or null for universal use (only null allows users without accounts to invoke the command).
+            permissions: null,                  //List of individual sufficient Users behavior permissions required for invoking this command, or null for universal use (only null allows users without accounts to invoke the command).
             requireAllPermissions: false,       //If this boolean is true, the above list becomes a list of necessary permissions (all listed permissions will be simultaneously required).
             unobtrusive: false                  //If this boolean is true, priv will send a notice rather than a message.
         }
         
-        descriptor.callback[mod.name] = callback;
+        descriptor.callback[behavior.name] = callback;
         
         if (options) {
             if (options.args) descriptor.args = options.args;
@@ -400,21 +409,21 @@ class ModCommands extends Module {
         
         let deets = this._rootDetails[commandroot];
         if (deets) {
-            if (deets.modName != mod.modName && !deets.extensions[mod.modName]) {
-                this.log('warn', 'Unable to register the command ID "' + commandid + '" because the root "' + commandroot + '" was previously claimed by |' + deets.modName + '|.');
+            if (deets.behavior != behavior.type && !deets.extensions[behavior.type]) {
+                this.log('warn', 'Unable to register the command ID "' + commandid + '" because the root "' + commandroot + '" was previously claimed by |' + deets.type + '|.');
                 return false;
             }
         } else {
             let existsroot = this.findFirstCommandByRoot(commandroot);
-            if (existsroot && existsroot.modName != mod.modName) {
-                this.log('warn', 'Unable to register the command ID "' + commandid + '" because the root "' + commandroot + '" was previously registered by |' + existsroot.modName + '|.');
+            if (existsroot && existsroot.behavior != behavior.type) {
+                this.log('warn', 'Unable to register the command ID "' + commandid + '" because the root "' + commandroot + '" was previously registered by |' + existsroot.behavior + '|.');
                 return false;
             }
         }
         
         let exists = this.getCommand(commandid);
         if (exists) {
-            exists.callback[mod.name] = callback;
+            exists.callback[behavior.name] = callback;
         } else {
             this._commands.push(descriptor);
             this._index[commandid] = descriptor;
@@ -442,19 +451,19 @@ class ModCommands extends Module {
     
     
     //Register metadata for a group of commands shared by multiple subcommands.
-    registerRootDetails(mod, commandroot, options) {
+    registerRootDetails(behavior, commandroot, options) {
         commandroot = commandroot.toLowerCase();
 
-        let aliases = this._params['aliases'][commandroot];
+        let aliases = this.param('aliases')[commandroot];
         if (Array.isArray(aliases)) {
             for (let alias of aliases) {
                 this.log('-> Registering alias for the root "' + commandroot +'": "' + alias + '"');
-                this.registerRootDetails(mod, alias, options);
+                this.registerRootDetails(behavior, alias, options);
             }
         }
 
         let rootdescriptor = {
-            modName: mod.modName,
+            behavior: behavior.type,
             commandroot: commandroot,
             description: "",
             details: [],
@@ -501,21 +510,21 @@ class ModCommands extends Module {
     }
     
     
-    //Register a submodule with a group of commands so it can add subcommands to that group (registerRootDetails must have been called by a requiredModule).
-    registerRootExtension(mod, rootModName, commandroot) {
+    //Register a sub-behavior with a group of commands so it can add subcommands to that group (registerRootDetails must have been called by a requiredBehavior).
+    registerRootExtension(behavior, rootBehaviorType, commandroot) {
         commandroot = commandroot.toLowerCase();
                 
         if (!this._rootDetails[commandroot]) {
-            this.log('warn', 'Details not found for the root "' + commandroot + '" when registering an extension module.');
+            this.log('warn', 'Details not found for the root "' + commandroot + '" when registering an extension behavior.');
             return false;
         }
         
-        if (this._rootDetails[commandroot].modName != rootModName) {
-            this.log('warn', 'Could not register an extension module on root "' + commandroot + '" because it was not claimed by |' + rootModName + '| but by |' + this._rootDetails[commandroot].modName + '|.');
+        if (this._rootDetails[commandroot].behavior != rootBehaviorType) {
+            this.log('warn', 'Could not register an extension behavior on root "' + commandroot + '" because it was not claimed by |' + rootBehaviorType + '| but by |' + this._rootDetails[commandroot].behavior + '|.');
             return false;
         }
         
-        this._rootDetails[commandroot].extensions[mod.modName] = true;
+        this._rootDetails[commandroot].extensions[behavior.type] = true;
         
         return true;
     }
@@ -524,12 +533,13 @@ class ModCommands extends Module {
 
     //Event handler
 
-    onCommandMessage(env, type, message, authorid, channelid, rawobject) {
+    async onCommandMessage(env, type, message, authorid, channelid, rawobject) {
 
         let prefix = this.param('defaultprefix');
         let prefixes = this.param('prefixes');
         if (prefixes[env.name]) prefix = prefixes[env.name];
         if (!message.startsWith(prefix)) return;
+        
         
         //Identify command being used
         
@@ -546,14 +556,14 @@ class ModCommands extends Module {
                 cmdwords = thesewords;
             }
         }
-        
+
         if (!command) {
             //Not a known comand; Try to find subcommands
             let subcommands = this.findSubcommands(cmdline);
             if (!subcommands) return;
             for (let subcommand of subcommands) {
             
-                if (subcommand.environments && subcommand.environments.indexOf(env.envName) < 0) {
+                if (subcommand.environments && subcommand.environments.indexOf(env.type) < 0) {
                     continue;
                 }
                 
@@ -562,7 +572,7 @@ class ModCommands extends Module {
                 }
                 
                 if (subcommand.permissions) {
-                    if (!this.mod('Users').testPermissions(env.name, authorid, channelid, subcommand.permissions, subcommand.requireAllPermissions)) {
+                    if (!await this.be('Users').testPermissions(env.name, authorid, channelid, subcommand.permissions, subcommand.requireAllPermissions)) {
                         continue;
                     }
                 }
@@ -578,19 +588,19 @@ class ModCommands extends Module {
         
         //Validate context against command descriptor
         
-        if (descriptor.environments && descriptor.environments.indexOf(env.envName) < 0) {
+        if (descriptor.environments && descriptor.environments.indexOf(env.type) < 0) {
             return true;
         }
         
         if (descriptor.types && descriptor.types.indexOf(type) < 0) {
             return true;
         }
-        
-        let handles = this.mod('Users').getHandlesById(env.name, authorid, true);
+
+        let handles = await this.be('Users').getHandlesById(env.name, authorid, true);
         let handle = (handles.length ? handles[0] : null);
 
         if (descriptor.permissions) {
-            if (!this.mod('Users').testPermissions(env.name, authorid, channelid, descriptor.permissions, descriptor.requireAllPermissions, handle)) {
+            if (!await this.be('Users').testPermissions(env.name, authorid, channelid, descriptor.permissions, descriptor.requireAllPermissions, handle)) {
                 this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + ': Failed permission check.');
                 return true;
             }
@@ -608,16 +618,16 @@ class ModCommands extends Module {
         }
         
         if (!targetmod || !descriptor.callback[targetmod]) {
-            let baseerror = (targetmod ? 'No callback for target module |' + targetmod + '|' : 'Target module not found');
+            let baseerror = (targetmod ? 'No callback for target behavior |' + targetmod + '|' : 'Target behavior not found');
             if (descriptor.unobtrusive) {
                 env.notice(authorid, env.applyFormatting(baseerror + '; Please choose one of: ' + knownmods.join(', ')));
             } else {
                 env.msg(channelid, env.applyFormatting(baseerror + '; Please choose one of: ' + knownmods.join(', ')));
             }
-            this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : '') + ': Unable to resolve target module.');
+            this.eventLog(env, authorid, channelid, 'FAILED ' + descriptor.command + (args.length ? ' ("' + args.join('", "') + '")' : '') + ': Unable to resolve target behavior.');
             return true;
         }
-        
+
         
         for (let i = 0; i < args.length - 1; i++) {
             while (i < args.length - 1 && args[i].match(/^".*[^"]$/)) {
@@ -671,7 +681,7 @@ class ModCommands extends Module {
             if (!descriptor.callback[targetmod](env, type, authorid, channelid, command, passargs, handle, {
                     reply: function(msg) {
                         let options = {};
-                        if (env.envName == "Discord") {
+                        if (env.type == DISCORD_ENVIRONMENT) {
                             options.reply = {
                                 messageReference: rawobject.id,
                                 failIfNotExists: false
@@ -690,12 +700,12 @@ class ModCommands extends Module {
                         }
                     },
                     react: function(emoji) {
-                        if (env.envName == "Discord") {
+                        if (env.type == DISCORD_ENVIRONMENT) {
                             env.react(rawobject, emoji);
                         }
                     },
                     ok: function() {
-                        if (env.envName == "Discord") {
+                        if (env.type == DISCORD_ENVIRONMENT) {
                             env.react(rawobject, OK_EMOJI);
                         } else {
                             ep.reply("Ok.");
@@ -722,16 +732,15 @@ class ModCommands extends Module {
     
     
     eventLog(env, userid, channelid, message) {
-        if (this._modLogger) {
-            this._modLogger.templateNameWrite('command', 'command', {
-                env: env.name,
-                userid: userid,
-                user: env.idToDisplayName(userid),
-                channelid: channelid,
-                channel: (channelid ? env.channelIdToDisplayName(channelid) : null),
-                message: message
-            });
-        }
+        if (!this.optBeExists("EventLogger")) return;
+        this.be("EventLogger").templateWrite('command', this.param('logTemplateCommand'), {
+            env: env.name,
+            userid: userid,
+            user: env.idToDisplayName(userid),
+            channelid: channelid,
+            channel: (channelid ? env.channelIdToDisplayName(channelid) : null),
+            message: message
+        });
     }
 
 
@@ -765,6 +774,3 @@ class ModCommands extends Module {
     }
     
 }
-
-
-module.exports = ModCommands;

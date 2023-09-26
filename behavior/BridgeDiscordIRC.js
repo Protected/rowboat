@@ -1,11 +1,12 @@
-/* Module: BridgeDiscordIRC -- This module was designed to bridge a multi-channel Discord server with a single IRC channel. */
+/* Behavior: BridgeDiscordIRC -- This module was designed to bridge a multi-channel Discord server with a single IRC channel. */
 
-const Module = require('../Module.js');
-const { closest } = require('color-diff');
-const diff = require('diff');
-const { ChannelType } = require('discord.js');
+import { closest } from 'color-diff';
+import diff from 'diff';
+import { ChannelType } from 'discord.js';
+import emoji  from 'emojione';
 
-var emoji = require('emojione');
+import Behavior from '../src/Behavior.js';
+
 emoji.ascii = true;
 delete emoji.asciiList['d:'];
 
@@ -28,38 +29,43 @@ const colormap = [
     "#D2D2D2"
 ];
 
+//From StackOverflow
+async function replaceAsync(str, regex, callback) {
+    const promises = [];
+    str.replace(regex, (match, ...args) => {
+        promises.push(callback(match, ...args));
+    });
+    let data = await Promise.all(promises);
+    return str.replace(regex, () => data.shift());
+}
 
-class ModBridgeDiscordIRC extends Module {
+export default class BridgeDiscordIRC extends Behavior {
 
+    get params() { return [
+        {n: 'defaultdiscordchannel', d: "ID of a Discord channel to receive IRC messages by default"},
+        {n: 'ircchannel', d: "ID/name of the IRC channel the bot will join (including prefix)"},
+        {n: 'discordBlacklist', d: "Discord channels NOT to bridge [ID, ...]"},
+        {n: 'discordOneWay', d: "Discord channels that will broadcast to IRC, but IRC can't send to them [ID, ...]"}
+    ]; }
+    
+    get defaults() { return {
+        discordBlacklist: [],
+        discordOneWay: []
+    }; }
+    
+    get requiredEnvironments() { return {
+        Discord: 'Discord',
+        IRC: 'IRC'
+    }; }
+    
+    get requiredBehaviors() { return {
+        Users: "Users"
+    }; }
 
     get isMultiInstanceable() { return true; }
 
-    get requiredParams() { return [
-        'envdiscord',           //Name of the Discord environment
-        'defaultdiscordchannel',    //ID of a Discord channel the bot will treat as default
-        'envirc',               //Name of the IRC environment
-        'ircchannel'            //ID/name of an IRC channel the bot will join (including prefix)
-    ]; }
-    
-    get optionalParams() { return [
-        'discordBlacklist',     //Discord channels NOT to bridge (list of IDs)
-        'discordOneWay'         //Discord channels that will broadcast to IRC, but IRC can't send to them
-    ]; }
-    
-    get requiredEnvironments() { return [
-        'Discord',
-        'IRC'
-    ]; }
-    
-    get requiredModules() { return [
-        'Users'
-    ]; }
-
     constructor(name) {
         super('BridgeDiscordIRC', name);
-        
-        this._params['discordBlacklist'] = [];
-        this._params['discordOneWay'] = [];
 
         this._convertedColorMap = [];
         for (let color of colormap) {
@@ -67,19 +73,17 @@ class ModBridgeDiscordIRC extends Module {
         }
     }
 
-
-    get irc() {
-        return this.env(this.param('envirc'));
-    }
-    
     get discord() {
-        return this.env(this.param('envdiscord'));
+        return this.env("Discord");
     }
     
+    get irc() {
+        return this.env("IRC");
+    }    
+
 
     initialize(opt) {
-        if (!super.initialize(opt)) return false;
-        
+        if (!super.initialize(opt)) return false;    
         
         //Register callbacks
         
@@ -108,7 +112,7 @@ class ModBridgeDiscordIRC extends Module {
     //Event handlers
 
 
-    onIrcMessage(env, type, message, authorid, channelid, rawobject) {
+    async onIrcMessage(env, type, message, authorid, channelid, rawobject) {
         if (type != "action" && type != "regular") return;
 
         let target = this.param('defaultdiscordchannel') || null;
@@ -118,25 +122,25 @@ class ModBridgeDiscordIRC extends Module {
             target = directedmessage[1];
             message = directedmessage[2];
             
-            let targetchan = this.discord.server.channels.cache.find(c => c.name == target);
+            let targetchan = await this.discord.server.channels.cache.find(c => c.name == target);
             if (targetchan && (
                 this.param('discordBlacklist').indexOf(targetchan.id) > -1
                 || this.param('discordOneWay').indexOf(targetchan.id) > -1)) return;
         }
 
         let finalmsg = this.discord.applyFormatting(this.irc.normalizeFormatting(message));
-        
-        let resolveMentions = (match, userornick) => {
-            let refid = this.irc.displayNameToId(userornick);
-            let discordid = this.translateAccountMentions(this.irc, refid, this.discord, target);
+
+        let resolveMentions = async (match, userornick) => {
+            let refid = await this.irc.displayNameToId(userornick);
+            let discordid = await this.translateAccountMentions(this.irc, refid, this.discord, target);
             if (discordid) return "<@" + discordid + ">";
-            refid = this.discord.displayNameToId(userornick);
+            refid = await this.discord.displayNameToId(userornick);
             if (refid) return "<@" + refid + ">";
             return match;
         }
         
-        finalmsg = finalmsg.replace(/@(([^ #]+)(#[0-9]{4})?)/, resolveMentions);
-        finalmsg = finalmsg.replace(/^([^:]+):/, resolveMentions);
+        finalmsg = await replaceAsync(finalmsg, /@(([^ #]+)(#[0-9]{4})?)/, resolveMentions);
+        finalmsg = await replaceAsync(finalmsg, /^([^:]+):/, resolveMentions);
         
         finalmsg = emoji.shortnameToUnicode(finalmsg);
         
@@ -148,12 +152,12 @@ class ModBridgeDiscordIRC extends Module {
     }
 
 
-    onDiscordMessage(env, type, message, authorid, channelid, rawobject) {
+    async onDiscordMessage(env, type, message, authorid, channelid, rawobject) {
         if (type != "regular") return;
         if (this.param('discordBlacklist').indexOf(channelid) > -1) return;
         
         let finalmsg = message;
-        
+
         let action = false;
         
         let authorname = env.idToDisplayName(authorid);
@@ -166,9 +170,12 @@ class ModBridgeDiscordIRC extends Module {
             }
         }
         
-        finalmsg = finalmsg.replace(/<@!?([0-9]+)>/g, (match, id) => {
-            let ircid = this.translateAccountMentions(this.discord, id, this.irc, this.param('ircchannel'));
-            if (ircid) return "@" + this.irc.idToDisplayName(ircid);
+        finalmsg = await replaceAsync(finalmsg, /<@!?([0-9]+)>/g, async (match, id) => {
+            let ircid = await this.translateAccountMentions(this.discord, id, this.irc, this.param('ircchannel'));
+            if (ircid) {
+                let dn = await this.irc.idToDisplayName(ircid);
+                return "@" + dn;
+            }
             return match;
         });
         
@@ -198,7 +205,7 @@ class ModBridgeDiscordIRC extends Module {
     }
     
     
-    onDiscordEdit(env, changes, authorid, channelid, oldMessage, newMessage) {
+    async onDiscordEdit(env, changes, authorid, channelid, oldMessage, newMessage) {
         
         let authorname = env.idToDisplayName(authorid);
         
@@ -221,8 +228,8 @@ class ModBridgeDiscordIRC extends Module {
             }
         }
 
-        finalmsg = finalmsg.replace(/<@!?([0-9]+)>/g, (match, id) => {
-            let ircid = this.translateAccountMentions(this.discord, id, this.irc, this.param('ircchannel'));
+        finalmsg = await replaceAsync(finalmsg, /<@!?([0-9]+)>/g, async (match, id) => {
+            let ircid = await this.translateAccountMentions(this.discord, id, this.irc, this.param('ircchannel'));
             if (ircid) return "@" + this.irc.idToDisplayName(ircid);
             return match;
         });
@@ -247,17 +254,17 @@ class ModBridgeDiscordIRC extends Module {
     //Auxiliary
     
     
-    translateAccountMentions(fromenv, fromid, toenv, tochan) { 
+    async translateAccountMentions(fromenv, fromid, toenv, tochan) { 
         if (!fromenv || !fromid || !toenv) return null;
 
-        let handles = this.mod("Users").getHandlesById(fromenv.name, fromid);
+        let handles = await this.be("Users").getHandlesById(fromenv.name, fromid);
         if (!handles.length) return null;
 
-        let toids = toenv.listUserIds(tochan);
+        let toids = await toenv.listUserIds(tochan);
         if (!toids.length) return null;
 
         for (let handle of handles) {  //Accounts of users in the channel where the message was written
-            for (let possibleid of this.mod("Users").getIds(handle, toenv.name)) {  //ID patterns of those accounts
+            for (let possibleid of await this.be("Users").getIds(handle, toenv.name)) {  //ID patterns of those accounts
                 for (let toid of toids) {  //Cross check against IDs of users in the channel where the message will be sent
                     if (RegExp(possibleid).exec(toid)) {
                         return toid;
@@ -293,6 +300,3 @@ class ModBridgeDiscordIRC extends Module {
     
     
 }
-
-
-module.exports = ModBridgeDiscordIRC;

@@ -1,28 +1,30 @@
 //Provides internal logging
 
-const winston = require('winston');
-const moment = require('moment');
+import winston from 'winston';
+import moment from 'moment';
+import { MESSAGE } from 'triple-beam';
 
-const { MESSAGE } = require('triple-beam');
+const TAIL_SIZE = 5;
 
 let pathTemplate = null;
 let path = null;
 let logger = null;
 let useConsole = false;
+let _tail = [];
 
-exports.setPathTemplate = function(newPathTemplate) {
+export function setPathTemplate(newPathTemplate) {
     if (pathTemplate == newPathTemplate) return;
     pathTemplate = newPathTemplate;
     path = null;
     logger = null;
 }
 
-exports.enableConsole = function() {
+export function enableConsole() {
     useConsole = true;
 }
 
 
-const logFormat = winston.format((info, opts) => {
+export const logFormat = winston.format((info, opts) => {
     let result = moment().format('YYYY-MM-DD HH:mm:ss') + ' [' + info.level.toUpperCase() + '] ';
     if (typeof info.message == "object") {
         result += "<<<\n" + JSON.stringify(info.message) + "\n>>>";
@@ -62,7 +64,7 @@ function ready() {
 }
 
 
-let log = exports.log = function(method, subject) {
+export function log(method, subject) {
     
     if (!ready()) {
         if (typeof subject != "object") {
@@ -83,19 +85,33 @@ let log = exports.log = function(method, subject) {
         default: actualMethod = logger.info;
     }
     
+    _tail.push({level: method, message: subject});
+    if (_tail.length > TAIL_SIZE) _tail.shift();
 
     return actualMethod.apply(null, [subject]);
 }
 
-exports.debug = function(subject) {
+export function debug(subject) {
     return log('debug', subject);
 }
-exports.info = function(subject) {
+export function info(subject) {
     return log('info', subject);
 }
-exports.warn = function(subject) {
+export function warn(subject) {
     return log('warn', subject);
 }
-exports.error = function(subject) {
+export function error(subject) {
     return log('error', subject);
 }
+
+export function tail(count) {
+    if (!count || count < 1) count = 1;
+    if (count > TAIL_SIZE) count = TAIL_SIZE;
+    return _tail.slice(0, count);
+}
+
+export function onFinish(callback) {
+    logger.on('finish', callback);
+}
+
+export default { setPathTemplate, enableConsole, logFormat, log, debug, info, warn, error, tail, onFinish };

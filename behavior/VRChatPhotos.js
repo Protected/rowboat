@@ -1,12 +1,12 @@
-/* Module: VRChatPhotos -- Manages a channel for sharing VRChat photos and screenshots. */
+/* VRChatPhotos -- Manages a channel for sharing VRChat photos and screenshots. */
 
-const moment = require('moment');
-const random = require('meteor-random');
-const { EmbedBuilder } = require('discord.js');
-const pngextract = require('png-chunks-extract');
-const fs = require('fs');
+import moment from 'moment';
+import random from 'meteor-random';
+import { EmbedBuilder } from 'discord.js';
+import pngextract from 'png-chunks-extract';
+import fs from 'fs';
 
-const Module = require('../Module.js');
+import Behavior from '../src/Behavior.js';
 
 const PERM_ADMIN = 'administrator';
 
@@ -14,49 +14,61 @@ const MAX_FIELDLEN = 1024;
 
 const ZWSP = "​";  //Zero-width space (\u200b)
 
-class ModVRChatPhotos extends Module {
+export default class VRChatPhotos extends Behavior {
+
+    get params() { return [
+        {n: "photochan", d: "ID of text channel for photos"},
+        {n: "listname", d: "Album name override (unique between this module and VRChatFavorites)"},
+        {n: "deleteemoji", d: "Emoji for deleting things"},
+        {n: "backuppath", d: "Subdirectory for backups"},
+        {n: "usewebhook", d: "Use a webhook to re-emit photos"},
+        {n: "embedwithoutmeta", d: "Whether to re-emit photos without metadata"},
+
+        /* Contest */
+        {n: "contestchan", d: "ID of text channel for contest candidates"},
+        {n: "nominationrole", d: "Role required for nominating"},
+        {n: "candidatemin", d: "Minimum timestamp for eligible candidates"},
+        {n: "candidatemax", d: "Maximum timestamp for eligible candidates"},
+        {n: "maxnominations", d: "Maximum candidates per member"},
+        {n: "nominationemoji", d: "Reaction emoji used for nominating"},
+        {n: "contestemojis", d: "List of emojis allowed to 'stick' in the contest channel (for votes)"},
+        {n: "candidatedelete", d: "Whether candidates can be deleted using a reaction"}
+    ]; }
+
+    get defaults() { return {
+        listname: null,
+        deleteemoji: "❌",
+        backuppath: null,
+        usewebhook: true,
+        embedwithoutmeta: false,
+        contestchan: null,
+        nominationrole: null,
+        candidatemin: null,
+        candidatemax: null,
+        maxnominations: 3,
+        nominationemoji: "⭐",
+        contestemojis: [],
+        candidatedelete: true
+    }; }
+
+    get requiredEnvironments() { return {
+        Discord: 'Discord'
+    }; }
+
+    get requiredBehaviors() { return {
+        Users: "Users",
+        Commands: "Commands",
+        VRChat: "VRChat"
+    }; }
 
     get isMultiInstanceable() { return true; }
 
-    get requiredParams() { return [
-        "env",
-        "photochan",            //ID of text channel for photos
-    ]; }
-    
-    get optionalParams() { return [
-        "name",                 //Album name override (unique between this module and VRChatFavorites)
-        "deleteemoji",          //Emoji for deleting things
-        "backuppath",           //Subdirectory for backups
-
-        "usewebhook",           //Use a webhook to re-emit photos
-        "embedwithoutmeta",     //Whether to re-emit photos without metadata
-
-        /* Contest */
-        "contestchan",          //ID of text channel for contest candidates
-        "nominationrole",       //Role required for nominating
-        "candidatemin",         //Minimum timestamp for eligible candidates
-        "candidatemax",         //Maximum timestamp for eligible candidates
-        "maxnominations",       //Maximum candidates per member
-        "nominationemoji",      //Reaction emoji used for nominating
-        "contestemojis",        //List of emojis allowed to "stick" in the contest channel (for votes)
-        "candidatedelete"       //Whether candidates can be deleted using a reaction
-    ]; }
-
-    get requiredEnvironments() { return [
-        'Discord'
-    ]; }
-
-    get requiredModules() { return [
-        'Commands',
-        'VRChat'
-    ]; }
-
     get denv() {
-        return this.env(this.param('env'));
+        return this.env("Discord");
     }
 
     get vrchat() {
-        return this.mod("VRChat");
+        return this.be("VRChat");
     }
 
     get photochan() {
@@ -70,16 +82,7 @@ class ModVRChatPhotos extends Module {
     constructor(name) {
         super('VRChatPhotos', name);
      
-        this._params["name"] = name.toLowerCase();
-        this._params["deleteemoji"] = "❌";
-
-        this._params["usewebhook"] = true;
-        this._params["embedwithoutmeta"] = false;
-
-        this._params["maxnominations"] = 3;
-        this._params["nominationemoji"] = "⭐";
-        this._params["contestemojis"] = [];
-        this._params["candidatedelete"] = true;
+        this._listName = name;
 
         this._index = {};  //{ID: MESSAGE, ...}
 
@@ -92,6 +95,7 @@ class ModVRChatPhotos extends Module {
     initialize(opt) {
         if (!super.initialize(opt)) return false;
 
+        if (this.param("listname")) this._listName = this.param("listname");
         
         //# Register Discord callbacks
 
@@ -104,7 +108,7 @@ class ModVRChatPhotos extends Module {
 
                 //Delete photos
                 if (messageReaction.emoji.name == this.param("deleteemoji")) {
-                    let owners = Object.values(this.extractOwnersFromPicture(messageReaction.message));
+                    let owners = Object.values(await this.extractOwnersFromPicture(messageReaction.message));
                     if (owners && owners.find(owner => owner == user.id)) {
                         messageReaction.message.delete();
                     } else {
@@ -127,7 +131,7 @@ class ModVRChatPhotos extends Module {
                             } else if (this._contestoriginals[messageReaction.message.id]) {
                                 this.denv.msg(user.id, "That photo is already nominated!");
                             } else {
-                                let owners = this.extractOwnersFromPicture(messageReaction.message);
+                                let owners = await this.extractOwnersFromPicture(messageReaction.message);
                                 let fields = this.getPhotoMessageFields(messageReaction.message);
                                 let candidate = await this.bakeCandidate(member, owners, fields, this.getPhotoMsgURL(messageReaction.message.id));
                                 if (candidate) {
@@ -150,7 +154,7 @@ class ModVRChatPhotos extends Module {
 
                 //Delete contest candidate
                 if (messageReaction.emoji.name == this.param("deleteemoji") && this.param("candidatedelete")) {
-                    let contestant = this.extractContestantFromPicture(messageReaction.message);
+                    let contestant = await this.extractContestantFromPicture(messageReaction.message);
                     if (contestant == user.id) {
                         let message = messageReaction.message;
                         message.delete()
@@ -173,7 +177,7 @@ class ModVRChatPhotos extends Module {
 
 
         let messageHandler = (env, type, message, authorid, channelid, messageObject) => {
-            if (env.name != this.param("env") || type != "regular") return;
+            if (type != "regular") return;
             if (channelid != this.photochan?.id) return;
                 
             //Sharing to photochan
@@ -239,9 +243,9 @@ class ModVRChatPhotos extends Module {
                 this._contestants = {};
                 this._contestoriginals = {};
 
-                this.denv.scanEveryMessage(this.contestchan, (message) => {
+                this.denv.scanEveryMessage(this.contestchan, async (message) => {
                     if (this.messageHasPhotos(message)) {
-                        let contestant = this.extractContestantFromPicture(message);
+                        let contestant = await this.extractContestantFromPicture(message);
                         if (contestant) {
                             let original = this.extractOriginalFromCandidatePicture(message);
                             this._contestindex[message.id] = {contestant: contestant, msg: message, original: original};
@@ -263,9 +267,9 @@ class ModVRChatPhotos extends Module {
 
         //# Register commands
 
-        this.mod('Commands').registerRootExtension(this, 'VRChat', 'vrcfix');
+        this.be('Commands').registerRootExtension(this, 'VRChat', 'vrcfix');
 
-        this.mod('Commands').registerCommand(this, 'vrcfix ' + this.param("name") + ' process', {
+        this.be('Commands').registerCommand(this, 'vrcfix ' + this._listName + ' process', {
             description: "Process an unprocessed photo message as if it had just been sent.",
             args: ["messageid"],
             permissions: [PERM_ADMIN]
@@ -283,7 +287,7 @@ class ModVRChatPhotos extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'vrcfix ' + this.param("name") + ' recandidate', {
+        this.be('Commands').registerCommand(this, 'vrcfix ' + this._listName + ' recandidate', {
             description: "Re-bakes a contest candidate message (edits the original).",
             args: ["messageid"],
             permissions: [PERM_ADMIN]
@@ -306,7 +310,7 @@ class ModVRChatPhotos extends Module {
                 return true;
             }
 
-            let owners = this.extractOwnersFromPicture(photomessage);
+            let owners = await this.extractOwnersFromPicture(photomessage);
             let fields = this.getPhotoMessageFields(photomessage);
             await this.bakeCandidate(null, owners, fields, this.getPhotoMsgURL(photomessage.id), message);
 
@@ -317,10 +321,10 @@ class ModVRChatPhotos extends Module {
 
 
 
-        this.mod('Commands').registerRootExtension(this, 'VRChat', 'vrcany');
+        this.be('Commands').registerRootExtension(this, 'VRChat', 'vrcany');
 
-        this.mod('Commands').registerCommand(this, 'vrcany ' + this.param("name"), {
-            description: "Obtain a random photo from the " + this.param("name") + " album.",
+        this.be('Commands').registerCommand(this, 'vrcany ' + this._listName, {
+            description: "Obtain a random photo from the " + this._listName + " album.",
             details: [
                 "The filter is applied against the full usernames of the participants in the photo (if known)."
             ],
@@ -367,10 +371,10 @@ class ModVRChatPhotos extends Module {
         });
 
 
-        this.mod('Commands').registerRootExtension(this, 'VRChat', 'vrcsave');
+        this.be('Commands').registerRootExtension(this, 'VRChat', 'vrcsave');
 
-        this.mod('Commands').registerCommand(this, 'vrcsave ' + this.param("name"), {
-            description: "Back up the photos from the " + this.param("name") + " album.",
+        this.be('Commands').registerCommand(this, 'vrcsave ' + this._listName, {
+            description: "Back up the photos from the " + this._listName + " album.",
             permissions: [PERM_ADMIN],
             type: ["private"]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
@@ -399,7 +403,7 @@ class ModVRChatPhotos extends Module {
             queue = queue.filter(queued => !existing.find(test => test == queued.id));
 
             let inProgress = {};
-            let downloadTimer = setInterval(function() {
+            let downloadTimer = setInterval(async function() {
                 if (Object.keys(inProgress).length >= 2) {  //maximum simultaneous
                     return;
                 }
@@ -411,7 +415,7 @@ class ModVRChatPhotos extends Module {
                     return;
                 }
 
-                let newdownload = this.downloadMessagePhoto(message, this.param("backuppath"), () => {
+                let newdownload = await this.downloadMessagePhoto(message, this.param("backuppath"), () => {
                     delete inProgress[message.id];
                     counter += 1;
                     if (!(counter % 50)) {
@@ -436,10 +440,10 @@ class ModVRChatPhotos extends Module {
         });
 
 
-        this.mod('Commands').registerRootExtension(this, 'VRChat', 'vrcount');
+        this.be('Commands').registerRootExtension(this, 'VRChat', 'vrcount');
 
-        this.mod('Commands').registerCommand(this, 'vrcount ' + this.param("name"), {
-            description: "Returns the current amount of photos in the " + this.param("name") + " album."
+        this.be('Commands').registerCommand(this, 'vrcount ' + this._listName, {
+            description: "Returns the current amount of photos in the " + this._listName + " album."
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
             let count = Object.keys(this._index).length;
@@ -454,8 +458,8 @@ class ModVRChatPhotos extends Module {
 
         if (this.param("contestchan")) {
 
-            this.mod('Commands').registerCommand(this, 'vrcount ' + this.param("name") + " candidates", {
-                description: "Returns the current amount of contest candidates associated with the " + this.param("name") + " album."
+            this.be('Commands').registerCommand(this, 'vrcount ' + this._listName + " candidates", {
+                description: "Returns the current amount of contest candidates associated with the " + this._listName + " album."
             }, (env, type, userid, channelid, command, args, handle, ep) => {
     
                 let count = Object.keys(this._contestindex).length;
@@ -593,10 +597,10 @@ class ModVRChatPhotos extends Module {
         });
     }
 
-    downloadMessagePhoto(message, targetpath, onEnd, onFail) {
+    async downloadMessagePhoto(message, targetpath, onEnd, onFail) {
         if (!message || !this.messageHasPhotos(message) || !targetpath) return null;
 
-        let handleDownloadedPhoto = (filename, data) => {
+        let handleDownloadedPhoto = async (filename, data) => {
             let metadata = null;
             if (filename && filename.match(/\.png$/i)) {
                 let rawmetadata;
@@ -616,8 +620,8 @@ class ModVRChatPhotos extends Module {
             if (metadata) {
                 targetfile += "_" + metadata.author.name + "_" + metadata.world.name;
             } else {
-                let owners = this.extractOwnersFromPicture(message);
-                targetfile += "_" + this.denv.idToDisplayName(owners.author || owners.sharedBy || "") + "_";
+                let owners = await this.extractOwnersFromPicture(message);
+                targetfile += "_" + await this.denv.idToDisplayName(owners.author || owners.sharedBy || "") + "_";
             }
             targetfile += "_" + message.id;
 
@@ -647,12 +651,12 @@ class ModVRChatPhotos extends Module {
     async bakePicture(name, data, member, metadata) {
         if (!name || !data || !data.length || !member) return null;
 
-        let sharedBy = this.denv.idToDisplayName(member.id);
+        let sharedBy = await this.denv.idToDisplayName(member.id);
 
         let emb = new EmbedBuilder();
 
         if (metadata) {
-            let sbperson = this.vrchat.getPerson(member.id);
+            let sbperson = await this.vrchat.getPerson(member.id);
             if (this.param("usewebhook") || sbperson && metadata.author.id == sbperson.vrc) {
                 sharedBy = null;
             }
@@ -666,16 +670,18 @@ class ModVRChatPhotos extends Module {
                     if (a.x === undefined || a.y === undefined || a.z === undefined
                             || b.x === undefined || b.y === undefined || b.z === undefined) return 0;
                     return a.x - b.x || a.y - b.y || a.z - b.z;
-                })
-                .map(player => {
-                    let result = player.name.replace(/(\_|\*|\~|\`|\||\\|\<|\>|\:|\!)/g, "\\$1");
-                    if (player.id == metadata.author.id) result = "__" + result + "__";
-                    if (player.z < 0) result = "*" + result + "*";
-                    let playeruserid = this.vrchat.getUseridByVrc(player.id);
-                    if (playeruserid) result = "[" + result + "](" + this.vrchat.getPersonMsgURL(playeruserid) + ")";
-                    return result;
                 });
-                
+
+            let converted = [];
+            for (let player of people) {
+                let result = player.name.replace(/(\_|\*|\~|\`|\||\\|\<|\>|\:|\!)/g, "\\$1");
+                if (player.id == metadata.author.id) result = "__" + result + "__";
+                if (player.z < 0) result = "*" + result + "*";
+                let playeruserid = await this.vrchat.getUseridByVrc(player.id);
+                if (playeruserid) result = "[" + result + "](" + await this.vrchat.getPersonMsgURL(playeruserid) + ")";
+                converted.push(result);
+            }
+            people = converted;
 
             if (people.length) {
                 //Pack subjects into embed fields whose contents are safely <MAX_FIELDLEN long
@@ -700,7 +706,7 @@ class ModVRChatPhotos extends Module {
         }
 
         if (sharedBy) {
-            let msgurl = this.vrchat.getPersonMsgURL(member.id);
+            let msgurl = await this.vrchat.getPersonMsgURL(member.id);
             if (msgurl) sharedBy = "[" + sharedBy + "](" + msgurl + ")";
             emb.addFields({name: "Shared by", value: sharedBy, inline: true});
         }
@@ -719,7 +725,7 @@ class ModVRChatPhotos extends Module {
     }
 
 
-    extractOwnersFromPicture(message) {
+    async extractOwnersFromPicture(message) {
         if (!message) return null;
 
         let emb = null;
@@ -748,14 +754,14 @@ class ModVRChatPhotos extends Module {
             if (field.name.match(/^shared by$/i)) {
                 let extrs = field.value.match(/\[[^\]]+\]\(https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)\)/);
                 if (extrs) {
-                    let person = this.vrchat.findPersonByMsg(extrs[1]);
+                    let person = await this.vrchat.findPersonByMsg(extrs[1]);
                     if (person) results.sharedBy = person;
                 }
             }
             if (field.name.match(/^with$/i)) {
                 let extrs = field.value.match(/\[[^\]]*__[^\]]+__[^\]]*\]\(https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)\)/);
                 if (extrs) {
-                    let person = this.vrchat.findPersonByMsg(extrs[1]);
+                    let person = await this.vrchat.findPersonByMsg(extrs[1]);
                     if (person) results.author = person;
                 }
             }
@@ -854,19 +860,19 @@ class ModVRChatPhotos extends Module {
 
         emb.data.fields = [];
 
-        let msgurl = this.vrchat.getPersonMsgURL(nominate);
+        let msgurl = await this.vrchat.getPersonMsgURL(nominate);
         if (msgurl) {
-            emb.addFields({name: label, value: "[" + this.denv.idToDisplayName(nominate) + "](" + msgurl + ")", inline: true});
+            emb.addFields({name: label, value: "[" + (await this.denv.idToDisplayName(nominate)) + "](" + msgurl + ")", inline: true});
         } else {
-            emb.addFields({name: label, value: this.denv.idToDisplayName(nominate), inline: true});
+            emb.addFields({name: label, value: await this.denv.idToDisplayName(nominate), inline: true});
         }
 
         if (member) {
-            msgurl = this.vrchat.getPersonMsgURL(member.id);
+            msgurl = await this.vrchat.getPersonMsgURL(member.id);
             if (msgurl) {
-                emb.addFields({name: "Nominated by", value: "[" + this.denv.idToDisplayName(member.id) + "](" + msgurl + ")", inline: true});
+                emb.addFields({name: "Nominated by", value: "[" + (await this.denv.idToDisplayName(member.id)) + "](" + msgurl + ")", inline: true});
             } else {
-                emb.addFields({name: "Nominated by", value: this.denv.idToDisplayName(member.id), inline: true});
+                emb.addFields({name: "Nominated by", value: await this.denv.idToDisplayName(member.id), inline: true});
             }
         } else if (nominatedfield) {
             emb.addFields({name: "Nominated by", value: nominatedfield.value, inline: true});
@@ -887,7 +893,7 @@ class ModVRChatPhotos extends Module {
 
 
 
-    extractContestantFromPicture(message) {
+    async extractContestantFromPicture(message) {
         if (!message) return null;
 
         let emb = null;
@@ -903,7 +909,7 @@ class ModVRChatPhotos extends Module {
             if (field.name.match(/^nominated by$/i)) {
                 let extrs = field.value.match(/\[[^\]]+\]\(https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)\)/);
                 if (extrs) {
-                    let person = this.vrchat.findPersonByMsg(extrs[1]);
+                    let person = await this.vrchat.findPersonByMsg(extrs[1]);
                     if (person) return person;
                 }
             }
@@ -1072,6 +1078,3 @@ class ModVRChatPhotos extends Module {
     }
 
 }
-
-
-module.exports = ModVRChatPhotos;

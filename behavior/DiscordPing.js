@@ -1,35 +1,41 @@
-/* Module: PingDiscord -- Tool for measuring latency between Rowboat and Discord. */
+/* DiscordPing -- Tool for measuring latency between Rowboat and Discord. */
 
-const Module = require('../Module.js');
-const moment = require('moment');
+import moment from 'moment';
 
-const PERM_ADMIN = "administrator";
+import Behavior from '../src/Behavior.js';
 
-class ModPingDiscord extends Module {
+export default class DiscordPing extends Behavior {
 
-    get optionalParams() { return [
-        'delayBetween',         //Delay between pings, not including rtt
-        'maxDuration',          //Duration before autostop
-        'scrollUp'              //Amount of new messages in channel before autostop
+    get params() { return [
+        {n: 'delayBetween', d: "Delay between pings, not including rtt (ms)"},
+        {n: 'maxDuration', d: "Maximum duration before autostop (ms)"},
+        {n: 'scrollUp', d: "Amount of new messages in channel before autostop"}
     ]; }
 
-    get requiredEnvironments() { return [
-        'Discord'
-    ]; }
+    get defaults() { return {
+        delayBetween: 2000,
+        maxDuration: 3600000,
+        scrollUp: 5
+    }; }
 
-    get requiredModules() { return [
-        'Commands'
-    ]; }
+    get requiredEnvironments() { return {
+        Discord: 'Discord'
+    }; }
+
+    get requiredBehaviors() { return {
+        Users: 'Users',
+        Commands: 'Commands'
+    }; }
 
     constructor(name) {
-        super('PingDiscord', name);
-        
-        this._params['delayBetween'] = 2000;  //ms
-        this._params['maxDuration'] = 3600000;  //ms
-        
+        super('DiscordPing', name);
+
         this._anchor = null;
         this._startts = null;
         this._outts = null;
+        
+        this._stop = true;
+        this._scrollCount = 0;
         
         this._count = null;
         this._errs = null;
@@ -41,18 +47,24 @@ class ModPingDiscord extends Module {
     initialize(opt) {
         if (!super.initialize(opt)) return false;
 
+        this.env("Discord").on('message', (env, type, message, authorid, channelid, rawobj) => {
+            if (this._anchor && this._anchor.channelId == channelid) {
+                this._scrollCount += 1;
+            }
+        }, this);
       
         //Register callbacks
         
-        this.mod('Commands').registerRootDetails(this, 'ping', {description: 'Measure latency between me and Discord.'});
+        this.be('Commands').registerRootDetails(this, 'ping', {description: 'Measure latency between me and Discord using message edits.'});
         
+        const permAdmin = this.be('Users').defaultPermAdmin;
         
-        this.mod('Commands').registerCommand(this, 'ping on', {
+        this.be('Commands').registerCommand(this, 'ping on', {
             description: "Start measuring ping on the current channel.",
             details: [
                 "Ping can only be active in one channel at a time."
             ],
-            permissions: [PERM_ADMIN],
+            permissions: [permAdmin],
             environments: ['Discord']
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
@@ -66,6 +78,8 @@ class ModPingDiscord extends Module {
             this._min = null;
             this._avg = null;
             this._max = null;
+            this._stop = false;
+            this._scrollCount = 0;
             
             let channel = env.server.channels.cache.get(channelid);
             
@@ -93,7 +107,7 @@ class ModPingDiscord extends Module {
             //Emits next message and calls pinger() or retries in case of error.
             let next = (message) => {
             
-                if (!this._anchor || moment().valueOf() - this._startts > this.param('maxDuration')) {
+                if (!this._anchor || this._stop || this._scrollCount >= this.param("scrollUp") || moment().valueOf() - this._startts > this.param('maxDuration')) {
                     if (this._anchor) this._anchor.edit("`STOPPED " + this.statString() + "`");
                     this._anchor = null;
                     return;
@@ -121,9 +135,9 @@ class ModPingDiscord extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'ping off', {
+        this.be('Commands').registerCommand(this, 'ping off', {
             description: "Stop measuring ping.",
-            permissions: [PERM_ADMIN],
+            permissions: [permAdmin],
             environments: ['Discord']
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
@@ -132,17 +146,15 @@ class ModPingDiscord extends Module {
                 return true;
             }
             
-            this._anchor.edit("`STOPPED " + this.statString() + "`");
-            
-            this._anchor = null;
+            this._stop = true;
         
             return true;
         });
         
         
-        this.mod('Commands').registerCommand(this, 'ping latest', {
+        this.be('Commands').registerCommand(this, 'ping latest', {
             description: "Show latest stats.",
-            permissions: [PERM_ADMIN],
+            permissions: [permAdmin],
             environments: ['Discord']
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
@@ -169,6 +181,3 @@ class ModPingDiscord extends Module {
     }
 
 }
-
-
-module.exports = ModPingDiscord;

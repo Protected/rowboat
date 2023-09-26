@@ -1,46 +1,46 @@
-/* Module: BridgeSimple -- This module was designed to bridge a pair of single channels in single environments without any style or mention conversions. */
+/* BridgeSimple -- Bridges a pair of single channels in any two single environments without any style or mention conversions. */
 
-const Module = require('../Module.js');
+import Behavior from "../src/Behavior.js";
 
-class ModBridgeSimple extends Module {
+export default class BridgeSimple extends Behavior {
 
+    get params() { return [
+        {n: 'envA', d: "Name of the environment A"},
+        {n: 'envB', d: "Name of the environment B"},
+        {n: 'chanA', d: "Name of a channel in the environment A"},
+        {n: 'chanB', d: "Name of a channel in the environment B"},
+        {n: 'tagEnvironment', d: "Prepend each message with the name of the source environment"},
+        {n: 'tagChannel', d: "Prepend each message with the name of the source channel"},
+        {n: 'oneWay', d: "Set to 'A' if only environment A can send messages, or 'B' if only B can send messages"}
+    ]; }
+
+    get defaults() { return {
+        chanA: null,
+        chanB: null,
+        tagEnvironment: false,
+        tagChannel: false,
+        oneWay: null
+    }; }
 
     get isMultiInstanceable() { return true; }
 
-    get requiredParams() { return [
-        'envA',                 //Name of the environment A
-        'envB'                  //Name of the environment B
-    ]; }
-    
-    get optionalParams() { return [
-        'chanA',                //Name of a channel in the environment A
-        'chanB',                //Name of a channel in the environment B
-        'tagEnvironment',       //Prepend each message with the name of the source environment
-        'tagChannel',           //Prepend each message with the name of the source channel
-        'oneWay'                //Set to 'A' if only environment A can send messages, or 'B' if only B can send messages
-    ]; }
-
     constructor(name) {
         super('BridgeSimple', name);
-        
-        this._params['tagEnvironment'] = false;
-        this._params['tagChannel'] = false;
-        this._params['oneWay'] = null;
+
     }
 
 
     get envA() {
-        return this.env(this.param('envA'));
+        return this.env('envA');
     }
     
     get envB() {
-        return this.env(this.param('envB'));
+        return this.env('envB');
     }
     
 
     initialize(opt) {
         if (!super.initialize(opt)) return false;
-        
         
         //Register callbacks
         
@@ -58,8 +58,7 @@ class ModBridgeSimple extends Module {
 
     //Event handler
 
-
-    onMessage(env, type, message, authorid, channelid, rawobject) {
+    onMessage(env, type, message, authorid, channelid) {
         if (type != "action" && type != "regular") return;
         
         let targetenv = null;
@@ -91,6 +90,3 @@ class ModBridgeSimple extends Module {
     
     
 }
-
-
-module.exports = ModBridgeSimple;

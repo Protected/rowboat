@@ -1,17 +1,17 @@
 /* Environment: Matrix -- This environment connects to a Matrix homeserver. */
 
-const Environment = require('../Environment.js');
+import Environment from '../src/Environment.js';
 
-class EnvMatrix extends Environment {
+export default class EnvMatrix extends Environment {
 
 
-    get requiredParams() { return [
+    get params() { return [
 
     ]; }
     
-    get optionalParams() { return [
+    get defaults() { return {
 
-    ]; }
+    }; }
     
     constructor(name) {
         super('Matrix', name);
@@ -48,6 +48,3 @@ class EnvMatrix extends Environment {
     applyFormatting(text) { return text; }                              //Convert normalized formatting to environment-specific formatting
 
 }
-
-
-module.exports = EnvMatrix;

@@ -1,33 +1,35 @@
-/* Module: DynamicCommands -- Dynamically create and manage simple commands. */
+/* DynamicCommands -- Dynamically create and manage simple commands. */
 
-const Module = require('../Module.js');
-const random = require('meteor-random');
+//WARNING: This behavior stores environment names. Renaming an environment with dynamic commands will break the stored commands.
 
-const PERM_ADMIN = 'administrator';
+import random from 'meteor-random';
 
-class ModDynamicCommands extends Module {
+import Behavior from '../src/Behavior.js';
 
+export default class DynamicCommands extends Behavior {
 
-    get optionalParams() { return [
-        'datafile',
-        'envs',                 //List of allowed environments for custom command usage (or null for all)
-        'types',                //List of allowed message types for custom command usage (or null for all)
-        'permissionAdmin',      //Admin permission (default command creator; can modify other people's commands)
+    get params() { return [
+        {n: 'datafile', d: "Customize the name of the default data file"},
+        {n: 'envs', d: "List of allowed environments for custom command usage (or null for all)"},
+        {n: 'types', d: "List of allowed message types for custom command usage (or null for all)"}
     ]; }
 
-    get requiredModules() { return [
-        'Users',
-        'Commands'
-    ]; }
+    get defaults() { return {
+        datafile: null,
+        types: null,
+        envs: null
+    }; }
+
+    get requiredBehaviors() { return {
+        Users: 'Users',
+        Commands: 'Commands'
+    }; }
 
     constructor(name) {
         super('DynamicCommands', name);
         
-        this._params['datafile'] = null;
-        this._params['types'] = null;
-        this._params['envs'] = null;
-        this._params['permissionAdmin'] = PERM_ADMIN;
-        
+        this._testIsModerator = null;
+
         //{COMMANDID: {name, owner: {envname, userid}, args, minArgs, description, details, reply, environments, types, permissions, calls: [{envname, userid, channelid, args: {...}}, ...]}
         this._data = {};
     }
@@ -40,25 +42,25 @@ class ModDynamicCommands extends Module {
 
 
         for (let name in this._data) {
-            let ownerenv = this.env(this._data[name].owner.envname);
-            if (!ownerenv) continue;
-            ownerenv.whenConnected().then(() => this.registerCommandFromDynamicDescriptor(this._data[name]));
+            if (!opt.envExists(this._data[name].owner.envname)) continue;
+            this.env(this._data[name].owner.envname).whenConnected().then(() => this.registerCommandFromDynamicDescriptor(this._data[name]));
         }
 
 
-        let testIsModerator = (envname, userid, channelid) =>
-            this.mod('Users').testPermissions(envname, userid, channelid, [this.param('permissionAdmin')]);
+        const permAdmin = this.be("Users").defaultPermAdmin;
+        let testIsModerator = this._testIsModerator = (envname, userid, channelid) =>
+            this.be('Users').testPermissions(envname, userid, channelid, [permAdmin]);
 
 
-        this.mod('Commands').registerRootDetails(this, 'cmd', {description: "Dynamically create and manage simple commands."});
+        this.be('Commands').registerRootDetails(this, 'cmd', {description: "Dynamically create and manage simple commands."});
 
 
-        this.mod("Commands").registerCommand(this, 'cmd create', {
+        this.be("Commands").registerCommand(this, 'cmd create', {
             description: 'Creates a new custom command.',
             args: ["name", "description", true],
             minArgs: 2,
-            permissions: [this.param('permissionAdmin')]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            permissions: [permAdmin]
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let name = args.name.toLowerCase();
 
@@ -68,13 +70,13 @@ class ModDynamicCommands extends Module {
             }
 
             if (this._data[name]) {
-                let ownerenv = this.env(this._data[name].owner.envname);
-                if (ownerenv) {
+                if (opt.envExists(this._data[name].owner.envname)) {
+                    let ownerenv = this.env(this._data[name].owner.envname);
                     let ownername;
                     if (ownerenv.name == env.name && this._data[name].owner.userid == userid) {
                         ownername = "you";
                     } else {
-                        ownername = ownerenv.idToDisplayName(this._data[name].owner.userid);
+                        ownername = await ownerenv.idToDisplayName(this._data[name].owner.userid);
                     }
                     ep.reply("There already exists a custom command with this name, owned by " + ownername + ".");
                 } else {
@@ -83,7 +85,7 @@ class ModDynamicCommands extends Module {
                 return true;
             }
 
-            if (this.mod("Commands").getCommand(name)) {
+            if (await this.be("Commands").getCommand(name)) {
                 ep.reply("There already exists a command with this name.");
                 return true;
             }
@@ -114,11 +116,11 @@ class ModDynamicCommands extends Module {
         });
 
 
-        this.mod("Commands").registerCommand(this, 'cmd owner', {
+        this.be("Commands").registerCommand(this, 'cmd owner', {
             description: 'Transfer ownership of a custom command.',
             args: ["name", "environment", "userid"],
             details: ["You can provide the minimum amount of required arguments between the command name and the list of arguments."]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let name = args.name.toLowerCase();
             let desc = this._data[name];
@@ -129,7 +131,7 @@ class ModDynamicCommands extends Module {
             }
 
             if ((desc.owner.envname != env.name || desc.owner.userid != userid)
-                    && !testIsModerator(env.name, userid, channelid)) {
+                    && !await testIsModerator(env.name, userid, channelid)) {
                 ep.reply("You are not the owner of this command.");
                 return true;
             }
@@ -146,12 +148,12 @@ class ModDynamicCommands extends Module {
         });
 
 
-        this.mod("Commands").registerCommand(this, 'cmd set args', {
+        this.be("Commands").registerCommand(this, 'cmd set args', {
             description: 'Sets the arguments for a custom command.',
             args: ["name", "args", true],
             details: ["You can provide the minimum amount of required arguments between the command name and the list of arguments."],
             minArgs: 1
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let name = args.name.toLowerCase();
             let desc = this._data[name];
@@ -162,7 +164,7 @@ class ModDynamicCommands extends Module {
             }
 
             if ((desc.owner.envname != env.name || desc.owner.userid != userid)
-                    && !testIsModerator(env.name, userid, channelid)) {
+                    && !await testIsModerator(env.name, userid, channelid)) {
                 ep.reply("You are not the owner of this command.");
                 return true;
             }
@@ -186,12 +188,12 @@ class ModDynamicCommands extends Module {
         });
 
 
-        this.mod("Commands").registerCommand(this, 'cmd set description', {
+        this.be("Commands").registerCommand(this, 'cmd set description', {
             description: 'Changes the description of the custom command.',
             details: ["Use | to provide additional information (which will only be displayed by the help command)."],
             args: ["name", "description", true],
             minArgs: 2
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let name = args.name.toLowerCase();
             let desc = this._data[name];
@@ -202,7 +204,7 @@ class ModDynamicCommands extends Module {
             }
 
             if ((desc.owner.envname != env.name || desc.owner.userid != userid)
-                    && !testIsModerator(env.name, userid, channelid)) {
+                    && !await testIsModerator(env.name, userid, channelid)) {
                 ep.reply("You are not the owner of this command.");
                 return true;
             }
@@ -221,7 +223,7 @@ class ModDynamicCommands extends Module {
         });
 
 
-        this.mod("Commands").registerCommand(this, 'cmd set environments', {
+        this.be("Commands").registerCommand(this, 'cmd set environments', {
             description: 'Restrict which message types and environments are allowed to use a custom command.',
             details: [
                 "Available message types depend on the environment, but 'public' and 'private' are usually available.",
@@ -229,7 +231,7 @@ class ModDynamicCommands extends Module {
             ],
             args: ["name", "types", "environments"],
             minArgs: 1
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let name = args.name.toLowerCase();
             let desc = this._data[name];
@@ -240,7 +242,7 @@ class ModDynamicCommands extends Module {
             }
 
             if ((desc.owner.envname != env.name || desc.owner.userid != userid)
-                    && !testIsModerator(env.name, userid, channelid)) {
+                    && !await testIsModerator(env.name, userid, channelid)) {
                 ep.reply("You are not the owner of this command.");
                 return true;
             }
@@ -258,7 +260,7 @@ class ModDynamicCommands extends Module {
             let environments = args.environments.split("|");
 
             for (let targetenvname of environments) {
-                if (!this.env(targetenvname)) {
+                if (!opt.envExists(targetenvname)) {
                     ep.reply("Environment not found: " + targetenvname);
                     return true;
                 }
@@ -290,11 +292,11 @@ class ModDynamicCommands extends Module {
         });
 
 
-        this.mod("Commands").registerCommand(this, 'cmd set permissions', {
+        this.be("Commands").registerCommand(this, 'cmd set permissions', {
             description: 'Restrict usage of a custom command to users who have one permission from the provided list.',
             args: ["name", "permissions", true],
             minArgs: 1
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let name = args.name.toLowerCase();
             let desc = this._data[name];
@@ -305,7 +307,7 @@ class ModDynamicCommands extends Module {
             }
 
             if ((desc.owner.envname != env.name || desc.owner.userid != userid)
-                    && !testIsModerator(env.name, userid, channelid)) {
+                    && !await testIsModerator(env.name, userid, channelid)) {
                 ep.reply("You are not the owner of this command.");
                 return true;
             }
@@ -325,7 +327,7 @@ class ModDynamicCommands extends Module {
         });
 
 
-        this.mod("Commands").registerCommand(this, 'cmd reply add', {
+        this.be("Commands").registerCommand(this, 'cmd reply add', {
             description: 'Adds a reply to the command. At least one reply is required for the command to work.',
             details: [
                 "If you add multiple replies, for each use of the command one of them will be randomly selected.",
@@ -344,7 +346,7 @@ class ModDynamicCommands extends Module {
             ],
             args: ["name", "reply", true],
             minArgs: 2
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let name = args.name.toLowerCase();
             let desc = this._data[name];
@@ -355,7 +357,7 @@ class ModDynamicCommands extends Module {
             }
 
             if ((desc.owner.envname != env.name || desc.owner.userid != userid)
-                    && !testIsModerator(env.name, userid, channelid)) {
+                    && !await testIsModerator(env.name, userid, channelid)) {
                 ep.reply("You are not the owner of this command.");
                 return true;
             }
@@ -377,11 +379,11 @@ class ModDynamicCommands extends Module {
         });
 
 
-        this.mod("Commands").registerCommand(this, 'cmd reply del', {
+        this.be("Commands").registerCommand(this, 'cmd reply del', {
             description: 'Removes a reply from the command.',
             args: ["name", "reply", true],
             minArgs: 2
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let name = args.name.toLowerCase();
             let desc = this._data[name];
@@ -392,7 +394,7 @@ class ModDynamicCommands extends Module {
             }
 
             if ((desc.owner.envname != env.name || desc.owner.userid != userid)
-                    && !testIsModerator(env.name, userid, channelid)) {
+                    && !await testIsModerator(env.name, userid, channelid)) {
                 ep.reply("You are not the owner of this command.");
                 return true;
             }
@@ -416,10 +418,10 @@ class ModDynamicCommands extends Module {
         });
 
 
-        this.mod("Commands").registerCommand(this, 'cmd reply list', {
+        this.be("Commands").registerCommand(this, 'cmd reply list', {
             description: 'Lists a command\'s existing replies.',
             args: ["name"],
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let name = args.name.toLowerCase();
             let desc = this._data[name];
@@ -430,7 +432,7 @@ class ModDynamicCommands extends Module {
             }
 
             if ((desc.owner.envname != env.name || desc.owner.userid != userid)
-                    && !testIsModerator(env.name, userid, channelid)) {
+                    && !await testIsModerator(env.name, userid, channelid)) {
                 ep.reply("You are not the owner of this command.");
                 return true;
             }
@@ -454,7 +456,7 @@ class ModDynamicCommands extends Module {
         });
 
 
-        this.mod("Commands").registerCommand(this, 'cmd stats', {
+        this.be("Commands").registerCommand(this, 'cmd stats', {
             description: 'Shows usage statistics for a custom command.',
             args: ["name", "criteria"],
             details: [
@@ -462,7 +464,7 @@ class ModDynamicCommands extends Module {
                 "If a value is provided, the results are filtered by that value, otherwise they are aggregated."
             ],
             minArgs: 1
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let name = args.name.toLowerCase();
             let desc = this._data[name];
@@ -473,7 +475,7 @@ class ModDynamicCommands extends Module {
             }
 
             if ((desc.owner.envname != env.name || desc.owner.userid != userid)
-                    && !testIsModerator(env.name, userid, channelid)) {
+                    && !await testIsModerator(env.name, userid, channelid)) {
                 ep.reply("You are not the owner of this command.");
                 return true;
             }
@@ -498,10 +500,10 @@ class ModDynamicCommands extends Module {
         });
 
 
-        this.mod("Commands").registerCommand(this, 'cmd reset', {
+        this.be("Commands").registerCommand(this, 'cmd reset', {
             description: 'Reset usage statistics and data for a custom command.',
             args: ["name"]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let name = args.name.toLowerCase();
             let desc = this._data[name];
@@ -512,7 +514,7 @@ class ModDynamicCommands extends Module {
             }
 
             if ((desc.owner.envname != env.name || desc.owner.userid != userid)
-                    && !testIsModerator(env.name, userid, channelid)) {
+                    && !await testIsModerator(env.name, userid, channelid)) {
                 ep.reply("You are not the owner of this command.");
                 return true;
             }
@@ -526,10 +528,10 @@ class ModDynamicCommands extends Module {
         });
 
 
-        this.mod("Commands").registerCommand(this, 'cmd destroy', {
+        this.be("Commands").registerCommand(this, 'cmd destroy', {
             description: 'Destroy a custom command.',
             args: ["name"]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let name = args.name.toLowerCase();
             let desc = this._data[name];
@@ -540,14 +542,14 @@ class ModDynamicCommands extends Module {
             }
 
             if ((desc.owner.envname != env.name || desc.owner.userid != userid)
-                    && !testIsModerator(env.name, userid, channelid)) {
+                    && !await testIsModerator(env.name, userid, channelid)) {
                 ep.reply("You are not the owner of this command.");
                 return true;
             }
 
-            let commanddesc = this.mod("Commands").getCommand(name);
-            if (commanddesc && commanddesc.modName == this.modName) {
-                this.mod("Commands").unregisterCommand(name);
+            let commanddesc = await this.be("Commands").getCommand(name);
+            if (commanddesc && commanddesc.behavior == this.type) {
+                await this.be("Commands").unregisterCommand(name);
             }
 
             delete this._data[name];
@@ -568,26 +570,26 @@ class ModDynamicCommands extends Module {
 
     //Unregister the command from ModCommands (if necessary) and register it again (if possible)
 
-    registerCommandFromDynamicDescriptor(desc) {
+    async registerCommandFromDynamicDescriptor(desc) {
         
-        let commanddesc = this.mod("Commands").getCommand(desc.name);
+        let commanddesc = await this.be("Commands").getCommand(desc.name);
         if (commanddesc) {
-            if (commanddesc.modName == this.modName) {
-                this.mod("Commands").unregisterCommand(desc.name);
+            if (commanddesc.behavior == this.type) {
+                await this.be("Commands").unregisterCommand(desc.name);
             } else {
                 return false;
             }
         }
 
         let rdetails = (desc.details || []).slice();
-        let ownerenv = this.env(desc.owner.envname);
-        if (ownerenv) { 
-            rdetails.push("*Custom command owner: " + ownerenv.idToDisplayName(desc.owner.userid) + "*");
+        let ownername = await this.env(desc.owner.envname)?.idToDisplayName(desc.owner.userid);
+        if (ownername) {
+            rdetails.push("*Custom command owner: " + ownername + "*");
         } else {
             rdetails.push("*This is a custom command.");
         }
 
-        this.mod("Commands").registerCommand(this, desc.name, {
+        this.be("Commands").registerCommand(this, desc.name, {
             args: desc.args,
             minArgs: desc.minArgs,
             description: desc.description,
@@ -595,7 +597,7 @@ class ModDynamicCommands extends Module {
             environments: desc.environments,
             types: desc.types,
             permissions: desc.permissions
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             if (desc.reply.length == 0) return true;
 
@@ -621,7 +623,7 @@ class ModDynamicCommands extends Module {
                 if (!srccmddesc) {
                     srccmddesc = desc;
                 } else if ((srccmddesc.owner.envname != desc.owner.envname || srccmddesc.owner.userid != desc.owner.userid)
-                        && !testIsModerator(desc.owner.envname, desc.owner.userid)) {
+                        && !await this._testIsModerator(desc.owner.envname, desc.owner.userid)) {
                     reply = reply.replace(matches[0], "");
                     continue;
                 }
@@ -724,5 +726,3 @@ class ModDynamicCommands extends Module {
 
 
 }
-
-module.exports = ModDynamicCommands;

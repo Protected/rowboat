@@ -1,31 +1,26 @@
-/* Module: ReactionRoles -- Assign roles to users based on message reactions, one message per role color. */
+/* DiscordReactionRoles -- Assign roles to users based on message reactions, one message per role color. */
 
-const { EmbedBuilder, ChannelType } = require('discord.js');
+import { EmbedBuilder, ChannelType } from 'discord.js';
 
-const Module = require('../Module.js');
+import Behavior from '../src/Behavior.js';
 
-const PERM_ADMIN = 'administrator';
+export default class DiscordReactionRoles extends Behavior {
 
-class ModReactionRoles extends Module {
+    get requiredEnvironments() { return {
+        Discord: 'Discord'
+    }; }
 
-    get requiredParams() { return [
-        "env"
-    ]; }
-
-    get requiredEnvironments() { return [
-        'Discord'
-    ]; }
-
-    get requiredModules() { return [
-        'Commands'
-    ]; }
+    get requiredBehaviors() { return {
+        Users: 'Users',
+        Commands: 'Commands'
+    }; }
     
     get denv() {
-        return this.env(this.param('env'));
+        return this.env('Discord');
     }
 
     constructor(name) {
-        super('ReactionRoles', name);
+        super('DiscordReactionRoles', name);
 
         this._data = null;  //{roles: {ROLEID: {emoji, desc, add, remove, require}, ...}, groups: {COLOR: {label, channel, message}, ...}}
         this._emoji = {};  //Index of registered roles by emoji
@@ -169,7 +164,66 @@ class ModReactionRoles extends Module {
         //Register commands
         
         
-        this.mod('Commands').registerRootDetails(this, 'rrole', {
+        const permAdmin = this.be("Users").defaultPermAdmin;
+
+        
+        this.be("Commands").registerCommand(this, 'members', {
+            description: 'Lists the Discord users with the given role(s).',
+            details: [
+                "Use & to intersect multiple roles; Users must have every role to be listed."
+            ],
+            args: ['role', true],
+            environments: ['Discord']
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
+            
+            let intersect = args.role.join(" ").split("&").map(el => el.trim());
+
+            if (intersect.length < 1) {
+                ep.reply("Specify at least one role.");
+                return true;
+            }
+
+            let roles = await env.server.roles.fetch();
+
+            let resultids = null;
+
+            for (let role of intersect) {
+                let roleobj = roles.get(role);
+                if (!roleobj) roleobj = roles.find(checkrole => checkrole.name.toLowerCase() == role.toLowerCase());
+
+                if (!roleobj) {
+                    ep.reply("The role \"" + role + "\" doesn't currently exist in this environment.");
+                    return true;
+                }
+
+                let members = roleobj.members.map(member => member.id);
+                if (!resultids) {
+                    resultids = members;
+                } else {
+                    resultids = resultids.filter(el => members.indexOf(el) > -1);
+                }
+            }
+
+            let results = [];
+            for (let id of resultids) {
+                results.push(env.idToDisplayName(id));
+            }
+            
+            if (results.length) {
+                while (results.length) {
+                    let outbound = results.slice(0, 10).join(', ');
+                    ep.reply(outbound);
+                    results = results.slice(10);
+                }
+            } else {
+                ep.reply("No members found.");
+            }
+            
+            return true;
+        });
+
+
+        this.be('Commands').registerRootDetails(this, 'rrole', {
             description: "Manage reaction-based role assignment.",
             details: [
                 "Register roles to associate them with an emoji (for reactions) and label. These are used everywhere the role is displayed. Roles can also have relations with other roles.",
@@ -179,17 +233,17 @@ class ModReactionRoles extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rrole set', {
+        this.be('Commands').registerCommand(this, 'rrole set', {
             description: "Registers a role.",
             details: [
                 "If a description isn't provided, the role name will be used."
             ],
             args: ["roleid", "emoji", "description", true],
             minArgs: 2,
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
     
-            let roleid = this.extractRoleId(args.roleid);
+            let roleid = this.denv.extractRoleId(args.roleid);
 
             let emoji = args.emoji;
             if (!emoji) {
@@ -218,13 +272,13 @@ class ModReactionRoles extends Module {
             return true;
         });
     
-        this.mod('Commands').registerCommand(this, 'rrole unset', {
+        this.be('Commands').registerCommand(this, 'rrole unset', {
             description: "Unregisters a role.",
             args: ["roleid"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
     
-            let roleid = this.extractRoleId(args.roleid);
+            let roleid = this.denv.extractRoleId(args.roleid);
 
             let roledata = this.getRole(roleid);
             if (this._emoji[roledata.emoji]) {
@@ -237,13 +291,13 @@ class ModReactionRoles extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rrole checkcolor', {
+        this.be('Commands').registerCommand(this, 'rrole checkcolor', {
             description: "Retrieve the current color of a role.",
             args: ["roleid"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let roleid = this.extractRoleId(args.roleid);
+            let roleid = this.denv.extractRoleId(args.roleid);
 
             env.server.roles.fetch(roleid)
                 .then(role => {
@@ -258,8 +312,8 @@ class ModReactionRoles extends Module {
 
 
         let relateMultipleRoles = (env, args, ep, relateMethod) => {
-            let roleid = this.extractRoleId(args.roleid);
-            let targetroleids = this.extractRoleIdsFromCollection(args.targetroleid);
+            let roleid = env.extractRoleId(args.roleid);
+            let targetroleids = env.extractRoleIdsFromCollection(args.targetroleid);
             let checkroles = targetroleids.slice();
             checkroles.unshift(roleid);
             checkroles = checkroles.map(checkroleid => env.server.roles.fetch(checkroleid));
@@ -283,41 +337,41 @@ class ModReactionRoles extends Module {
             return true;
         }
 
-        this.mod('Commands').registerCommand(this, 'rrole relate add', {
+        this.be('Commands').registerCommand(this, 'rrole relate add', {
             description: "When the role is granted, the target role is also granted.",
             details: [
                 "Losing the role does not result in the loss of the target role."
             ],
             args: ["roleid", "targetroleid", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => relateMultipleRoles(env, args, ep, this.roleRelateAdd));
 
-        this.mod('Commands').registerCommand(this, 'rrole relate remove', {
+        this.be('Commands').registerCommand(this, 'rrole relate remove', {
             description: "When the role is granted, the target role is removed.",
             details: [
                 "Losing the role does not result in the recovery of the target role."
             ],
             args: ["roleid", "targetroleid", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => relateMultipleRoles(env, args, ep, this.roleRelateRemove));
 
-        this.mod('Commands').registerCommand(this, 'rrole relate require', {
+        this.be('Commands').registerCommand(this, 'rrole relate require', {
             description: "The role can only be granted if the user has the target role.",
             details: [
                 "The loss of the target role results in the loss of the role."
             ],
             args: ["roleid", "targetroleid", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => relateMultipleRoles(env, args, ep, this.roleRelateRequire));
 
-        this.mod('Commands').registerCommand(this, 'rrole unrelate', {
+        this.be('Commands').registerCommand(this, 'rrole unrelate', {
             description: "Removes the relationship between the role and the target role (if any).",
             args: ["roleid", "targetroleid", true],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let roleid = this.extractRoleId(args.roleid);
-            let targetroleids = this.extractRoleIdsFromCollection(args.targetroleid);
+            let roleid = this.denv.extractRoleId(args.roleid);
+            let targetroleids = this.denv.extractRoleIdsFromCollection(args.targetroleid);
 
             if (this.roleUnrelate(roleid, targetroleids)) {
                 ep.ok(); 
@@ -340,13 +394,13 @@ class ModReactionRoles extends Module {
             embed.addFields({name: label, value: roles.join(", ")});
         };
         
-        this.mod('Commands').registerCommand(this, 'rrole info', {
+        this.be('Commands').registerCommand(this, 'rrole info', {
             description: "Shows information associated with a registered role.",
             args: ["roleid"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let roleid = this.extractRoleId(args.roleid);
+            let roleid = this.denv.extractRoleId(args.roleid);
             let roledata = this.getRole(roleid);
             if (!roledata) {
                 ep.reply("Role not known.");
@@ -371,11 +425,11 @@ class ModReactionRoles extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rrole group add', {
+        this.be('Commands').registerCommand(this, 'rrole group add', {
             description: "Registers a group of roles with a certain color.",
             args: ["color", "label", true],
             minArgs: 1,
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
     
             let color = args.color;
@@ -393,10 +447,10 @@ class ModReactionRoles extends Module {
             return true;
         });
     
-        this.mod('Commands').registerCommand(this, 'rrole group remove', {
+        this.be('Commands').registerCommand(this, 'rrole group remove', {
             description: "Unregisters the group of roles with a certain color.",
             args: ["color"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
     
             let color = args.color;
@@ -412,9 +466,9 @@ class ModReactionRoles extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rrole group list', {
+        this.be('Commands').registerCommand(this, 'rrole group list', {
             description: "Lists all the registered color groups.",
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
             if (!this._data.groups || !Object.keys(this._data.groups).length) {
@@ -434,10 +488,10 @@ class ModReactionRoles extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rrole group roles', {
+        this.be('Commands').registerCommand(this, 'rrole group roles', {
             description: "Lists all the roles currently in a group.",
             args: ["color"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let color = args.color;
@@ -454,7 +508,7 @@ class ModReactionRoles extends Module {
 
             let embed = new EmbedBuilder();
 
-            embed.setTitle(group.label);
+            embed.setTitle(group.label || null);
             embed.setColor(color);
 
             let roles = await this.rolesByColor(color);
@@ -467,7 +521,7 @@ class ModReactionRoles extends Module {
                 description += "\n\n[Go to message](https://discord.com/channels/" + env.server.id + "/" + group.channel + "/" + group.message + ")"; 
             }
 
-            embed.setDescription(description);
+            embed.setDescription(description || "No roles.");
 
             ep.reply(embed);
 
@@ -475,14 +529,14 @@ class ModReactionRoles extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rrole message create', {
+        this.be('Commands').registerCommand(this, 'rrole message create', {
             description: "Creates a new message for the assignment of roles of this color in the specified channel.",
             args: ["color", "targetchannelid"],
             minArgs: 1,
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let targetchannelid = this.extractChannelId(args.targetchannelid) || channelid;
+            let targetchannelid = this.denv.extractChannelId(args.targetchannelid) || channelid;
 
             let color = args.color;
             if (!this.isValidColor(color)) {
@@ -509,7 +563,7 @@ class ModReactionRoles extends Module {
             }
 
             let embed = await this.generateGroupMessageEmbed(color);
-            let message = await channel.send(embed);
+            let message = await channel.send({embeds: [embed]});
             this.setGroupMessage(color, channel.id, message.id);
             this.setupGroupReactions(color, message);
             ep.ok();
@@ -517,14 +571,14 @@ class ModReactionRoles extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rrole message assign', {
+        this.be('Commands').registerCommand(this, 'rrole message assign', {
             description: "Uses an existing message for the assignment of roles of this color.",
             args: ["color", "messageid", "targetchannelid"],
             minArgs: 2,
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let targetchannelid = this.extractChannelId(args.targetchannelid) || channelid;
+            let targetchannelid = this.denv.extractChannelId(args.targetchannelid) || channelid;
 
             let color = args.color;
             if (!this.isValidColor(color)) {
@@ -544,7 +598,7 @@ class ModReactionRoles extends Module {
                 return true;
             }
 
-            let channel = env.server.channels.cache.get(targetchannelid);
+            let channel = await env.server.channels.fetch(targetchannelid);
             if (!channel || channel.type != ChannelType.GuildText) {
                 ep.reply("Text channel not found.");
                 return true;
@@ -564,10 +618,10 @@ class ModReactionRoles extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'rrole message update', {
+        this.be('Commands').registerCommand(this, 'rrole message update', {
             description: "Updates the assigned message for the given color.",
             args: ["color"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let color = args.color;
@@ -604,13 +658,13 @@ class ModReactionRoles extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'rrole message unassign', {
+        this.be('Commands').registerCommand(this, 'rrole message unassign', {
             description: "Detaches the message (if any) assigned to a group of roles.",
             details: [
                 "The message will not be deleted automatically."
             ],
             args: ["color"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
             let color = args.color;
@@ -955,7 +1009,7 @@ class ModReactionRoles extends Module {
 
         let embed = new EmbedBuilder();
 
-        embed.setTitle(group.label);
+        embed.setTitle(group.label || null);
         embed.setColor(color);
 
         let roles = await this.rolesByColor(color);
@@ -968,7 +1022,7 @@ class ModReactionRoles extends Module {
             return result;
         }).join("\n");
 
-        embed.setDescription(description);
+        embed.setDescription(description || "No roles.");
 
         return embed;
     }
@@ -997,27 +1051,6 @@ class ModReactionRoles extends Module {
 
 
     //Helpers
-
-    extractRoleId(roleid) {
-        if (!roleid) return null;
-        if (roleid.match(/^[0-9]+$/)) return roleid;
-        let extr = roleid.match(/<@&([0-9]+)>/);
-        if (extr) return extr[1];
-        return null;
-    }
-
-    extractChannelId(channelid) {
-        if (!channelid) return null;
-        if (channelid.match(/^[0-9]+$/)) return channelid;
-        let extr = channelid.match(/<#([0-9]+)>/);
-        if (extr) return extr[1];
-        return null;
-    }
-
-    extractRoleIdsFromCollection(roleids) {
-        if (!roleids) return [];
-        return roleids.map(roleid => this.extractRoleId(roleid)).filter(checkroleid => !!checkroleid);
-    }
     
     emojiFromReaction(reaction) {
         //Returns the string that produces the emoji or emote in the actual message
@@ -1028,7 +1061,3 @@ class ModReactionRoles extends Module {
 
 
 }
-
-
-module.exports = ModReactionRoles;
-

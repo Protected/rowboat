@@ -1,25 +1,20 @@
-/* Module: VRChat -- Show information about VRChat users on Discord. */
+/* VRChat -- Interact with the VRChat API and show information about VRChat users on Discord. */
 
-const moment = require('moment');
-const random = require('meteor-random');
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const WebSocket = require('ws');
-const Imap = require('imap');
+import moment from 'moment';
+import random from 'meteor-random';
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField } from 'discord.js';
+import WebSocket from 'ws';
+import Imap from 'imap';
 
-const Module = require('../Module.js');
-const { enableConsole } = require('../Logger.js');
-const { relativeTimeThreshold } = require('moment');
-
-const PERM_ADMIN = 'administrator';
+import Behavior from '../src/Behavior.js';
 
 const MAIL_FROM = /(^|<)noreply@vrchat.com(>|$)/;
 const MAIL_OTP = /Your One-Time Code is ([0-9]+)/;
 const TWOFA_DURATION = 2419200;  //28 days
 
 const ENDPOINT = "https://api.vrchat.cloud/api/1/";
-const NO_AUTH = ["config", "time", "visits"];
 const WEBSOCKET = "wss://pipeline.vrchat.cloud/";
-const HTTP_USER_AGENT = "Rowboat/0.0";
+const HTTP_USER_AGENT_TEMPLATE = "Rowboat/$version$ $contact$";
 const RATE_DELAY = 1000;
 
 const STATUS_ONLINE = ["active", "join me", "ask me"];
@@ -31,110 +26,136 @@ const CLOCKS = ["🕛","🕧","🕐","🕜","🕑","🕝","🕒","🕞","🕓","
 
 const MAX_FIELDLEN = 1024;
 
-/*
-Object.defineProperty(global, '__stack', {
-get: function() {
-        var orig = Error.prepareStackTrace;
-        Error.prepareStackTrace = function(_, stack) {
-            return stack;
-        };
-        var err = new Error;
-        Error.captureStackTrace(err, arguments.callee);
-        var stack = err.stack;
-        Error.prepareStackTrace = orig;
-        return stack;
-    }
-});
-    
-Object.defineProperty(global, '__line', {
-get: function() {
-        return __stack[2].getLineNumber();
-    }
-});
+export default class VRChat extends Behavior {
 
-Object.defineProperty(global, '__function', {
-get: function() {
-        return __stack[2].getFunctionName();
-    }
-});
-*/
+    get params() { return [
+        {n: "username", d: "VRChat username"},
+        {n: "password", d: "VRChat password"},
+        {n: "imapUser", d: "E-mail username for OTP"},
+        {n: "imapPassword", d: "E-mail password for OTP"},
+        {n: "userAgentContact", d: "E-mail address that identifies bot owner to VRChat"},
 
-class ModVRChat extends Module {
+        {n: "imapHost", d: "IMAP server hostname (defaults to localhost)"},
+        {n: "imapPort", d: "IMAP server port (143, 993 if remote)"},
+        {n: "imapTLS", d: "IMAP server TLS toggle (false, true if remote)"},
+        {n: "otpTimeout", d: "How long to wait for VRChat's OTP (s)"},
 
-    get requiredParams() { return [
-        "env",
-        "username",             //VRChat username
-        "password",             //VRChat password
-        "imapUser",             //E-mail username for OTP
-        "imapPassword",         //E-mail password for OTP
-        "userAgentContact",     //E-mail address that identifies bot owner to VRChat
+        {n: "updatefreq", d: "How often to run the main update function (s)"},
+        {n: "localaddress", d: "IP address of a local network interface"},
+        {n: "friendliststale", d: "How long before the entire friend list should be refreshed by the update function (s)"},
+        {n: "bakestale", d: "How long a baked status embed remains fresh and shouldn't be updated (s)"},
+        {n: "statuschan", d: "ID of text channel for baked person status embeds"},
+        {n: "knownrole", d: "ID of a role that will be automatically assigned to known people and unassigned from unknown people"},
+        {n: "offlinetolerance", d: "How long to delay offline announcements to improve odds they're real and not slow world loading (s)"},
+
+        {n: "worldfreq", d: "How often to run the world update function (s) [Note: Worlds can be updated outside this function.]"},
+        {n: "worldchan", d: "ID of text channel for worlds (warning: all contents will be deleted)"},
+        {n: "worldstale", d: "How long after retrieval until an entry in the world cache goes stale (s)"},
+        {n: "worldexpiration", d: "How long after emptying until an entry in the world cache is removed (h)"},
+        {n: "staleupdatesperitr", d: "How many stale worlds are updated per every time the update function runs"},
+        {n: "instancechan", d: "ID of text channel for baked instance members embeds"},
+
+        {n: "coloroffline", d: "Color for offline/unused embed accents"},
+        {n: "coloronline", d: "Color for online/used embed accents"},
+
+        {n: "announcechan", d: "ID of text channel for announcements"},
+        {n: "useannstacks", d: "Whether to use announcement stacks (for online/offline announcements)"},
+        {n: "anncollapse", d: "How long since the latest announcement to collapse announcements (s)"},
+        {n: "anncollapseconsec", d: "How long since the latest announcement to collapse announcements if it's the latest message too (s)"},
+        {n: "anncollapsetrans", d: "Maximum interval for collapsing a user's state transition (s)"},
+        {n: "annremovetransmin", d: "Maximum interval for removing instead of collapsing a reconnect/peek (s)"},
+        {n: "annmaxstack", d: "Maximum amount of names to list in a collapsed announcement"},
+
+        {n: "expiration", d: "How long to stay unfriended before unassigning a person (h)"},
+        {n: "absence", d: "How long can a known user stay offline before they're automatically unassigned (d)"},
+        {n: "inactivity", d: "How long can a known user not talk on Discord before they're automatically unassigned (d)"},
+
+        {n: "ddelay", d: "Delay between actions in the delayed action queue (ms) [used to prevent rate limiting]"},
+
+        {n: "pinnedemoji", d: "Emoji used for pinning worlds"},
+        {n: "inviteemoji", d: "Emoji used for requesting an invitation"},
+        {n: "anyemoji", d: "Emoji that represents any visible instance"},
+        {n: "publicemoji", d: "Emoji that represents a public instance"},
+        {n: "friendsplusemoji", d: "Emoji that represents a friends+ instance ['hidden']"},
+        {n: "friendsemoji", d: "Emoji that represents a friends instance"},
+        {n: "deleteemoji", d: "Emoji for deleting things"},
+
+        {n: "alertmin", d: "Minimum amount of online people to vrcalert at"},
+        {n: "alertcooldown", d: "How long until a user can be alerted again (mins)"},
+
+        {n: "statedebug", d: "Log inbound state and location changes"}
     ]; }
-    
-    get optionalParams() { return [
-        "imapHost",             //IMAP server hostname (defaults to localhost)
-        "imapPort",             //IMAP server port (143, 993 if remote)
-        "imapTLS",              //IMAP server TLS toggle (false, true if remote)
-        "otpTimeout",           //How long to wait for VRChat's OTP (s)
 
-        "updatefreq",           //How often to run the main update function (s)
-        "usewebsocket",         //Whether to connect to the VRChat websocket to receive faster updates
-        "localaddress",         //IP address of a local network interface
-        "friendliststale",      //How long before the entire friend list should be refreshed by the update function (s)
-        "bakestale",            //How long a baked status embed remains fresh and shouldn't be updated (s)
-        "statuschan",           //ID of text channel for baked person status embeds
-        "knownrole",            //ID of a role that will be automatically assigned to known people and unassigned from unknown people
-        "offlinetolerance",     //How long to delay offline announcements to improve odds they're real and not slow world loading (s)
+    get defaults() { return {
+        imapHost: "localhost",
+        imapPort: 143,
+        imapTLS: false,
+        otpTimeout: 60,
+     
+        updatefreq: 180,
+        localaddress: null,
+        friendliststale: 179,
+        bakestale: 29,
+        statuschan: null,
+        knownrole: null,
+        offlinetolerance: 119,
+
+        worldfreq: 300,
+        worldchan: null,
+        worldstale: 3600,
+        worldexpiration: 25,
+        staleupdatesperitr: 10,
+        instancechan: null,
         
-        "worldfreq",            //How often to run the world update function (s) [Note: Worlds can be updated outside this function.]
-        "worldchan",            //ID of text channel for worlds (warning: all contents will be deleted)
-        "worldstale",           //How long after retrieval until an entry in the world cache goes stale (s)
-        "worldexpiration",      //How long after emptying until an entry in the world cache is removed (h)
-        "staleupdatesperitr",   //How many stale worlds are updated per every time the update function runs
-        "instancechan",         //ID of text channel for baked instance members embeds
+        coloroffline: [200, 200, 200],
+        coloronline: [40, 255, 40],
 
-        "coloroffline",         //Color for "offline"/"unused" embed accents
-        "coloronline",          //Color for "online"/"used" embed accents
-        
-        "announcechan",         //ID of text channel for announcements
-        "useannstacks",         //Whether to use announcement stacks (for online/offline announcements)
-        "anncollapse",          //How long since the latest announcement to collapse announcements (s)
-        "anncollapseconsec",    //How long since the latest announcement to collapse announcements if it's the latest message too (s)
-        "anncollapsetrans",     //Maximum interval for collapsing a user's state transition (s)
-        "annremovetransmin",    //Maximum interval for removing instead of collapsing a reconnect/peek (s)
-        "annmaxstack",          //Maximum amount of names to list in a collapsed announcement
+        announcechan: null,
+        useannstacks: true,
+        anncollapse: 600,
+        anncollapseconsec: 1200,
+        anncollapsetrans: 600,
+        annremovetransmin: 45,
+        annmaxstack: 10,
 
-        "expiration",           //How long to stay unfriended before unassigning a person (h)
-        "absence",              //How long can a known user stay offline before they're automatically unassigned (d)
-        "inactivity",           //How long can a known user not talk on Discord before they're automatically unassigned (d)
+        expiration: 48,
+        absence: 32,
+        inactivity: 62,
 
-        "pinfavorites",         //VRChatFavorites instance name to be used for pinning
+        ddelay: 250,
 
-        "ddelay",               //Delay between actions in the delayed action queue (ms) [used to prevent rate limiting]
+        pinnedemoji: "📌",
+        inviteemoji: "✉️",
+        anyemoji: "🚪",
+        publicemoji: "🌍",
+        friendsplusemoji: "🥳",
+        friendsemoji: "🧑‍🤝‍🧑",
+        deleteemoji: "❌",
 
-        "pinnedemoji",          //Emoji used for pinning worlds
-        "inviteemoji",          //Emoji used for requesting an invitation
-        "anyemoji",             //Emoji that represents any visible instance
-        "publicemoji",          //Emoji that represents a public instance
-        "friendsplusemoji",     //Emoji that represents a friends+ instance ["hidden"]
-        "friendsemoji",         //Emoji that represents a friends instance
-        "deleteemoji",          //Emoji for deleting things
+        alertmin: 4,
+        alertcooldown: 60,
 
-        "alertmin",             //Minimum amount of online people to vrcalert at
-        "alertcooldown",        //How long until a user can be alerted again (mins)
+        statedebug: false
+    }; }
 
-        "statedebug"            //Log inbound state and location changes
-    ]; }
+    get requiredEnvironments() { return {
+        Discord: 'Discord'
+    }; }
 
-    get requiredEnvironments() { return [
-        'Discord'
-    ]; }
+    get requiredBehaviors() { return {
+        Users: 'Users',
+        Commands: 'Commands'
+    }; }
 
-    get requiredModules() { return [
-        'Commands'
-    ]; }
+    get optionalBehaviors() { return {
+        Time: 'Time',
+        DiscordReactionRoles: 'DiscordReactionRoles',
+        Activity: 'Activity',
+        PinFavorites: 'VRChatFavorites'
+    }; }
 
     get denv() {
-        return this.env(this.param('env'));
+        return this.env('Discord');
     }
 
     get statuschan() {
@@ -153,56 +174,17 @@ class ModVRChat extends Module {
         return this.denv.server.channels.cache.get(this.param("instancechan"));
     }
 
+    get httpUserAgent() {
+        return HTTP_USER_AGENT_TEMPLATE
+            .replace(/\$version\$/, this._version)
+            .replace(/\$contact\$/, this.param("userAgentContact"))
+            ;
+    }
 
     constructor(name) {
         super('VRChat', name);
 
-        this._params["imapHost"] = "localhost";
-        this._params["imapPort"] = 143;
-        this._params["imapTLS"] = false;
-        this._params["otpTimeout"] = 60;
-     
-        this._params["updatefreq"] = 180;
-        this._params["usewebsocket"] = true;
-        this._params["localaddress"] = undefined;
-        this._params["friendliststale"] = 179;
-        this._params["bakestale"] = 29;
-
-        this._params["offlinetolerance"] = 119;
-
-        this._params["worldfreq"] = 300;
-        this._params["worldstale"] = 3600;
-        this._params["worldexpiration"] = 25;
-        this._params["staleupdatesperitr"] = 10;
-        
-        this._params["coloroffline"] = [200, 200, 200];
-        this._params["coloronline"] = [40, 255, 40];
-
-        this._params["useannstacks"] = true;
-        this._params["anncollapse"] = 600;
-        this._params["anncollapseconsec"] = 1200;
-        this._params["anncollapsetrans"] = 600;
-        this._params["annremovetransmin"] = 45;
-        this._params["annmaxstack"] = 10;
-
-        this._params["expiration"] = 48;
-        this._params["absence"] = 32;
-        this._params["inactivity"] = 62;
-
-        this._params["ddelay"] = 250;
-
-        this._params["pinnedemoji"] = "📌";
-        this._params["inviteemoji"] = "✉️";
-        this._params["anyemoji"] = "🚪";
-        this._params["publicemoji"] = "🌍";
-        this._params["friendsplusemoji"] = "🥳";
-        this._params["friendsemoji"] = "🧑‍🤝‍🧑";
-        this._params["deleteemoji"] = "❌";
-
-        this._params["alertmin"] = 4;
-        this._params["alertcooldown"] = 60;
-
-        this._params["statedebug"] = false;
+        this._version = null;
 
         this._people = null;  //{USERID: {see registerPerson}, ...}
         this._worlds = null;  //The worlds cache {WORLDID: {..., see getWorld}, ...}
@@ -216,7 +198,7 @@ class ModVRChat extends Module {
         this._sneaks = {};  //Users who were sneaking when they last went offline {USERID: TS, ...}
         this._invisibles = {};  //Users who were invisible when they last went offline {USERID: TS, ...}
 
-        this._config = null;  //The full object returned by the "config" API. This API must be called before any other request.
+        this._vrcconfig = null;  //The full object returned by the "config" API. This API must be called before any other request.
         this._auth = null;  //The auth cookie
         this._twofa = null;  //The 2FA cookie
         this._me = null;  //The bot user data
@@ -230,9 +212,6 @@ class ModVRChat extends Module {
         this._lt_quickpeek = {prefix: "⚫ Quick peek", msg: null, ts: null, stack: []};  //State of recent 'quick peek' announcements
 
         this._ready = false;  //Whether we're done caching existing status messages and can start baking new ones.
-        this._modTime = null;  //A reference to the Time module, if available.
-        this._modReactionRoles = null;  //A reference to the ReactionRoles module, if available.
-        this._modPins = null;  //A reference to the VRChatFavorites module for pinning, if available.
 
         this._inviteSources = {};  //IDs of channels permitted to initiate interactions that create VRChat world invites
 
@@ -250,33 +229,15 @@ class ModVRChat extends Module {
         this._mtimer = null;  //Mail timer - Checks for expired callbacks
 
         this._otpPromise = null;  //A promise that will resolve when the OTP is validated
-
-        this._connectCallbacks = [];
-        this._websocketCallbacks = {};
     }
     
     
     initialize(opt) {
         if (!super.initialize(opt)) return false;
 
+        this._version = opt.config.version;
 
-        opt.moduleRequest('Time', (time) => { this._modTime = time; });
-        opt.moduleRequest('ReactionRoles', (reactionRoles) => { this._modReactionRoles = reactionRoles; });
-        
-        if (this.param("pinfavorites")) {
-            opt.moduleRequest(this.param("pinfavorites"), (vrChatFavorites) => {
-                if (vrChatFavorites.modName == "VRChatFavorites") {
-                    this._modPins = vrChatFavorites;
-                } else {
-                    this.log("error", "Module " + this.param("pinfavorites") + " found, but not an instance of VRChatFavorites.");
-                }
-            });
-        }
-        
-        let modActivity = null;
-        opt.moduleRequest('Activity', (activity) => { modActivity = activity; });
-
-        
+    
         //# Load data
 
         this._people = this.loadData(undefined, undefined, {quiet: true});
@@ -302,7 +263,7 @@ class ModVRChat extends Module {
 
         //# Cleanup handler
 
-        opt.pushCleanupHandler((next) => {
+        opt.pushShutdownHandler((next) => {
             if (this._auth) {
                 this.vrcpost("logout", null, "PUT")
                     .then(() => {
@@ -481,9 +442,9 @@ class ModVRChat extends Module {
             if (buttonInteraction.customId == "pin") {
                 //Pin worlds to favorites channel
 
-                if (this.worldchan && channelid == this.worldchan.id && this._modPins) {
+                if (this.worldchan && channelid == this.worldchan.id && this.be("PinFavorites")) {
 
-                    this._modPins.potentialWorldPin(buttonInteraction.message, false, buttonInteraction.user.id)
+                    this.be("PinFavorites").potentialWorldPin(buttonInteraction.message, false, buttonInteraction.user.id)
                         .then(result => {
                             if (result) {
                                 buttonInteraction.update({components: [this.worldInviteButtons(true)]});
@@ -507,16 +468,23 @@ class ModVRChat extends Module {
 
                         buttonInteraction.deferReply({ephemeral: true});
                         
-                        let region = this.idealServerRegion(buttonInteraction.user.id);
+                        let region = await this.idealServerRegion(buttonInteraction.user.id);
 
                         if (buttonInteraction.customId == "invitepublic" || buttonInteraction.customId == "inviteany") {
                             this.getWorld(worldid, true)
                                 .then((world) => {
                                     if (!world) throw {};
-                                    let instances = Object.values(world.instances).filter(ci => !ci.members || Object.keys(ci.members).length < world.capacity).map(ci => ci.instance);
+                                    let instances = Object.values(world.instances)
+                                        .filter(ci => {
+                                            if (ci.members && Object.keys(ci.members).length >= world.capacity) return false;
+                                            let friends = ci.instance.split("~").find(element => element.match(/^friends\(/));
+                                            if (friends) return friends === "friends(" + this._me.id + ")";  //Can only invite to bot-owned friends instances
+                                            return true;
+                                        })
+                                        .map(ci => ci.instance);
                                     let instance;
                                     if (buttonInteraction.customId == "inviteany") {
-                                        instance = this.generateInstanceFor(person.vrc, "public", instances, undefined, region);
+                                        instance = this.generateInstanceFor(person.vrc, "public", instances);
                                     } else {
                                         instance = this.generateInstanceFor(person.vrc, "public", null, instances.map(ci => ci.split("~")[0]), region);
                                     }
@@ -690,7 +658,9 @@ class ModVRChat extends Module {
 
         //# Set up VRChat session
 
-        let friendStateChangeHandler = (vrcuserid, state, userdata) => {
+        this.on("friendStateChange", (userdata) => {
+            let vrcuserid = userdata.id;
+            let state = userdata.state;
             let userid = this.getUseridByVrc(vrcuserid);
             let person = this.getPerson(userid);
             if (!person) return;
@@ -715,9 +685,12 @@ class ModVRChat extends Module {
                     this.bakeStatus(userid, this._friends[vrcuserid]);
                 }.bind(this));
             }
-        }
+        });
 
-        let friendLocationChangeHandler = (vrcuserid, userdata, partialworld, instance, location) => {
+        this.on("friendLocation", (data) => {
+            let vrcuserid = data.userId;
+            let userdata = Object.assign({}, data.user);
+            let location = data.location;
             let userid = this.getUseridByVrc(vrcuserid);
             let person = this.getPerson(userid);
             if (!person) return;
@@ -758,30 +731,32 @@ class ModVRChat extends Module {
 
             this.updateAffectedWorlds(affectedworlds);
             this.updateAffectedInstances(affectedworlds);
-        }
+        });
 
-        let friendAddHandler = (vrcuserid, userdata) => {
-            let userid = this.getUseridByVrc(vrcuserid);
+        this.on("friendAdd", async (data) => {
+            let userid = this.getUseridByVrc(data.userId);
             let person = this.getPerson(userid);
-            this._friends[vrcuserid] = userdata;
+            this._friends[data.userId] = data.user;
             if (person && !person.confirmed) {
                 this.confirmPerson(userid);
                 this.assignKnownRole(userid, "User is now confirmed.");
-                this.announce("I see you, " + this.denv.idToDisplayName(userid) + "! You're my VRChat friend.");
+                this.announce("I see you, " + (await this.denv.idToDisplayName(userid)) + "! You're my VRChat friend.");
             }
-        }
+        });
 
-        let friendDeleteHandler = (vrcuserid) => {
-            let userid = this.getUseridByVrc(vrcuserid);
+        this.on("friendDelete", async (data) => {
+            let userid = this.getUseridByVrc(data.userId);
             let person = this.getPerson(userid);
             if (person && person.confirmed) {
                 this.unconfirmPerson(userid);
                 this.unassignKnownRole(userid, "User is no longer confirmed.");
-                this.announce("Uh oh... " + this.denv.idToDisplayName(userid) + " is no longer my friend.");
+                this.announce("Uh oh... " + (await this.denv.idToDisplayName(userid)) + " is no longer my friend.");
             }
-        }
+        });
 
-        let friendUpdateHandler = (vrcuserid, userdata) => {
+        this.on("friendUpdate", (data) => {
+            let vrcuserid = data.userId;
+            let userdata = Object.assign({}, data.user);
             let userid = this.getUseridByVrc(vrcuserid);
 
             if (userdata.state) delete userdata.state;
@@ -800,8 +775,8 @@ class ModVRChat extends Module {
             Object.assign(this._friends[vrcuserid], userdata);
 
             if (this.statuschan && userid && this.isBakeStale(userid)) {
-                this.dqueue(function() {
-                    this.bakeStatus(userid, this._friends[vrcuserid]);
+                this.dqueue(async function() {
+                    await this.bakeStatus(userid, this._friends[vrcuserid]);
                     if (this._friends[vrcuserid].location) {
                         let worldid = this.worldFromLocation(this._friends[vrcuserid].location);
                         if (worldid) {
@@ -810,27 +785,16 @@ class ModVRChat extends Module {
                     }
                 }.bind(this));
             }
-        }
+        });
 
         //Initialize VRChat session
 
-        let startup = this.vrcConfig();
-
-        if (this.param("usewebsocket")) {
-            startup = startup.then(() => this.vrcInitialize())
-                .then(handlers => {
-                    handlers.friendStateChange = friendStateChangeHandler;
-                    handlers.friendLocationChange = friendLocationChangeHandler;
-                    handlers.friendAdd = friendAddHandler;
-                    handlers.friendDelete = friendDeleteHandler;
-                    handlers.friendUpdate = friendUpdateHandler;
-                })
-        }
-
-        startup = startup.then(() => this.refreshFriends(true))
-            .then(() => this.executeConnectCallbacks())
+        this.vrcConfig()
+            .then(() => this.vrcInitialize())
+            .then(() => this.refreshFriends(true))
+            .then(() => this.emit("connect"))
             .catch((e) => {
-                this.log("error", "Failed to initialize VRChat module. Error:" + JSON.stringify(e));
+                this.log("error", "Failed to initialize VRChat behavior. Error:" + JSON.stringify(e));
                 process.exit(11);
             });
             
@@ -873,7 +837,7 @@ class ModVRChat extends Module {
                 if (!person || !person.confirmed) continue;
                 this.unconfirmPerson(userid);
                 this.unassignKnownRole(userid, "User is no longer confirmed.");
-                this.announce("Uh oh... " + this.denv.idToDisplayName(userid) + " is no longer my friend.");
+                this.announce("Uh oh... " + (await this.denv.idToDisplayName(userid)) + " is no longer my friend.");
             }
 
             //Remove absent and inactive users
@@ -918,7 +882,7 @@ class ModVRChat extends Module {
                     if (this._friends[person.vrc]) {
                         this.confirmPerson(userid);
                         this.assignKnownRole(userid, "User is now confirmed.");
-                        this.announce("I see you, " + this.denv.idToDisplayName(userid) + "! You're my VRChat friend.");
+                        this.announce("I see you, " + (await this.denv.idToDisplayName(userid)) + "! You're my VRChat friend.");
                     } else {
                         if (now - person.waiting > this.param("expiration") * 3600) {
                             this.unregisterPerson(userid);
@@ -974,7 +938,7 @@ class ModVRChat extends Module {
                 }
 
                 //Synchronize nickname with vrchat username
-                if (person.syncnick) {
+                if (person.syncnick && this.denv.server.members.me.permissions.has(PermissionsBitField.Flags.ManageNicknames)) {
                     let member = this.denv.server.members.cache.get(userid);
                     if (member && member.displayName != this._friends[person.vrc].displayName) {
                         member.setNickname(this._friends[person.vrc].displayName, "Synchronizing nickname with VRChat.")
@@ -1013,7 +977,7 @@ class ModVRChat extends Module {
         if (this.param("updatefreq") >= 40) setTimeout(maintimer, 20000);  //Run faster at startup
 
 
-        if (this.param("usewebsocket") && this.param("updatefreq") > 300) {
+        if (this.param("updatefreq") > 300) {
             this._qtimer = setInterval(function () {
 
                 let now = moment().unix();
@@ -1097,7 +1061,9 @@ class ModVRChat extends Module {
 
         //# Register commands
 
-        this.mod('Commands').registerRootDetails(this, 'vrchat', {description: "Control integration with your VRChat account."});
+        const permAdmin = this.be("Users").defaultPermAdmin;
+
+        this.be('Commands').registerRootDetails(this, 'vrchat', {description: "Control integration with your VRChat account."});
         
         let asscall = async (env, userid, discorduser, vrchatuser, ep) => {
 
@@ -1141,7 +1107,7 @@ class ModVRChat extends Module {
                 }
 
                 if (!data.isFriend) {
-                    let fstatus = await this.vrcFriendStatus(data.id);
+                    let fstatus = await this.vrcFriendStatus(data.id)
                     if (!fstatus || (!fstatus.isFriend && !fstatus.outgoingRequest)) {
                         await this.vrcFriendRequest(data.id);
                         ep.reply("VRChat account learned. I've sent you a friend request! Please accept it.");
@@ -1163,7 +1129,7 @@ class ModVRChat extends Module {
             return true;
         };
 
-        this.mod('Commands').registerCommand(this, 'vrchat assign', {
+        this.be('Commands').registerCommand(this, 'vrchat assign', {
             description: "Assigns a VRChat user to you.",
             details: [
                 "A friend request will be sent from the user '" + this.param("username") + "'."
@@ -1173,7 +1139,7 @@ class ModVRChat extends Module {
             types: ["regular"]
         },  (env, type, userid, channelid, command, args, handle, ep) => asscall(env, userid, null, args.vrchatuser.join(" "), ep));
 
-        this.mod('Commands').registerCommand(this, 'vrchat assignto', {
+        this.be('Commands').registerCommand(this, 'vrchat assignto', {
             description: "Assigns a VRChat user to a Discord user.",
             details: [
                 "If the Discord user is not provided, the current user is assumed.",
@@ -1181,7 +1147,7 @@ class ModVRChat extends Module {
             ],
             args: ["vrchatuser", "discorduser", true],
             minArgs: 1,
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         },  (env, type, userid, channelid, command, args, handle, ep) => asscall(env, userid, args.discorduser.join(" "), args.vrchatuser, ep));
 
 
@@ -1226,22 +1192,22 @@ class ModVRChat extends Module {
             return true;
         };
 
-        this.mod('Commands').registerCommand(this, 'vrchat unassign', {
+        this.be('Commands').registerCommand(this, 'vrchat unassign', {
             description: "Unassigns your VRChat user.",
             types: ["regular"]
         },  (env, type, userid, channelid, command, args, handle, ep) => unasscall(env, userid, null, ep));
 
-        this.mod('Commands').registerCommand(this, 'vrchat unassignfrom', {
+        this.be('Commands').registerCommand(this, 'vrchat unassignfrom', {
             description: "Unassigns a Discord user's VRChat user.",
             details: [
                 "If the Discord user is not provided, the current user is assumed."
             ],
             args: ["discorduser", true],
             minArgs: 0,
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         },  (env, type, userid, channelid, command, args, handle, ep) => unasscall(env, userid, args.discorduser.join(" "), ep));
 
-        this.mod('Commands').registerCommand(this, 'vrchat delete', {
+        this.be('Commands').registerCommand(this, 'vrchat delete', {
             description: "Unassigns your VRChat user and unfriends it.",
             details: [
                 "If you want to assign again at a later date, you will have to accept my friend request again."
@@ -1249,7 +1215,7 @@ class ModVRChat extends Module {
             types: ["regular"]
         },  (env, type, userid, channelid, command, args, handle, ep) => unasscall(env, userid, null, ep, true));
 
-        this.mod('Commands').registerCommand(this, 'vrchat deletefrom', {
+        this.be('Commands').registerCommand(this, 'vrchat deletefrom', {
             description: "Unassigns a Discord user's VRChat user and unfriends it.",
             details: [
                 "If the Discord user is not provided, the current user is assumed.",
@@ -1257,11 +1223,11 @@ class ModVRChat extends Module {
             ],
             args: ["discorduser", true],
             minArgs: 0,
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         },  (env, type, userid, channelid, command, args, handle, ep) => unasscall(env, userid, args.discorduser.join(" "), ep, true));
 
 
-        this.mod('Commands').registerCommand(this, 'vrchat syncnick', {
+        this.be('Commands').registerCommand(this, 'vrchat syncnick', {
             description: "Automatically synchronize your Discord nickname with your VRChat username.",
             args: ["state"],
             minArgs: 0
@@ -1298,7 +1264,7 @@ class ModVRChat extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'vrchat stickypic', {
+        this.be('Commands').registerCommand(this, 'vrchat stickypic', {
             description: "Retain your current avatar picture on Discord even if your avatar changes.",
             args: ["state"],
             minArgs: 0
@@ -1335,7 +1301,7 @@ class ModVRChat extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'vrchat sneak', {
+        this.be('Commands').registerCommand(this, 'vrchat sneak', {
             description: "Disable location tracking for one session.",
             args: ["state"],
             minArgs: 0
@@ -1394,7 +1360,7 @@ class ModVRChat extends Module {
                 let worldid = this.worldFromLocation(person.latestlocation), instanceid = this.instanceIdFromLocation(person.latestlocation);
                 if (worldid) {
                     this.addWorldMember(worldid, person.latestlocation, userid)
-                        .then(() => { if (friend) this.bakeStatus(userid, friend); })
+                        .then(() => { if (friend) return this.bakeStatus(userid, friend); })
                         .then(() => {
                             let affectedworlds = {[worldid]: {[instanceid]: true}};
                             this.updateAffectedWorlds(affectedworlds);
@@ -1408,7 +1374,7 @@ class ModVRChat extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'vrchat invisible', {
+        this.be('Commands').registerCommand(this, 'vrchat invisible', {
             description: "Disable status tracking for one session.",
             args: ["state"],
             minArgs: 0
@@ -1466,7 +1432,7 @@ class ModVRChat extends Module {
                 let worldid = this.worldFromLocation(person.latestlocation), instanceid = this.instanceIdFromLocation(person.latestlocation);
                 if (worldid) {
                     this.addWorldMember(worldid, person.latestlocation, userid)
-                        .then(() => { if (friend) this.bakeStatus(userid, friend); })
+                        .then(() => { if (friend) return this.bakeStatus(userid, friend); })
                         .then(() => {
                             let affectedworlds = {[worldid]: {[instanceid]: true}};
                             this.updateAffectedWorlds(affectedworlds);
@@ -1480,10 +1446,10 @@ class ModVRChat extends Module {
         });
 
 
-        this.mod('Commands').registerRootDetails(this, 'vrcany', {description: "Return a link to a random VRChat element."});
+        this.be('Commands').registerRootDetails(this, 'vrcany', {description: "Return a link to a random VRChat element."});
 
 
-        this.mod('Commands').registerCommand(this, 'vrcany user', {
+        this.be('Commands').registerCommand(this, 'vrcany user', {
             description: "Obtain a random known user."
         },  (env, type, userid, channelid, command, args, handle, ep) => {
 
@@ -1498,7 +1464,7 @@ class ModVRChat extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'vrcany onlineuser', {
+        this.be('Commands').registerCommand(this, 'vrcany onlineuser', {
             description: "Obtain a random online known user."
         },  (env, type, userid, channelid, command, args, handle, ep) => {
 
@@ -1528,7 +1494,7 @@ class ModVRChat extends Module {
                     }
                 ]);
 
-            this.mod('Commands').registerCommand(this, 'vrcany recentworld', {
+            this.be('Commands').registerCommand(this, 'vrcany recentworld', {
                 description: "Obtain a random recently seen (cached) world.",
                 args: ["filter", true],
                 minArgs: 0
@@ -1552,7 +1518,7 @@ class ModVRChat extends Module {
                 return true;
             });
 
-            this.mod('Commands').registerCommand(this, 'vrcany activeworld', {
+            this.be('Commands').registerCommand(this, 'vrcany activeworld', {
                 description: "Obtain a random world currently in use by a known user.",
                 args: ["filter", true],
                 minArgs: 0
@@ -1585,10 +1551,10 @@ class ModVRChat extends Module {
         }
 
 
-        this.mod('Commands').registerRootDetails(this, 'vrcsave', {description: "Save backup data."});
+        this.be('Commands').registerRootDetails(this, 'vrcsave', {description: "Save backup data."});
 
 
-        this.mod('Commands').registerCommand(this, 'vrcalert', {
+        this.be('Commands').registerCommand(this, 'vrcalert', {
             description: "Receive a DM alert when a certain amount of known users are online.",
             details: [
                 "When at least PEOPLE users are online (minimum: " + this.param("alertmin") +") I will DM you.",
@@ -1598,7 +1564,7 @@ class ModVRChat extends Module {
             ],
             args: ["people", "minutes"],
             minArgs: 1
-        },  (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             if (!this.testEnv(env)) return true;
 
@@ -1608,8 +1574,10 @@ class ModVRChat extends Module {
                 return true;
             }
 
+            let time = this.be("Time");
+
             let minutes = null;
-            if (this._modTime && args.minutes != null) minutes = Math.max(0, parseInt(args.minutes));
+            if (time && args.minutes != null) minutes = Math.max(0, parseInt(args.minutes));
 
             if (args.people == "-" || args.people == "cancel" || args.people == "disable" || args.people == "off") {
                 this.updateAlertParameters(userid, false);
@@ -1624,8 +1592,8 @@ class ModVRChat extends Module {
             }
 
             let m = null;
-            if (this._modTime) {
-                m = this._modTime.getCurrentMomentByUserid(env, userid);
+            if (time) {
+                m = await time.getCurrentMomentByUserid(env.name, userid);
                 if (minutes != null && !m) {
                     ep.reply("You don't have a timezone! Use `tz` to set your timezone or set an alert without a timezone interval.");
                     return true;
@@ -1639,9 +1607,9 @@ class ModVRChat extends Module {
         });
 
 
-        this.mod('Commands').registerRootDetails(this, 'vrcount', {description: "Counters for registered VR elements."});
+        this.be('Commands').registerRootDetails(this, 'vrcount', {description: "Counters for registered VR elements."});
 
-        this.mod('Commands').registerCommand(this, 'vrcount members', {
+        this.be('Commands').registerCommand(this, 'vrcount members', {
             description: "Returns the current amount of known users."
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
@@ -1656,14 +1624,14 @@ class ModVRChat extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'vrcconfig pronouns', {
+        this.be('Commands').registerCommand(this, 'vrcconfig pronouns', {
             description: "Sets the pronouns role color.",
             details: [
                 "Use - to unset.",
                 "Requires ReactionRoles."
             ],
             args: ["color"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
             let color = args.color;
@@ -1676,8 +1644,8 @@ class ModVRChat extends Module {
                 color = undefined;
             } else {
                 color = color.toLowerCase();
-                if (!this._modReactionRoles || !this._modReactionRoles.getGroup(color)) {
-                    ep.reply("There is no ReactionRoles group with this color. Please create one first.");
+                if (!this.be("DiscordReactionRoles") || !this.be("DiscordReactionRoles").getGroup(color)) {
+                    ep.reply("There is no roles group with this color. Please create one first.");
                     return true;
                 }
             }
@@ -1688,13 +1656,13 @@ class ModVRChat extends Module {
             return true;
         });
 
-        this.mod('Commands').registerCommand(this, 'vrcconfig addcolorgroup', {
+        this.be('Commands').registerCommand(this, 'vrcconfig addcolorgroup', {
             description: "Adds roles with a certain color to status embeds.",
             details: [
                 "Requires ReactionRoles."
             ],
             args: ["color"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
     
             let color = args.color;
@@ -1703,8 +1671,8 @@ class ModVRChat extends Module {
                 return true;
             }
 
-            if (!this._modReactionRoles || !this._modReactionRoles.getGroup(color)) {
-                ep.reply("There is no ReactionRoles group with this color. Please create one first.");
+            if (!this.be("DiscordReactionRoles")|| !this.be("DiscordReactionRoles").getGroup(color)) {
+                ep.reply("There is no roles group with this color. Please create one first.");
                 return true;
             }
 
@@ -1714,10 +1682,10 @@ class ModVRChat extends Module {
             return true;
         });
     
-        this.mod('Commands').registerCommand(this, 'vrcconfig delcolorgroup', {
+        this.be('Commands').registerCommand(this, 'vrcconfig delcolorgroup', {
             description: "Removes roles with a certain color from status embeds.",
             args: ["color"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
     
             let color = args.color;
@@ -1733,13 +1701,13 @@ class ModVRChat extends Module {
         });
     
 
-        this.mod('Commands').registerRootDetails(this, 'vrcfix', {description: "Manual fixes for VRChat elements."});
+        this.be('Commands').registerRootDetails(this, 'vrcfix', {description: "Manual fixes for VRChat elements."});
 
 
-        this.mod('Commands').registerCommand(this, 'vrcfix simulatestatus', {
+        this.be('Commands').registerCommand(this, 'vrcfix simulatestatus', {
             description: "Simulates a status update.",
             args: ["userid", "status"],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let person = this.getPerson(args.userid);
@@ -1756,17 +1724,17 @@ class ModVRChat extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'vrcfix ldfromactivity', {
-            description: "Updates person latestdiscord fields with data from the Activity module.",
-            permissions: [PERM_ADMIN]
+        this.be('Commands').registerCommand(this, 'vrcfix ldfromactivity', {
+            description: "Updates person latestdiscord fields with data from the Activity behavior.",
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            if (!modActivity) {
-                ep.reply("Activity module not found.");
+            if (!this.be("Activity")) {
+                ep.reply("Activity behavior not found.");
                 return true;
             }
 
-            let data = modActivity.getAllNickRegisters(this.param("env"));
+            let data = await this.be("Activity").getAllNickRegisters(this.param("env"));
             let count = 0;
 
             for (let actperson of data) {
@@ -2017,13 +1985,13 @@ class ModVRChat extends Module {
         return true;
     }
 
-    updateTrust(userid, trust) {
+    async updateTrust(userid, trust) {
         if (!this._people[userid] || trust === undefined) return false;
         let prev = this._people[userid].latesttrust;
         if (prev == trust) return false;
         this._people[userid].latesttrust = trust;
         if (prev) {
-            this.announce(this.trustLevelIcon(prev) + TRUST_CHANGE_ICON + this.trustLevelIcon(trust) + " Trust change: **" + this.denv.idToDisplayName(userid) + "**");
+            this.announce(this.trustLevelIcon(prev) + TRUST_CHANGE_ICON + this.trustLevelIcon(trust) + " Trust change: **" + (await this.denv.idToDisplayName(userid)) + "**");
         }
         this._people.save();
         return true;
@@ -2449,7 +2417,7 @@ class ModVRChat extends Module {
 
     //Status embeds
 
-    bakeStatus(userid, vrcdata, now) {
+    async bakeStatus(userid, vrcdata, now) {
         if (!this._ready) return false;
         let person = this.getPerson(userid);
         if (!person || !vrcdata) return false;
@@ -2475,7 +2443,7 @@ class ModVRChat extends Module {
         }
 
         let title = vrcdata.displayName;
-        let pronouns = this.userEmbedPronouns(userid);
+        let pronouns = await this.userEmbedPronouns(userid);
         if (pronouns) title += " " + pronouns;
 
         emb.setTitle(title || "?");
@@ -2493,10 +2461,10 @@ class ModVRChat extends Module {
             emb.addFields({name: "Location", value: person.invisible ? this.placeholderLocation("offline") : this.placeholderLocation(vrcdata.location, person.sneak, previouslocationcontents), inline: true});
         }
 
-        if (this._modReactionRoles && this._misc.statusrolegroups) {
+        if (this.be("DiscordReactionRoles") && this._misc.statusrolegroups) {
             for (let rolecolor of this._misc.statusrolegroups) {
-                let group = this._modReactionRoles.getGroup(rolecolor);
-                let block = this.userEmbedRoleBlock(userid, rolecolor);
+                let group = await this.be("DiscordReactionRoles").getGroup(rolecolor);
+                let block = await this.userEmbedRoleBlock(userid, rolecolor);
                 emb.addFields({name: group.label, value: block + ZWSP /*mobile layout fix*/, inline: true});
             }
         }
@@ -2506,9 +2474,9 @@ class ModVRChat extends Module {
         if (vrcdata.statusDescription) body.push("*" + this.stripNormalizedFormatting(vrcdata.statusDescription.trim()) + "*");
 
         let clockline = [];
-        let clock = this.userEmbedClock(userid);
+        let clock = await this.userEmbedClock(userid);
         if (clock) clockline.push(clock);
-        clockline = clockline.concat(this.flags(vrcdata.tags, userid));
+        clockline = clockline.concat(await this.flags(vrcdata.tags, userid));
         if (clockline.length) body.push(clockline.join(" "));
 
         if (vrcdata.bio) body.push(this.stripNormalizedFormatting(vrcdata.bio.trim()));
@@ -2548,9 +2516,9 @@ class ModVRChat extends Module {
         return true;
     }
 
-    userEmbedClock(userid) {
-        if (!this._modTime) return null;
-        let m = this._modTime.getCurrentMomentByUserid(this.denv, userid);
+    async userEmbedClock(userid) {
+        if (!this.be("Time")) return null;
+        let m = await this.be("Time").getCurrentMomentByUserid(this.denv.name, userid);
         if (!m) return null;
         let chour = (m.hour() % 12) * 2;
         let cmin = m.minute();
@@ -2562,14 +2530,14 @@ class ModVRChat extends Module {
         return CLOCKS[chour] + " " + m.format("HH:mm (Z)");
     }
 
-    userEmbedPronouns(userid) {
-        if (!this._modReactionRoles || !this._misc.pronounscolor) return null;
+    async userEmbedPronouns(userid) {
+        if (!this.be("DiscordReactionRoles") || !this._misc.pronounscolor) return null;
         let member = this.denv.server.members.cache.get(userid);
         if (!member) return null;
         let result = [];
         for (let role of member.roles.cache.values()) {
             if (role.hexColor.toLowerCase() != this._misc.pronounscolor) continue;
-            let roledata = this._modReactionRoles.getRole(role.id);
+            let roledata = await this.be("DiscordReactionRoles").getRole(role.id);
             if (roledata) {
                 result.push(roledata.emoji);
             }
@@ -2577,14 +2545,14 @@ class ModVRChat extends Module {
         return result.join(" ");
     }
 
-    userEmbedRoleBlock(userid, rolecolor) {
-        if (!this._modReactionRoles) return null;
+    async userEmbedRoleBlock(userid, rolecolor) {
+        if (!this.be("DiscordReactionRoles")) return null;
         let member = this.denv.server.members.cache.get(userid);
         if (!member) return null;
         let result = [];
         for (let role of member.roles.cache.values()) {
             if (role.hexColor.toLowerCase() != rolecolor) continue;
-            let roledata = this._modReactionRoles.getRole(role.id);
+            let roledata = await this.be("DiscordReactionRoles").getRole(role.id);
             if (roledata) {
                 result.push(roledata.emoji);
             }
@@ -2693,9 +2661,9 @@ class ModVRChat extends Module {
             for (let userid in world.members) {
                 let line, person = this.getPerson(userid);
                 if (mode == "text") {
-                    line = (person.name || this.denv.idToDisplayName(userid)) + " (" + this.instanceIdFromLocation(person.latestlocation) + ")";
+                    line = (person.name || await this.denv.idToDisplayName(userid)) + " (" + this.instanceIdFromLocation(person.latestlocation) + ")";
                 } else {
-                    line = "[" + (person.name || this.denv.idToDisplayName(userid)) + "](" + this.getPersonMsgURL(userid) + ")"
+                    line = "[" + (person.name || await this.denv.idToDisplayName(userid)) + "](" + this.getPersonMsgURL(userid) + ")"
                         + " ([" + this.instanceIdFromLocation(person.latestlocation) + "](" + this.linkFromLocation(person.latestlocation).replace(/\)/g, "\\)") + "))"
                         ;
                 }
@@ -2725,10 +2693,14 @@ class ModVRChat extends Module {
         emb.setFooter({text: "Retrieved " + moment.unix(world.retrieved).from(now)});
 
         try {
+            let pinnedmode = null, pinfavorites = this.be("PinFavorites");
+            if (pinfavorites) {
+                pinnedmode = await pinfavorites.isWorldPinned(worldid);
+            }
             if (message) {
-                return await message.edit({embeds: [emb], components: [this.worldInviteButtons(this._modPins ? this._modPins.isWorldPinned(worldid) : null)]});
+                return await message.edit({embeds: [emb], components: [this.worldInviteButtons(pinnedmode)]});
             } else {
-                return await this.worldchan.send({embeds: [emb], components: [this.worldInviteButtons(this._modPins ? this._modPins.isWorldPinned(worldid) : null)]})
+                return await this.worldchan.send({embeds: [emb], components: [this.worldInviteButtons(pinnedmode)]})
                     .then(newmessage => {
                         this.setWorldMsg(worldid, newmessage);
                         return newmessage;
@@ -2784,7 +2756,7 @@ class ModVRChat extends Module {
         for (let userid in instance.members) {
             let line, person = this.getPerson(userid);
             if (!url) url = this.linkFromLocation(person.latestlocation);
-            line = "[" + (person.name || this.denv.idToDisplayName(userid)) + "](" + this.getPersonMsgURL(userid) + ")";
+            line = "[" + (person.name || await this.denv.idToDisplayName(userid)) + "](" + this.getPersonMsgURL(userid) + ")";
             members.push(line);
         }
 
@@ -2990,8 +2962,8 @@ class ModVRChat extends Module {
         return true;
     }
 
-    annOnline(userid) {
-        this.log(this.denv.idToDisplayName(userid) + " is online.");
+    async annOnline(userid) {
+        this.log((await this.denv.idToDisplayName(userid)) + " is online.");
         if (!this.announcechan) return false;
         let now = moment().unix();
 
@@ -3014,8 +2986,8 @@ class ModVRChat extends Module {
         return true;
     }
 
-    annOffline(userid) {
-        this.log(this.denv.idToDisplayName(userid) + " is offline.");
+    async annOffline(userid) {
+        this.log((await this.denv.idToDisplayName(userid)) + " is offline.");
         if (!this.announcechan) return false;
         let now = moment().unix();
 
@@ -3110,7 +3082,12 @@ class ModVRChat extends Module {
             stack = stack.slice(0, this.param("annmaxstack"));
         }
 
-        txt += "**" + stack.map(stackuserid => this.denv.idToDisplayName(stackuserid)).join("**, **") + "**";
+        let stackDisplayNames = [];
+        for (let stackuserid of stack) {
+            stackDisplayNames.push(await this.denv.idToDisplayName(stackuserid));
+        }
+
+        txt += "**" + stackDisplayNames.join("**, **") + "**";
         if (extralen) {
             txt += "and **" + extralen + "** other" + (extralen != 1 ? "s": "");
         }
@@ -3154,11 +3131,11 @@ class ModVRChat extends Module {
     }
 
 
-    mapOnlinePeople(timezones) {
+    async mapOnlinePeople(timezones) {
         let onlinemap = {};
         for (let userid in this._people) {
             if (STATUS_ONLINE.includes(this._people[userid].lateststatus)) {
-                onlinemap[userid] = (timezones && this._modTime ? this._modTime.getCurrentUtcOffsetByUserid(this.denv, userid) : true);
+                onlinemap[userid] = (timezones && this.be("Time") ? await this.be("Time").getCurrentUtcOffsetByUserid(this.denv.name, userid) : true);
             }
         }
         return onlinemap;
@@ -3170,11 +3147,11 @@ class ModVRChat extends Module {
         }.bind(this));
     }
 
-    deliverDMAlerts() {
+    async deliverDMAlerts() {
 
         //Create map of online people
 
-        let onlinemap = this.mapOnlinePeople(true);
+        let onlinemap = await this.mapOnlinePeople(true);
         let onlinecount = Object.keys(onlinemap).length;
 
         //Alert whoever
@@ -3195,7 +3172,7 @@ class ModVRChat extends Module {
             
             //Timezone-based
             if (person.alert.tzrange != null) {
-                let offset = this._modTime.getCurrentUtcOffsetByUserid(this.denv, userid);
+                let offset = await this.be("Time").getCurrentUtcOffsetByUserid(this.denv.name, userid);
                 let restrictedcount = 0;
                 for (let userid in onlinemap) {
                     if (onlinemap[userid] && Math.abs(offset - onlinemap[userid]) <= person.alert.tzrange) {
@@ -3211,11 +3188,11 @@ class ModVRChat extends Module {
 
     }
 
-    resetDMAlerts() {
+    async resetDMAlerts() {
 
         //Create map of online people
 
-        let onlinemap = this.mapOnlinePeople(true);
+        let onlinemap = await this.mapOnlinePeople(true);
         let onlinecount = Object.keys(onlinemap).length;
 
         //Reset alerts as soon as previous alert conditions are no longer met
@@ -3230,7 +3207,7 @@ class ModVRChat extends Module {
             }
 
             if (person.alert.tzrange != null) {
-                let offset = this._modTime.getCurrentUtcOffsetByUserid(this.denv, userid);
+                let offset = await this.be("Time").getCurrentUtcOffsetByUserid(this.denv.name, userid);
                 let restrictedcount = 0;
                 for (let userid in onlinemap) {
                     if (onlinemap[userid] && Math.abs(offset - onlinemap[userid]) <= person.alert.tzrange) {
@@ -3260,7 +3237,7 @@ class ModVRChat extends Module {
     //High level api methods
 
     async vrcConfig() {
-        return this.vrcget("config").then(data => { if (data) this._config = data; });
+        return this.vrcget("config").then(data => { if (data) this._vrcconfig = data; });
     }
 
     async vrcTime() {
@@ -3387,18 +3364,10 @@ class ModVRChat extends Module {
     async vrcInitialize() {
         await this.vrcMe();  //Login
 
-        let handlers = {
-            friendStateChange: null,
-            friendLocationChange: null,
-            friendAdd: null,
-            friendDelete: null,
-            friendUpdate: null
-        };
-
         let buildWebsocket = () => {
             //Initialize websocket
             return new Promise((resolve, reject) => {
-                let ws = new WebSocket(WEBSOCKET + "?authToken=" + this._auth, {headers: {"User-Agent": HTTP_USER_AGENT + " " + this.param("userAgentContact")}, localAddress: this.param("localAddress")});
+                let ws = new WebSocket(WEBSOCKET + "?authToken=" + this._auth, {headers: {"User-Agent": this.httpUserAgent}, localAddress: this.param("localAddress")});
                 
                 let connectionError = (err) => reject(err);
 
@@ -3422,23 +3391,10 @@ class ModVRChat extends Module {
                     let message = JSON.parse(data);
                     try {
                         let content = JSON.parse(message.content);
-                        if (handlers.friendStateChange && ["friend-active", "friend-online", "friend-offline"].includes(message.type)) {
-                            handlers.friendStateChange(content.userId, message.type.split("-")[1], content.user);
-                            this.executeWebsocketCallbacks("friend-state-change", Object.assign({messageType: message.type}, content));
+                        if (["friend-active", "friend-online", "friend-offline"].includes(message.type)) {
+                            this.emit("friendStateChange", Object.assign({state: message.type.split("-")[1], id: message.userId || content.user?.id}, content.user));
                         }
-                        if (handlers.friendLocationChange && message.type == "friend-location") {
-                            handlers.friendLocationChange(content.userId, content.user, content.world, content.instance, content.location);
-                        }
-                        if (handlers.friendAdd && message.type == "friend-add") {
-                            handlers.friendAdd(content.userId, content.user);
-                        }
-                        if (handlers.friendDelete && message.type == "friend-delete") {
-                            handlers.friendDelete(content.userId);
-                        }
-                        if (handlers.friendUpdate && message.type == "friend-update") {
-                            handlers.friendUpdate(content.userId, content.user);
-                        }
-                        this.executeWebsocketCallbacks(message.type, content);
+                        this.emit(message.type.split("-").map((elm, i) => i > 0 ? elm[0].toUpperCase() + elm.substring(1) : elm).join(""), content);
                     } catch (e) {
                         this.log("warn", "Could not parse websocket message " + message.type + ": " + message.content + " (" + JSON.stringify(e) + ")");
                     }
@@ -3514,7 +3470,7 @@ class ModVRChat extends Module {
                 this.log("warn", "Oh no, gateway errors (" + e.statusCode + ")...");
             }
             if (e.statusCode != 401) {
-                //this.log("warn", "API rejection at " + path + ": " + JSON.stringify(e));
+                this.log("warn", "API rejection at " + path + ": " + JSON.stringify(e));
                 throw e;
             }
         }
@@ -3530,13 +3486,12 @@ class ModVRChat extends Module {
     }
 
     async vrcget(path) {
-        if (!path || !NO_AUTH.includes(path) && !this._config) return null;
+        if (!path) return null;
         let options = {headers: {
             Cookie: [],
-            "User-Agent": HTTP_USER_AGENT + " " + this.param("userAgentContact")
+            "User-Agent": this.httpUserAgent
         }, returnFull: true, localAddress: this.param("localAddress")};
 
-        if (this._config) options.headers.Cookie.push("apiKey=" + this._config.apiKey);
         if (this._twofa) options.headers.Cookie.push("twoFactorAuth=" + this._twofa)
         if (this._auth) options.headers.Cookie.push("auth=" + this._auth);
         else options.auth = this.param("username") + ':' + this.param("password");
@@ -3555,14 +3510,13 @@ class ModVRChat extends Module {
     }
 
     async vrcpost(path, fields, method) {
-        if (!path || !this._config) return null;
+        if (!path) return null;
         let options = {headers: {
             Cookie: [],
-            "User-Agent": HTTP_USER_AGENT + " " + this.param("userAgentContact")
+            "User-Agent": this.httpUserAgent
         }, returnFull: true, localAddress: this.param("localAddress")};
         if (method) options.method = method;
 
-        if (this._config) options.headers.Cookie.push("apiKey=" + this._config.apiKey);
         if (this._twofa) options.headers.Cookie.push("twoFactorAuth=" + this._twofa)
         if (this._auth) options.headers.Cookie.push("auth=" + this._auth);
         else options.auth = this.param("username") + ':' + this.param("password");
@@ -3624,42 +3578,6 @@ class ModVRChat extends Module {
         }
         
         return this.setCookies(result);
-    }
-
-
-    //VRChat callbacks
-
-    registerConnectCallback(callback) {
-        this._connectCallbacks.push(callback);
-    }
-
-    unregisterConnectCallback(callback) {
-        this._connectCallbacks = this._connectCallbacks.filter(eachcallback => eachcallback != callback);
-    }
-
-    executeConnectCallbacks() {
-        for (let callback of this._connectCallbacks) {
-            callback();
-        }
-    }
-
-    registerWebsocketCallback(event, callback) {
-        if (!this._websocketCallbacks[event]) {
-            this._websocketCallbacks[event] = [];
-        }
-        this._websocketCallbacks[event].push(callback);
-    }
-
-    unregisterWebsocketCallback(event, callback) {
-        if (this._websocketCallbacks[event]) {
-            this._websocketCallbacks[event] = this._websocketCallbacks[event].filter(eachcallback => eachcallback != callback);
-        }
-    }
-
-    executeWebsocketCallbacks(event, params) {
-        for (let callback of this._websocketCallbacks[event] || []) {
-            callback(params);
-        }
     }
 
 
@@ -3797,10 +3715,10 @@ class ModVRChat extends Module {
         return labels;
     }
     
-    idealServerRegion(userid) {
+    async idealServerRegion(userid) {
         let utcOffset = null;
-        if (this._modTime && userid) {
-            utcOffset = this._modTime.getCurrentUtcOffsetByUserid(this.denv, userid);
+        if (this.be("Time") && userid) {
+            utcOffset = await this.be("Time").getCurrentUtcOffsetByUserid(this.denv.name, userid);
         }
         if (utcOffset != null && utcOffset <= -300) return "us";
         else if (utcOffset != null && utcOffset > 0 && utcOffset < 300) return "eu";
@@ -3808,11 +3726,11 @@ class ModVRChat extends Module {
         return "use";
     }
 
-    flags(tags, userid) {
+    async flags(tags, userid) {
         let flags = [];
         let utcOffset = null;
-        if (this._modTime && userid) {
-            utcOffset = this._modTime.getCurrentUtcOffsetByUserid(this.denv, userid);
+        if (this.be("Time") && userid) {
+            utcOffset = await this.be("Time").getCurrentUtcOffsetByUserid(this.denv.name, userid);
         }
         if (tags.includes("language_eng")) {
             if (utcOffset != null && utcOffset <= -240) flags.push("🇺🇸");
@@ -3945,7 +3863,7 @@ class ModVRChat extends Module {
             } else {
                 result = Math.floor(random.fraction() * 99998) + 1;
             }
-        } while (exclude.includes(result));
+        } while (exclude.find(id => result.split("~")[0] == id));
         return result;
     }
 
@@ -3954,21 +3872,22 @@ class ModVRChat extends Module {
         if (region) {
             regionpart = "~region(" + region + ")";
         }
+        let instanceid = this.generateInstanceId(include, exclude);
         if (vrcuserid) {
             if (type == "private" || type == "invite") {
-                return this.generateInstanceId(include, exclude) + "~private(" + vrcuserid + ")" + regionpart + "~nonce(" + this.generateNonce() + ")";
+                return instanceid + "~private(" + vrcuserid + ")" + regionpart + "~nonce(" + this.generateNonce() + ")";
             }
             if (type == "invite+") {
-                return this.generateInstanceId(include, exclude) + "~private(" + vrcuserid + ")~canRequestInvite" + regionpart + "~nonce(" + this.generateNonce() + ")";
+                return instanceid + "~private(" + vrcuserid + ")~canRequestInvite" + regionpart + "~nonce(" + this.generateNonce() + ")";
             }
             if (type == "friends") {
-                return this.generateInstanceId(include, exclude) + "~friends(" + vrcuserid + ")" + regionpart + "~nonce(" + this.generateNonce() + ")";
+                return instanceid + "~friends(" + vrcuserid + ")" + regionpart + "~nonce(" + this.generateNonce() + ")";
             }
             if (type == "hidden" || type == "friends+") {
-                return this.generateInstanceId(include, exclude) + "~hidden(" + vrcuserid + ")" + regionpart + "~nonce(" + this.generateNonce() + ")";
+                instanceid + "~hidden(" + vrcuserid + ")" + regionpart + "~nonce(" + this.generateNonce() + ")";
             }
         }
-        return this.generateInstanceId(include, exclude) + regionpart;
+        return instanceid + regionpart;
     }
 
     randomEntry(map, filter) {
@@ -4019,6 +3938,3 @@ class ModVRChat extends Module {
     }
 
 }
-
-
-module.exports = ModVRChat;

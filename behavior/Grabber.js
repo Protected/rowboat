@@ -1,21 +1,18 @@
-/* Module: Grabber -- Downloads song files referenced in a Discord channel and maintains a dynamic index w/ API. */
+/* Grabber -- Downloads song files referenced in a Discord channel and maintains a dynamic index. */
 
-const Module = require('../Module.js');
-const fs = require('fs');
-const crypto = require('crypto');
-const cp = require('child_process');
-const { promisify } = require('util');
-const { Readable } = require('stream');
+import fs from 'fs';
+import crypto from 'crypto';
+import cp from 'child_process';
+import { promisify } from 'util';
+import { Readable } from 'stream';
+import ytdl from 'ytdl-core';
+import FFmpeg from 'fluent-ffmpeg';
+import normalize from 'ffmpeg-normalize';
+import moment from 'moment';
+import random from 'meteor-random';
 
-const ytdl = require('ytdl-core');
-const FFmpeg = require('fluent-ffmpeg');
-const normalize = require('ffmpeg-normalize');
-const moment = require('moment');
-const random = require('meteor-random');
-const { stream } = require('winston');
+import Behavior from '../src/Behavior.js';
 
-const PERM_ADMIN = 'administrator';
-const PERM_MODERATOR = 'moderator';
 const INDEXFILE = 'index.json';
 const STATSFILE = 'stats.json';
 
@@ -23,80 +20,85 @@ const GET_FIELDS = ['name', 'author', 'album', 'track', 'length', 'source', 'sou
 const SET_FIELDS = ['name', 'author', 'album', 'track'];
 const NUMBER_FIELDS = ['track'];
 
-const AUDIO_FORMATS = ['pcm', 'flac', 'mp3'];
+const AUDIO_FORMATS = ['mp3', 'flac', 'pcm'];
 
-const YOUTUBEDLURL = 'https://youtube-dl.org/downloads/latest/youtube-dl';
+/* Events:
+    newSong (messageObj, messageAuthor, reply, hash)                    A new song was added to the index.
+    songExistsOnScan (messageObj, messageAuthor, reply, hash)           An existing song was detected when scanning a channel.
+    removeSong (hash, ismoderator, removerid)                           A song is about to be removed from the index.
+*/
 
+export default class Grabber extends Behavior {
 
-class ModGrabber extends Module {
+    get params() { return [
+        {n: 'channels', d: "List of IDs of the Discord channels to be used"},
+        {n: 'ffmpegPath', d: "Explicitly provide a path to the ffmpeg executable"},
+        {n: 'ffprobePath', d: "Explicitly provide a path to the ffprobe executable"},
+        {n: 'downloadPath', d: "Relative path to store the downloaded files (index.json will also be created here)"},
+        {n: 'minDuration', d: "Minimum duration of the audio file (seconds)"},
+        {n: 'maxDuration', d: "Maximum duration of the audio file (seconds)"},
+        {n: 'maxDiskUsage', d: "Amount of disk space grabber is allowed to use in the downloadPath excluding index (bytes)"},
+        {n: 'maxSimDownloads', d: "Maximum simultaneous actions (downloads or fixes)"},
+        {n: 'scanDelay', d: "Delay between attempts to process messages (pending messages are queued) (ms)"},
+        {n: 'selfDeleteExpiration', d: "Deadline for sharer to delete a song (counted from song's first share) (s)"},
+        {n: 'permissionsDeleteAll', d: "List of sufficient permissions for deleting songs not shared by the user"},
+        {n: 'permissionsReplace', d: "List of sufficient permissions for replacing previously indexed songs"},
+        {n: 'allowedFormats', d: "List of allowed storage formats (subset of: " + AUDIO_FORMATS.join(", ") + ")"},
+        {n: 'defaultFormat', d: "Default storage format. One of the allowed formats."},
+        {n: 'defaultBehavior', d: "How to treat music messages by default. One of: 'ignore', 'quiet', 'feedback'"},
+        {n: 'tagIgnore', d: "Tag message to be ignored (regex)"},
+        {n: 'tagQuiet', d: "Tag message to be quietly processed (regex)"},
+        {n: 'tagFeedback', d: "Tag message to be processed and provide feedback (regex)"},
+        {n: 'normalization', d: "Normalize downloaded files. One of: false, true/'ebuR128', 'rms'"},
+        {n: 'normalTarget', d: "Normalization target in LUFS or dB depending on the algorithm chosen above"},
+        {n: 'normalCustomTweak', d: "Allowable customization interval (added to target) for normalization"}
+    ]; }
 
-    
+    get defaults() { return {
+        ffmpegPath: null,
+        ffprobePath: null,
+
+        downloadPath: "songs",
+        minDuration: 90,
+        maxDuration: 1500,
+        maxDiskUsage: null,
+        maxSimDownloads: 2,
+        scanDelay: 200,
+        
+        selfDeleteExpiration: 604800,  //7 days
+        permissionsDeleteAll: [],
+        permissionsReplace: [],
+
+        allowedFormats: AUDIO_FORMATS,
+        defaultFormat: 'mp3',
+
+        defaultBehavior: 'feedback',
+        tagIgnore: '^XX',
+        tagQuiet: '^\\$\\$',
+        tagFeedback: '^!!',
+        
+        normalization: 'rms',
+        normalTarget: -20,
+        normalCustomTweak: 4
+    }; }
+
+    get requiredEnvironments() { return {
+        Discord: 'Discord'
+    }; }
+
+    get requiredBehaviors() { return {
+        Users: 'Users',
+        Commands: 'Commands'
+    }; }
+
     get isMultiInstanceable() { return true; }
-    
-    get requiredParams() { return [
-        'env',                  //Name of the Discord environment to be used
-        'channels'              //List of IDs of the Discord channels to be used
-    ]; }
-    
-    get optionalParams() { return [
-        'downloadPath',         //Path to store the downloaded files (index.json will also be created)
-        'minDuration',          //Minimum duration of the audio file (seconds)
-        'maxDuration',          //Maximum duration of the audio file (seconds)
-        'maxDiskUsage',         //Amount of disk space grabber is allowed to use in the downloadPath excluding index (bytes)
-        'maxSimDownloads',      //Maximum simultaneous actions (downloads or fixes)
-        'scanDelay',            //Delay between attempts to process messages (pending messages are queued) (ms)
-        'selfDeleteExpiration', //Deadline for sharer to delete a song (counted from song's first share) (s)
-        'permissionsDeleteAll', //List of sufficient permissions for deleting songs not shared by the user
-        'permissionsReplace',   //List of sufficient permissions for replacing previously indexed songs
-        'defaultFormat',        //Default storage format
-        'allowPcm',             //Allow PCM storage
-        'allowFlac',            //Allow FLAC storage
-        'defaultBehavior',      //How to treat messages by default. One of: 'ignore', 'quiet', 'feedback'
-        'tagIgnore',            //Tag message to be ignored (regex)
-        'tagQuiet',             //Tag message to be quietly processed (regex)
-        'tagFeedback',          //Tag message to be processed and provide feedback (regex)
-        'useYoutubedl',         //Download and use youtube-dl features. Currently: Chapters
-        'normalization',        //Normalize downloaded files. One of: false, true/'ebuR128', 'rms'
-        'normalTarget',         //Normalization target in LUFS or dB depending on the algorithm chosen above
-        'normalCustomTweak'     //Allowable customization interval (added to target) for normalization
-    ]; }
 
-    get requiredEnvironments() { return [
-        'Discord'
-    ]; }
-
-    get requiredModules() { return [
-        'Users',
-        'Commands'
-    ]; }
+    get denv() {
+        return this.env('Discord');
+    }
 
     constructor(name) {
         super('Grabber', name);
-        
-        this._params['downloadPath'] = "songs";
-        this._params['minDuration'] = 90;
-        this._params['maxDuration'] = 1500;
-        this._params['maxDiskUsage'] = null;
-        this._params['maxSimDownloads'] = 2;
-        this._params['scanDelay'] = 200;
-        
-        this._params['selfDeleteExpiration'] = 604800;  //7 days
-        this._params['permissionsDeleteAll'] = [PERM_MODERATOR, PERM_ADMIN];
-        this._params['permissionsReplace'] = [PERM_MODERATOR, PERM_ADMIN];
-
-        this._params['defaultFormat'] = 'mp3';
-        this._params['allowPcm'] = false;
-        this._params['allowFlac'] = false;
-
-        this._params['defaultBehavior'] = 'feedback';
-        this._params['tagIgnore'] = '^XX';
-        this._params['tagQuiet'] = '^$$';
-        this._params['tagFeedback'] = '^!!';
-        
-        this._params['useYoutubedl'] = false;
-        this._params['normalization'] = 'rms';
-        this._params['normalTarget'] = -20;
-        this._params['normalCustomTweak'] = 4;
         
         this._preparing = 0;  //Used for generating temporary filenames
         
@@ -107,6 +109,8 @@ class ModGrabber extends Module {
         
         this._usage = 0;  //Cache disk usage (by mp3s only)
         this._sessionGrabs = [];  //History of hashes grabbed in this session
+
+        this._hashhelp = [];  //[[filter, description], ...] to display in !song hash
         this._parserFilters = [];  //[[regex, callback(string)], ...] to apply to hashoroffset arguments (see API)
         
         this._scanQueue = [];  //Rate-limit song downloads and other heavy actions. Each item is: ["description", anonymous function that performs the action, cacheurl]
@@ -114,46 +118,33 @@ class ModGrabber extends Module {
         this._scanTimer = null;
         this._downloads = 0;
         
-        this._apiCbNewSong = [];  //List of callbacks called when new songs are added. Return true to stop processing.
-        this._apiCbGrabscanExists = [];  //List of callbacks called when existing songs are detected by a grabscan call. Return true to stop processing.
-        this._apiCbRemoveSong = [];  //List of callbacks called when songs are removed.
-
         this._cache = {};  //{url: {ongoinginfo: boolean, info, ongoing: boolean, data}} Temporary cache
         
-        this._path = __dirname;
     }
     
     
     initialize(opt) {
         if (!super.initialize(opt)) return false;
 
-        //Download youtube-dl
+        const permAdmin = this.be('Users').defaultPermAdmin;
+        const permMod =  this.be('Users').defaultPermMod;
 
-        this._path = opt.rootpath;
-
-        if (this.param('useYoutubedl')) {
-            if (!fs.existsSync(this.youtubedlPath)) {
-                let url = YOUTUBEDLURL;
-                if (process.platform == 'win32') url += '.exe';
-                this.downloadget(url, this.youtubedlPath)
-                    .then(() => {
-                        this.log('Downloaded youtube-dl into current directory.');
-                        if (process.platform != 'win32') {
-                            cp.execSync('chmod u+x ' + this.youtubedlPath);
-                        }
-                    })
-                    .catch((e) => {
-                        this.log('warn', 'Failed to download youtube-dl: ' + e);
-                    });
-            } else {
-                this.log('youtube-dl found in current directory.');
-            }
+        if (this.param("ffmpegPath")) {
+            FFmpeg.setFfmpegPath(this.param("ffmpegPath"));
         }
+
+        if (this.param("ffprobePath")) {
+            FFmpeg.setFfprobePath(this.param("ffprobePath"));
+        }
+
 
         //Load index
         
         this._index = this.loadData(this.param('downloadPath') + '/' + INDEXFILE, {}, {abspath: true, pretty: true, quiet: true});
-        if (this._index === false) return false;
+        if (this._index === false) {
+            this.log("error", "Unable to load index file.");
+            return false;
+        }
         
         for (let hash in this._index) {
             let info = this._index[hash];
@@ -176,41 +167,38 @@ class ModGrabber extends Module {
         
         //Queue processor
         
-        var self = this;
         this._scanTimer = setInterval(() => {
-            self.dequeueAndScan.apply(self, null)
+            this.dequeueAndScan();
         }, this.param('scanDelay'));
 
       
         //Register callbacks
         
-        if (!opt.envs[this.param('env')]) {
-            this.log('error', "Environment not found.");
-            return false;
-        }
-        
-        opt.envs[this.param('env')].on('message', this.onMessage, this);
-        opt.envs[this.param('env')].on('connected', () => { this.loadStats(); }, this);
+        this.denv.on('message', this.onMessage, this);
+        this.denv.on('connected', () => { this.loadStats(); }, this);
         
         
-        this.mod('Commands').registerRootDetails(this, 'grab', {description: "Manipulate the collection of songs from a Discord channel."});
-        
-        this.mod('Commands').registerRootDetails(this, 'song', {
-            description: "Interact with the song library and index.",
+        this.be('Commands').registerRootDetails(this, 'grab', {
+            description: "Manage the collection of songs from a Discord channel.",
             details: [
-                "The following expansions are natively provided for hash arguments:",
-                "  -NUMBER : References latest learned song or a recently learned song.",
-                "  (String) : Performs a search by string and returns the hash of the single result, or an error if there are 0 or more than 1 results.",
-                "  (?String) : Performs a search by string and returns the hash of a random result."
+                "Use `song hash` for a list of registered filters for hash or offset arguments."
+            ]
+        });
+
+        
+        this.be('Commands').registerRootDetails(this, 'song', {
+            description: "Interact with the song index.",
+            details: [
+                "Use `song hash` for a list of registered filters for hash or offset arguments."
             ]
         });
         
         
-        this.mod('Commands').registerCommand(this, 'grab scan', {
+        this.be('Commands').registerCommand(this, 'grab scan', {
             description: 'Scans channel history until INTERVAL days ago and grabs any song files.',
             args: ['channelid', 'interval'],
             environments: ['Discord'],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let channel = env.server.channels.cache.get(args.channelid);
@@ -233,7 +221,7 @@ class ModGrabber extends Module {
                         if (message.createdTimestamp <= cutoff) endNow = true;
                         this.queueScanMessage(message, {
                             exists: (messageObj, messageAuthor, reply, hash) => {
-                                this.processOnGrabscanExists(messageObj, messageAuthor, reply, hash);
+                                this.emit("songExistsOnScan", messageObj, messageAuthor, reply, hash);
                             }
                         });
                     }
@@ -251,11 +239,11 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'grab regrab', {
+        this.be('Commands').registerCommand(this, 'grab regrab', {
             description: 'Fix the library by attempting to redownload songs from source (if not missing).',
             args: ['hashoroffset', 'format', 'onlyreformat'],
             minArgs: 0,
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (args.hashoroffset) {
@@ -304,11 +292,11 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'grab undo', {
+        this.be('Commands').registerCommand(this, 'grab undo', {
             description: 'Undo a single recent grab from this session.',
             args: ['offset'],
             minArgs: 0
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (!args.offset || args.offset > -1) args.offset = -1;
         
@@ -325,7 +313,7 @@ class ModGrabber extends Module {
             let info = this._index[this._sessionGrabs[-args.offset - 1][0]];
             if (info) {
 
-                let candeleteall = this.mod('Users').testPermissions(this.param('env'), userid, channelid, this.param('permissionsDeleteAll'));
+                let candeleteall = await this.be('Users').testPermissions(this.denv.name, userid, channelid, this.param('permissionsDeleteAll'));
                 let partial = false;
 
                 if (info.seen.length > 1) {
@@ -345,7 +333,7 @@ class ModGrabber extends Module {
                 
                 if (!partial) {
                     if (candeleteall || moment().unix() - info.seen[0] < this.param('selfDeleteExpiration')) {
-                        if (!this.removeByHash(info.hash, candeleteall, userid)) {
+                        if (!await this.removeByHash(info.hash, candeleteall, userid)) {
                             ep.reply('Hash not found or not removable.');
                             return true;
                         }
@@ -366,10 +354,10 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'grab delete', {
+        this.be('Commands').registerCommand(this, 'grab delete', {
             description: 'Delete an indexed song by hash.',
             args: ['hashoroffset']
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
                     
             let hash = this.parseHashArg(args.hashoroffset);
             if (hash === false) {
@@ -383,7 +371,7 @@ class ModGrabber extends Module {
                 return true;
             }
 
-            let candeleteall = this.mod('Users').testPermissions(this.param('env'), userid, channelid, this.param('permissionsDeleteAll'));
+            let candeleteall = await this.be('Users').testPermissions(this.denv.name, userid, channelid, this.param('permissionsDeleteAll'));
 
             if (!candeleteall) {
                 let info = this._index[hash];
@@ -400,7 +388,7 @@ class ModGrabber extends Module {
                 }
             }
                     
-            if (this.removeByHash(hash, candeleteall, userid)) {
+            if (await this.removeByHash(hash, candeleteall, userid)) {
                 this._sessionGrabs = this._sessionGrabs.filter((item) => item[0] != hash);
                 ep.ok();
             } else {
@@ -411,7 +399,7 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'grab latest', {
+        this.be('Commands').registerCommand(this, 'grab latest', {
             description: 'Get the hash of a single recent song.',
             args: ['hashoroffset'],
             minArgs: 0
@@ -435,7 +423,7 @@ class ModGrabber extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'grab tasks', {
+        this.be('Commands').registerCommand(this, 'grab tasks', {
             description: 'Lists the contents of the scan queue.'
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
@@ -456,14 +444,14 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'grab fixloudness', {
+        this.be('Commands').registerCommand(this, 'grab fixloudness', {
             description: 'Adjust the loudness of a song to match the instance target.',
             details: [
                 'This operation is lossy if the song is cached in a lossy format.'
             ],
             args: ['hashoroffset'],
             minArgs: 0,
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             if (args.hashoroffset) {
@@ -507,13 +495,13 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'grab reformat', {
+        this.be('Commands').registerCommand(this, 'grab reformat', {
             description: 'Convert a cached song to a different format.',
             details: [
                 'This operation is lossy if the song is converted to a lossy format.'
             ],
             args: ['hashoroffset', 'format'],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
             
             let hash = this.parseHashArg(args.hashoroffset);
@@ -543,7 +531,24 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'song find', {
+        this.be('Commands').registerCommand(this, 'song hash', {
+            description: 'Lists filters accepted in hash or offset arguments of song and grab commands.'
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+            
+            ep.reply("  `#HASH` : References the song uniquely identified by HASH.")
+            ep.reply("  `-NUMBER` : References latest learned song or a recently learned song (NUMBER songs ago).");
+
+            for (let item of this._hashhelp) {
+                ep.reply("  `" + item[0] + "` : " + item[1]);
+            }
+
+            ep.reply("  `?Any string` : Performs a search by string and returns the hash of a random result.");
+            ep.reply("  `Any string` : Performs a search by string and returns a hash if and only if there is exactly one result.");
+
+            return true;
+        });
+
+        this.be('Commands').registerCommand(this, 'song find', {
             description: 'Find an indexed song.',
             details: [
                 'Use -p PAGE before the search string to access result pages beyond the first one (if available).',
@@ -586,13 +591,13 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'song set', {
+        this.be('Commands').registerCommand(this, 'song set', {
             description: 'Change metadata of an indexed song.',
             details: [
                 "Allowed fields: " + SET_FIELDS.join(', ')
             ],
             args: ['hashoroffset', 'field', 'value', true],
-            permissions: [PERM_ADMIN, PERM_MODERATOR]
+            permissions: [permAdmin, permMod]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let hash = this.parseHashArg(args.hashoroffset, userid);
@@ -627,7 +632,7 @@ class ModGrabber extends Module {
                 }
             }
 
-            //-----Logic for indexByAlbumAndTrack
+            //-----Logic for indexAlbumAndTrack
             let entry = this._index[hash];
 
             if (entry.album && args.field == "track") {
@@ -665,7 +670,7 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'song get', {
+        this.be('Commands').registerCommand(this, 'song get', {
             description: 'Retrieve metadata of an indexed song.',
             details: [
                 "Allowed fields: " + GET_FIELDS.join(', ')
@@ -707,7 +712,7 @@ class ModGrabber extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'song album', {
+        this.be('Commands').registerCommand(this, 'song album', {
             description: 'Retrieve tracks by album.',
             args: ['album', true]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -727,10 +732,10 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'song kw', {
+        this.be('Commands').registerCommand(this, 'song kw', {
             description: 'List keywords associated with an indexed song.',
             args: ['hashoroffset'],
-            permissions: [PERM_ADMIN, PERM_MODERATOR]
+            permissions: [permAdmin, permMod]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             let hash = this.parseHashArg(args.hashoroffset, userid);
@@ -756,10 +761,10 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'song kw add', {
+        this.be('Commands').registerCommand(this, 'song kw add', {
             description: 'Associate a new keyword with an indexed song.',
             args: ['hashoroffset', 'keyword', true],
-            permissions: [PERM_ADMIN, PERM_MODERATOR]
+            permissions: [permAdmin, permMod]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             args.keyword = args.keyword.join(" ");
@@ -797,10 +802,10 @@ class ModGrabber extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'song kw remove', {
+        this.be('Commands').registerCommand(this, 'song kw remove', {
             description: 'Remove a keyword from an indexed song.',
             args: ['hashoroffset', 'keyword', true],
-            permissions: [PERM_ADMIN, PERM_MODERATOR]
+            permissions: [permAdmin, permMod]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
             args.keyword = args.keyword.join(" ");
@@ -846,36 +851,9 @@ class ModGrabber extends Module {
     // # Module code below this line #
     
     
-    //Youtube-dl
-    
-    get youtubedlPath() {
-        let path = this._path + '/youtube-dl';
-        if (process.platform === 'win32') path += '.exe';
-        return path;
-    }
-    
-    async youtubedlChapters(url) {
-        return new Promise((resolve, reject) => {
-            let inst = cp.execFile(this.youtubedlPath, ['-j', url], {windowsHide: true}, (error, stdout, stderr) => {
-                if (!inst.exitCode) {
-                    let json = JSON.parse(stdout);
-                    if (json && json.chapters) resolve(json.chapters);
-                    else resolve([]);
-                } else {
-                    reject("Failed to retrieve chapters: " + stderr);
-                }
-            });
-        });
-    }
-    
-    youtubedlDownload(url, localpath) {
-        return cp.execFile(this.youtubedlPath, ['-q', '-o', localpath, url]);
-    }
-    
-    
     //Stats file manipulation
     
-    loadStats() {
+    async loadStats() {
         if (this._stats) return true;
         
         //This file is rebuilt every time we start the module.
@@ -889,7 +867,7 @@ class ModGrabber extends Module {
         for (let hash in this._index) {
             let info = this._index[hash];
             for (let sharer of info.sharedBy) {
-                this.incrUserStat(sharer, "shares", 1, true);
+                await this.incrUserStat(sharer, "shares", 1, true);
                 if (!shareavglength[sharer]) shareavglength[sharer] = 0;
                 shareavglength[sharer] += info.length;
                 if (!sharemaxlength[sharer]) sharemaxlength[sharer] = info.length; else sharemaxlength[sharer] = Math.max(sharemaxlength[sharer], info.length);
@@ -898,9 +876,9 @@ class ModGrabber extends Module {
         }
         
         for (let sharer in shareavglength) {
-            this.setUserStat(sharer, "shareavglength", shareavglength[sharer] / this.getUserStat(sharer, "shares"), true);
-            this.setUserStat(sharer, "shareminlength", shareminlength[sharer], true);
-            this.setUserStat(sharer, "sharemaxlength", sharemaxlength[sharer], true);
+            await this.setUserStat(sharer, "shareavglength", shareavglength[sharer] / this.getUserStat(sharer, "shares"), true);
+            await this.setUserStat(sharer, "shareminlength", shareminlength[sharer], true);
+            await this.setUserStat(sharer, "sharemaxlength", sharemaxlength[sharer], true);
         }
         
         this.saveStats();
@@ -916,7 +894,6 @@ class ModGrabber extends Module {
     //Message processing
     
     onMessage(env, type, message, authorid, channelid, rawobj) {
-        if (env.name != this.param('env')) return false;
         if (this.param('channels').indexOf(channelid) < 0) return false;
         this.queueScanMessage(rawobj, {
             accepted: (messageObj, messageAuthor, reply, hash) => {
@@ -1022,11 +999,11 @@ class ModGrabber extends Module {
         }
         
         let format = this.param('defaultFormat');
-        let getformat = message.match(/\{format(=|:) ?(mp3|flac|pcm)\}/iu);
+        let getformat = message.match(new RegExp("\\{format(=|:) ?(" + this.param("allowedFormats").join("|") + ")\\}", "iu"));
         if (getformat) {
-            if (getformat[2] == 'mp3') format = 'mp3';
-            if (this.param('allowFlac') && getformat[2] == 'flac') format = 'flac';
-            if (this.param('allowPcm') && getformat[2] == 'pcm') format = 'pcm';
+            if (AUDIO_FORMATS.indexOf(getformat[2]) > -1 && this.param("allowedFormats").find(getformat[2])) {
+                format = getformat[2];
+            }
         }
         if (AUDIO_FORMATS.indexOf(format) < 0) format = 'mp3';
 
@@ -1078,29 +1055,28 @@ class ModGrabber extends Module {
         }
     
         let chapters = [];
-        if (from == 'youtube' && this.param('useYoutubedl')) {
+        if (from == 'youtube') {
             try {
-                chapters = await this.youtubedlChapters(url);
+                chapters = await this.youtubeChapters(url);
             } catch (e) {
                 this.log('warn', 'Chapter extraction: ' + e);
             }
         }
     
         let messageInfo = this.extractMessageInfo(fragment, {authorid: messageObj.author.id, chapters: chapters});
-        let tenv = this.env(this.param('env'));
 
         if (messageInfo.replace) {
-            if (!this.mod('Users').testPermissions(this.param('env'), messageObj.author.id, messageObj.channel.id, this.param('permissionsReplace'))) {
+            if (!await this.be('Users').testPermissions(this.denv.name, messageObj.author.id, messageObj.channel.id, this.param('permissionsReplace'))) {
                 messageInfo.replace = false;
             }
         }
         
         return {
             author: messageObj.author.id,
-            authorName: tenv.idToDisplayName(messageObj.author.id),
+            authorName: await this.denv.idToDisplayName(messageObj.author.id),
             info: messageInfo,
             interval: messageInfo.interval,
-            reply: (messageInfo.warnauthor ? (out) => tenv.msg(messageObj.channel.id, out) : null),
+            reply: (messageInfo.warnauthor ? (out) => { this.denv.msg(messageObj.channel.id, out)} : null),
             chapters: chapters
         };
     }
@@ -1150,7 +1126,7 @@ class ModGrabber extends Module {
                         let fixtitle = cmp.info.title.match(/^[0-9]+[:.-] ?(.+)/);
                         if (fixtitle) cmp.info.title = fixtitle[1];
                         cmp.info.track = i + 1;
-                        cmp.info.interval = [chapter.start_time, chapter.end_time]; //TODO
+                        cmp.info.interval = [chapter.start_time, chapter.end_time];
                         cmp.interval = cmp.info.interval;
                         delete cmp.chapters;
 
@@ -1220,18 +1196,6 @@ class ModGrabber extends Module {
             }.bind(this)]);
         }
         
-        if (this.param("useYoutubedl")) {
-            //Bandcamp
-            let bcurl = fragment.match(/(?:https?:\/\/|\/\/)?([a-z0-9-]+)\.bandcamp\.com\/track\/([\w_-]+)(?![\w_-])/);
-            if (bcurl) {
-                let mp = await this.obtainMessageParams(messageObj, fragment);
-                this._scanQueue.push(["Grab using youtube-dl", function() {
-                    this.grabFromYoutubedl(mp, bcurl[0], 'bandcamp', bcurl[1] + '__' + bcurl[2], messageObj, callbacks, readOnly)
-                        .catch((e) => this.log('warn', 'Grab from Bandcamp: ' + e));
-                }.bind(this)]);
-            }
-        }
-        
         return true;
     }
     
@@ -1248,9 +1212,6 @@ class ModGrabber extends Module {
         } else if (info.sourceType == 'discord') {
             this.grabFromAttachment({name: info.name, id: info.sourceSpecificId, url: info.source}, info, callbacks, readOnly)
                 .catch((e) => this.log('warn', 'Regrab from attachment: ' + e));
-        } else if (info.sourceType == 'bandcamp') {
-            this.grabFromYoutubedl(info.source, info.sourceType, info.sourceSpecificId, info, callbacks, readOnly)
-                .catch((e) => this.log('warn', 'Regrab from Youtube-dl: ' + e));
         } else if (info.source) {
             this.grabFromURL(info.source, info.sourceType, info.sourceSpecificId, info, callbacks, readOnly)
                 .catch((e) => this.log('warn', 'Regrab from URL: ' + e));
@@ -1286,6 +1247,16 @@ class ModGrabber extends Module {
                     return info;
                 });
         }
+    }
+
+    async youtubeChapters(url) {
+        let info = await this.youtubeInfo(url);
+        let chapters = info.videoDetails?.chapters || [];
+        for (let i = 0; i < chapters.length - 1; i++) {
+            chapters[i].end_time = chapters[i + 1].start_time;
+        }
+        chapters[chapters.length - 1].end_time = parseInt(info.videoDetails?.lengthSeconds);
+        return chapters;
     }
 
     youtubeDownload(url) {
@@ -1324,7 +1295,8 @@ class ModGrabber extends Module {
         this.youtubeInfo(url)
             .then((info) => {
             
-                let length = info.length_seconds || info.duration || info.videoDetails.lengthSeconds || info.player_response.videoDetails.lengthSeconds || 0;
+                let videoId = info.videoDetails.videoId || info.player_response.videoDetails.videoId;
+                let length = info.videoDetails.lengthSeconds || info.player_response.videoDetails.lengthSeconds || 0;
                 
                 if (mp.interval && mp.interval[1] > length) {
                     mp.interval[1] = length;
@@ -1332,19 +1304,19 @@ class ModGrabber extends Module {
                 
                 if (!mp.interval && length < this.param('minDuration') || mp.interval && mp.interval[1] - mp.interval[0] < this.param('minDuration')
                         || length > this.param('maxDuration') && (!mp.interval || mp.interval[1] - mp.interval[0] > this.param('maxDuration'))) {
-                    if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
+                    if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.videoDetails.title);
                     return;
                 }
                         
-                if (!mp.regrab && this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][info.video_id]
-                        && !this._indexSourceTypeAndId['youtube'][info.video_id].sourcePartial && !mp.interval) {
-                    if (callbacks.exists) callbacks.exists(messageObj, mp.authorName, mp.reply, this._indexSourceTypeAndId['youtube'][info.video_id].hash);
+                if (!mp.regrab && this._indexSourceTypeAndId['youtube'] && this._indexSourceTypeAndId['youtube'][videoId]
+                        && !this._indexSourceTypeAndId['youtube'][videoId].sourcePartial && !mp.interval) {
+                    if (callbacks.exists) callbacks.exists(messageObj, mp.authorName, mp.reply, this._indexSourceTypeAndId['youtube'][videoId].hash);
                     return;
                 }
                 
                 let keywords = [];
-                if (info.player_response && info.player_response.videoDetails && typeof info.player_response.videoDetails.keywords == "object") {
-                    for (let keyword of info.player_response.videoDetails.keywords) {
+                if (typeof info.videoDetails?.keywords === "object") {
+                    for (let keyword of info.videoDetails.keywords) {
                         keywords.push(keyword);
                     }
                 }
@@ -1353,7 +1325,7 @@ class ModGrabber extends Module {
                 }
                 
                 let loudness = null;
-                if (info.player_response && info.player_response.playerConfig && typeof info.player_response.playerConfig.audioConfig == "object") {
+                if (typeof info.player_response?.playerConfig?.audioConfig === "object") {
                     loudness = parseFloat(info.player_response.playerConfig.audioConfig.perceptualLoudnessDb);
                 }
                 
@@ -1399,9 +1371,9 @@ class ModGrabber extends Module {
                         length: parseInt(length),
                         source: url,
                         sourceType: 'youtube',
-                        sourceSpecificId: info.video_id || info.videoDetails.video_id || info.videoDetails.videoId,
+                        sourceSpecificId: videoId,
                         sourceLoudness: loudness,
-                        name: info.title || info.videoDetails.title,
+                        name: info.videoDetails.title,
                         author: '',
                         album: '',
                         keywords: keywords
@@ -1655,119 +1627,6 @@ class ModGrabber extends Module {
     }
     
     
-    async grabFromYoutubedl(mp, url, sourceType, sourceSpecificId, messageObj, callbacks, readOnly) {
-        if (mp.info.noextract) return;
-
-        let filename = sourceSpecificId;
-    
-        this.log('Grabbing from ' + sourceType + ' using youtube-dl: ' + url + ' (' + sourceSpecificId + ')');
-        this._downloads += 1;
-        
-        let prepnum = this._preparing++;
-        
-        //URL -> Hard drive
-        
-        let prepath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '_a.tmp';
-        let youtubedl = this.youtubedlDownload(url, prepath);
-
-        youtubedl.on('error', (err) => {
-            this.log('error', '[Youtube-dl, Process] ' + error);
-            this._downloads -= 1;
-        });
-        
-        youtubedl.on('exit', (code) => {
-            if (code) {
-                this.log('error', '[Youtube-dl, Exit code] ' + code);
-                this._downloads -= 1;
-
-                return;
-            }
-            
-            //Get song info
-            FFmpeg(prepath).ffprobe((err, info) => {
-                if (err) {
-                    this.log('warn', err);
-                    return;
-                }
-                
-                if (mp.interval && mp.interval[1] > info.format.duration) {
-                    mp.interval[1] = info.format.duration;
-                }
-                
-                //Hard drive -> FFmpeg -> Hard drive
-                
-                let ffmpeg = new FFmpeg(prepath);
-                if (mp.interval) ffmpeg.seekInput(mp.interval[0]).duration(mp.interval[1] - mp.interval[0]);
-                
-                let temppath = this.param('downloadPath') + '/' + 'dl_' + prepnum + '.tmp';
-                let stream = fs.createWriteStream(temppath);
-                
-                if (mp.info.format == 'pcm') {
-                    ffmpeg.format('s16le').audioBitrate('48k').audioChannels(2);
-                } else if (mp.info.format == 'flac') {
-                    ffmpeg.format('flac');
-                } else {
-                    ffmpeg.format('mp3');
-                }
-                let audio = ffmpeg.pipe(stream);
-                
-                ffmpeg.on('error', (error) => {
-                    this.log('error', '[URL, FFmpeg] ' + error);
-                    audio.destroy();
-                    this._downloads -= 1;
-                });
-                
-                stream.on('error', (error) => {
-                    this.log('error', '[URL, Rewrite] ' + error);
-                    audio.destroy();
-                    this._downloads -= 1;
-                });
-                
-                stream.on('finish', () => {
-                    this._downloads -= 1;
-                    
-                    fs.unlink(prepath, (err) => {});
-
-                    let duration = parseFloat(info.format.duration || info.streams[0].duration);
-                    if (duration < this.param('minDuration') || duration > this.param('maxDuration')) {
-                        if (callbacks.errorDuration) callbacks.errorDuration(messageObj, mp.authorName, mp.reply, info.title);
-                        return;
-                    }
-                    
-                    let title = filename;
-                    let artist = '';
-                    let album = '';
-                    let track = null;
-                    if (info.format && info.format.tags) {
-                        if (info.format.tags.title) title = info.format.tags.title;
-                        if (info.format.tags.artist) artist = info.format.tags.artist;
-                        if (info.format.tags.album) album = info.format.tags.album;
-                        if (info.format.tags.track) track = parseInt(info.format.tags.track);
-                    }
-                    
-                    let keywords = (mp.info.dkeywords || []);
-                    
-                    this.persistTempDownload(temppath, url, mp, {
-                        length: Math.floor(duration),
-                        source: url,
-                        sourceType: sourceType,
-                        sourceSpecificId: sourceSpecificId,
-                        sourceLoudness: null,
-                        name: title,
-                        author: artist,
-                        album: album,
-                        track: track,
-                        keywords: keywords
-                    }, messageObj, callbacks, readOnly);
-                });
-                
-            });
-        
-        });
-            
-    }
-    
-    
     /*
         temppath: Temporary location of downloaded song, already in mp3 format.
         originalname: Display name of the original for the downloaded song, for logging.
@@ -1795,10 +1654,10 @@ class ModGrabber extends Module {
                     this._index[hash].sharedBy.push(mp.author);
                     
                     let shares = this.getUserStat(mp.author, "shares");
-                    this.setUserStat(mp.author, "shareavglength", (this.getUserStat(mp.author, "shareavglength") * shares + info.length) / (shares + 1));
-                    this.setUserStat(mp.author, "shareminlength", Math.min(this.getUserStat(mp.author, "shareminlength") || 0, info.length));
-                    this.setUserStat(mp.author, "sharemaxlength", Math.max(this.getUserStat(mp.author, "sharemaxlength") || Number.MAX_VALUE, info.length));
-                    this.incrUserStat(mp.author, "shares");
+                    await this.setUserStat(mp.author, "shareavglength", (this.getUserStat(mp.author, "shareavglength") * shares + info.length) / (shares + 1));
+                    await this.setUserStat(mp.author, "shareminlength", Math.min(this.getUserStat(mp.author, "shareminlength") || 0, info.length));
+                    await this.setUserStat(mp.author, "sharemaxlength", Math.max(this.getUserStat(mp.author, "sharemaxlength") || Number.MAX_VALUE, info.length));
+                    await this.incrUserStat(mp.author, "shares");
                 }
                 this._index.save();
             }
@@ -1837,7 +1696,7 @@ class ModGrabber extends Module {
             entry = this._index[mp.info.replace];
             if (!entry.replaced) entry.replaced = [];
             entry.replaced.push([mp.info.replace, mp.author, now]);
-            this.removeByHash(mp.info.replace, true);
+            await this.removeByHash(mp.info.replace, true);
         }
         
         entry.hash = hash;
@@ -1920,10 +1779,10 @@ class ModGrabber extends Module {
         
         if (!mp.regrab) {
             let shares = this.getUserStat(mp.author, "shares");
-            this.setUserStat(mp.author, "shareavglength", (this.getUserStat(mp.author, "shareavglength") * shares + entry.length) / (shares + 1));
-            this.setUserStat(mp.author, "shareminlength", Math.min(this.getUserStat(mp.author, "shareminlength") || 0, entry.length));
-            this.setUserStat(mp.author, "sharemaxlength", Math.max(this.getUserStat(mp.author, "sharemaxlength") || Number.MAX_VALUE, entry.length));
-            this.incrUserStat(mp.author, "shares");
+            await this.setUserStat(mp.author, "shareavglength", (this.getUserStat(mp.author, "shareavglength") * shares + entry.length) / (shares + 1));
+            await this.setUserStat(mp.author, "shareminlength", Math.min(this.getUserStat(mp.author, "shareminlength") || 0, entry.length));
+            await this.setUserStat(mp.author, "sharemaxlength", Math.max(this.getUserStat(mp.author, "sharemaxlength") || Number.MAX_VALUE, entry.length));
+            await this.incrUserStat(mp.author, "shares");
             
             this._sessionGrabs.unshift([hash, now]);
         }
@@ -1932,7 +1791,7 @@ class ModGrabber extends Module {
         if (callbacks.accepted) callbacks.accepted(messageObj, mp.authorName, mp.reply, hash);
         
         if (!mp.regrab) {
-            this.processOnNewSong(messageObj, mp.authorName, mp.reply, hash);
+            this.emit("newSong", messageObj, mp.authorName, mp.reply, hash);
         }
 
     }
@@ -2007,30 +1866,19 @@ class ModGrabber extends Module {
         return null;
     }
     
-    removeByHash(hash, ismoderator, removerid) {
+    async removeByHash(hash, ismoderator, removerid) {
         if (!this._index[hash]) return false;
         fs.unlink(this.param('downloadPath') + '/' + hash + '.' + (this._index[hash].format || this.param('defaultFormat')), (err) => {});
         
         let info = this._index[hash];
         for (let sharer of info.sharedBy) {            
             let shares = this.getUserStat(sharer, "shares");
-            this.setUserStat(sharer, "shareavglength", (this.getUserStat(sharer, "shareavglength") * shares - info.length) / (shares - 1));
-            this.incrUserStat(sharer, "shares", -1);
+            await this.setUserStat(sharer, "shareavglength", (this.getUserStat(sharer, "shareavglength") * shares - info.length) / (shares - 1));
+            await this.incrUserStat(sharer, "shares", -1);
         }
         
-        for (let cb of this._apiCbRemoveSong) {
-            try {
-                let r;
-                if (typeof cb == "function") {
-                    r = cb.apply(this, [hash, ismoderator, removerid]);
-                } else {
-                    r = cb[0].apply(cb[1], [hash, ismoderator, removerid]);
-                }
-                if (r) return false;
-            } catch (exception) {
-                this.log('error', 'Error in callback while removing ' + hash);
-            }
-        }
+        let completed = await this.emit('removeSong', hash, ismoderator, removerid);
+        if (!completed) return false;
         
         info = this._index[hash];
         if (this._indexSourceTypeAndId[info.sourceType] && this._indexSourceTypeAndId[info.sourceType][info.sourceSpecificId]) {
@@ -2109,40 +1957,6 @@ class ModGrabber extends Module {
         if (actualmin > Number.MAX_SAFE_INTEGER) actualmin = Number.MAX_SAFE_INTEGER;
         if (actualmax < actualmin) actualmax = actualmin;
         return [actualmin, actualmax];
-    }
-    
-    
-    processOnNewSong(messageObj, messageAuthor, reply, hash) {
-        for (let cb of this._apiCbNewSong) {
-            try {
-                let r;
-                if (typeof cb == "function") {
-                    r = cb.apply(this, [messageObj, messageAuthor, reply, hash]);
-                } else {
-                    r = cb[0].apply(cb[1], [messageObj, messageAuthor, reply, hash]);
-                }
-                if (r) break;
-            } catch (exception) {
-                this.log('error', 'Error in callback after adding ' + hash);
-            }
-        }
-    }
-    
-    
-    processOnGrabscanExists(messageObj, messageAuthor, reply, hash) {
-        for (let cb of this._apiCbGrabscanExists) {
-            try {
-                let r;
-                if (typeof cb == "function") {
-                    r = cb.apply(this, [messageObj, messageAuthor, reply, hash]);
-                } else {
-                    r = cb[0].apply(cb[1], [messageObj, messageAuthor, reply, hash]);
-                }
-                if (r) break;
-            } catch (exception) {
-                this.log('error', 'Error in callback after detecting existing ' + hash);
-            }
-        }
     }
     
     
@@ -2367,11 +2181,11 @@ class ModGrabber extends Module {
         return this._stats.users[userid][field];
     }
     
-    setUserStat(userid, field, value, nosave) {
+    async setUserStat(userid, field, value, nosave) {
         if (!this._stats.users[userid]) {
-            let guildmember = this.env(this.param('env')).server.members.cache.get(userid);
+            let guildmember = this.denv.server.members.cache.get(userid);
             this._stats.users[userid] = {
-                displayname: this.env(this.param('env')).idToDisplayName(userid),
+                displayname: await this.denv.idToDisplayName(userid),
                 avatar: (guildmember ? guildmember.user.displayAvatarURL({size: 512}) : null)
             };
         }
@@ -2380,11 +2194,11 @@ class ModGrabber extends Module {
         return true;
     }
     
-    incrUserStat(userid, field, amount, nosave) {
+    async incrUserStat(userid, field, amount, nosave) {
         let value = this.getUserStat(userid, field) || 0;
         amount = amount || 1;
         value += amount;
-        this.setUserStat(userid, field, value, nosave);
+        await this.setUserStat(userid, field, value, nosave);
     }
     
     cleanUserStats(field) {
@@ -2404,41 +2218,30 @@ class ModGrabber extends Module {
     
     
     //Callback signature: messageObj, messageAuthor, reply, hash
-    registerOnNewSong(func, self) {
-        this.log('Registering new song callback. Context: ' + self.constructor.name);
-        if (!self) {
-            this._apiCbNewSong.push(func);
-        } else {
-            this._apiCbNewSong.push([func, self]);
-        }
+    registerOnNewSong(func) {
+        this.log('Registering new song callback.');
+        this._apiCbNewSong.push(func);
     }
     
     
     //Callback signature: messageObj, messageAuthor, reply, hash
-    registerOnGrabscanExists(func, self) {
-        this.log('Registering song found on scan callback. Context: ' + self.constructor.name);
-        if (!self) {
-            this._apiCbGrabscanExists.push(func);
-        } else {
-            this._apiCbGrabscanExists.push([func, self]);
-        }
+    registerOnGrabscanExists(func) {
+        this.log('Registering song found on scan callback.');
+        this._apiCbGrabscanExists.push(func);
     }
     
     
     //Callback signature: hash, ismoderator, removerid (only hash is guaranteed to be defined)
-    registerOnRemoveSong(func, self) {
-        this.log('Registering remove song callback. Context: ' + self.constructor.name);
-        if (!self) {
-            this._apiCbRemoveSong.push(func);
-        } else {
-            this._apiCbRemoveSong.push([func, self]);
-        }
+    registerOnRemoveSong(func) {
+        this.log('Registering remove song callback.');
+        this._apiCbRemoveSong.push(func);
     }
     
     
     //Filter callback signature: hashoroffset, matchresult
-    registerParserFilter(regex, func, self) {
-        this.log('Registering parser filter. Context: ' + self.constructor.name);
+    registerParserFilter(label, regex, func, description) {
+        this.log('Registering parser filter ' + label + '.');
+        this._hashhelp.push([label, description]);
         this._parserFilters.push([regex, func]);
     }
     
@@ -2497,6 +2300,3 @@ class ModGrabber extends Module {
     }
     
 }
-
-
-module.exports = ModGrabber;

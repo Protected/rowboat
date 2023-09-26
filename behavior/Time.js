@@ -1,33 +1,35 @@
-/* Module: Time -- Adds a time command and timezone tracking. */
+/* Time -- Adds a time command and timezone tracking. */
 
-const Module = require('../Module.js');
+import moment from 'moment-timezone';
+import ct from 'countries-and-timezones';
 
-const moment = require('moment-timezone');
-const ct = require('countries-and-timezones');
+import Behavior from '../src/Behavior.js';
 
 const MAX_SAME_USERS = 20;
 const DEFAULT_FORMAT = "dddd Y-MM-DD HH:mm:ss (Z)";
 
-class ModTime extends Module {
+export default class Time extends Behavior {
 
-    get optionalParams() { return [
-        'formats'               //Map of usable format string prefixes {NAME: FORMAT, ...}
+    get params() { return [
+        {n: 'formats', d: "Map of usable format string prefixes {NAME: FORMAT, ...}"}
     ]; }
 
-    get requiredModules() { return [
-        'Users',
-        'Commands'
-    ]; }
-
-    constructor(name) {
-        super('Time', name);
-
-        this._params["formats"] = {  //No spaces in keys
+    get defaults() { return {
+        formats: {  //No spaces in keys
             sane: "dddd Y-MM-DD HH:mm:ss (Z)",
             american: "dddd MMM D, Y hh:mm a (Z)",
             short: "ddd HH:mm:ss (Z)",
             iso8601: "Y-MM-DDTHH:mm:ssZ"
         }
+    }; }
+
+    get requiredBehaviors() { return {
+        Users: 'Users',
+        Commands: 'Commands'
+    }; }
+
+    constructor(name) {
+        super('Time', name);
 
         this._tzCallbacks = [];
     }
@@ -39,7 +41,7 @@ class ModTime extends Module {
         //Register callbacks
         
 
-        this.mod("Commands").registerCommand(this, 'tz', {
+        this.be("Commands").registerCommand(this, 'tz', {
             description: "Display or change your timezone.",
             details: [
                 "The argument should be an IANA (tz) timezone denomination.",
@@ -49,10 +51,10 @@ class ModTime extends Module {
             ],
             args: ["timezone"],
             minArgs: 0
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
             
             if (!handle) {
-                let user = this.mod("Users").getEnvUser(env.name, userid);
+                let user = await this.be("Users").getEnvUser(env.name, userid);
                 if (!user) {
                     ep.reply("Unfortunately I couldn't create or retrieve your account. Please ask an administrator for manual assistance.");
                     return true;
@@ -61,7 +63,7 @@ class ModTime extends Module {
             }
 
             if (!args.timezone) {
-                let timezone = this.mod("Users").getMeta(handle, "timezone");
+                let timezone = await this.be("Users").getMeta(handle, "timezone");
                 if (!timezone) {
                     ep.reply("Your timezone is not set.");
                 } else {
@@ -77,7 +79,7 @@ class ModTime extends Module {
             }
 
             if (args.timezone.match(/^-|default|server$/i)) {
-                this.mod("Users").delMeta(handle, "timezone");
+                await this.be("Users").delMeta(handle, "timezone");
                 ep.reply("Timezone unset.");
                 return true;
             }
@@ -93,10 +95,10 @@ class ModTime extends Module {
                 return true;
             }
 
-            this.mod("Users").setMeta(handle, "timezone", info.name);
+            await this.be("Users").setMeta(handle, "timezone", info.name);
 
             for (let func of this._tzCallbacks) {
-                func(env, userid, handle, info);
+                func(env.name, userid, handle, info);
             }
 
             ep.reply("Your timezone is now set to " + info.name + " (" + info.utcOffsetStr + ").");
@@ -105,17 +107,17 @@ class ModTime extends Module {
         });
 
 
-        this.mod("Commands").registerCommand(this, 'tf', {
+        this.be("Commands").registerCommand(this, 'tf', {
             description: "Change your clock format.",
             details: [
                 "This will affect the output of !time when used by you only. The argument must be one of: " + Object.keys(this.param("formats")).join(", ") + ".",
                 "Use '-' to unset your format override and return to the default."
             ],
             args: ["format"]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             if (!handle) {
-                let user = this.mod("Users").getEnvUser(env.name, userid);
+                let user = await this.be("Users").getEnvUser(env.name, userid);
                 if (!user) {
                     ep.reply("Unfortunately I couldn't create or retrieve your account. Please ask an administrator for manual assistance.");
                     return true;
@@ -124,7 +126,7 @@ class ModTime extends Module {
             }
 
             if (args.format == "-") {
-                this.mod("Users").delMeta(handle, "timeformat");
+                await this.be("Users").delMeta(handle, "timeformat");
                 ep.reply("Clock format unset.");
                 return true;
             }
@@ -134,14 +136,14 @@ class ModTime extends Module {
                 return true;
             }
 
-            this.mod("Users").setMeta(handle, "timeformat", this.param("formats")[args.format]);
+            await this.be("Users").setMeta(handle, "timeformat", this.param("formats")[args.format]);
             ep.reply("Your clock format was changed.");
 
             return true;
         });
 
 
-        this.mod("Commands").registerCommand(this, 'time', {
+        this.be("Commands").registerCommand(this, 'time', {
             description: "Retrieve the current time.",
             details: [
                 "By default displays time in your timezone (if set) or in the server timezone.",
@@ -154,9 +156,9 @@ class ModTime extends Module {
             ],
             args: ["timezone", true],
             minArgs: 0
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
         
-            let format = this.mod("Users").getMeta(handle, "timeformat") || DEFAULT_FORMAT;
+            let format = await this.be("Users").getMeta(handle, "timeformat") || DEFAULT_FORMAT;
 
             if (args.timezone.length) {
                 let extrf = args.timezone[args.timezone.length - 1].match(/<([a-z0-9-]+)/i);
@@ -172,10 +174,11 @@ class ModTime extends Module {
             }
 
             let reqzone = args.timezone.join(" ");
-            let parsed = this.parseTimezoneArgument(env, reqzone);
+            let parsed = await this.parseTimezoneArgument(env, reqzone);
 
             if (parsed === false) {
-                parsed = {timezone: this.mod("Users").getMeta(handle, "timezone")};
+                let timezone = await this.be("Users").getMeta(handle, "timezone");
+                parsed = {timezone: timezone};
             } else if (parsed === null) {
                 ep.reply("User or timezone not found.");
                 return true;
@@ -195,16 +198,16 @@ class ModTime extends Module {
         });
 
 
-        this.mod("Commands").registerCommand(this, 'sametime', {
+        this.be("Commands").registerCommand(this, 'sametime', {
             description: "Lists channel users known to currently have the same time offset as you.",
             details: [
                 "Use the distance argument to specify a tolerance in minutes (defaults to 0)."
             ],
             args: ["distance"],
             minArgs: 0
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let timezone = this.mod("Users").getMeta(handle, "timezone");
+            let timezone = await this.be("Users").getMeta(handle, "timezone");
             if (!timezone) {
                 ep.reply("Your timezone is not set.");
                 return true;
@@ -221,9 +224,9 @@ class ModTime extends Module {
             let results = [], also = 0;
             for (let targetid of env.listUserIds(channelid)) {
                 if (userid == targetid) continue;
-                let handles = this.mod("Users").getHandlesById(env.name, targetid);
+                let handles = await this.be("Users").getHandlesById(env.name, targetid);
                 if (!handles.length) continue;
-                let targetzone = this.mod("Users").getMeta(handles[0], "timezone");
+                let targetzone = await this.be("Users").getMeta(handles[0], "timezone");
                 if (!targetzone) continue;
                 let targetinfo = ct.getTimezone(targetzone);
                 if (!targetinfo) continue;
@@ -247,7 +250,7 @@ class ModTime extends Module {
         });
 
 
-        this.mod("Commands").registerCommand(this, 'timediff', {
+        this.be("Commands").registerCommand(this, 'timediff', {
             description: "Shows the current difference between your timezone and another.",
             details: [
                 "The argument can be:",
@@ -258,16 +261,16 @@ class ModTime extends Module {
             ],
             args: ["timezone", true],
             minArgs: 0
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let timezone = this.mod("Users").getMeta(handle, "timezone");
+            let timezone = await this.be("Users").getMeta(handle, "timezone");
             if (!timezone) {
                 ep.reply("Your timezone is not set.");
                 return true;
             }
 
             let reqzone = args.timezone.join(" ");
-            let parsed = this.parseTimezoneArgument(env, reqzone);
+            let parsed = await this.parseTimezoneArgument(env, reqzone);
 
             if (parsed === false) {
                 parsed = {timezone: null, offset: null, owner: "*-server-*"};
@@ -312,7 +315,7 @@ class ModTime extends Module {
     
     //Helpers
 
-    parseTimezoneArgument(env, reqzone) {
+    async parseTimezoneArgument(env, reqzone) {
         if (!env || !reqzone) return false;  //Empty arguments
 
         let timezone = null;
@@ -330,12 +333,12 @@ class ModTime extends Module {
             } else {
                 let checkhandle = reqzone.match(/^=(.*)$/);
                 if (checkhandle) {
-                    timezone = this.mod("Users").getMeta(checkhandle[1], "timezone");
+                    timezone = await this.be("Users").getMeta(checkhandle[1], "timezone");
                     owner = checkhandle[1];
                 } else {
-                    let handles = this.mod("Users").getHandlesById(env.name, env.displayNameToId(reqzone) || reqzone);
+                    let handles = await this.be("Users").getHandlesById(env.name, env.displayNameToId(reqzone) || reqzone);
                     if (handles.length) {
-                        timezone = this.mod("Users").getMeta(handles[0], "timezone");
+                        timezone = await this.be("Users").getMeta(handles[0], "timezone");
                         owner = reqzone;
                     }
                 }
@@ -347,7 +350,7 @@ class ModTime extends Module {
     }
 
 
-    //Register callbacks to be invoked when a user sets their timezone. Signature: (env, userid, handle, tzinfo)
+    //Register callbacks to be invoked when a user sets their timezone. Signature: (env.name, userid, handle, tzinfo)
 
     registerTimezoneCallback(func) {
         this._tzCallbacks.push(func);
@@ -356,47 +359,43 @@ class ModTime extends Module {
 
     //Return tz timezone names
 
-    getTimezoneByUserid(env, userid) {
-        let handles = this.mod("Users").getHandlesById(env.name, userid);
+    async getTimezoneByUserid(envname, userid) {
+        let handles = await this.be("Users").getHandlesById(envname, userid);
         if (!handles.length) return null;
         return this.getTimezoneByHandle(handles[0]);
     }
 
-    getTimezoneByHandle(handle) {
-        return this.mod("Users").getMeta(handle, "timezone");
+    async getTimezoneByHandle(handle) {
+        return await this.be("Users").getMeta(handle, "timezone");
     }
 
     //Return offset in minutes
 
-    getCurrentUtcOffsetByUserid(env, userid) {
-        let timezone = this.getTimezoneByUserid(env, userid);
+    async getCurrentUtcOffsetByUserid(envname, userid) {
+        let timezone = await this.getTimezoneByUserid(envname, userid);
         if (!timezone) return null;
         return moment().tz(timezone).utcOffset();
     }
 
-    getCurrentUtcOffsetByHandle(handle) {
-        let timezone = this.getTimezoneByHandle(handle);
+    async getCurrentUtcOffsetByHandle(handle) {
+        let timezone = await this.getTimezoneByHandle(handle);
         if (!timezone) return null;
         return moment().tz(timezone).utcOffset();
     }
 
     //Return moment.js instances
 
-    getCurrentMomentByUserid(env, userid) {
-        let timezone = this.getTimezoneByUserid(env, userid);
+    async getCurrentMomentByUserid(envname, userid) {
+        let timezone = await this.getTimezoneByUserid(envname, userid);
         if (!timezone) return null;
         return moment().tz(timezone);
     }
 
-    getCurrentMomentByHandle(handle) {
-        let timezone = this.getTimezoneByHandle(handle);
+    async getCurrentMomentByHandle(handle) {
+        let timezone = await this.getTimezoneByHandle(handle);
         if (!timezone) return null;
         return moment().tz(timezone);
     }
 
 
 }
-
-
-module.exports = ModTime;
-

@@ -1,20 +1,21 @@
-/* Module: DictionaryGame -- Play a game for guessing translations of dictionary entries. */
+/* DictionaryGame -- Play a game for guessing translations of dictionary entries. */
 
 //Install 'node-gd' to have images through Discord Embeds.
 
-const Module = require('../Module.js');
-const sqlite3 = require('sqlite3');
-const random = require('meteor-random');
-const moment = require('moment');
-const diff = require('diff');
+//Note: By default, the moderator permission is enough for manipulating dictionaries owned by other users.
 
+import sqlite3 from 'sqlite3';
+import random from 'meteor-random';
+import moment from 'moment';
+import diff from 'diff';
+
+var gd, EmbedBuilder;
 try {
-    var gd = require('node-gd');
-    var { EmbedBuilder } = require('discord.js');
+    gd = await import('node-gd');
+    EmbedBuilder = await import('discord.js').then(ns => ns.EmbedBuilder);
 } catch (err) {}
 
-const PERM_ADMIN = 'administrator';
-const PERM_MODERATOR = 'moderator';
+import Behavior from '../src/Behavior.js';
 
 const MODE_NORMAL = 'normal';
 const MODE_INVERTED = 'inverted';
@@ -38,51 +39,51 @@ const TIMEOUT_MIN = 3;
 const TIMEOUT_MAX = 60;
 
 
-class ModDictionaryGame extends Module {
+export default class DictionaryGame extends Behavior {
 
-
-    get requiredParams() { return [
-        'env',                  //Name of the environment to be used
-        'channels'              //List of the IDs of the channels where playing is allowed (note: private message is always allowed)
+    get params() { return [
+        {n: 'env', d: "Name of the environment to be used"},
+        {n: 'channels', d: "List of the IDs of the channels where playing is allowed (note: private message is always allowed)"},
+        {n: 'datafile', d: "Name of the SQLite database file"},
+        {n: 'pageSize', d: "Amount of results to show at a time when listing dictionary contents"},
+        {n: 'playCount', d: "Default amount of questions in a game"},
+        {n: 'playTimeout', d: "Default timeout for answers (s)"},
+        {n: 'playCorrections', d: "Default corrections mode to use"},
+        {n: 'almost', d: "How close to the right answer a wrong answer must be to count as 'almost' ]0..1]"},
+        {n: 'maxConsecSkips', d: "How many unanswered questions before the game shuts down"},
+        {n: 'fancyColor', d: "Discord embedded image text color"},
+        {n: 'fancyBgcolor', d: "Discord embedded image background color (null for transparent)"},
+        {n: 'fancyFont', d: "Discord embedded image font file"},
+        {n: 'fancySize', d: "Discord embedded image font size (pt)'"}
     ]; }
 
-    get optionalParams() { return [
-        'datafile',             //Name of the SQLite database file
-        'permissionAdmin',      //Admin permission (can mass-delete dictionaries)
-        'permissionModerator',  //Moderator permission (can manipulate dictionaries they don't own)
-        'pageSize',             //Amount of results to show at a time when listing dictionary contents
-        'playCount',            //Default amount of questions in a game
-        'playTimeout',          //Default timeout for answers (s)
-        'playCorrections',      //Default corrections mode to use
-        'almost',               //How close to the right answer a wrong answer must be to count as 'almost' ]0..1]
-        'maxConsecSkips',       //How many unanswered questions before the game shuts down
-        'fancyColor',           //Discord embedded image text color
-        'fancyBgcolor',         //Discord embedded image background color (null for transparent)
-        'fancyFont',            //Discord embedded image font file
-        'fancySize',            //Discord embedded image font size'
-    ]; }
+    get defaults() { return {
+        datafile: 'dictionary.db',
+        pageSize: 10,
+        playCount: 20,
+        playTimeout: 15,
+        playCorrections: CORRECTIONS_NONE,
+        almost: 0.75,
+        maxConsecSkips: 5,
+        fancyColor: [0, 0, 0],
+        fancyBgcolor: [255, 255, 255],
+        fancyFont: 'extra/dictionarygame/meiryo.ttc',
+        fancySize: 32
+    }; }
 
-    get requiredModules() { return [
-        'Users',
-        'Commands'
-    ]; }
+    get requiredBehaviors() { return {
+        Users: 'Users',
+        Commands: 'Commands'
+    }; }
+
+    get genv() {
+        return this.env('env');
+    }
 
     constructor(name) {
         super('DictionaryGame', name);
-        
-        this._params['datafile'] = 'dictionary.db';
-        this._params['permissionAdmin'] = PERM_ADMIN;
-        this._params['permissionModerator'] = PERM_MODERATOR;
-        this._params['pageSize'] = 10;
-        this._params['playCount'] = 20;
-        this._params['playTimeout'] = 15;
-        this._params['playCorrections'] = CORRECTIONS_NONE;
-        this._params['almost'] = 0.75;
-        this._params['maxConsecSkips'] = 5;
-        this._params['fancyColor'] = [0, 0, 0];
-        this._params['fancyBgcolor'] = [255, 255, 255];
-        this._params['fancyFont'] = 'meiryo.ttc';
 
+        this._rootpath = null;
         this._db = null;
 
         //It will be null if no game is running or PLAYER_* representing the game type.
@@ -129,16 +130,19 @@ class ModDictionaryGame extends Module {
     initialize(opt) {
         if (!super.initialize(opt)) return false;
 
-        let testIsModerator = (envname, userid, channelid) =>
-        this.mod('Users').testPermissions(envname, userid, channelid, [
-            this.param('permissionModerator'), this.param('permissionAdmin')]);
+        this._rootpath = opt.rootpath;
 
+        let testIsModerator = (envname, userid, channelid) =>
+                this.be('Users').testPermissions(envname, userid, channelid, [
+                    this.be('Users').defaultPermMod,
+                    this.be('Users').defaultPermAdmin
+                ]);
 
         this.connectDb()
             .then((db) => this._db = db)
             .catch((reason) => this.log('error', "Could not initialize database connection: " + reason));
 
-        if (!opt.envs[this.param('env')]) {
+        if (!opt.envExists(this.param('env'))) {
             this.log('error', "Environment not found.");
             return false;
         }
@@ -147,10 +151,10 @@ class ModDictionaryGame extends Module {
         //Register callbacks
 
 
-        opt.envs[this.param('env')].on('message', this.onMessage, this);
+        this.genv.on('message', this.onMessage, this);
 
         
-        this.mod('Commands').registerRootDetails(this, 'dg', {
+        this.be('Commands').registerRootDetails(this, 'dg', {
             description: "Manipulate dictionaries and the dictionary game.",
             details: [
                 "For the subcommands that take a dictionary name or list of dictionaries, use this format:",
@@ -162,7 +166,7 @@ class ModDictionaryGame extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'dg add', {
+        this.be('Commands').registerCommand(this, 'dg add', {
             description: "Adds one or more translations to one of your dictionaries.",
             details: [
                 "Each translation should be in the format: WORD=TRANSLATED (no spaces within the translation).",
@@ -171,7 +175,7 @@ class ModDictionaryGame extends Module {
             ],
             args: ["dictionary", "words", true],
             minArgs: 2
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let dictmap = this.dictionaryNameToMap(args.dictionary, env);
 
@@ -189,7 +193,7 @@ class ModDictionaryGame extends Module {
                 dictmap.userid = userid;
             } else if (!dictmap.userid) {
                 ep.reply('This command must target a specific user.');
-            } else if (dictmap.userid != userid && !testIsModerator(env.name, userid, channelid)) {
+            } else if (dictmap.userid != userid && !await testIsModerator(env.name, userid, channelid)) {
                 ep.reply('Only moderators can add to other people\'s dictionaries.');
                 return true;
             }
@@ -215,7 +219,7 @@ class ModDictionaryGame extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'dg remove', {
+        this.be('Commands').registerCommand(this, 'dg remove', {
             description: "Removes one or more translations from one of your dictionaries.",
             details: [
                 "List only the left-hand-side words to be removed from the dictionary.",
@@ -223,7 +227,7 @@ class ModDictionaryGame extends Module {
             ],
             args: ["dictionary", "words", true],
             minArgs: 2
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let dictmap = this.dictionaryNameToMap(args.dictionary, env);
 
@@ -236,7 +240,7 @@ class ModDictionaryGame extends Module {
                 dictmap.userid = userid;
             } else if (!dictmap.userid) {
                 ep.reply('This command must target a specific user.');
-            } else if (dictmap.userid != userid && !testIsModerator(env.name, userid, channelid)) {
+            } else if (dictmap.userid != userid && !await testIsModerator(env.name, userid, channelid)) {
                 ep.reply('Only moderators can remove from other people\'s dictionaries.');
                 return true;
             }
@@ -266,10 +270,10 @@ class ModDictionaryGame extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'dg delete', {
+        this.be('Commands').registerCommand(this, 'dg delete', {
             description: "Deletes a dictionary or category. All translations in it will be lost.",
             args: ["dictionary"]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let dictmap = this.dictionaryNameToMap(args.dictionary, env);
 
@@ -278,7 +282,7 @@ class ModDictionaryGame extends Module {
                 return true;
             }
 
-            let isAdmin = this.mod('Users').testPermissions(env.name, userid, channelid, [this.param('permissionAdmin')]);
+            let isAdmin = await this.be('Users').testPermissions(env.name, userid, channelid, [this.be("Users").defaultPermAdmin]);
 
             if (dictmap.userid === undefined) {
                 dictmap.userid = userid;
@@ -309,7 +313,7 @@ class ModDictionaryGame extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'dg list', {
+        this.be('Commands').registerCommand(this, 'dg list', {
             description: "Lists existing dictionaries matching the given optional pattern.",
             details: [
                 "By default, all of your dictionaries will be listed. Use *|* to show all dictionaries."
@@ -348,7 +352,7 @@ class ModDictionaryGame extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'dg show', {
+        this.be('Commands').registerCommand(this, 'dg show', {
             description: "Shows all translations in a given dictionary.",
             args: ["dictionary", "page"],
             minArgs: 1
@@ -392,7 +396,7 @@ class ModDictionaryGame extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'dg play', {
+        this.be('Commands').registerCommand(this, 'dg play', {
             description: "Starts a new game.",
             details: [
                 "You can list dictionaries to include in the game. By default, all your dictionaries will be included.",
@@ -409,7 +413,7 @@ class ModDictionaryGame extends Module {
         }, this.prepareGame(PLAYING_PLAYER));
 
 
-        this.mod('Commands').registerCommand(this, 'dg contest', {
+        this.be('Commands').registerCommand(this, 'dg contest', {
             description: "Starts a new game for everyone in the channel.",
             details: [
                 "This command takes the same arguments as dg play ."
@@ -420,9 +424,9 @@ class ModDictionaryGame extends Module {
         }, this.prepareGame(PLAYING_CHANNEL));
 
 
-        this.mod('Commands').registerCommand(this, 'dg end', {
+        this.be('Commands').registerCommand(this, 'dg end', {
             description: "Ends an ongoing game immediately."
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
             if (env.name != this.param('env')) return true;
 
             if (!this._playing) {
@@ -430,7 +434,7 @@ class ModDictionaryGame extends Module {
                 return true;
             }
 
-            if (this._player != userid && !testIsModerator(env.name, userid, channelid)) {
+            if (this._player != userid && !await testIsModerator(env.name, userid, channelid)) {
                 ep.reply("Only moderators can stop other people's games.");
                 return true;
             }
@@ -458,7 +462,7 @@ class ModDictionaryGame extends Module {
 
     connectDb() {
         return new Promise((resolve, reject) => {
-            let db = new sqlite3.Database(this.dataPath() + this._params['datafile'],
+            let db = new sqlite3.Database(this.dataPath() + this.param('datafile'),
                 sqlite3.OPEN_READWRITE,
                 (err) => {
                     if (err) {
@@ -482,7 +486,7 @@ class ModDictionaryGame extends Module {
     prepareDb() {
         return new Promise((resolve, reject) => {
             let db = new sqlite3.Database(
-                this.dataPath() + this._params['datafile'],
+                this.dataPath() + this.params('datafile'),
                 sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE,
                 (err) => {
                     if (err) {
@@ -903,7 +907,7 @@ class ModDictionaryGame extends Module {
     }
 
 
-    playWord() {
+    async playWord() {
         if (this._maxCount && this._count >= this._maxCount) {
             return this.stopGame();
         }
@@ -928,24 +932,23 @@ class ModDictionaryGame extends Module {
         this._wordStart = moment().unix();
         
         //Send word to channel
-        let env = this.env(this.param('env'));
         let query = (this._current.mode == MODE_INVERTED ? this._current.right : this._current.left);
         if (typeof query != "string") {
             //It's an array of alternatives; pick one
             query = query[Math.floor(random.fraction() * query.length)];
         }
 
-        if (gd && env.envName == "Discord" && discord && query.length <= 20 && !this._forcePlaintext) {
+        if (gd && this.genv.type == "Discord" && EmbedBuilder && query.length <= 20 && !this._forcePlaintext) {
             //Fancy (png image of rendered font): Requires gd, node-gd and Discord
             let png = this.createPngFromText(query, this.param('fancyFont'), this.param('fancySize'),
                     this.param('fancyColor'), this.param('fancyBgcolor'));
             let re = new EmbedBuilder()
                 .setImage("attachment://query.png");
             if (this._showCategory) re.setDescription(this._current.category);
-            env.msg(this._channelid, {embeds: [re], files: [{name: "query.png", attachment: png}]});
+            await this.genv.msg(this._channelid, {embeds: [re], files: [{name: "query.png", attachment: png}]});
         } else {
             //Plaintext (normal)
-            env.msg(this._channelid, env.applyFormatting("**" + this.escapeNormalizedFormatting(query) + "**"
+            await this.genv.msg(this._channelid, this.genv.applyFormatting("**" + this.escapeNormalizedFormatting(query) + "**"
                 + (this._showCategory ? "(" + this._current.category + ")" : "")));
         }
         
@@ -1048,8 +1051,6 @@ class ModDictionaryGame extends Module {
     endWord() {
         this._timer = null;
 
-        let env = this.env(this.param('env'));
-
         let query = (this._current.mode == MODE_INVERTED ? this._current.right : this._current.left);
         let answers = (this._current.mode == MODE_NORMAL ? this._current.right : this._current.left);
         let answer = (typeof answers == "string" ? answers : answers[0]);
@@ -1062,11 +1063,11 @@ class ModDictionaryGame extends Module {
         } else if (this._corrections == CORRECTIONS_END) {
             this._wrong[query] = answer;
         }
-        env.msg(this._channelid, "Time up!" + also);
+        this.genv.msg(this._channelid, "Time up!" + also);
 
         this._consecSkips += 1;
         if (this._consecSkips >= this.param("maxConsecSkips")) {
-            env.msg(this._channelid, "No one seems to be here...");
+            this.genv.msg(this._channelid, "No one seems to be here...");
             this.stopGame();
             return;
         }
@@ -1081,7 +1082,7 @@ class ModDictionaryGame extends Module {
             this._timer = null;
         }
 
-        let env = this.env(this.param('env'));
+        let env = this.genv;
         env.msg(this._channelid, "Game ended after " + this._count + " word" + (this._count != 1 ? "s" : "") + ".");
 
         if (this._count) {
@@ -1152,7 +1153,7 @@ class ModDictionaryGame extends Module {
 
         //Calculate image size
         let img = gd.createTrueColorSync(1, 1);
-        let bb = img.stringFTBBox(gdbgcolor, __dirname + '/' + font, size, 0, 0, 0, text);
+        let bb = img.stringFTBBox(gdbgcolor, this._rootpath + '/' + font, size, 0, 0, 0, text);
         let w = Math.abs(bb[4] - bb[0]) + 4, h = Math.abs(bb[5] - bb[1]) + 4;
         img.destroy();
 
@@ -1162,7 +1163,7 @@ class ModDictionaryGame extends Module {
         img.alphaBlending(0);
         img.filledRectangle(0, 0, w, h, gdbgcolor);
         img.alphaBlending(1);
-        img.stringFT(gdcolor, __dirname + '/' + font, size, 0, -1 * bb[6] + 2, -1 * bb[7] + 2, text);
+        img.stringFT(gdcolor, this._rootpath + '/' + font, size, 0, -1 * bb[6] + 2, -1 * bb[7] + 2, text);
         let ptr = Buffer.from(img.pngPtr(), "binary");
         img.destroy();
 
@@ -1174,6 +1175,3 @@ class ModDictionaryGame extends Module {
     }
 
 }
-
-
-module.exports = ModDictionaryGame;

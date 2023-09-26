@@ -3,10 +3,10 @@
 //B: Modules can communicate with remote modules transparently (configuration).
 //C: Modules can add explicit routes.
 
-const express = require('express');
-const helmet = require('helmet')
-const http = require('http');
-const https = require('https');
+import express from 'express';
+import helmet from 'helmet';
+import http from 'http';
+import https from 'https';
 
 const router = express();
 router.use(helmet());

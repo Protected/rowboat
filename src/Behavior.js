@@ -1,64 +1,102 @@
-/* Module -- This superclass should be extended by all module implementations. */
-'use strict';
+/* Behavior -- This superclass should be extended by all behavior implementations. */
 
-const jsonfile = require('jsonfile');
-const fs = require('fs');
-const { http, https } = require('follow-redirects');
-const querystring = require('querystring');
-const stream = require('stream');
-const logger = require('./Logger.js');
-const { EWOULDBLOCK } = require('constants');
+import fs from 'fs';
+import fr from 'follow-redirects';
+import querystring from 'querystring';
+import stream from 'stream';
+import jsonfile from 'jsonfile';
 
-class Module {
+const { http, https } = fr;
+
+import logger from './Logger.js';
+import AsyncEventEmitter from './AsyncEventEmitter.js';
+
+export default class Behavior extends AsyncEventEmitter {
 
     get name() { return this._name; }
-    get modName() { return this._modName; }
+    get type() { return this._type; }
     
     get expose() { return this._expose; }
     
-    /* Settings to override in your module */
+    /* Settings to override in your behavior */
 
-    //Return a list of configuration parameters that *must* be provided in the config file.
-    get requiredParams() { return []; }
+    //Return a list of {n: NAME, d: DESCRIPTION} for each parameter of the behavior. ALL parameters must be listed.
+    get params() { return []; }
 
-    //Return a list of configuration parameters that can be provided in the config file. They should be initialized in the constructor.
-    get optionalParams() { return []; }
+    //Return a map of default values for optional parameters (those without defaults must be in the config file).
+    get defaults() { return {}; }
+
+    //A map of {KEY: TYPE} where each KEY is a parameter pointing to an instance of an environment of the given type.
+    //Environments can then be accessed using this.env(KEY) .
+    //If KEY is not explicitly declared as a parameter, a mandatory parameter will be automatically generated.
+    get requiredEnvironments() { return {}; }
+
+    //Maps of {KEY: TYPE} where each KEY is a parameter pointing to an instance of a behavior of the given type.
+    //Behaviors can then be accessed using this.be(KEY) .
+    //If KEY is not explicitly declared as a parameter, an optional parameter be automatically generated:
     
-    
-    //Return true if the user can set up multiple instances of the module.
-    //The user must provide
+    get requiredBehaviors() { return {}; }  //with the default equal to TYPE (and the behavior must be in config)
+    get optionalBehaviors() { return {}; }  //with the default equal to null
+
+    //Return true if the user can set up multiple instances of behavior.
     get isMultiInstanceable() { return false; }
 
-    //Request from the kernel a reference to itself. Don't do that if you don't need it. You probably don't need it.
+    //Request from the kernel a reference to itself.
+    //It will be mapped under the key 'root'.
     get isRootAccess() { return false; }
-    
 
-    //Configured environments instances must include environments of the types listed here for this module to load.
-    get requiredEnvironments() { return []; }
-
-    //Modules of the types listed here must be instances for this module to load.
-    get requiredModules() { return []; }
-
+    //Replace with @decorators once they become available
+    get synchronousMethods() { return ["escapeNormalizedFormatting", "stripNormalizedFormatting"]; }
 
     /* Constructor */
 
-    //Override the constructor in your module. The first line should be: super('YourModule', name);
-    //You should only use your constructor to initialize optional parameters and class attributes.
+    //Override the constructor in your behavior. The first line should be: super('YourBehavior', name);
+    //You should only use your constructor to initialize class attributes.
 
-    constructor(modName, name) {
-    
-        this._modName = modName;
-        this._name = (name ? name : modName);
+    constructor(type, name) {
+        super();
+
+        this._config = null;
+
+        this._type = type;
+        this._name = (name ? name : type);
         
         this._expose = false;
         
-        this._params = {};
-        
-        this._environments = null;
-        this._modules = null;
-        this._globalConfig = {};
+        this._envProxy = null;
+        this._beProxy = null;
+        this._optBeExists = null;
     
-    }    
+        this._hasInitialized = false;
+
+        //Infer missing parameters for environments and behaviors
+
+        this._trueParams = this.params;
+        this._trueDefaults = this.defaults;
+
+        for (let param in this.requiredBehaviors) {
+            if (!this.params.find(entry => entry.n === param)) {
+                this._trueParams.push({n: param, d: "Instance name of a " + this.requiredBehaviors[param] + " behavior"});
+                this._trueDefaults[param] = param;
+            }
+        }
+
+        for (let param in this.optionalBehaviors) {
+            if (!this.params.find(entry => entry.n === param)) {
+                this._trueParams.push({n: param, d: "Instance name of a " + this.optionalBehaviors[param] + " behavior (optional)"});
+                this._trueDefaults[param] = null;
+            }
+        }
+
+    }
+
+    get config() { return this._config; }
+    param(key) { return this.config.getBehaviorConfig(this._name)?.[key]; }
+
+    optBeExists(key) { return this._optBeExists(this.param(key)); }
+
+    env(key) { return this._envProxy(this.param(key)); }
+    be(key) { return this._beProxy(this.param(key)); }
     
     
     //Override this method in your module. The top line should be: if (!super.initialize(opt)) return false;
@@ -67,106 +105,69 @@ class Module {
     //  initialize should register a callback for the connect event for that environment.
 
     initialize(opt) {
-        var params = {};
         
+        this._config = opt.config;
+
         //Load and check parameters
+
+        this.config.loadBehaviorConfig(this._name);
+        this.config.setBehaviorDefaults(this._name, this.config.getBehaviorCommonConfig());
+        this.config.setBehaviorDefaults(this._name, this._trueDefaults);
         
-        var fileName = this.configfile;
-        try {
-            params = jsonfile.readFileSync(fileName);
-            this.log('Initializing module of type ' + this._modName + '.');
-        } catch(e) {
-            if (e.code !== 'ENOENT') {
-                this.log('error', `Error trying to load the config file ${fileName} because of: ${e}`);
+        let fail = false;
+        for (let param of this.params) {
+            if (this.param(param.n) === undefined) {
+                this.log('error', `Parameter not found: ${param.n}`);
+                fail = true;
+            }
+        }
+        if (fail) return false;
+              
+        //Check reference to environments/behaviors
+
+        for (let param in this.requiredEnvironments) {
+            if (!opt.envExists(this.param(param), this.requiredEnvironments[param])) {
+                this.log('error', "Could not initialize the behavior: " + this._name + " because the parameter " + param + " does not reference an instance of an environment with the type " + this.requiredEnvironments[param] + " .");
+                return false;
             }
         }
 
-        for (let reqParam of this.requiredParams) {
-            if (params[reqParam] !== undefined && params[reqParam] !== null) this._params[reqParam] = params[reqParam];
-            if (this._params[reqParam] === undefined) {
-                this.log('error', 'Failed loading required parameter: ' + reqParam);
-                return false;
-            }
-        };
-        
-        for (let optParam of this.optionalParams) {
-            if (params[optParam] !== undefined) this._params[optParam] = params[optParam];
-            if (this._params[optParam] === undefined) this._params[optParam] = null;
-        }
-        
-        for (let key in params) {
-            if (this._params[key] === undefined) this._params[key] = params[key];
-        }
-        
-        //Check reference to environments/modules
-        
-        if (!opt.envs || !opt.mods) return false;
-        
-        var envtypes = {};
-        var modtypes = {};
-        
-        for (let label in opt.envs) {
-            envtypes[opt.envs[label].envName] = true;
-        }
-        
-        for (let label in opt.mods) {
-            if (opt.mods[label].isMultiInstanceable) continue;
-            modtypes[opt.mods[label].modName] = true;
-        }
-        
-        for (let reqenv of this.requiredEnvironments) {
-            if (!envtypes[reqenv]) {
+        for (let param in this.requiredBehaviors) {
+            if (!opt.beExists(this.param(param), this.requiredBehaviors[param])) {
+                this.log('error', "Could not initialize the behavior: " + this._name + " because the parameter " + param + " does not reference an instance of a behavior with the type " + this.requiredBehaviors[param] + " .");
                 return false;
             }
         }
-        
-        for (let reqmod of this.requiredModules) {
-            if (!modtypes[reqmod]) {
-                return false;
-            }
-        }
-        
-        this._environments = opt.envs;
-        this._modules = opt.mods;
-        
-        this._globalConfig = opt.config;
 
+        this._envProxy = opt.envProxy;
+        this._beProxy = opt.beProxy;
+
+        this._optBeExists = (param) => {
+            if (!this.optionalBehaviors[param]) {
+                this.log('error', "Attempted to check for undeclared optional behavior in " + param);
+                return null;
+            }
+            return opt.beExists(this.param(param), this.optionalBehaviors[param]);
+        }
+        
         return true;
+    }
+
+    get hasInitialized() {
+        return this._hasInitialized;
+    }
+
+    setHasInitialized() {
+        this._hasInitialized = true;
     }
     
 
     /* Miscellaneous helpers */
 
-    //Obtain module parameters.
-    param(key) { return this._params[key]; }
-    get params() { return Object.assign({}, this._params); }
-
-    get configfile() { 
-        let configname = this._modName.toLowerCase();
-        if (this.isMultiInstanceable) configname = this._name.toLowerCase() + "." + configname;
-        configname = "config/" + configname + ".mod.json";
-        return configname;
-    }
-    
-    //Obtain a reference to another module or environment by instance name.
-    //Only use a hardcoded name if the target module is not multi instanceable and is returned by requiredModules.
-    env(name) { return this._environments[name]; }
-    mod(name) { return this._modules[name]; }
-    
-    //Obtain entries from the main configuration file.
-    config(key) {
-        var path = key.split(".");
-        var config = this._globalConfig;
-        while (path.length && typeof config == "object") {
-            config = config[path.shift()];
-        }
-        if (path.length) config = null;
-        return config;
-    }
     
     //Shortcut for obtaining the path where datafiles should be stored.
     dataPath() {
-        return this.config("paths.data");
+        return this.config["paths"]?.["data"];
     }
     
     //Internal module logging (do not use to log environment events).
@@ -376,7 +377,6 @@ class Module {
     
     //Returns stream of URL contents
     streamget(url, options, extcallback) {
-        let mod = this;
         let pt = new stream.PassThrough();
         let req;
         
@@ -416,6 +416,3 @@ class Module {
 
     
 }
-
-
-module.exports = Module;

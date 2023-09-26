@@ -1,7 +1,8 @@
 /* Wrapper that allows multiple environments to use a discord.js client. */
 
-const discord = require('discord.js');
-const ModernEventEmitter = require('../ModernEventEmitter.js');
+import discord from 'discord.js';
+
+import AsyncEventEmitter from '../src/AsyncEventEmitter.js';
 
 const Events = discord.Events;
 const Intents = discord.IntentsBitField.Flags;
@@ -46,7 +47,7 @@ const MAXIMUM_ATTACH = 8388608;
 const MAXIMUM_COMPROWS = 5;
 const EXPIRE_QUEUED_MESSAGE = 60; //seconds
 
-class DiscordClient extends ModernEventEmitter {
+export default new class DiscordClient extends AsyncEventEmitter {
 
     constructor() {
         super();
@@ -317,5 +318,3 @@ class DiscordClient extends ModernEventEmitter {
     }
 
 }
-
-module.exports = new DiscordClient();

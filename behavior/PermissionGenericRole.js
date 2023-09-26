@@ -1,50 +1,25 @@
-/* Module: PermissionGenericRole -- This module is a permissions provider that turns roles from any environment into ModUsers permissions. */
+/* PermissionGenericRole -- Permissions provider that turns generic environment roles into permissions. */
 
-const Module = require('../Module.js');
+import { PermissionProvider } from "./Users.js";
 
-class ModPermissionGenericRole extends Module {
-
-    get requiredEnvironments() { return [
-        'Discord'
-    ]; }
-
-    get requiredModules() { return [
-        'Users'
-    ]; }
+export default class PermissionGenericRole extends PermissionProvider {
 
     constructor(name) {
-        super('PermissionGenericRole', name);
+        super('GenericRole', name);
     }
     
+    async permissionProvider({env, userid, channelid, permissions}) {
+        let roles = await env.listUserRoles(userid, channelid);
     
-    initialize(opt) {
-        if (!super.initialize(opt)) return false;
-        
-        
-        //Register callbacks
-        
-        this.mod('Users').registerPermissionProvider((passedname, userid, channelid, permissions) => {
-            let env = opt.envs[passedname];
-        
-            let roles = env.listUserRoles(userid, channelid);
-        
-            let result = [];
-        
-            for (let permission of permissions) {
-                if (roles.indexOf(permission) > -1) {
-                    result.push(permission);
-                }
+        let result = [];
+    
+        for (let permission of permissions) {
+            if (roles.indexOf(permission) > -1) {
+                result.push(permission);
             }
-        
-            return result;
-        }, this);
-        
-        
-        return true;
+        }
+    
+        return result;
     }
-
 
 }
-
-
-module.exports = ModPermissionGenericRole;

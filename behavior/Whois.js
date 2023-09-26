@@ -1,34 +1,36 @@
-/* Module: Whois -- Adds a command, "netwhois", which retrieves information on a registered internet resource. */
+/* Whois -- Adds a command, "netwhois", which retrieves information on a registered internet resource. */
 
-const Module = require('../Module.js');
-const whois = require('whois');
-const moment = require('moment');
+import whois from 'whois';
+import moment from 'moment';
+
+import Behavior from '../src/Behavior.js';
 
 const TSFORMAT = "YYYY-MM-DD HH:mm:ss";
 
-class ModWhois extends Module {
+export default class Whois extends Behavior {
 
-
-    get optionalParams() { return [
-        'server',               //Use a specific whois server ("host:port"); leave blank to determine by TLD
-        'follow',               //Amount of times to follow redirects
-        'timeout',              //Socket timeout (ms)
-        'bind',                 //Bind to a specific local interface (IP)
-        'expire'                //Timeout to expire cached results (s)
+    get params() { return [
+        {n: 'server', d: "Use a specific whois server; leave blank to determine by TLD (host:port)"},
+        {n: 'follow', d: "Amount of times to follow redirects"},
+        {n: 'timeout', d: "Socket timeout (ms)"},
+        {n: 'bind', d: "Bind to a specific local interface (IP)"},
+        {n: 'expire', d: "Timeout to expire cached results (s)"}
     ]; }
 
-    get requiredModules() { return [
-        'Commands'
-    ]; }
+    get defaults() { return {
+        server: "",
+        follow: 2,
+        timeout: 10000,
+        bind: null,
+        expire: 1800
+    }; }
+
+    get requiredBehaviors() { return {
+        Commands: 'Commands'
+    }; }
 
     constructor(name) {
         super('Whois', name);
-
-        this._params['server'] = "";
-        this._params['follow'] = 2;
-        this._params['timeout'] = 10000;
-        this._params['bind'] = null;
-        this._params['expire'] = 1800;
 
         this._cache = {};  //{data: ..., ts: ...}
     }
@@ -40,7 +42,7 @@ class ModWhois extends Module {
       
         //Register callbacks
         
-        this.mod('Commands').registerCommand(this, 'netwhois', {
+        this.be('Commands').registerCommand(this, 'netwhois', {
             description: "Queries a WHOIS server.",
             args: ["string"]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -80,7 +82,7 @@ class ModWhois extends Module {
                     }
 
                     ep.reply("**WHOIS lookup " + (excerpt ? "excerpt" : "result") + " for __" + args.string + "__** (" + moment.unix(result.ts).format(TSFORMAT) + ")");
-                    if (env.envName == "Discord") display = "```\n" + display + "\n```";
+                    if (env.type == "Discord") display = "```\n" + display + "\n```";
                     ep.reply(display);
 
                     this.log('Successful whois lookup for "' + args.string + '" (Requested by ' + userid + ')');
@@ -131,7 +133,3 @@ class ModWhois extends Module {
 
 
 }
-
-
-module.exports = ModWhois;
-

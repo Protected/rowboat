@@ -1,69 +1,53 @@
 /* Environment -- This superclass should be extended by all environment implementations. */
-'use strict';
 
-const jsonfile = require('jsonfile');
-const logger = require('./Logger.js');
-const ModernEventEmitter = require('./ModernEventEmitter.js');
+import logger from './Logger.js';
+import AsyncEventEmitter from './AsyncEventEmitter.js';
 
-class Environment extends ModernEventEmitter {
+export default class Environment extends AsyncEventEmitter {
 
     get name() { return this._name; }
-    get envName() { return this._envName; }
+    get type() { return this._type; }
 
-
-    get requiredParams() { return []; }
-    get optionalParams() { return []; }
+    get params() { return []; }
+    get defaults() { return {}; }
     
     get sharedModules() { return []; }
+
+    //Replace with @decorators once they become available
+    get synchronousMethods() { return ["normalizeFormatting", "applyFormatting", "stripNormalizedFormatting"]; }
     
-    constructor(envName, name) {
+    constructor(type, name) {
         super();
     
-        this._envName = envName;
+        this._config = null;
+
+        this._type = type;
         this._name = name;
 
         this._hasConnected = false;
-        
-        this._params = {};
-        
     }
     
-    
-    param(key) { return this._params[key]; }
-    get params() { return Object.assign({}, this._params); }
-    get configfile() { return "config/" + this._name.toLowerCase() + "." + this._envName.toLowerCase() + ".env.json"; }
+    get config() { return this._config; }
+    param(key) { return this.config.environments[this._name][key]; }
     
     
     initialize(opt) {
-        let params = {};
-        
-        //Load and check parameters
-        
-        let fileName = this.configfile;
-        try {
-            params = jsonfile.readFileSync(fileName);
-            this.log(`Initializing environment of type ${this._envName}.`);
-        } catch(e) {
-            this.log('error', `Error trying to load the config file ${fileName} because of: ${e}`);
-        }
 
-        for (let reqParam of this.requiredParams) {
-            if (params[reqParam] !== undefined && params[reqParam] !== null) this._params[reqParam] = params[reqParam];
-            if (this._params[reqParam] === undefined) {
-                this.log('error', `Failed loading required parameter: ${reqParam}`);
+        this._config = opt.config;
+
+        //Load and check parameters
+
+        this.config.loadEnvironmentConfig(this._name);
+        this.config.setEnvironmentDefaults(this._name, this.defaults);
+        
+        for (let param of this.params) {
+            if (this.param(param.n) === undefined) {
+                this.log('error', `Parameter not found: ${param.n}`);
                 return false;
             }
         }
-        
-        for (let optParam of this.optionalParams) {
-            if (params[optParam] !== undefined) this._params[optParam] = params[optParam];
-            if (this._params[optParam] === undefined) this._params[optParam] = null;
-        }
-        
-        for (let key in params) {
-            if (this._params[key] === undefined) this._params[key] = params[key];
-        }
-        
+
+
         this.on('newListener', (type, handler) => {
             this.log('Handler for *' + type + '* added' + (handler.ctx ? ' by |' + handler.ctx.name + '| .' : ''));
         }, this);
@@ -107,8 +91,8 @@ class Environment extends ModernEventEmitter {
     }
 
 
-    connect() {}
-    disconnect() {}
+    async connect() {}
+    async disconnect() {}
     msg(targetid, msg, options) {}
     notice(targetid, msg, options) {}
     
@@ -160,5 +144,3 @@ class Environment extends ModernEventEmitter {
     }
 
 }
-
-module.exports = Environment;

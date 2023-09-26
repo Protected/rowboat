@@ -1,30 +1,30 @@
-/* Module: Activity -- Commands for checking a user's most recent activity/presence. */
+/* Behavior: Activity -- Commands for checking a user's most recent activity/presence. */
 
-const Module = require('../Module.js');
-const moment = require('moment');
+import moment from 'moment';
 
-const PERM_ADMIN = "administrator";
+import Behavior from '../src/Behavior.js';
 
-class ModActivity extends Module {
+export default class Activity extends Behavior {
 
-
-    get optionalParams() { return [
-        'datafile',
-        'linesPerUser',         //Amount of lines per user to keep (for !last)
-        'channelblacklist'      //List of [[environment, channelid], ...] of the channels to be ignored
+    get params() { return [
+        {n: 'datafile', d: "Customize the name of the default data file"},
+        {n: 'linesPerUser', d: "Amount of lines per user to keep (for !last)"},
+        {n: 'channelblacklist', d: "List of [[environment, channelid], ...] of the channels to be ignored"}
     ]; }
+
+    get defaults() { return {
+        datafile: null,
+        linesPerUser: 5,
+        channelblacklist: []
+    }; }
     
-    get requiredModules() { return [
-        'Users',
-        'Commands'
-    ]; }
+    get requiredBehaviors() { return {
+        Users: "Users",
+        Commands: "Commands"
+    }; }
 
     constructor(name) {
         super('Activity', name);
-        
-        this._params['datafile'] = null;
-        this._params['linesPerUser'] = 5;
-        this._params['channelblacklist'] = [];
         
         //Main map: {ENV => {NICKNAME => {REGISTER}, ...}, ...}
         this._activitydata = {};
@@ -62,19 +62,17 @@ class ModActivity extends Module {
 
         //Register callbacks
         
-        for (let envname in opt.envs) {
-            opt.envs[envname].on('join', this.onJoin, this);
-            opt.envs[envname].on('part', this.onPart, this);
-            opt.envs[envname].on('message', this.onMessage, this);
-        }
+        this.env().on('join', this.onJoin, this);
+        this.env().on('part', this.onPart, this);
+        this.env().on('message', this.onMessage, this);
 
         
-        this.mod("Commands").registerCommand(this, 'seen', {
+        this.be("Commands").registerCommand(this, 'seen', {
             description: "Reports when a user was last seen (or if the user was never seen).",
             args: ["nickname", "environment"],
             details: ["Prefix NICKNAME with = to reference a Rowboat user account instead."],
             minArgs: 1
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
             
             let envobj = null;
             let envname = args.environment;
@@ -91,7 +89,8 @@ class ModActivity extends Module {
                 //Lookup by handle
             
                 for (let id in this._authorseen[envname]) {
-                    if (this.mod("Users").isIdHandle(args.nickname.substr(1), envname, id)) {
+                    let validate = await this.be("Users").isIdHandle(args.nickname.substr(1), envname, id);
+                    if (validate) {
                         if (!register || this._authorseen[envname][id].seen[2] > register.seen[2]) {
                             register = this._authorseen[envname][id];
                         }
@@ -127,12 +126,12 @@ class ModActivity extends Module {
         });
         
         
-        this.mod("Commands").registerCommand(this, 'last', {
+        this.be("Commands").registerCommand(this, 'last', {
             description: "Repeats a user's latest chat lines in record.",
             args: ["nickname", "environment"],
             details: ["Prefix NICKNAME with = to reference a Rowboat user account instead."],
             minArgs: 1
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
         
             let envobj = null;
             let envname = args.environment;
@@ -149,7 +148,8 @@ class ModActivity extends Module {
                 //Lookup by handle
             
                 for (let id in this._authorspoke[envname]) {
-                    if (this.mod("Users").isIdHandle(args.nickname.substr(1), envname, id)) {
+                    let validate = await this.be("Users").isIdHandle(args.nickname.substr(1), envname, id);
+                    if (validate) {
                         for (let entry of this._authorspoke[envname][id]) {
                             entries.push(entry);
                         }
@@ -181,7 +181,7 @@ class ModActivity extends Module {
         });
         
         
-        this.mod("Commands").registerCommand(this, 'roleseen', {
+        this.be("Commands").registerCommand(this, 'roleseen', {
             description: "Short activity report for a role.",
             args: ["role"],
             environments: ["Discord"]
@@ -333,6 +333,3 @@ class ModActivity extends Module {
     
     
 }
-
-
-module.exports = ModActivity;

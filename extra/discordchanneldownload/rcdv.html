@@ -1,0 +1,803 @@
+<!doctype html>
+<html>
+<head>
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Rickety Channel Dump Viewer 1.1</title>
+<style type="text/css">
+
+#selectcontain {
+    display: block;
+    margin: 20px auto;
+    padding: 30px;
+    border: 2px solid #c0a090;
+    background: #eae0d6;
+    width: 40%;
+    text-align: center;
+    border-radius: 5px;
+}
+
+#selectcontain > div {
+    margin: 20px 3px;
+}
+#selectcontain input[type="button"] {
+    display: block;
+    margin: 50px auto 0;
+}
+#selectcontain input[type="file"] {
+    display: block;
+    margin: 60px auto 0;
+    border: 1px solid #b09090;
+    padding: 2px;
+    border-radius: 3px;
+}
+#selectcontain #nobueno {
+    display: none;
+    text-align: center;
+    color: orange;
+    font-weight: 600;
+    font-size: 14px;
+    margin-top: 5px;
+}
+
+
+/* Whitney font available here: https://allyourfonts.com/font/whitney-font/ */
+
+.theme-light {
+    --header-primary: #060607;
+    --header-secondary: #4f5660;
+    --text-normal: #2e3338;
+    --text-muted: #747f8d;
+    --text-link: #0067e0;
+    --channels-default: #6a7480;
+    --interactive-normal: #4f5660;
+    --interactive-hover: #2e3338;
+    --interactive-active: #060607;
+    --interactive-muted: #c7ccd1;
+    --background-primary: #fff;
+    --background-secondary: #f2f3f5;
+    --background-secondary-alt: #ebedef;
+    --background-tertiary: #e3e5e8;
+    --background-accent: #747f8d;
+    --background-floating: #fff;
+    --background-mobile-primary: #f8f9f9;
+    --background-mobile-secondary: #fff;
+    --background-modifier-hover: rgba(116,127,141,0.08);
+    --background-modifier-active: rgba(116,127,141,0.16);
+    --background-modifier-selected: rgba(116,127,141,0.24);
+    --background-modifier-accent: rgba(6,6,7,0.08);
+    --background-mentioned: rgba(250,166,26,0.1);
+    --background-mentioned-hover: rgba(250,166,26,0.2);
+    --background-message-hover: rgba(6,6,7,0.02);
+    --background-help-warning: rgba(250,166,26,0.1);
+    --background-help-info: rgba(0,103,224,0.1);
+    --scrollbar-thin-thumb: rgba(79,84,92,0.3);
+    --scrollbar-thin-track: transparent;
+    --scrollbar-auto-thumb: #ccc;
+    --scrollbar-auto-track: #f2f2f2;
+    --scrollbar-auto-scrollbar-color-thumb: #e3e5e8;
+    --scrollbar-auto-scrollbar-color-track: #f2f3f5;
+    --elevation-stroke: 0 0 0 1px rgba(6,6,7,0.08);
+    --elevation-low: 0 1px 0 rgba(6,6,7,0.1),0 1.5px 0 rgba(6,6,7,0.025),0 2px 0 rgba(6,6,7,0.025);
+    --elevation-medium: 0 4px 4px rgba(0,0,0,0.08);
+    --elevation-high: 0 8px 16px rgba(0,0,0,0.16);
+    --logo-primary: #7289da;
+    --focus-primary: #00b0f4;
+    --guild-header-text-shadow: 0 1px 1px hsla(0,0%,100%,0.4);
+    --channeltextarea-background: #ebedef;
+    --activity-card-background: #fff;
+    --textbox-markdown-syntax: #6a7480;
+    --deprecated-card-bg: #f8f9f9;
+    --deprecated-card-editable-bg: rgba(246,246,247,0.6);
+    --deprecated-store-bg: #f8f9f9;
+    --deprecated-quickswitcher-input-background: #fff;
+    --deprecated-quickswitcher-input-placeholder: rgba(79,84,92,0.3);
+    --deprecated-text-input-bg: rgba(79,84,92,0.02);
+    --deprecated-text-input-border: rgba(79,84,92,0.3);
+    --rcdv-hover: #f0f0fe;
+    --rcdv-spoiler: hsla(0,0%,0%,.1);
+}
+
+.theme-dark {
+    --header-primary: #fff;
+    --header-secondary: #b9bbbe;
+    --text-normal: #dcddde;
+    --text-muted: #72767d;
+    --text-link: #00b0f4;
+    --channels-default: #8e9297;
+    --interactive-normal: #b9bbbe;
+    --interactive-hover: #dcddde;
+    --interactive-active: #fff;
+    --interactive-muted: #4f545c;
+    --background-primary: #36393f;
+    --background-secondary: #2f3136;
+    --background-secondary-alt: #292b2f;
+    --background-tertiary: #202225;
+    --background-accent: #4f545c;
+    --background-floating: #18191c;
+    --background-mobile-primary: #36393f;
+    --background-mobile-secondary: #2f3136;
+    --background-modifier-hover: rgba(79,84,92,0.16);
+    --background-modifier-active: rgba(79,84,92,0.24);
+    --background-modifier-selected: rgba(79,84,92,0.32);
+    --background-modifier-accent: hsla(0,0%,100%,0.06);
+    --background-mentioned: rgba(250,166,26,0.05);
+    --background-mentioned-hover: rgba(250,166,26,0.08);
+    --background-message-hover: rgba(4,4,5,0.07);
+    --background-help-warning: rgba(250,166,26,0.1);
+    --background-help-info: rgba(0,176,244,0.1);
+    --scrollbar-thin-thumb: #202225;
+    --scrollbar-thin-track: transparent;
+    --scrollbar-auto-thumb: #202225;
+    --scrollbar-auto-track: #2e3338;
+    --scrollbar-auto-scrollbar-color-thumb: #202225;
+    --scrollbar-auto-scrollbar-color-track: #2f3136;
+    --elevation-stroke: 0 0 0 1px rgba(4,4,5,0.15);
+    --elevation-low: 0 1px 0 rgba(4,4,5,0.2),0 1.5px 0 rgba(6,6,7,0.05),0 2px 0 rgba(4,4,5,0.05);
+    --elevation-medium: 0 4px 4px rgba(0,0,0,0.16);
+    --elevation-high: 0 8px 16px rgba(0,0,0,0.24);
+    --logo-primary: #fff;
+    --focus-primary: #00b0f4;
+    --guild-header-text-shadow: 0 1px 1px rgba(0,0,0,0.4);
+    --channeltextarea-background: #40444b;
+    --activity-card-background: #202225;
+    --textbox-markdown-syntax: #8e9297;
+    --deprecated-card-bg: rgba(32,34,37,0.6);
+    --deprecated-card-editable-bg: rgba(32,34,37,0.3);
+    --deprecated-store-bg: #36393f;
+    --deprecated-quickswitcher-input-background: #72767d;
+    --deprecated-quickswitcher-input-placeholder: hsla(0,0%,100%,0.3);
+    --deprecated-text-input-bg: rgba(0,0,0,0.1);
+    --deprecated-text-input-border: rgba(0,0,0,0.3);
+    --deprecated-text-input-border-hover: #040405;
+    --deprecated-text-input-border-disabled: #202225;
+    --deprecated-text-input-prefix: #dcddde;
+    --rcdv-hover: #3e4145;
+    --rcdv-spoiler: hsla(0,0%,100%,.1);
+}
+
+
+body {
+    font-family: Whitney, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    text-rendering: optimizelegibility;
+    margin: 0;
+    background: var(--background-primary);
+}
+
+#main {
+    display: none;
+    position: relative;
+}
+
+#top {
+    position: fixed;
+    top: 0; height: 49px;
+    background: var(--background-secondary);
+    border-bottom: 1px solid var(--background-secondary-alt);
+    left: 0; right: 0;
+    z-index: 10000;
+    padding: 5px;
+}
+#channel {
+    color: var(--header-primary);
+    font-size: 24px;
+    font-weight: 600;
+    font-style: italic;
+}
+#requested {
+    margin-top: 3px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+#rightmode, #nightmode {
+    position: absolute;
+    top: 32px;
+    right: 4px;
+    display: block;
+    cursor: pointer;
+    width: 116px;
+    text-align: right;
+}
+#loadpix {
+    position: absolute;
+    top: 32px;
+    right: 120px;
+    display: block;
+    cursor: pointer;
+    width: 116px;
+    text-align: right;
+}
+
+#filter {
+    position: absolute;
+    display: block;
+    top: 4px;
+    right: 4px;
+    width: 220px;
+}
+
+
+
+/* Main contents */
+
+#contents {
+    position: absolute;
+    top: 60px; bottom: 0;
+    left: 0; right: 0;
+    color: var(--text-normal);
+}
+
+a {
+    color: var(--text-link);
+    text-decoration: none;
+}
+
+pre {
+    display: block;
+    box-sizing: border-box;
+    max-width: 90%;
+    border-radius: 4px;
+    padding: 0;
+    font-family: Consolas,Andale Mono WT,Andale Mono,Lucida Console,Lucida Sans Typewriter,DejaVu Sans Mono,Bitstream Vera Sans Mono,Liberation Mono,Nimbus Mono L,Monaco,Courier New,Courier,monospace;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    margin-top: 6px;
+    white-space: pre-wrap;
+    background-clip: border-box;
+}
+
+code.block {
+    font-size: 0.875rem;
+    line-height: 1.125rem;
+    text-indent: 0;
+    white-space: pre-wrap;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-tertiary);
+    display: block;
+    overflow-x: auto;
+    padding: .5em;
+    border-radius: 4px;
+    color: var(--header-secondary);
+}
+
+code.inline {
+    width: auto;
+    height: auto;
+    padding: .2em;
+    margin: -.2em 0;
+    border-radius: 3px;
+    font-size: 85%;
+    font-family: Consolas,Andale Mono WT,Andale Mono,Lucida Console,Lucida Sans Typewriter,DejaVu Sans Mono,Bitstream Vera Sans Mono,Liberation Mono,Nimbus Mono L,Monaco,Courier New,Courier,monospace;
+    text-indent: 0;
+    border: none;
+    white-space: pre-wrap;
+    line-height: 1.125rem;
+    background: var(--background-secondary);
+}
+
+.quote {
+    display: flex;
+}
+.quote > div {
+    width: 4px;
+    border-radius: 4px;
+    background-color: var(--interactive-muted);
+}
+.quote > blockquote {
+    padding: 0 8px 0 12px;
+    box-sizing: border-box;
+    text-indent: 0;
+    max-width: 90%;
+    display: block;
+    margin: 0;
+}
+
+
+.msg {
+    padding-top: .125rem;
+    padding-bottom: .125rem;
+    padding-left: 5rem;
+    padding-right: 48px !important;
+    position: relative;
+    word-wrap: break-word;
+    user-select: text;
+    flex: 0 0 auto;
+    padding-right: 16px;
+    min-height: 1.375rem;
+}
+.msg:hover {
+    background-color: var(--rcdv-hover);
+}
+
+.msg > .contents {
+    overflow: hidden;
+    margin-left: -5rem;
+    padding-left: 5rem;
+    text-indent: -4rem;
+}
+
+.msg > .contents > .ts {
+    text-align: right;
+    font-size: 0.6875rem;
+    line-height: 1.375rem;
+    margin-right: .25rem;
+    color: var(--text-muted);
+    text-indent: 0;
+    width: 2.25rem;
+    display: inline-block;
+    height: 1.25rem;
+}
+
+.msg > .contents > .user {
+    font-weight: 600;
+    font-size: 1rem;
+    line-height: 1.375rem;
+    color: var(--header-primary);
+    display: inline;
+    vertical-align: baseline;
+    position: relative;
+    margin-right: .35rem;
+    text-indent: -4rem;
+}
+
+.user > .bottag {
+    height: .9375rem;
+    padding: 0 .275rem;
+    margin-top: .075em;
+    border-radius: .1875rem;
+    background: var(--logo-primary);
+    color: var(--background-primary);
+    font-size: .625rem;
+    text-transform: uppercase;
+    vertical-align: top;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    text-indent: 0;
+    margin-right: .25rem;
+    position: relative;
+    top: .1rem;
+}
+.user > .bottag > div {
+    line-height: .9375rem;
+    position: relative;
+    font-weight: 500;
+}
+
+.msg > .contents > .txt {
+    user-select: text;
+    display: inline;
+    word-wrap: break-word;
+    font-size: 1rem;
+    line-height: 1.375rem;
+    white-space: break-spaces;
+    overflow: hidden;
+}
+
+.msg .spoiler {
+    background-color: var(--rcdv-spoiler);
+    border-radius: 3px;
+    position: relative;
+}
+
+.msg .edited {
+    margin-left: .3em;
+    font-size: 0.625rem;
+    cursor: pointer;
+    line-height: 1;
+    user-select: none;
+    color: #747f8d;
+}
+
+.msg .emoji {
+    position: relative;
+    width: 1.375em;
+    height: 1.375em;
+    min-height: 1.375em;
+}
+
+.divider {
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+    left: auto;
+    right: auto;
+    z-index: 1;
+    height: 0;
+    border-top: thin solid var(--background-modifier-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    flex: 0 0 auto;
+    pointer-events: none;
+    box-sizing: border-box;
+    margin-left: 1rem;
+    margin-right: .875rem;
+}
+
+.divider > div {
+    display: block;
+    flex: 0 0 auto;
+    padding: 2px 4px;
+    color: var(--text-muted);
+    background: var(--background-primary);
+    line-height: 13px;
+    font-size: 12px;
+    margin-top: -1px;
+    font-weight: 600;
+    border-radius: 8px;
+}
+
+.container {
+    display: grid;
+    grid-auto-flow: row;
+    grid-row-gap: .25rem;
+    text-indent: 0;
+    min-height: 0;
+    min-width: 0;
+    padding-top: .125rem;
+    padding-bottom: .125rem;
+}
+
+.container > div {
+    justify-self: start;
+    align-self: start;
+    border-color: var(--background-secondary-alt);
+    background-color: var(--background-secondary);
+    box-sizing: border-box;
+    border-radius: 3px;
+    letter-spacing: 0;
+    max-width: 520px;
+    width: 100%;
+    padding: 10px;
+    border: 1px solid transparent;
+    flex-direction: row;
+    align-items: center;
+    display: flex;    
+}
+
+.container > div > div {
+    flex: 1;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.container .filename {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.container .metadata {
+    color: var(--text-muted);
+    margin-right: 8px;
+    line-height: 16px;
+    font-size: 12px;
+}
+
+.container .imgwrap {
+    justify-self: start;
+    align-self: start;
+    cursor: pointer;
+    display: block;
+    position: relative;
+    user-select: text;
+    overflow: hidden;
+    border-radius: 3px;
+}
+
+.container .imgwrap > img {
+    position: absolute;
+}
+
+.msg > .chanlink {
+    float: right;
+    width: 20px;
+    height: 20px;
+    position: absolute;
+    right: 0;
+    padding: 2px;
+    top: 0;
+    font-size: 12px;
+    text-align: center;
+    opacity: 0;
+}
+.msg > .chanlink:after {
+    content: '🔗';
+}
+.msg > .chanlink:hover {
+    opacity: 100;
+}
+
+
+</style>
+
+<script type="text/javascript">
+
+/**********/
+let predump = null; /*CHANNEL DUMP STRING*/
+/**********/
+
+
+const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+let dark = false;
+let body;
+
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    let frm = document.getElementById("selector");
+    filter = document.getElementById("filter");
+    body = document.getElementsByTagName("body")[0];
+    
+    document.getElementById("rightmode").addEventListener("click", () => updateTheme(true));
+    document.getElementById("nightmode").addEventListener("click", () => updateTheme(false));
+    document.getElementById("loadpix").addEventListener("click", () => loadPix());
+    
+    updateTheme(dark);
+    
+    if (predump) {
+        loadDump(predump);
+    } else {
+        frm.elements["ok"].addEventListener("click", () => {
+            let fr = new FileReader();
+            fr.onload = (e) => {
+                predump = e.target.result;
+                loadDump(predump);
+            };
+            fr.readAsText(frm.elements["filename"].files[0]);
+        });
+    }
+    
+    filter.value = '';
+    filter.addEventListener("change", (e) => {
+        loadDump(predump, e.target.value);
+    });
+    
+});
+
+function escapeRegex(string) {
+    return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+}
+
+function loadDump(json, filter) {
+    
+    let nobueno = document.getElementById("nobueno");
+    
+    let dump;
+    try {
+        dump = JSON.parse(json);
+    } catch (e) {
+        nobueno.style.display = "block";
+        return;
+    }
+    
+    if (!dump.messages || !dump.users || dump.messages.length === undefined || typeof dump.users !== "object") {
+        nobueno.style.display = "block";
+        return;
+    }
+    
+    nobueno.style.display = "none";
+    document.getElementById("selectcontain").style.display = "none";
+    
+    let main = document.getElementById("main");
+    let con = document.getElementById("contents");
+    
+    document.getElementById("channel").innerText = "#" + dump.channelname;
+    document.getElementById("requested").innerText = new Date(dump.requestStart * 1000).toString();
+    
+    let prevday = null;
+
+    con.innerHTML = "";
+    for (let msg of dump.messages.reverse()) {
+        
+        //Ignore system messages
+        if (msg.sy) continue;
+        
+        let ct = new Date(msg.ct * 1000);
+        
+        //Author
+        let dn = "Deleted-User";
+        let user = dump.users[msg.au];
+        let ucolor = null;
+        if (user) {
+            dn = user.displayName || user.tag;
+            if (user.displayHexColor) ucolor = user.displayHexColor;
+        }
+        
+        //Filter
+        if (filter) {
+            let re = new RegExp(escapeRegex(filter).replace(/ /, ".*"), "i");
+            if (!msg.tx.match(re) && !dn.match(re) && (!user.tag || !user.tag.match(re))) {
+                continue;
+            }
+        }
+        
+        //Date header on date changes
+        let absday = Math.floor((msg.ct - ct.getTimezoneOffset() * 60) / 86400);
+        if (absday != prevday) {
+            let absdate = new Date(absday * 86400000);
+            let daysep = document.createElement("div");
+            daysep.className = "divider";
+            daysep.innerHTML = "<div>" + absdate.getDate() + " " + monthNames[absdate.getMonth()] + " " + absdate.getFullYear() + "</div>";
+            con.append(daysep);
+            prevday = absday;
+        }
+        
+        //Message content (process formatting)
+        let txt = msg.tx;
+        txt = txt.replace(/> (.*?)(\n|$)/g, '<blockquote>$1</blockquote>')
+            .replace(/__(.*?)__/g, "<u>$1</u>")
+            .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
+            .replace(/\*(.*?)\*/g, "<i>$1</i>")
+            .replace(/~~(.*?)~~/g, "<s>$1</s>")
+            .replace(/```.*\n((.|\n)*?)\n```/g, '<pre><code class="block">$1</code></pre>')
+            .replace(/`(.*?)`/g, '<code class="inline">$1</code>')
+            .replace(/\|\|(.*?)\|\|/g, '<span class="spoiler">$1</span>')
+            .replace(/<\/blockquote><blockquote>/g, '\n')
+            .replace(/<blockquote>/g, '<div class="quote"><div></div><blockquote>')
+            .replace(/<\/blockquote>/g, '</blockquote></div>')
+            .replace(/<?((https?|s?ftp)\:\/\/([^ >\n]+))>?/g, '<a target="_blank" href="$1">$1</a>')
+            ;
+
+        let msgdiv = document.createElement("div");
+        msgdiv.id = "msg_" + msg.id;
+        msgdiv.className = "msg";
+        
+        //Assemble main message elements in 'contents'
+        let contentsdiv = document.createElement("div");
+        contentsdiv.className = "contents";
+        
+        let tsdiv = document.createElement("div");
+        tsdiv.className = "ts";
+        tsdiv.innerHTML = ("0" + ct.getHours()).slice(-2) + ":" + ("0" + ct.getMinutes()).slice(-2);
+        tsdiv.title = ct.toString();
+        
+        let userdiv = document.createElement("div");
+        userdiv.className = "user";
+        userdiv.innerHTML = dn;
+        if (ucolor) {
+            userdiv.style.color = ucolor;
+        }
+        if (user.bot) {
+            //Bot tag
+            let bottag = document.createElement("div");
+            bottag.className = "bottag";
+            bottag.innerHTML = "<div>BOT</div>";
+            userdiv.prepend(bottag);
+        }
+        
+        let txtdiv = document.createElement("div");
+        txtdiv.className = "txt";
+        txtdiv.innerHTML = txt;
+        
+        if (msg.et) {
+            //Edited tag
+            let et = new Date(msg.et * 1000);
+            let etdiv = document.createElement("time");
+            etdiv.className = "edited";
+            etdiv.textContent = "(edited)";
+            etdiv.dateTime = et.toISOString();
+            etdiv.setAttribute("role", "note");
+            etdiv.setAttribute("aria-label", et.toString());
+            etdiv.setAttribute("title", et.toString());
+            txtdiv.append(etdiv);
+        }
+        
+        contentsdiv.append(tsdiv);
+        contentsdiv.append(userdiv);
+        contentsdiv.append(txtdiv);
+        msgdiv.append(contentsdiv);
+        
+        //Attachments block
+        if (msg.at && msg.at.length) {
+            for (let att of msg.at) {
+                let attdiv = document.createElement("div");
+                attdiv.className = "container";
+                attdiv.innerHTML = '<div><div class="attachment"><div class="filename"><a href="' + att.u + '">' + att.n + '</a></div><div class="metadata">' + (att.s / 1024).toFixed(2) + ' KB</div></div></div>';
+
+                if (att.w && att.h) {
+                    let w = att.w;
+                    let h = att.h;
+                    if (w > 400) {
+                        h = h * 400 / w;
+                        w = 400;
+                    }
+                    if (h > 300) {
+                        w = w * 300 / h;
+                        h = 300;
+                    }
+                    
+                    let imgwrap = document.createElement("a");
+                    imgwrap.className = "imgwrap";
+                    imgwrap.target = "_blank";
+                    imgwrap.href = att.u;
+                    imgwrap.style.width = w + "px";
+                    imgwrap.style.height = h + "px";
+                    
+                    attdiv.getElementsByClassName("attachment")[0].append(imgwrap);
+                }
+                
+                msgdiv.append(attdiv);
+            }
+        }
+        
+        //Link to discord
+        let linkdiv = document.createElement("a");
+        linkdiv.className = "chanlink";
+        linkdiv.target = "_blank";
+        linkdiv.href = "https://discordapp.com/channels/" + dump.serverid + "/" + dump.channelid + "/" + msg.id;
+        
+        msgdiv.append(linkdiv);
+        
+        con.append(msgdiv);
+    }
+    
+    document.getElementById("loadpix").style.display = "block";
+    main.style.display = "block";
+}
+
+function updateTheme(newdark) {
+    dark = newdark;
+    if (dark) {
+        body.classList.remove("theme-light");
+        body.classList.add("theme-dark");
+        document.getElementById("rightmode").style.display = "none";
+        document.getElementById("nightmode").style.display = "block";
+    } else {
+        body.classList.remove("theme-dark");
+        body.classList.add("theme-light");
+        document.getElementById("nightmode").style.display = "none";
+        document.getElementById("rightmode").style.display = "block";
+    }
+}
+
+function loadPix() {
+    for (let msg of document.getElementById("contents").getElementsByClassName("msg")) {
+        let txt = msg.getElementsByClassName("txt")[0];
+        txt.innerHTML = txt.innerHTML.replace(/&lt;(\:[A-Za-z0-9~_-]+\:)([0-9]+)&gt;/g, '<img aria-label="$1" src="https://cdn.discordapp.com/emojis/$2.png?v=1" alt=":dragohug:" draggable="false" class="emoji jumboable">');
+        
+        let imgwrap = msg.getElementsByClassName("imgwrap");
+        if (imgwrap.length) {
+            imgwrap = imgwrap[0];
+            let img = document.createElement("img");
+            img.src = imgwrap.href;
+            img.style.width = imgwrap.style.width;
+            img.style.height = imgwrap.style.height;
+            imgwrap.append(img);
+        }
+    }
+    document.getElementById("loadpix").style.display = "none";
+}
+
+</script>
+
+</head>
+<body>
+
+<div id="selectcontain"><form id="selector">
+    <div>Select a channel dump (.json)</div>
+    <input type="file" name="filename" accept=".json">
+    <div id="nobueno">Invalid format</div>
+    <input type="button" name="ok" value="Load file">
+</form></div>
+
+<div id="main">
+    <div id="top">
+        <div id="channel"></div>
+        <div id="requested"></div>
+        <input type="text" id="filter">
+        <a id="rightmode" title="Switch to night mode">🌘 Night mode</a>
+        <a id="nightmode" title="Switch to right mode">💡 Right mode</a>
+        <a id="loadpix" title="Images are not part of the channel dump and may no longer exist on the server or may become unreachable.">🖼️ Load images</a>
+    </div>
+    <div id="contents"></div>
+</div>
+
+</body>
+</html>

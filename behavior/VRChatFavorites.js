@@ -1,42 +1,43 @@
-/* Module: VRChatFavorites -- Manages a channel for sharing links to VRChat worlds. */
+/* VRChatFavorites -- Manages a channel for sharing static links to VRChat worlds. */
 
-const { AttachmentBuilder, EmbedBuilder } = require('discord.js');
-const random = require('meteor-random');
+import { AttachmentBuilder, EmbedBuilder } from 'discord.js';
+import random from 'meteor-random';
 
-const Module = require('../Module.js');
+import Behavior from '../src/Behavior.js';
 
-const PERM_ADMIN = 'administrator';
+export default class VRChatFavorites extends Behavior {
 
-class ModVRChatFavorites extends Module {
+    get params() { return [
+        {n: "pinnedchan", d: "ID of text channel for favorite worlds"},
+        {n: "listname", d: "List name override (unique between this module and VRChatPhotos); defaults to instance name"},
+        {n: "deleteemoji", d: "Emoji for deleting things"},
+        {n: "usewebhook", d: "Use a webhook to re-emit links"}
+    ]; }
+
+    get defaults() { return {
+        listname: null,
+        deleteemoji: "❌",
+        usewebhook: true
+    }; }
+
+    get requiredEnvironments() { return {
+        Discord: 'Discord'
+    }; }
+
+    get requiredBehaviors() { return {
+        Users: "Users",
+        Commands: "Commands",
+        VRChat: "VRChat"
+    }; }
 
     get isMultiInstanceable() { return true; }
 
-    get requiredParams() { return [
-        "env",                  //Discord environment
-        "pinnedchan"            //ID of text channel for favorite worlds
-    ]; }
-
-    get optionalParams() { return [
-        "name",                 //List name override (unique between this module and VRChatPhotos)
-        "deleteemoji",          //Emoji for deleting things
-        "usewebhook"            //Use a webhook to re-emit links
-    ]; }
-
-    get requiredEnvironments() { return [
-        'Discord'
-    ]; }
-
-    get requiredModules() { return [
-        'Commands',
-        'VRChat'
-    ]; }
-
     get denv() {
-        return this.env(this.param('env'));
+        return this.env("Discord");
     }
 
     get vrchat() {
-        return this.mod("VRChat");
+        return this.be("VRChat");
     }
 
     get pinnedchan() {
@@ -46,9 +47,7 @@ class ModVRChatFavorites extends Module {
     constructor(name) {
         super('VRChatFavorites', name);
         
-        this._params["name"] = name.toLowerCase();
-        this._params["deleteemoji"] = "❌";
-        this._params["usewebhook"] = true;
+        this._listName = name;
 
         this._pins = {};  //Map of favorited worlds (transient) {WORLDID: Message, ...}
     }
@@ -57,6 +56,7 @@ class ModVRChatFavorites extends Module {
     initialize(opt) {
         if (!super.initialize(opt)) return false;
 
+        if (this.param("listname")) this._listName = this.param("listname");
 
         //# Register Discord callbacks
 
@@ -91,7 +91,7 @@ class ModVRChatFavorites extends Module {
 
         };
 
-        let messageHandler = (env, type, message, authorid, channelid, messageObject) => {
+        let messageHandler = async (env, type, message, authorid, channelid, messageObject) => {
             if (env.name != this.param("env") || type != "regular" || messageObject.webhookId) return;
 
             if (channelid == this.pinnedchan?.id) {
@@ -106,17 +106,17 @@ class ModVRChatFavorites extends Module {
 
                 for (let worldid of worldids) {
                     if (this._pins[worldid]) {
-                        let worldname = this.getCachedWorld(worldid)?.name || worldid;
-                        this.announce("<@" + authorid + "> The world " + worldname + " is already in " + this.param("name") + ".");
+                        let worldname = await this.getCachedWorld(worldid)?.name || worldid;
+                        this.announce("<@" + authorid + "> The world " + worldname + " is already in " + this._listName + ".");
                         continue;
                     }
 
                     this.vrchat.dqueue(function() {
                         this.potentialWorldPin(worldid, true, authorid)
-                            .then(result => {
+                            .then(async result => {
                                 if (!result) {
-                                    let worldname = this.getCachedWorld(worldid)?.name || worldid;
-                                    this.announce("<@" + authorid + "> Failed to add the world " + worldname + " to " + this.param("name") + " - does it still exist?");
+                                    let worldname = await this.getCachedWorld(worldid)?.name || worldid;
+                                    this.announce("<@" + authorid + "> Failed to add the world " + worldname + " to " + this._listName + " - does it still exist?");
                                 }
                             });
                     }.bind(this));
@@ -132,8 +132,8 @@ class ModVRChatFavorites extends Module {
 
             //Prefetch and index favorites
 
-            this.denv.scanEveryMessage(this.pinnedchan, (message) => {
-                let worldid = this.extractWorldFromMessage(message);
+            this.denv.scanEveryMessage(this.pinnedchan, async (message) => {
+                let worldid = await this.extractWorldFromMessage(message);
                 if (!worldid) return;
                 this._pins[worldid] = message;
             });
@@ -146,17 +146,15 @@ class ModVRChatFavorites extends Module {
 
         //# Register Commands
 
+        const permAdmin = this.be("Users").defaultPermAdmin;
 
+        this.be('Commands').registerRootExtension(this, 'VRChat', 'vrcany');
 
-
-
-        this.mod('Commands').registerRootExtension(this, 'VRChat', 'vrcany');
-
-        this.mod('Commands').registerCommand(this, 'vrcany ' + this.param("name"), {
-            description: "Obtain a random message from the " + this.param("name") + " worlds channel.",
+        this.be('Commands').registerCommand(this, 'vrcany ' + this._listName, {
+            description: "Obtain a random message from the " + this._listName + " worlds channel.",
             args: ["filter", true],
             minArgs: 0
-        },  (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let filter = undefined;
             if (args.filter.length) {
@@ -166,13 +164,13 @@ class ModVRChatFavorites extends Module {
                 filter = this.pinFilterFromString(filterarg, checkonlytags);
             }
 
-            let message = this.randomPin(filter);
+            let message = await this.randomPin(filter);
             if (!message) {
-                ep.reply("There are no worlds in " + this.param("name") + (args.filter.length ? " matching your search" : "") + "!");
+                ep.reply("There are no worlds in " + this._listName + (args.filter.length ? " matching your search" : "") + "!");
                 return true;
             }
 
-            let data = this.extractWorldFromMessage(message, true);
+            let data = await this.extractWorldFromMessage(message, true);
             if (!data) return true;
 
             ep.reply("**" + data.title + "** - " + this.getPinnedMsgURL(message.id));
@@ -181,13 +179,13 @@ class ModVRChatFavorites extends Module {
         });
 
 
-        this.mod('Commands').registerRootExtension(this, 'VRChat', 'vrcount');
+        this.be('Commands').registerRootExtension(this, 'VRChat', 'vrcount');
 
-        this.mod('Commands').registerCommand(this, 'vrcount ' + this.param("name"), {
-            description: "Returns the current amount of worlds from the " + this.param("name") + " channel.",
+        this.be('Commands').registerCommand(this, 'vrcount ' + this._listName, {
+            description: "Returns the current amount of worlds from the " + this._listName + " channel.",
             args: ["filter", true],
             minArgs: 0
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let filter = undefined;
             if (args.filter.length) {
@@ -197,44 +195,44 @@ class ModVRChatFavorites extends Module {
                 filter = this.pinFilterFromString(filterarg, checkonlytags);
             }
 
-            let count = this.countPins(filter);
+            let count = await this.countPins(filter);
             ep.reply(count);
 
             return true;
         });
 
 
-        this.mod('Commands').registerRootExtension(this, 'VRChat', 'vrcsave');
+        this.be('Commands').registerRootExtension(this, 'VRChat', 'vrcsave');
 
-        this.mod('Commands').registerCommand(this, 'vrcsave ' + this.param("name"), {
-            description: "Back up the list of worlds from the " + this.param("name") + " channel.",
-            permissions: [PERM_ADMIN],
+        this.be('Commands').registerCommand(this, 'vrcsave ' + this._listName, {
+            description: "Back up the list of worlds from the " + this._listName + " channel.",
+            permissions: [permAdmin],
             type: ["private"]
         },  (env, type, userid, channelid, command, args, handle, ep) => {
 
             let json = {};
 
-            this.denv.scanEveryMessage(this.pinnedchan, (message) => {
-                let data = this.extractWorldFromMessage(message, true);
+            this.denv.scanEveryMessage(this.pinnedchan, async (message) => {
+                let data = await this.extractWorldFromMessage(message, true);
                 if (!data) return;
                 json[data.worldid] = data;
-            }, () => {
-                ep.reply(new AttachmentBuilder(Buffer.from(JSON.stringify(json, undefined, 4)), {name: this.param("name") + ".json"}));
+            }, async () => {
+                ep.reply(new AttachmentBuilder(Buffer.from(JSON.stringify(json, undefined, 4)), {name: this._listName + ".json"}));
             });
 
             return true;
         });
 
 
-        this.mod('Commands').registerRootExtension(this, 'VRChat', 'vrcfix');
+        this.be('Commands').registerRootExtension(this, 'VRChat', 'vrcfix');
 
-        this.mod('Commands').registerCommand(this, 'vrcfix ' + this.param("name") + ' update', {
-            description: "Refresh all processed entries from " + this.param("name") + " (non-destructive).",
-            permissions: [PERM_ADMIN]
+        this.be('Commands').registerCommand(this, 'vrcfix ' + this._listName + ' update', {
+            description: "Refresh all processed entries from " + this._listName + " (non-destructive).",
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
             this.denv.scanEveryMessage(this.pinnedchan, async (message) => {
-                let worldid = this.extractWorldFromMessage(message);
+                let worldid = await this.extractWorldFromMessage(message);
                 if (!worldid) return;
 
                 let world = await this.getWorld(worldid);
@@ -285,12 +283,12 @@ class ModVRChatFavorites extends Module {
                 }
 
                 if (changed) {
-                    this.vrchat.dqueue(function() {
-                        message.edit({embeds: [emb], components: [this.vrchat.worldInviteButtons()]});
+                    this.vrchat.dqueue(async function() {
+                        message.edit({embeds: [emb], components: [await this.vrchat.worldInviteButtons()]});
                     }.bind(this));
                 }
 
-            }, () => {
+            }, async () => {
                 ep.reply("Done!");
             });
 
@@ -299,22 +297,22 @@ class ModVRChatFavorites extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'vrcfix ' + this.param("name") + ' convert', {
-            description: "Extract and remove messages from the " + this.param("name") + " channel (destructive).",
+        this.be('Commands').registerCommand(this, 'vrcfix ' + this._listName + ' convert', {
+            description: "Extract and remove messages from the " + this._listName + " channel (destructive).",
             details: [
                 "Note that converted messages are added to the end, so the end result might be in a different order.",
                 "May overload the VRChat delay queue while in operation."
             ],
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
             let worldids = [];
             let deleted = 0;
             let pinned = 0;
 
-            this.denv.scanEveryMessage(this.pinnedchan, (message) => {
+            this.denv.scanEveryMessage(this.pinnedchan, async (message) => {
 
-                let data = this.extractWorldFromMessage(message, true);
+                let data = await this.extractWorldFromMessage(message, true);
                 if (data) {
                     worldids.push([data.worldid, data.sharedById]);
                     if (this._pins[data.worldid]) delete this._pins[data.worldid];
@@ -328,7 +326,7 @@ class ModVRChatFavorites extends Module {
                 }.bind(this));
                 deleted += 1;
 
-            }, () => {
+            }, async () => {
                 
                 worldids.reverse();
                 let promises = [];
@@ -336,16 +334,16 @@ class ModVRChatFavorites extends Module {
                 for (let desc of worldids) {
                     let worldid = desc[0], userid = desc[1];
                     if (this._pins[worldid]) {
-                        let worldname = this.getCachedWorld(worldid)?.name || worldid;
+                        let worldname = await this.getCachedWorld(worldid)?.name || worldid;
                         this.announce("The world " + worldname + " is already pinned.");
                         continue;
                     }
     
                     this.vrchat.dqueue(function() {
                         promises.push(this.potentialWorldPin(worldid, true, userid)
-                            .then(result => {
+                            .then(async result => {
                                 if (!result) {
-                                    let worldname = this.getCachedWorld(worldid)?.name || worldid;
+                                    let worldname = await this.getCachedWorld(worldid)?.name || worldid;
                                     this.announce("Failed to add the world " + worldname + " - does it still exist?");
                                 } else {
                                     pinned += 1;
@@ -367,9 +365,9 @@ class ModVRChatFavorites extends Module {
         });
 
 
-        this.mod('Commands').registerCommand(this, 'vrcfix ' + this.param("name") + ' removereacts', {
-            description: "Remove all reactions from the " + this.param("name") + " channel (blindly).",
-            permissions: [PERM_ADMIN]
+        this.be('Commands').registerCommand(this, 'vrcfix ' + this._listName + ' removereacts', {
+            description: "Remove all reactions from the " + this._listName + " channel (blindly).",
+            permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
             this.denv.scanEveryMessage(this.pinnedchan, (message) => {
@@ -395,7 +393,7 @@ class ModVRChatFavorites extends Module {
     // # Module code below this line #
     
 
-    //VRChat module shortcuts
+    //VRChat module shortcuts (async)
     
     extractWorldFromMessage(message, verbose) {
         return this.vrchat.extractWorldFromMessage(message, verbose);
@@ -421,14 +419,14 @@ class ModVRChatFavorites extends Module {
         if (byid) {
             worldid = message;
         } else {
-            worldid = this.extractWorldFromMessage(message);
+            worldid = await this.extractWorldFromMessage(message);
         }
         if (!worldid) return false;
         if (this._pins[worldid]) return false;
 
-        let sharedBy = this.denv.idToDisplayName(userid);
+        let sharedBy = await this.denv.idToDisplayName(userid);
 
-        let world = this.getCachedWorld(worldid);
+        let world = await this.getCachedWorld(worldid);
         if (!world) {
             if (byid) {
                 world = await this.getWorld(worldid, false, true);
@@ -451,7 +449,7 @@ class ModVRChatFavorites extends Module {
         }
 
         if (sharedBy) {
-            let msgurl = this.vrchat.getPersonMsgURL(userid);
+            let msgurl = await this.vrchat.getPersonMsgURL(userid);
             if (msgurl) sharedBy = "[" + sharedBy + "](" + msgurl + ")";
             emb.addFields({name: "Added by", value: sharedBy, inline: true});
         }
@@ -470,11 +468,11 @@ class ModVRChatFavorites extends Module {
             try {
                 let member = await this.denv.server.members.fetch(userid);
                 let webhook = await this.denv.getWebhook(this.pinnedchan, member);
-                post = webhook.send({embeds: [emb], components: [this.vrchat.worldInviteButtons()]});
+                post = webhook.send({embeds: [emb], components: [await this.vrchat.worldInviteButtons()]});
             } catch (e) {}
         }
         if (!post) {
-            post = this.pinnedchan.send({embeds: [emb], components: [this.vrchat.worldInviteButtons()]});
+            post = this.pinnedchan.send({embeds: [emb], components: [await this.vrchat.worldInviteButtons()]});
         }
 
         return post.then(newmessage => {
@@ -490,7 +488,7 @@ class ModVRChatFavorites extends Module {
 
     //Messages with favorites
 
-    extractOwnersFromPin(message) {
+    async extractOwnersFromPin(message) {
         if (!message) return null;
 
         let emb = null;
@@ -503,7 +501,7 @@ class ModVRChatFavorites extends Module {
             if (field.name.match(/^added by$/i)) {
                 let extrs = field.value.match(/\[[^\]]+\]\(https:\/\/discord\.com\/channels\/[0-9]+\/[0-9]+\/([0-9]+)\)/);
                 if (extrs) {
-                    let person = this.vrchat.findPersonByMsg(extrs[1]);
+                    let person = await this.vrchat.findPersonByMsg(extrs[1]);
                     if (person) results.push(person);
                 }
             }
@@ -516,17 +514,17 @@ class ModVRChatFavorites extends Module {
         return "https://discord.com/channels/" + this.denv.server.id + "/" + this.pinnedchan.id + "/" + msgid;
     }
 
-    randomPin(makefilter) {
-        return this.randomEntry(this._pins, makefilter ? makefilter(this._pins) : undefined);
+    async randomPin(makefilter) {
+        return this.randomEntry(this._pins, makefilter ? await (async () => makefilter(this._pins)) : undefined);
     }
 
-    countPins(makefilter) {
-        return this.countEntries(this._pins, makefilter ? makefilter(this._pins) : undefined);
+    async countPins(makefilter) {
+        return this.countEntries(this._pins, makefilter ? await (async () => makefilter(this._pins)) : undefined);
     }
 
     pinFilterFromString(filterarg, checkonlytags) {
-        return pins => worldid => {
-            let data = this.extractWorldFromMessage(pins[worldid], true);
+        return pins => async worldid => {
+            let data = await this.extractWorldFromMessage(pins[worldid], true);
             let filters = [
                 (data, filter) => {
                     if (data.tags) {
@@ -602,6 +600,3 @@ class ModVRChatFavorites extends Module {
     }
 
 }
-
-
-module.exports = ModVRChatFavorites;

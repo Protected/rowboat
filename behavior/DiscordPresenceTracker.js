@@ -1,49 +1,26 @@
-/* Module: DiscordPresenceTracker -- Announces updates to user presence in a Discord channel. */
+/* DiscordPresenceTracker -- Announces updates to user presence in a Discord channel. */
 
-const moment = require('moment');
-const { EmbedBuilder, ActivityType } = require('discord.js');
+import moment from 'moment';
+import { EmbedBuilder, ActivityType } from 'discord.js';
 
-const Module = require('../Module.js');
+import Behavior from '../src/Behavior.js';
 
-class ModDiscordPresenceTracker extends Module {
+export default class DiscordPresenceTracker extends Behavior {
 
-    get isMultiInstanceable() { return true; }
-
-    get requiredParams() { return [
-        "env",
-        "channelid"
+    get params() { return [
+        {n: "channelid", d: "ID of the channel where the updates will be sent"},
+        {n: "roleid", d: "ID of an optional role required for being tracked"},
+        {n: "activities", d: "List of tracked activities (see discord API docs)"},
+        {n: "actinfo", d: "Activity descriptors: {NAME: {filter: {...}, fieldTitle, fieldLabels: {...}, online, color}, ...}"},
+        {n: "reconnecttolerance", d: "How long until a disconnection becomes valid to be announced (s)"},
+        {n: "reconnectchecktimer", d: "How often to validate disconnections (s)"},
+        {n: "usewebhook", d: "Whether to use a temporary webhook for announcements"}
     ]; }
 
-    get optionalParams() { return [
-        "roleid",               //Optional role required for being tracked
-        "activities",           //List of tracked activities
-        "actinfo",              //Activity descriptors: {NAME: {filter: {...}, fieldTitle, fieldLabels: {...}, online, color}, ...}
-        "reconnecttolerance",   //How long until a disconnection becomes valid to be announced
-        "reconnectchecktimer",  //How often to validate disconnections
-        "usewebhook"            //Whether to use a temporary webhook for announcements
-    ]; }
-
-    get requiredEnvironments() { return [
-        'Discord'
-    ]; }
-
-    get requiredModules() { return [
-    ]; }
-    
-    get denv() {
-        return this.env(this.param('env'));
-    }
-
-    get announcechan() {
-        return this.denv.server.channels.cache.get(this.param("channelid"));
-    }
-
-    constructor(name) {
-        super('DiscordPresenceTracker', name);
-
-        this._params["activities"] = ["twitch"];
-
-        this._params["actinfo"] = {
+    get defaults() { return {
+        roleid: null,
+        activities: ["twitch"],
+        actinfo: {
             twitch: {
                 //Match every field in Activity to identify this activity
                 filter: {name: "Twitch", type: ActivityType.Streaming},
@@ -57,16 +34,31 @@ class ModDiscordPresenceTracker extends Module {
                 //Embed accent color
                 color: "#593695"
             }
-        };
+        },
+        reconnecttolerance: 180,
+        reconnectchecktimer: 61,
+        usewebhook: true
+    }; }
 
-        this._params["reconnecttolerance"] = 180;
-        this._params["reconnectchecktimer"] = 61;
+    get requiredEnvironments() { return {
+        Discord: "Discord"
+    }; }
 
-        this._params["usewebhook"] = true;
+    get isMultiInstanceable() { return true; }
+    
+    get denv() {
+        return this.env("Discord");
+    }
+
+    get announcechan() {
+        return this.denv.server.channels.cache.get(this.param("channelid"));
+    }
+
+    constructor(name) {
+        super('DiscordPresenceTracker', name);
 
         this._pendingoffline = {};  //{userid: {ACTIVITY: TS, ...}, ...}
         this._timer = null;
-
     }
 
     initialize(opt) {
@@ -203,7 +195,7 @@ class ModDiscordPresenceTracker extends Module {
         embed.setDescription(info.online);
 
         if (this.param("usewebhook")) {
-            this.denv.getWebhook(this.announcechan, member).then((webhook) => webhook.send(embed));
+            this.denv.getWebhook(this.announcechan, member).then((webhook) => webhook.send({embeds: [embed]}));
         } else {
             this.denv.msg(this.announcechan, embed);
         }
@@ -228,7 +220,7 @@ class ModDiscordPresenceTracker extends Module {
         if (changes.length) {
             embed.setDescription(changes.join("\n"));
             if (this.param("usewebhook")) {
-                this.denv.getWebhook(this.announcechan, member).then((webhook) => webhook.send(embed));
+                this.denv.getWebhook(this.announcechan, member).then((webhook) => webhook.send({embeds: [embed]}));
             } else {
                 this.denv.msg(this.announcechan, embed);
             }
@@ -245,7 +237,7 @@ class ModDiscordPresenceTracker extends Module {
         embed.setDescription(info.offline);
 
         if (this.param("usewebhook")) {
-            this.denv.getWebhook(this.announcechan, member).then((webhook) => webhook.send(embed));
+            this.denv.getWebhook(this.announcechan, member).then((webhook) => webhook.send({embeds: [embed]}));
         } else {
             this.denv.msg(this.announcechan, embed);
         }
@@ -253,7 +245,3 @@ class ModDiscordPresenceTracker extends Module {
 
 
 }
-
-
-module.exports = ModDiscordPresenceTracker;
-

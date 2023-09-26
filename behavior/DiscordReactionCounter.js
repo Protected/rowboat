@@ -1,29 +1,22 @@
-/* Module: ReactionCounter -- Ranks Discord channel messages by reactions. */
+/* ReactionCounter -- Ranks Discord channel messages by reactions. */
 
-const random = require('meteor-random');
+import random from 'meteor-random';
 
-const Module = require('../Module.js');
+import Behavior from '../src/Behavior.js';
 
-const PERM_ADMIN = 'administrator';
+export default class DiscordReactionCounter extends Behavior {
 
-class ModReactionCounter extends Module {
+    get requiredEnvironments() { return {
+        Discord: 'Discord'
+    }; }
 
-    get requiredParams() { return [
-    ]; }
-    
-    get optionalParams() { return [
-    ]; }
-
-    get requiredEnvironments() { return [
-        'Discord'
-    ]; }
-
-    get requiredModules() { return [
-        'Commands',
-    ]; }
+    get requiredBehaviors() { return {
+        Users: 'Users',
+        Commands: 'Commands'
+    }; }
 
     constructor(name) {
-        super('ReactionCounter', name);
+        super('DiscordReactionCounter', name);
      
     }
     
@@ -34,17 +27,21 @@ class ModReactionCounter extends Module {
 
         //# Register commands
 
-        this.mod('Commands').registerCommand(this, 'recount', {
+        const permAdmin = this.be('Users').defaultPermAdmin;
+
+        this.be('Commands').registerCommand(this, 'recount', {
             description: "Lists the top messages with the most reactions of the given emoji.",
             details: [
                 "Returns the top 3 by default."
             ],
             args: ["channelid", "emoji", "amount"],
             minArgs: 2,
-            permissions: [PERM_ADMIN]
+            permissions: [permAdmin]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let channel = env.server.channels.cache.get(args.channelid);
+            if (env.name !== this.env('Discord').name) return true;
+
+            let channel = env.server.channels.cache.get(env.extractChannelId(args.channelid));
             if (!channel) {
                 ep.reply("Channel not found.");
                 return true;
@@ -82,6 +79,3 @@ class ModReactionCounter extends Module {
 
 
 }
-
-
-module.exports = ModReactionCounter;

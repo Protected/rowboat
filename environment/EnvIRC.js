@@ -1,43 +1,46 @@
 /* Environment: IRC -- This environment connects to an IRC server. */
 
-const Environment = require('../Environment.js');
-const irc = require('matrix-org-irc');
+import irc from 'matrix-org-irc';
+
+import Environment from '../src/Environment.js';
 
 const DISPLAY_MODES = {
     o: 'operator',
     v: 'voice'
 };
 
-class EnvIRC extends Environment {
+export default class EnvIRC extends Environment {
 
 
-    get requiredParams() { return [
-        'serverhost',           //IP address or hostname of the IRC server
-        'nickname',             //Nickname for the connection
-        'channels'              //List of channels to join (each item is a string representing a channel name)
+    get params() { return [
+        
+        {n: 'serverhost', d: "IP address or hostname of the IRC server"},
+        {n: 'nickname', d: "Nickname for the connection"},
+        {n: 'channels', d: "List of channels to join (each item is a string representing a channel name)"},
+
+        {n: 'port', d: "Port of the IRC server"},
+        {n: 'ssl', d: "Use SSL connection"},
+        {n: 'nickservnick', d: "Nickserv's nickname"},
+        {n: 'nickpass', d: "Nickserv password"},
+        {n: 'ident', d: "Username"},
+        {n: 'realname', d: "Real name"},
+        {n: 'senddelay', d: "Send delay (ms)"}
+
     ]; }
     
-    get optionalParams() { return [
-        'port',                 //Port of the IRC server
-        'ssl',                  //Use SSL connection
-        'nickservnick',         //Nickserv's nickname
-        'nickpass',             //Nickserv password
-        'ident',                //Username
-        'realname',             //Real name
-        'senddelay'             //Send delay (ms)
-    ]; }
+    get defaults() { return {
+        port: 6667,
+        ssl: false,
+        nickservnick: 'Nickserv',
+        nickpass: null,
+        ident: 'myshelter',
+        realname: 'Not a pun, just a misunderstanding.',
+        senddelay: 500
+    }; }
     
     constructor(name) {
         super('IRC', name);
         
-        this._params['port'] = 6667;
-        this._params['ssl'] = false;
-        this._params['nickservnick'] = 'Nickserv';
-        this._params['nickpass'] = null;
-        this._params['ident'] = 'myshelter';
-        this._params['realname'] = 'Not a pun, just a misunderstanding.';
-        this._params['senddelay'] = 500;
-
         this._client = null;
         this._prefixes = [];
         this._people = {};  //see addPeople
@@ -50,21 +53,20 @@ class EnvIRC extends Environment {
         return new Promise((resolve, reject) => {
         
             var self = this;
-            let params = this.params;
 
-            this._client = new irc.Client(params.serverhost, params.nickname, {
-                port: params.port,
-                secure: params.ssl,
-                channels: params.channels,
-                userName: params.ident,
-                realName: params.realname,
+            this._client = new irc.Client(this.param('serverhost'), this.param('nickname'), {
+                port: this.param('port'),
+                secure: this.param('ssl'),
+                channels: this.param('channels'),
+                userName: this.param('ident'),
+                realName: this.param('realname'),
                 floodProtection: true,
-                floodProtectionDelay: params.senddelay,
+                floodProtectionDelay: this.param('senddelay'),
                 stripColors: false,
                 password: null
             });
 
-            this.log(`Connecting to ${params.serverhost}.`);
+            this.log(`Connecting to ${this.param('serverhost')}.`);
             
             this._client.addListener('error', (message) => {
                 this.genericErrorHandler(JSON.stringify(message, null, 4));
@@ -74,8 +76,8 @@ class EnvIRC extends Environment {
             this._client.addListener('registered', (messageObj) => {
                 this.emit('connected', this);
                 this._hasConnected = true;
-                if (this._client.nick != params.nickname) {
-                    this.log('warning', "I am " + this._client.nick + " but should be " + params.nickname + "; Will try to retake.");
+                if (this._client.nick != this.param('nickname')) {
+                    this.log('warning', "I am " + this._client.nick + " but should be " + this.param('nickname') + "; Will try to retake.");
                     this._retake = setInterval(() => {
                         self.retakeNickname.apply(self, null);
                     }, 15000);
@@ -107,9 +109,9 @@ class EnvIRC extends Environment {
             });
             
             this._client.addListener('notice', (from, to, message, messageObj) => {
-                if (params.nickpass && from && params.nickservnick && from.toLowerCase() == params.nickservnick.toLowerCase()) {
+                if (this.param('nickpass') && from && this.param('nickservnick') && from.toLowerCase() == this.param('nickservnick').toLowerCase()) {
                     if (/This.*nickname.*registered/i.exec(message)) {
-                        this._client.say(params.nickservnick, "IDENTIFY " + params.nickpass);
+                        this._client.say(this.param('nickservnick'), "IDENTIFY " + this.param('nickpass'));
                     }
                 }
             });
@@ -117,7 +119,7 @@ class EnvIRC extends Environment {
             
             this._client.addListener('join', (channel, nick, messageObj) => {
                 this.addPeople(nick, [channel], messageObj);
-                if (nick.toLowerCase() == params.nickname.toLowerCase()) {
+                if (nick.toLowerCase() == this.param('nickname').toLowerCase()) {
                     this._client.send('WHO', channel);
                 } 
                 this.triggerJoin(nick, [channel], messageObj);
@@ -191,11 +193,10 @@ class EnvIRC extends Environment {
     }
 
 
-    disconnect() {
+    async disconnect() {
         if (this._client) this._client.disconnect();
         this._client = null;
-        this.emit('disconnected', this);
-        return Promise.resolve();
+        await this.emit('disconnected', this);
     }
 
 
@@ -484,6 +485,3 @@ class EnvIRC extends Environment {
     }
     
 }
-
-
-module.exports = EnvIRC;

@@ -1,38 +1,38 @@
-/* Module: SelfService -- Commands for a user to register his own account. */
+/* SelfService -- Commands for regular users to register and merge bot accounts. */
 
-const Module = require('../Module.js');
-const random = require('meteor-random');
-const moment = require('moment');
-const md5 = require('js-md5');
+import random from 'meteor-random';
+import moment from 'moment';
+import md5 from 'js-md5';
+
+import Behavior from '../src/Behavior.js';
 
 const tokenChars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
+export default class SelfService extends Behavior {
 
-class ModSelfService extends Module {
-
-
-    get optionalParams() { return [
-        'enableSelfRegistration',       //Enable !register
-        'idLinkage',                    //Enable !link
-        'initializeWithPermissions',    //Permissions for newly registered accounts
-        'tokenLength',                  //Length of !link tokens
-        'tokenExpiration'               //Validity of !link tokens
+    get params() { return [
+        {n: 'enableSelfRegistration', d: "Enable !register"},
+        {n: 'enableIdLinkage', d: "Enable !link (true or a)"},
+        {n: 'initializeWithPermissions', d: "Permissions for newly registered accounts (list)"},
+        {n: 'tokenLength', d: "Length of !link tokens"},
+        {n: 'tokenExpiration', d: "Validity of !link tokens (s)"}
     ]; }
+
+    get defaults() { return {
+        enableSelfRegistration: false,
+        enableIdLinkage: true,
+        initializeWithPermissions: [],
+        tokenLength: 32,
+        tokenExpiration: 300
+    }; }
     
-    get requiredModules() { return [
-        'Users',
-        'Commands'
-    ]; }
+    get requiredBehaviors() { return {
+        Users: 'Users',
+        Commands: 'Commands'
+    }; }
 
     constructor(name) {
         super('SelfService', name);
-        
-        this._params['enableSelfRegistration'] = false;
-        this._params['idLinkage'] = true;  //Pass a string to require a permission
-        this._params['initializeWithPermissions'] = [];
-        
-        this._params['tokenLength'] = 32;
-        this._params['tokenExpiration'] = 300;  //s
         
         this._tokens = {};
         this._index = {};
@@ -47,7 +47,7 @@ class ModSelfService extends Module {
         
         var self = this;
         
-        if (this.param('idLinkage')) {
+        if (this.param('enableIdLinkage')) {
             this._tokenCleaner = setInterval(() => {
                 self.clearTokens.apply(self, null);
             }, 60000);
@@ -56,15 +56,15 @@ class ModSelfService extends Module {
         
         //Register callbacks
         
-        this.mod("Commands").registerCommand(this, 'whoami', {
+        this.be("Commands").registerCommand(this, 'whoami', {
             description: 'If I am authenticated, shows the details of my account.'
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
     
             if (!handle) {
                 ep.reply("You don't have an account. Your ID in " + env.name + " is: " + userid);
             }
     
-            let account = this.mod("Users").getUser(handle);
+            let account = await this.be("Users").getUser(handle);
             if (!account) return true;
             
             ep.reply('========== __' + account.handle + '__ ==========');
@@ -92,10 +92,10 @@ class ModSelfService extends Module {
         
         
         if (this.param('enableSelfRegistration')) {
-            this.mod("Commands").registerCommand(this, 'register', {
+            this.be("Commands").registerCommand(this, 'register', {
                 description: 'If I am not authenticated, registers an account associated with the current ID.',
                 args: ['handle']
-            }, (env, type, userid, channelid, command, args, handle, ep) => {
+            }, async(env, type, userid, channelid, command, args, handle, ep) => {
             
                 if (handle) {
                     ep.reply("You already have an account! Your handle is: " + handle + ".");
@@ -107,26 +107,26 @@ class ModSelfService extends Module {
                     return true;
                 }
                 
-                let existingaccount = this.mod("Users").getUser(args.handle);
+                let existingaccount = await this.be("Users").getUser(args.handle);
                 if (existingaccount) {
                     ep.reply("There is already an account identified by the handle you provided.");
                     return true;
                 }
                 
-                if (!this.mod("Users").addUser(args.handle)) {
+                if (!await this.be("Users").addUser(args.handle)) {
                     ep.reply("Failed to create user account '" + args.handle + "'.");
                     return true;
                 }
                 
-                if (!this.mod("Users").addId(args.handle, env.name, "^" + userid + "$")) {
-                    this.mod("Users").delUser(args.handle);
+                if (!await this.be("Users").addId(args.handle, env.name, "^" + userid + "$")) {
+                    await this.be("Users").delUser(args.handle);
                     ep.reply("Failed to initialize your new account with your current " + env.name + " ID.");
                     return true;
                 }
                 
                 ep.reply("Your account '" + args.handle + "' was successfully created!");
                 
-                if (this.param("initializeWithPermissions").length && this.mod("Users").addPerms(args.handle, this.param("initializeWithPermissions"))) {
+                if (this.param("initializeWithPermissions").length && await this.be("Users").addPerms(args.handle, this.param("initializeWithPermissions"))) {
                     ep.reply("Initial permissions: " + this.param("initializeWithPermissions").join(", "));
                 }
             
@@ -135,14 +135,13 @@ class ModSelfService extends Module {
         }
         
         
-        if (this.param('idLinkage')) {
-            this.mod("Commands").registerCommand(this, 'link', {
+        if (this.param('enableIdLinkage')) {
+            this.be("Commands").registerCommand(this, 'link', {
                 description: 'Create a token for linking your current ID or pass a previously created token to link it with your current account.',
                 args: ["token"],
                 minArgs: 0,
-                permissions: (typeof this.param('idLinkage') == "string" ? [this.param('idLinkage')] : null),
                 types: ["private"]
-            }, (env, type, userid, channelid, command, args, handle, ep) => {
+            }, async (env, type, userid, channelid, command, args, handle, ep) => {
             
                 if (args.token) {
                 
@@ -157,14 +156,14 @@ class ModSelfService extends Module {
                         return true;
                     }
                     
-                    let handles = this.mod("Users").getHandlesById(descriptor.env.name, descriptor.id);
+                    let handles = await this.be("Users").getHandlesById(descriptor.env.name, descriptor.id);
                     if (handles.length) {
                         this.deleteToken(args.token);
                         ep.reply("This ID has already been assigned to an account: " + handles[0]);
                         return true;
                     }
                     
-                    if (!this.mod("Users").addId(handle, descriptor.env.name, "^" + descriptor.id + "$")) {
+                    if (!await this.be("Users").addId(handle, descriptor.env.name, "^" + descriptor.id + "$")) {
                         ep.reply("Failed to assign the new ID to your account. Please try again.");
                         return true;
                     }
@@ -246,6 +245,3 @@ class ModSelfService extends Module {
 
 
 }
-
-
-module.exports = ModSelfService;

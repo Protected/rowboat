@@ -1,21 +1,23 @@
-/* Module: Alerts -- Adds a command, "alert", which allows users to specify alert patterns. */
+/* Behavior: Alerts -- Adds a command, "alert", which allows users to specify alert patterns. */
 
-const Module = require('../Module.js');
+import Behavior from '../src/Behavior.js';
 
-class ModAlerts extends Module {
+export default class Alerts extends Behavior {
 
-    get optionalParams() { return [
-        'datafile'
+    get params() { return [
+        {n: 'datafile', d: "Customize the name of the default data file"}
     ]; }
 
-    get requiredModules() { return [
-        'Commands'
-    ]; }
+    get defaults() { return {
+        datafile: null
+    }; }
+
+    get requiredBehaviors() { return {
+        Commands: "Commands"
+    }; }
 
     constructor(name) {
         super('Alerts', name);
-        
-        this._params['datafile'] = null;
         
         this._data = {};
     }
@@ -39,15 +41,12 @@ class ModAlerts extends Module {
 
         //Register callbacks
         
-        for (let envname in opt.envs) {
-            opt.envs[envname].on('messageSent', this.onMessageSent, this);
-        }
+        this.env().on('messageSent', this.onMessageSent, this);
+        
+        this.be('Commands').registerRootDetails(this, 'alert', {description: "View and manipulate bot activity alerts."});
         
         
-        this.mod('Commands').registerRootDetails(this, 'alert', {description: "View and manipulate bot activity alerts."});
-        
-        
-        this.mod('Commands').registerCommand(this, 'alert list', {
+        this.be('Commands').registerCommand(this, 'alert list', {
             description: "Lists existing bot activity alerts."
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
@@ -77,7 +76,7 @@ class ModAlerts extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'alert add', {
+        this.be('Commands').registerCommand(this, 'alert add', {
             description: "Create a new bot activity alert.",
             args: ["pattern", "message", "ttl"],
             minArgs: 2
@@ -118,7 +117,7 @@ class ModAlerts extends Module {
         });
         
         
-        this.mod('Commands').registerCommand(this, 'alert del', {
+        this.be('Commands').registerCommand(this, 'alert del', {
             description: "Remove an existing bot activity alert.",
             args: ["pattern"]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
@@ -157,13 +156,15 @@ class ModAlerts extends Module {
         
 
     onMessageSent(env, type, targetid, message) {
+        if (!message) return;
+
         let dirty = false;
 
         for (let userid in this._data[env.name]) {
             if (type != "regular" && userid != targetid) continue;
             for (let pattern in this._data[env.name][userid]) {
                 let alertData = this._data[env.name][userid][pattern];
-                
+
                 if (message.indexOf('`' + pattern + '`') > -1) continue;
                 
                 if (message.match(pattern)) {
@@ -189,6 +190,3 @@ class ModAlerts extends Module {
     }
 
 }
-
-
-module.exports = ModAlerts;
