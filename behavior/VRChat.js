@@ -3374,7 +3374,7 @@ export default class VRChat extends Behavior {
                 ws.on('open', () => {
                     this._ws = ws;
                     this.log("Established connection to the websocket.");
-                    resolve(handlers);
+                    resolve();
                     ws.removeListener('error', connectionError);
                 });
 
