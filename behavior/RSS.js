@@ -1,5 +1,3 @@
-/* RSS -- Keep track of RSS/Atom feeds. */
-
 import moment from 'moment';
 import FeedParser from 'feedparser';
 import striptags from 'striptags';
@@ -18,6 +16,8 @@ const RESULT_ERROR = "error";
 const RESULT_INVALID = "invalidfeed";
 
 export default class RSS extends Behavior {
+
+    get description() { return "Keep track of RSS/Atom feeds"; }
 
     get params() { return [
         {n: 'datafile', d: "Customize the name of the default data file"},

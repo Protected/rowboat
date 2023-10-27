@@ -1,8 +1,8 @@
-/* DiscordVoiceText -- Adds voice channel users to a text channel only while they're connected. */
-
 import Behavior from "../src/Behavior.js";
 
 export default class DiscordVoiceText extends Behavior {
+
+    get description() { return "Adds voice channel users to a text channel only while they're connected"; }
 
     get params() { return [
         {n: "voicechannelid", d: "ID of the Discord voice channel to observe."},

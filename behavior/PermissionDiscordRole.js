@@ -1,10 +1,10 @@
-/* PermissionDiscordRole -- Permissions provider that turns Discord role names into permissions. */
-
 //WARNING: Any user allowed to rename their own roles or to create and assign themselves roles will be able to give themselves permissions.
 
 import { PermissionProvider } from "./Users.js";
 
 export default class PermissionDiscordRole extends PermissionProvider {
+
+    get description() { return "Permissions provider that turns Discord role names into permissions"; }
 
     constructor(name) {
         super('DiscordRole', name);

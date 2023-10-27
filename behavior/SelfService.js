@@ -1,5 +1,3 @@
-/* SelfService -- Commands for regular users to register and merge bot accounts. */
-
 import random from 'meteor-random';
 import moment from 'moment';
 import md5 from 'js-md5';
@@ -9,6 +7,8 @@ import Behavior from '../src/Behavior.js';
 const tokenChars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 export default class SelfService extends Behavior {
+
+    get description() { return "Commands for regular users to register and merge Users accounts"; }
 
     get params() { return [
         {n: 'enableSelfRegistration', d: "Enable !register"},

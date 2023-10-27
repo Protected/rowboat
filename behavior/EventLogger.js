@@ -1,5 +1,3 @@
-/* EventLogger -- Event logging for environments and behaviors; log searches. */
-
 import winston from 'winston';
 import moment from 'moment';
 import fs from 'fs';
@@ -15,6 +13,8 @@ const logFormat = winston.format((info, opts) => {
 });
 
 export default class EventLogger extends Behavior {
+
+    get description() { return "Event logging for environments and behaviors"; }
 
     get params() { return [
         {n: 'basePath', d: "Path to the logs directory"},

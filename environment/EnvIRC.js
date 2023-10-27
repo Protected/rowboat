@@ -1,5 +1,3 @@
-/* Environment: IRC -- This environment connects to an IRC server. */
-
 import irc from 'matrix-org-irc';
 
 import Environment from '../src/Environment.js';
@@ -11,6 +9,7 @@ const DISPLAY_MODES = {
 
 export default class EnvIRC extends Environment {
 
+    get description() { return "Connects to an IRC server"; }
 
     get params() { return [
         

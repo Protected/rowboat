@@ -1,10 +1,10 @@
-/* DiscordReactionRoles -- Assign roles to users based on message reactions, one message per role color. */
-
 import { EmbedBuilder, ChannelType } from 'discord.js';
 
 import Behavior from '../src/Behavior.js';
 
 export default class DiscordReactionRoles extends Behavior {
+
+    get description() { return "Assign roles to users based on message reactions, one message per role color"; }
 
     get requiredEnvironments() { return {
         Discord: 'Discord'

@@ -1,9 +1,8 @@
-/* Environment: Matrix -- This environment connects to a Matrix homeserver. */
-
 import Environment from '../src/Environment.js';
 
 export default class EnvMatrix extends Environment {
 
+    get description() { return "Connects to a Matrix homeserver."; }
 
     get params() { return [
 

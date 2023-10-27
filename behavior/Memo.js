@@ -1,10 +1,10 @@
-/* Memo -- Save a public message for another user to be auto-delivered on activity. */
-
 import moment from 'moment';
 
 import Behavior from '../src/Behavior.js';
 
 export default class Memo extends Behavior {
+
+    get description() { return "Save a public message for another user to be auto-delivered on activity"; }
 
     get params() { return [
         {n: 'datafile', d: "Customize the name of the default data file"},

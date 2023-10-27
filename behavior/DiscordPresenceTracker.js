@@ -1,11 +1,11 @@
-/* DiscordPresenceTracker -- Announces updates to user presence in a Discord channel. */
-
 import moment from 'moment';
 import { EmbedBuilder, ActivityType } from 'discord.js';
 
 import Behavior from '../src/Behavior.js';
 
 export default class DiscordPresenceTracker extends Behavior {
+
+    get description() { return "Announces updates to user presence in a Discord channel"; }
 
     get params() { return [
         {n: "channelid", d: "ID of the channel where the updates will be sent"},

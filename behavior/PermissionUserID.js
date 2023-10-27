@@ -1,8 +1,8 @@
-/* PermissionUserID -- Permissions provider that turns user IDs into permissions. */
-
 import { PermissionProvider } from "./Users.js";
 
 export default class PermissionUserID extends PermissionProvider {
+
+    get description() { return "Permissions provider that turns user IDs into permissions"; }
 
     constructor(name) {
         super('UserID', name);

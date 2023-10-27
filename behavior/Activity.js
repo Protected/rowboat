@@ -1,10 +1,10 @@
-/* Behavior: Activity -- Commands for checking a user's most recent activity/presence. */
-
 import moment from 'moment';
 
 import Behavior from '../src/Behavior.js';
 
 export default class Activity extends Behavior {
+
+    get description() { return "Commands for checking a user's most recent activity/presence"; }
 
     get params() { return [
         {n: 'datafile', d: "Customize the name of the default data file"},

@@ -1,11 +1,11 @@
-/* VRChatGroups -- Allows the bot to be in VRChat groups and provides group-related features. */
-
 import moment from 'moment';
 import { EmbedBuilder } from 'discord.js';
 
 import Behavior from '../src/Behavior.js';
 
 export default class VRChatGroups extends Behavior {
+
+    get description() { return "Manages VRChat group membership and provides group-related features"; }
 
     get params() { return [
         {n: "memberfreq", d: "How often to check group members (s)"},
@@ -1140,7 +1140,9 @@ export default class VRChatGroups extends Behavior {
         }
         emb.setURL(url);
 
-        emb.setFooter({text: (member.joinedAt ? "Joined " + moment(member.joinedAt).from(now) : "")});
+        if (member.joinedAt) {
+            emb.setFooter({text: "Joined " + moment(member.joinedAt).from(now)});
+        }
 
         let body = [];
 

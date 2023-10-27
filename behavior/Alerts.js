@@ -1,8 +1,8 @@
-/* Behavior: Alerts -- Adds a command, "alert", which allows users to specify alert patterns. */
-
 import Behavior from '../src/Behavior.js';
 
 export default class Alerts extends Behavior {
+
+    get description() { return "Adds a command, \"alert\", which allows users to specify alert patterns"; }
 
     get params() { return [
         {n: 'datafile', d: "Customize the name of the default data file"}

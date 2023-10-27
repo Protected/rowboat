@@ -1,8 +1,8 @@
-/* Users -- Manage "known" user accounts and permission flags. */
-
 import Behavior from '../src/Behavior.js';
 
 export default class Users extends Behavior {
+
+    get description() { return "Manage \"known\" user accounts and permission flags"; }
 
     get params() { return [
         {n: 'datafile', d: "Customize the name of the default data file"},
@@ -811,6 +811,8 @@ export default class Users extends Behavior {
 
 //This template can be extended by behaviors that contain a single permission provider
 export class PermissionProvider extends Behavior {
+
+    get description() { return "A permission provider for Users"; }
 
     get requiredBehaviors() { return {
         Users: 'Users'

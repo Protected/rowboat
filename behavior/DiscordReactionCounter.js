@@ -1,10 +1,10 @@
-/* ReactionCounter -- Ranks Discord channel messages by reactions. */
-
 import random from 'meteor-random';
 
 import Behavior from '../src/Behavior.js';
 
 export default class DiscordReactionCounter extends Behavior {
+
+    get description() { return "Ranks Discord channel messages by reactions"; }
 
     get requiredEnvironments() { return {
         Discord: 'Discord'

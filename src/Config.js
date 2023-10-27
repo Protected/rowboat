@@ -4,6 +4,7 @@ import fs from 'fs';
 import yaml from 'yaml';
 
 import logger from './Logger.js';
+import EditConfig from './EditConfig.js';
 
 const CONFIG_PATH = "config/";
 const CONFIG_FILE = "config.yaml";
@@ -31,7 +32,6 @@ const DEFAULT_CONFIG = {
 
 
 export function loadMasterConfig() {
-    logger.info("Loading master config...");
 
     try {
         fs.accessSync(CONFIG_PATH + CONFIG_FILE, fs.constants.F_OK);
@@ -104,6 +104,37 @@ export function loadMasterConfig() {
         }
     }
     
+    return true;
+}
+
+function loadEditConfig() {
+    let config;
+
+    try {
+        fs.accessSync(CONFIG_PATH + CONFIG_FILE, fs.constants.F_OK);
+
+        try {
+            const data = fs.readFileSync(CONFIG_PATH + CONFIG_FILE, 'utf8');
+            config = new EditConfig(data);
+        } catch (e) {
+            logger.error("Failed to load master config. Error: " + e.message);
+        }
+    } catch (e) {
+        config = new EditConfig("");
+    }
+    
+    return config;
+}
+
+function saveEditConfig(config) {
+
+    try  {
+        fs.writeFileSync(CONFIG_PATH + CONFIG_FILE, String(config));
+    } catch (e) {
+        logger.warn("Failed to save master config. Error: " + e.message);
+        return false;
+    }
+
     return true;
 }
 
@@ -193,6 +224,7 @@ export function setBehaviorDefaults(instanceName, defaults) {
 }
 
 export default new Proxy({
+    loadEditConfig, saveEditConfig,
     loadMasterConfig, saveMasterConfig,
     getEnvironmentConfig, loadEnvironmentConfig, setEnvironmentDefaults,
     getBehaviorConfig, getBehaviorCommonConfig, loadBehaviorConfig, setBehaviorDefaults

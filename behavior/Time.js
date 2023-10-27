@@ -1,5 +1,3 @@
-/* Time -- Adds a time command and timezone tracking. */
-
 import moment from 'moment-timezone';
 import ct from 'countries-and-timezones';
 
@@ -9,6 +7,8 @@ const MAX_SAME_USERS = 20;
 const DEFAULT_FORMAT = "dddd Y-MM-DD HH:mm:ss (Z)";
 
 export default class Time extends Behavior {
+
+    get description() { return "Adds a time command and timezone tracking"; }
 
     get params() { return [
         {n: 'formats', d: "Map of usable format string prefixes {NAME: FORMAT, ...}"}

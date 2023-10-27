@@ -1,5 +1,3 @@
-/* DynamicCommands -- Dynamically create and manage simple commands. */
-
 //WARNING: This behavior stores environment names. Renaming an environment with dynamic commands will break the stored commands.
 
 import random from 'meteor-random';
@@ -7,6 +5,8 @@ import random from 'meteor-random';
 import Behavior from '../src/Behavior.js';
 
 export default class DynamicCommands extends Behavior {
+
+    get description() { return "Dynamically create and manage simple commands"; }
 
     get params() { return [
         {n: 'datafile', d: "Customize the name of the default data file"},

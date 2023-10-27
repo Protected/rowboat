@@ -1,11 +1,11 @@
-/* VRChatFavorites -- Manages a channel for sharing static links to VRChat worlds. */
-
 import { AttachmentBuilder, EmbedBuilder } from 'discord.js';
 import random from 'meteor-random';
 
 import Behavior from '../src/Behavior.js';
 
 export default class VRChatFavorites extends Behavior {
+
+    get description() { return "Manages a channel for sharing static links to VRChat worlds"; }
 
     get params() { return [
         {n: "pinnedchan", d: "ID of text channel for favorite worlds"},

@@ -1,11 +1,11 @@
-/* Commands -- Framework for providing responses to triggers in a standardized format. */
-
 import Behavior from '../src/Behavior.js';
 
 const DISCORD_ENVIRONMENT = "Discord";  //Type match for specific behavior
 const OK_EMOJI = '✅';
 
 export default class Commands extends Behavior {
+
+    get description() { return "Framework for providing responses to text triggers in a standardized format"; }
 
     get params() { return [
         {n: 'defaultprefix', d: "Default prefix for text commands"},

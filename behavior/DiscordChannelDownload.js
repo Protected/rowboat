@@ -1,5 +1,3 @@
-/* DiscordChannelDownload -- Search or download channel data. */
-
 import fs from 'fs';
 import moment from 'moment';
 import jsonfile from 'jsonfile';
@@ -11,6 +9,8 @@ import Behavior from '../src/Behavior.js';
 const RCDV_PATH = 'extra/discordchanneldownload/rcdv.html';
 
 export default class DiscordChannelDownload extends Behavior {
+
+    get description() { return "Search or download channel data"; }
 
     get params() { return [
         {n: 'cachePath', d: "Subdirectory for cached channel dumps"},

@@ -1,5 +1,3 @@
-/* Behavior: BridgeDiscordIRC -- This module was designed to bridge a multi-channel Discord server with a single IRC channel. */
-
 import { closest } from 'color-diff';
 import diff from 'diff';
 import { ChannelType } from 'discord.js';
@@ -40,6 +38,8 @@ async function replaceAsync(str, regex, callback) {
 }
 
 export default class BridgeDiscordIRC extends Behavior {
+
+    get description() { return "Bridges a multi-channel Discord server with a single IRC channel"; }
 
     get params() { return [
         {n: 'defaultdiscordchannel', d: "ID of a Discord channel to receive IRC messages by default"},

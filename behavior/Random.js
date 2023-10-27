@@ -1,10 +1,10 @@
-/* Random -- Adds randomizer, shuffle and dice roll commands. */
-
 import random from 'meteor-random';
 
 import Behavior from '../src/Behavior.js';
 
 export default class Random extends Behavior {
+
+    get description() { return "Adds randomizer, shuffle and dice roll commands"; }
 
     get requiredBehaviors() { return {
         Commands: 'Commands'

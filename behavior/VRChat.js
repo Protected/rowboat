@@ -1,5 +1,3 @@
-/* VRChat -- Interact with the VRChat API and show information about VRChat users on Discord. */
-
 import moment from 'moment';
 import random from 'meteor-random';
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField } from 'discord.js';
@@ -27,6 +25,8 @@ const CLOCKS = ["🕛","🕧","🕐","🕜","🕑","🕝","🕒","🕞","🕓","
 const MAX_FIELDLEN = 1024;
 
 export default class VRChat extends Behavior {
+
+    get description() { return "Interact with the VRChat API and show information about VRChat users on Discord"; }
 
     get params() { return [
         {n: "username", d: "VRChat username"},

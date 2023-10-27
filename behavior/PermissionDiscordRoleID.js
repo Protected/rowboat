@@ -1,8 +1,8 @@
-/* PermissionDiscordRoleID -- Permissions provider that turns Discord role IDs into permissions. */
-
 import { PermissionProvider } from "./Users.js";
 
 export default class PermissionDiscordRoleID extends PermissionProvider {
+
+    get description() { return "Permissions provider that turns Discord role IDs into permissions"; }
 
     constructor(name) {
         super('DiscordRoleID', name);

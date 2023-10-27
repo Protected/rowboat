@@ -21,6 +21,8 @@ import fs from 'fs';
 
 import logger from './src/Logger.js';
 import config from './src/Config.js';
+import { parseAndExecuteArgs } from './src/CommandLine.js';
+import registerCommandLineFeatures from './src/commandLineFeatures.js';
 import Rowboat from './src/Rowboat.js';
 
 const PIDFILE = "rowboat.pid";
@@ -33,8 +35,6 @@ if (fs.existsSync(PIDFILE)) {
 }
 
 //Start up
-
-logger.info("Welcome to Rowboat!");
 
 if (!config.loadMasterConfig()) {
     logger.error("Unable to load master config.");
@@ -65,8 +65,29 @@ process.on("exit", () => {
     logger.info("Rowboat has ended gracefully.");
 });
 
+registerCommandLineFeatures();
+
+let args = process.argv;
+args.shift(); args.shift();
+
 (async function() {
     "use strict";
+
+    //Command line arguments
+
+    let stop = await parseAndExecuteArgs(args, {root: rowboat, config, editConfig: null}, ({editConfig}) => {
+        if (editConfig) {
+            config.saveEditConfig(editConfig);
+            logger.info("Saved configuration file.");
+            return true;
+        }
+    });
+
+    if (stop) {
+        process.exit(0);
+    }
+
+    //Actual execution
     
     let fail = 0;
 

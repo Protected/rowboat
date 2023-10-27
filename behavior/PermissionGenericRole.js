@@ -1,8 +1,8 @@
-/* PermissionGenericRole -- Permissions provider that turns generic environment roles into permissions. */
-
 import { PermissionProvider } from "./Users.js";
 
 export default class PermissionGenericRole extends PermissionProvider {
+
+    get description() { return "Permissions provider that turns generic environment roles into permissions"; }
 
     constructor(name) {
         super('GenericRole', name);

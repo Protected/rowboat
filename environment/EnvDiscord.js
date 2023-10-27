@@ -1,5 +1,3 @@
-/* Environment: Discord -- This environment connects to a Discord server/guild. */
-
 import moment from 'moment';
 import { verifyString, ChannelType } from 'discord.js';
 
@@ -8,6 +6,8 @@ import Environment from '../src/Environment.js';
 const MAXIMUM_MSG_LENGTH = 2000;
 
 export default class EnvDiscord extends Environment {
+
+    get description() { return "Connects to a Discord server/guild"; }
 
     get params() { return [
 

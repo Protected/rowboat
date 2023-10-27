@@ -1,5 +1,3 @@
-/* DiscordReactionChannels -- Add users to channels based on message reactions. */
-
 import { EmbedBuilder, ChannelType } from 'discord.js';
 
 import Behavior from '../src/Behavior.js';
@@ -8,6 +6,8 @@ const CREATE_TYPES = {'text': ChannelType.GuildText, 'voice': ChannelType.GuildV
 const NEUTRAL_COLOR = "#808080";
 
 export default class DiscordReactionChannels extends Behavior {
+
+    get description() { return "Add users to channels based on message reactions"; }
 
     get params() { return [
         {n: "channelemojis", d: "Map of emoji for channel type representations"}

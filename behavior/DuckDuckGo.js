@@ -1,5 +1,3 @@
-/* DuckDuckGo -- Adds a command, "duck", which performs a DuckDuckGo query. */
-
 import DDG from 'duck-duck-scrape';
 import moment from 'moment';
 
@@ -19,6 +17,8 @@ try {
 } catch (err) {}
 
 export default class DuckDuckGo extends Behavior {
+
+    get description() { return "Adds a command, \"duck\", which performs a DuckDuckGo search"; }
 
     get params() { return [
         {n: 'results', d: "Amount of returned results by default"},

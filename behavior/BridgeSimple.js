@@ -1,8 +1,8 @@
-/* BridgeSimple -- Bridges a pair of single channels in any two single environments without any style or mention conversions. */
-
 import Behavior from "../src/Behavior.js";
 
 export default class BridgeSimple extends Behavior {
+
+    get description() { return "Bridges a pair of single channels in any two single environments without any style or mention conversions"; }
 
     get params() { return [
         {n: 'envA', d: "Name of the environment A"},

@@ -220,17 +220,22 @@ export default class Rowboat {
 
     //Load and initialize configured environments
 
+    async createEnvironment(type, name, logerror) {
+        let envtype = await importUncached("./environment/Env" + type + ".js");
+        envtype = envtype.default;
+        if (!envtype) {
+            if (logerror) logger.error("Could not load the environment: " + name + " . Is the environment source in Rowboat's directory?");
+            return null;
+        }
+        return new envtype(name);
+    }
+
     async loadEnvironments() {
 
         for (let name in config.environments) {
-            let envtype = await importUncached("./environment/Env" + config.environments[name].type + ".js");
-            envtype = envtype.default;
-            if (!envtype) {
-                logger.error("Could not load the environment: " + name + " . Is the environment source in Rowboat's directory?");
-                return false;
-            }
-            
-            let env = new envtype(name);
+
+            let env = await this.createEnvironment(config.environments[name].type, name, true);
+            if (!env) return false;
             
             let sharedInstances = {};
             for (let sharedModule of env.sharedModules) {
@@ -272,6 +277,16 @@ export default class Rowboat {
 
     //Load and initialize configured behaviors
 
+    async createBehavior(type, name, logerror) {
+        let betype = await importUncached("./behavior/" + type + ".js");
+        betype = betype.default;
+        if (!betype) {
+            if (logerror) logger.error("Could not load the behavior: " + name + " . Is the behavior source in Rowboat's directory?");
+            return null;
+        }
+        return new betype(name);
+    }
+
     async loadBehaviors() {
 
         let uniqueBehaviors = {};
@@ -279,14 +294,9 @@ export default class Rowboat {
         //First pass: Instantiate and store all behaviors
 
         for (let beConfig of config.behaviors) {
-            let betype = await importUncached("./behavior/" + beConfig.type + ".js");
-            betype = betype.default;
-            if (!betype) {
-                logger.error("Could not load the behavior: " + beConfig.name + " . Is the behavior source in Rowboat's directory?");
-                return false;
-            }
             
-            let be = new betype(beConfig.name);
+            let be = await this.createBehavior(beConfig.type, beConfig.name);
+            if (!be) return false;
 
             if (!be.isMultiInstanceable) {
                 if (uniqueBehaviors[be.type]) {

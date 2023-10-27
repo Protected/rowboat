@@ -42,7 +42,7 @@ function ready() {
     let desiredPath = moment().format(pathTemplate);
     if (!logger || path != desiredPath) {
         path = desiredPath;
-        console.log('Log open: ' + path);
+        //console.log('Log open: ' + path);
 
         logger = winston.createLogger({
             transports: [

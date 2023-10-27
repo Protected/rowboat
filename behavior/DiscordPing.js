@@ -1,10 +1,10 @@
-/* DiscordPing -- Tool for measuring latency between Rowboat and Discord. */
-
 import moment from 'moment';
 
 import Behavior from '../src/Behavior.js';
 
 export default class DiscordPing extends Behavior {
+
+    get description() { return "Tool for measuring latency between Rowboat and Discord"; }
 
     get params() { return [
         {n: 'delayBetween', d: "Delay between pings, not including rtt (ms)"},

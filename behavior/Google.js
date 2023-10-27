@@ -1,12 +1,12 @@
-/* Google -- Adds a command, "google", which performs a google search. */
-
 import Behavior from "../src/Behavior.js";
 
 export default class Google extends Behavior {
 
+    get description() { return "Adds a command, \"google\", which performs a google search"; }
+
     get params() { return [
         {n: 'apikey', d: "Create project, enable google CS API and get a key from https://console.developers.google.com/apis/api/"},
-        {n: 'cx', d: "Create a CSE and get the cx from the embed code at https://cse.google.com/cse/"},
+        {n: 'cx', d: "Create a PSE and get the cx from https://programmablesearchengine.google.com/"},
         {n: 'results', d: "Maximum amount of returned results (1 to 10)"},
         {n: 'safesearch', d: "Enable safesearch"},
         {n: 'googleparams', d: "List of google API parameters allowed as arguments"}

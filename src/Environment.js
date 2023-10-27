@@ -8,6 +8,8 @@ export default class Environment extends AsyncEventEmitter {
     get name() { return this._name; }
     get type() { return this._type; }
 
+    get description() { return "An environment."; }
+
     get params() { return []; }
     get defaults() { return {}; }
     

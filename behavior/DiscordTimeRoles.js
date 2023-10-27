@@ -1,10 +1,10 @@
-/* DiscordTimeRoles -- A Time addon that sets Discord roles based on timezone offsets. */
-
 import moment from 'moment';
 
 import Behavior from '../src/Behavior.js';
 
 export default class DiscordTimeRoles extends Behavior {
+
+    get description() { return "A Time addon that sets Discord roles based on timezone offsets"; }
 
     get params() { return [
         {n: 'roles', d: "A map of {ROLEID: {MIN, MAX}, ...} where MIN and MAX are timezone offsets in minutes."},

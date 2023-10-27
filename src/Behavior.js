@@ -20,6 +20,9 @@ export default class Behavior extends AsyncEventEmitter {
     
     /* Settings to override in your behavior */
 
+    //Returns a description for the behavior.
+    get description() { return "A behavior."; }
+
     //Return a list of {n: NAME, d: DESCRIPTION} for each parameter of the behavior. ALL parameters must be listed.
     get params() { return []; }
 

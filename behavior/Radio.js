@@ -1,5 +1,3 @@
-/* Radio -- Grabber add-on for playing songs on discord audio channels. */
-
 import moment from 'moment';
 import random from 'meteor-random';
 import emoji from 'emoji-toolkit';
@@ -61,6 +59,8 @@ function createAudioResourceAndSeek(input, options) {
 
 export default class Radio extends Behavior {
     
+    get description() { return "Grabber add-on for playing songs on discord voice channels"; }
+
     get params() { return [
         {n: 'datafile', d: "Customize the name of the default data file"},
         

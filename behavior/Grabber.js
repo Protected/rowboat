@@ -1,8 +1,5 @@
-/* Grabber -- Downloads song files referenced in a Discord channel and maintains a dynamic index. */
-
 import fs from 'fs';
 import crypto from 'crypto';
-import cp from 'child_process';
 import { promisify } from 'util';
 import { Readable } from 'stream';
 import ytdl from 'ytdl-core';
@@ -29,6 +26,8 @@ const AUDIO_FORMATS = ['mp3', 'flac', 'pcm'];
 */
 
 export default class Grabber extends Behavior {
+
+    get description() { return "Downloads song files referenced in a Discord channel and maintains a dynamic index"; }
 
     get params() { return [
         {n: 'channels', d: "List of IDs of the Discord channels to be used"},

@@ -1,5 +1,3 @@
-/* DiscordTempVoice -- Start a temporary voice channel for any Discord text channel. */
-
 import { PermissionsBitField, ChannelType, OverwriteType } from 'discord.js';
 
 import Behavior from '../src/Behavior.js';
@@ -8,6 +6,8 @@ const BOT_PERMS_IN_VOICE_CHAN = ["ViewChannel", "ManageChannels", "Connect", "Mu
 const DEFAULT_MOD_PERMS_IN_VOICE_CHAN = ["ViewChannel", "ManageChannels", "PrioritySpeaker", "Stream", "Connect", "Speak", "MuteMembers", "MoveMembers"];
 
 export default class DiscordTempVoice extends Behavior {
+
+    get description() { return "Start a temporary voice channel for any Discord text channel"; }
 
     get params() { return [
         {n: 'datafile', d: "Datafile for keeping track of the temporary channels"},

@@ -1,5 +1,3 @@
-/* VRChatPhotos -- Manages a channel for sharing VRChat photos and screenshots. */
-
 import moment from 'moment';
 import random from 'meteor-random';
 import { EmbedBuilder } from 'discord.js';
@@ -15,6 +13,8 @@ const MAX_FIELDLEN = 1024;
 const ZWSP = "​";  //Zero-width space (\u200b)
 
 export default class VRChatPhotos extends Behavior {
+
+    get description() { return "Manages a channel for sharing VRChat photos and screenshots"; }
 
     get params() { return [
         {n: "photochan", d: "ID of text channel for photos"},

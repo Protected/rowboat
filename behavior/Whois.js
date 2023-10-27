@@ -1,5 +1,3 @@
-/* Whois -- Adds a command, "netwhois", which retrieves information on a registered internet resource. */
-
 import whois from 'whois';
 import moment from 'moment';
 
@@ -8,6 +6,8 @@ import Behavior from '../src/Behavior.js';
 const TSFORMAT = "YYYY-MM-DD HH:mm:ss";
 
 export default class Whois extends Behavior {
+
+    get description() { return "Adds a command, \"netwhois\", which retrieves information about a registered internet resource"; }
 
     get params() { return [
         {n: 'server', d: "Use a specific whois server; leave blank to determine by TLD (host:port)"},

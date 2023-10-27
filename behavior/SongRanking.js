@@ -1,5 +1,3 @@
-/* SongRanking -- Grabber add-on for liking/disliking songs and rating them. */
-
 import emoji from 'emoji-toolkit';
 import random from 'meteor-random';
 
@@ -142,7 +140,9 @@ const LIKEABILITY_ICONS = {
 
 
 export default class SongRanking extends Behavior {
-    
+
+    get description() { return "Grabber add-on for liking/disliking songs and rating them"; }
+
     get params() { return [
         {n: 'scaleExtremists', d: "Scale down -2/2 votes of people who have more than X times as many of those votes as -1/1 votes"},
         {n: 'allowRemoval', d: "Allow users to remove their votes from the index by voting 0"},

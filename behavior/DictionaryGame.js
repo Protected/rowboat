@@ -1,5 +1,3 @@
-/* DictionaryGame -- Play a game for guessing translations of dictionary entries. */
-
 //Install 'node-gd' to have images through Discord Embeds.
 
 //Note: By default, the moderator permission is enough for manipulating dictionaries owned by other users.
@@ -40,6 +38,8 @@ const TIMEOUT_MAX = 60;
 
 
 export default class DictionaryGame extends Behavior {
+
+    get description() { return "Play a game for guessing translations of dictionary entries"; }
 
     get params() { return [
         {n: 'env', d: "Name of the environment to be used"},
