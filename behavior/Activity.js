@@ -70,7 +70,7 @@ export default class Activity extends Behavior {
         this.be("Commands").registerCommand(this, 'seen', {
             description: "Reports when a user was last seen (or if the user was never seen).",
             args: ["nickname", "environment"],
-            details: ["Prefix NICKNAME with = to reference a Rowboat user account instead."],
+            details: ["Prefix NICKNAME with = to reference a local user account instead."],
             minArgs: 1
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
             
@@ -129,7 +129,7 @@ export default class Activity extends Behavior {
         this.be("Commands").registerCommand(this, 'last', {
             description: "Repeats a user's latest chat lines in record.",
             args: ["nickname", "environment"],
-            details: ["Prefix NICKNAME with = to reference a Rowboat user account instead."],
+            details: ["Prefix NICKNAME with = to reference a local user account instead."],
             minArgs: 1
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
         

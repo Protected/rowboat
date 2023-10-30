@@ -27,6 +27,9 @@ export default class Environment extends AsyncEventEmitter {
         this._name = name;
 
         this._hasConnected = false;
+
+        this._trueParams = this.params;
+        this._trueDefaults = this.defaults;
     }
     
     get config() { return this._config; }

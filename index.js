@@ -23,7 +23,7 @@ import logger from './src/Logger.js';
 import config from './src/Config.js';
 import { parseAndExecuteArgs } from './src/CommandLine.js';
 import registerCommandLineFeatures from './src/commandLineFeatures.js';
-import Rowboat from './src/Rowboat.js';
+import Core from './src/Core.js';
 
 const PIDFILE = "rowboat.pid";
 
@@ -49,18 +49,18 @@ if (!config.dontCatchRejections) {
 
 }
 
-let rowboat = new Rowboat();
+let core = new Core();
 
 process.on("SIGINT", () => {
     //Graceful shutdown
-    rowboat.beginShutdown();
+    core.beginShutdown();
 });
 
 fs.writeFileSync(PIDFILE, String(process.pid), {mode: 0o644});
 
 process.on("exit", () => {
     //Cleanup
-    rowboat.performCleanup();
+    core.performCleanup();
     fs.unlinkSync(PIDFILE);
     logger.info("Rowboat has ended gracefully.");
 });
@@ -75,10 +75,13 @@ args.shift(); args.shift();
 
     //Command line arguments
 
-    let stop = await parseAndExecuteArgs(args, {root: rowboat, config, editConfig: null}, ({editConfig}) => {
+    let stop = await parseAndExecuteArgs(args, {core, config, editConfig: null}, ({editConfig, stop}) => {
         if (editConfig) {
             config.saveEditConfig(editConfig);
             logger.info("Saved configuration file.");
+            return true;
+        }
+        if (stop) {
             return true;
         }
     });
@@ -91,12 +94,12 @@ args.shift(); args.shift();
     
     let fail = 0;
 
-    if (!await rowboat.loadEnvironments()) {
+    if (!await core.loadEnvironments()) {
         logger.error("Unable to load environments.");
         fail = 3;
     }
 
-    if (!await rowboat.loadBehaviors()) {
+    if (!await core.loadBehaviors()) {
         logger.error("Unable to load behaviors.");
         fail = 4;
     }
@@ -105,7 +108,7 @@ args.shift(); args.shift();
         //Give the logger time to write
         setTimeout(() => process.exit(fail), 1000);
     } else {
-        await rowboat.runEnvironments();
+        await core.runEnvironments();
         logger.info("Rowboat " + config.version + " is now running.");
     }
 })();

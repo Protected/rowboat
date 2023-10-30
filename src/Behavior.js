@@ -44,9 +44,9 @@ export default class Behavior extends AsyncEventEmitter {
     //Return true if the user can set up multiple instances of behavior.
     get isMultiInstanceable() { return false; }
 
-    //Request from the kernel a reference to itself.
-    //It will be mapped under the key 'root'.
-    get isRootAccess() { return false; }
+    //Request from the core a reference to itself.
+    //It will be mapped under the key 'core'.
+    get isCoreAccess() { return false; }
 
     //Replace with @decorators once they become available
     get synchronousMethods() { return ["escapeNormalizedFormatting", "stripNormalizedFormatting"]; }

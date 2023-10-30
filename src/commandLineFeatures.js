@@ -1,7 +1,7 @@
 import { registerDefaultFeatures, registerGroup, registerFeature } from './CommandLine.js';
 import { ConfigFail } from './EditConfig.js';
 
-//Command line features (expect context with config, root)
+//Command line features (expect context with config, core)
 
 export default function registerCommandLineFeatures() {  //---
 
@@ -11,7 +11,7 @@ registerDefaultFeatures();
 function editConfig(context) {
     if (!context.editConfig) {
         context.editConfig = context.config.loadEditConfig();
-        context.editConfig.rowboat = context.root;
+        context.editConfig.core = context.core;
     }
     return context.editConfig;
 }
@@ -26,12 +26,179 @@ function genericFeedback(result, label) {
     }
 }
 
+// === lists ===
+
+registerGroup("lists", {
+    label: "List modules",
+    description: "Use these to list existing and loaded environments and behaviors",
+    priority: 0
+});
+
+registerFeature("environments", {
+    group: "lists",
+    description: "List environment instances currently in the config file"
+}, ({}, context) => {
+    context.stop = true;
+    let allenvs = context.config.environments;
+    if (!allenvs || !Object.keys(allenvs).length) {
+        console.log("No environments found.");
+        return;
+    }
+    console.log("Environments ({NAME}):");
+    for (let name in allenvs) {
+        let thatenv = allenvs[name];
+        console.log("  {" + name + "} - " + thatenv.type);
+    }
+});
+
+registerFeature("behaviors", {
+    group: "lists",
+    description: "List behavior instances currently in the config file"
+}, async ({}, context) => {
+    context.stop = true;
+    let allbes = context.config.behaviors;
+    if (!allbes || !Object.keys(allbes).length) {
+        console.log("No behaviors found.");
+        return;
+    }
+
+    let display = {};
+    let imi = {};
+    for (let name in allbes) {
+        let thatbe = allbes[name];
+        if (!display[thatbe.type]) {
+            display[thatbe.type] = [];
+        }
+        display[thatbe.type].push(thatbe);
+        let be = await editConfig(context).getBehaviorInstance(name, thatbe.type);
+        imi[thatbe.type] = be.isMultiInstanceable;
+    }
+    
+    console.log("Behaviors (|NAME|):");
+    for (let type in display) {
+        if (!imi[type]) {
+            console.log("  |" + type + "|");
+        } else {
+            let line = [];
+            for (let be of display[type]) {
+                line.push("|" + be.name + "|");
+            }
+            console.log("  " + type + ": " + line.join(", "));
+        }
+    }
+});
+
+function listParameters(mod) {
+    if (!mod._trueParams.length) return;
+    let required = [], optional = [], key = {};
+    for (let {n, d} of mod._trueParams) {
+        let e = [];
+        if (mod.requiredEnvironments?.[n]) {
+            e.push("[Env->" + mod.requiredEnvironments[n] + "]");
+            key.env = "[Env] Required environment";
+        }
+        if (mod.requiredBehaviors?.[n]) {
+            e.push("[Be->" + mod.requiredBehaviors[n] + "]");
+            key.be = "[Be] Required behavior";
+        }
+        if (mod.optionalBehaviors?.[n]) {
+            e.push("[OptBe->" + mod.optionalBehaviors[n] + "]");
+            key.optbe = "[OptBe] Optional behavior";
+        }
+        if (mod._trueDefaults[n] !== undefined) {
+            optional.push({n, d, e});
+        } else {
+            required.push({n, d, e});
+        }
+    }
+    if (required.length) {
+        console.log("\nRequired parameters:");
+        for (let {n, d, e} of required) {
+            console.log("  " + n + (e.length ? " " + e.join(" ") : "") + " - " + d);
+        }
+    }
+    if (optional.length) {
+        console.log("\nOptional parameters:");
+        for (let {n, d, e} of optional) {
+            console.log("  " + n + (e.length ? " " + e.join(" ") : "") + " - " + d);
+        }
+    }
+    if (Object.keys(key).length) {
+        console.log("\n" + Object.values(key).join(" "));
+    }
+}
+
+registerFeature("environmentTypes", {
+    group: "lists",
+    description: "List available environment types or information about a type",
+    args: ["type"],
+    minArgs: 0
+}, async ({type}, context) => {
+    context.stop = true;
+    if (type) {
+        let env = await context.core.createEnvironment(type, "Dummy");
+        console.log("=== " + env.type + " ===");
+        console.log(env.description + "." || "!! Description missing !!");
+        if (env.sharedModules.length) {
+            console.log("\nShared modules:");
+            for (let sm of env.sharedModules) {
+                console.log("  " + sm);
+            }
+        }
+        listParameters(env);
+    } else {
+        console.log("Existing environment types:")
+        for (let type of await context.core.listEnvironmentTypes()) {
+            let env;
+            try {
+                env = await context.core.createEnvironment(type, "Dummy");
+            } catch (e) {
+                continue;
+            }
+            let description = "!! Description missing !!";
+            if (env && env.description) description = env.description;
+            console.log(type + " - " + description);
+        }
+    }
+});
+
+registerFeature("behaviorTypes", {
+    group: "lists",
+    description: "List available behavior types or information about a type",
+    args: ["type"],
+    minArgs: 0
+}, async ({type}, context) => {
+    context.stop = true;
+    if (type) {
+        let be = await context.core.createBehavior(type, "Dummy");
+        console.log("=== " + be.type + " ===");
+        console.log(be.description + "." || "!! Description missing !!");
+        console.log(be.isMultiInstanceable ? "Can have multiple instances" : "Single instance only");
+        if (be.isCoreAccess) console.log("Requests core access");
+        listParameters(be);
+    } else {
+        console.log("Existing behavior types (* means multi-instanceable):")
+        for (let type of await context.core.listBehaviorTypes()) {
+            let be;
+            try {
+                be = await context.core.createBehavior(type, "Dummy");
+            } catch (e) {
+                continue;
+            }
+            let description = "!! Description missing !!";
+            if (be && be.description) description = be.description;
+            console.log(type + (be?.isMultiInstanceable ? "*" : "") + " - " + description);
+        }
+    }
+});
+
 // === basic ===
 
 registerGroup("basic", {
     label: "Add and remove modules",
-    description: "Use these to manipulate the lists of environments and behaviors that will be loaded and initialized by Rowboat"
-})
+    description: "Use these to manipulate the lists of environments and behaviors in the config file",
+    priority: 1
+});
 
 registerFeature("addEnvironment", {
     group: "basic",
@@ -107,8 +274,9 @@ registerFeature("removeBehavior", {
 
 registerGroup("params", {
     label: "Add parameters to modules",
-    description: "Use these to bootstrap the parameter maps of environments and behaviors in the config file"
-})
+    description: "Use these to bootstrap the parameter maps of environments and behaviors in the config file",
+    priority: 2
+});
 
 const paramsMode = {
     required: {required: true, missing: true},
@@ -151,7 +319,8 @@ registerFeature("addBehaviorParams", {
 
 registerGroup("comments", {
     label: "Add and remove comments",
-    description: "Use these to add or remove default explanatory comments in the config file"
+    description: "Use these to add or remove default explanatory comments in the config file",
+    priority: 3
 });
 
 const commentsMode = {

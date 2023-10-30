@@ -43,13 +43,13 @@ export default class Commands extends Behavior {
         EventLogger: "EventLogger"
     }; }
 
-    get isRootAccess() { return true; }
+    get isCoreAccess() { return true; }
 
     constructor(name) {
         super('Commands', name);
     
         this._config = null;
-        this._root = null;
+        this._core = null;
 
         this._commands = [];
         this._index = {};
@@ -62,7 +62,7 @@ export default class Commands extends Behavior {
         if (!super.initialize(opt)) return false;
 
         this._config = opt.config;
-        this._root = opt.root;
+        this._core = opt.core;
 
 
         //Register callbacks
@@ -236,28 +236,28 @@ export default class Commands extends Behavior {
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
         
             ep.reply('Reloading...');
-            this.log('Reloading Rowboat by request from ' + handle + ' in ' + env.name);
+            this.log('Reloading by request from ' + handle + ' in ' + env.name);
             
-            await this._root.stopEnvironments(); //Note: Invalidates reply callback
+            await this._core.stopEnvironments(); //Note: Invalidates reply callback
 
             if (!this._config.loadMasterConfig()) {
                 this.log('error','Failed to load master config.');
                 process.exit(2);
             }
             
-            this._root.resetContext();
+            this._core.resetContext();
             
-            if (!await this._root.loadEnvironments()) {
+            if (!await this._core.loadEnvironments()) {
                 this.log('error','Failed to load environments.');
                 process.exit(3);
             }
             
-            if (!await this._root.loadBehaviors()) {
+            if (!await this._core.loadBehaviors()) {
                 this.log('error','Failed to load behaviors.');
                 process.exit(4);
             }
             
-            await this._root.runEnvironments();
+            await this._core.runEnvironments();
         
             this.log('Reload successful.');
         
@@ -270,7 +270,7 @@ export default class Commands extends Behavior {
             permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            let allenvs = this._root.getAllEnvironments();
+            let allenvs = this._core.getAllEnvironments();
             if (!allenvs || !Object.keys(allenvs).length) {
                 ep.reply ("No environments found.");
                 return true;
@@ -290,7 +290,7 @@ export default class Commands extends Behavior {
             permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
         
-            let allbes = this._root.getAllBehaviors();
+            let allbes = this._core.getAllBehaviors();
             if (!allbes || !Object.keys(allbes).length) {
                 ep.reply ("No behaviors found.");
                 return true;

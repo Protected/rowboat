@@ -1,26 +1,13 @@
-/*
-Copyright 2014-2017 Awkens
-Copyright 2016-2023 Protected
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this software except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 import path from 'path';
 import url from 'url';
 import fs from 'fs';
 
 import logger from './Logger.js';
 import config from './Config.js';
+
+const PATH_BEHAVIORS = "./behavior/";
+const PATH_ENVIRONMENTS = "./environment/";
+const ENVIRONMENT_PREFIX = "Env";
 
 //Dynamic import wrapper that refreshes cached modules
 export async function importUncached(modulepath) {
@@ -41,9 +28,9 @@ export async function importUncached(modulepath) {
 }
 
 
-//Root module, responsible for managing environments and behaviors
+//Core module, responsible for managing environments and behaviors
 
-export default class Rowboat {
+export default class Core {
 
     constructor() {
 
@@ -69,7 +56,7 @@ export default class Rowboat {
     }
 
 
-    //Methods for behaviors with root access
+    //Methods for behaviors with core access
 
     resetContext() {
         this._environments = {};
@@ -220,11 +207,19 @@ export default class Rowboat {
 
     //Load and initialize configured environments
 
+    async listEnvironmentTypes() {
+        let files = await fs.promises.readdir(PATH_ENVIRONMENTS);
+        return files.filter(file => file.startsWith(ENVIRONMENT_PREFIX)).map(file => {
+            let match = file.match(new RegExp(ENVIRONMENT_PREFIX + "(.+)\\.js"));
+            return match[1];
+        });
+    }
+
     async createEnvironment(type, name, logerror) {
-        let envtype = await importUncached("./environment/Env" + type + ".js");
+        let envtype = await importUncached(PATH_ENVIRONMENTS + ENVIRONMENT_PREFIX + type + ".js");
         envtype = envtype.default;
         if (!envtype) {
-            if (logerror) logger.error("Could not load the environment: " + name + " . Is the environment source in Rowboat's directory?");
+            if (logerror) logger.error("Could not load the environment: " + name + " . Is the environment source in in the environment directory?");
             return null;
         }
         return new envtype(name);
@@ -242,7 +237,7 @@ export default class Rowboat {
                 let sharedName = env.type + '_' + sharedModule;
                 
                 if (!this._shared[sharedName]) {
-                    this._shared[sharedName] = await importUncached("./environment/" + sharedModule + ".js");
+                    this._shared[sharedName] = await importUncached(PATH_ENVIRONMENTS + sharedModule + ".js");
                     this._shared[sharedName] = this._shared[sharedName]?.default;
                     if (!this._shared[sharedName]) {
                         logger.error("Could not initialize the environment: " + name + " . The shared module " + sharedModule + " could not be found.");
@@ -277,11 +272,19 @@ export default class Rowboat {
 
     //Load and initialize configured behaviors
 
+    async listBehaviorTypes() {
+        let files = await fs.promises.readdir(PATH_BEHAVIORS);
+        return files.map(file => {
+            let match = file.match("(.+)\\.js");
+            return match[1];
+        });
+    }
+
     async createBehavior(type, name, logerror) {
-        let betype = await importUncached("./behavior/" + type + ".js");
+        let betype = await importUncached(PATH_BEHAVIORS + type + ".js");
         betype = betype.default;
         if (!betype) {
-            if (logerror) logger.error("Could not load the behavior: " + name + " . Is the behavior source in Rowboat's directory?");
+            if (logerror) logger.error("Could not load the behavior: " + name + " . Is the behavior source in the behavior directory?");
             return null;
         }
         return new betype(name);
@@ -317,10 +320,10 @@ export default class Rowboat {
             
             let be = this._behaviors[beConfig.name];
 
-            let root;
-            if (be.isRootAccess) {
-                logger.info("The behavior: " + be.name + " requested access to the root module.");
-                root = this;
+            let core;
+            if (be.isCoreAccess) {
+                logger.info("The behavior: " + be.name + " requested access to the core module.");
+                core = this;
             }
 
             if (!be.initialize({
@@ -332,7 +335,7 @@ export default class Rowboat {
                 pushShutdownHandler: this.pushShutdownHandler.bind(this),
                 pushCleanupHandler: this.pushCleanupHandler.bind(this),
                 rootpath: path.resolve(),
-                root: root
+                core: core
             })) {
                 logger.error("Could not initialize the behavior: " + be.name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined and valid.");
                 return false;

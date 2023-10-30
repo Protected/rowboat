@@ -90,7 +90,7 @@ export default class Memo extends Behavior {
                 "  Send a message to one or more recipients. Multiple recipients are separated by &. After the list of recipients, write the desired message.",
                 "  Each recipient by default is a nickname or ID of the user in the current environment. Prefix the recipient with {env} to target another environment.",
                 "  To force the recipient to be authenticated before delivering, prefix it with a '+' symbol. By default, the receipient doesn't have to be authenticated.",
-                "  Use =HANDLE as the recipient to target a Rowboat user account.",
+                "  Use =HANDLE as the recipient to target a local user account.",
                 "  If you prefix the parameters with <delay> the message can only be delivered after a delay. Specify the delay as [[hh:]mm:]ss or using #[dhms] where # is a number."
             ],
             unobtrusive: true

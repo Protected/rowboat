@@ -1,5 +1,11 @@
 //Handle command line arguments
 
+/* Group options:
+    label: The group label in --help
+    description: Description of the feature group.
+    priority: Group order in --help
++/
+
 /* Feature options:
     args: A list of argument names to be consumed in order after the feature flag. Arguments are passed to the callback as an object.
     description: Single line description of the feature.
@@ -92,6 +98,7 @@ export function registerDefaultFeatures() {
 
         let featurelist = Object.values(features);
         featurelist.sort((a, b) => {
+            if (groups[a.group]?.priority != groups[b.group]?.priority) return groups[a.group]?.priority - groups[b.group]?.priority;
             if (a.group != b.group) return (a.group || "").localeCompare(b.group || "");
             return a.name.localeCompare(b.name);
         });
@@ -108,7 +115,7 @@ export function registerDefaultFeatures() {
                 currentgroup = groups[options.group];
                 console.log(`\n${" ".repeat(HELP_GROUP_INDENT)}${currentgroup.label}`);
                 if (currentgroup.description) {
-                    console.log(`${" ".repeat(HELP_FEATURE_INDENT)}${currentgroup.description}\n`);
+                    console.log(`${" ".repeat(HELP_FEATURE_INDENT)}${currentgroup.description}.\n`);
                 }
             }
 

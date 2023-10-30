@@ -1,7 +1,7 @@
 import { closest } from 'color-diff';
 import diff from 'diff';
 import { ChannelType } from 'discord.js';
-import emoji  from 'emojione';
+import emoji  from 'emoji-toolkit';
 
 import Behavior from '../src/Behavior.js';
 

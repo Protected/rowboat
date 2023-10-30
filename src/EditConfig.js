@@ -2,7 +2,7 @@
 
 import yaml from 'yaml';
 
-const COMMENT_TOP = "This is the Rowboat master configuration file. Declare here your environments (which connect to other systems) and behaviors (which provide functionality).";
+const COMMENT_TOP = "This is the master configuration file. Declare here your environments (which connect to other systems) and behaviors (which provide functionality).";
 const COMMENT_PATHS = "Filesystem paths used by the core.";
 const COMMENT_ENVS = "Environment declaration mapping each instance name to a map of options. The options can be 'type' and parameters specific to that environment type. Multiple environments of the same type are permitted.";
 const COMMENT_BECOMMON = "Common options that will be replicated to every loaded behavior.";
@@ -25,7 +25,7 @@ export const ConfigFail = {
 export default class EditConfig {
 
     document = null;
-    rowboat = null;
+    core = null;
 
     #envCache = {};
     #beCache = {};
@@ -194,8 +194,8 @@ export default class EditConfig {
 
     async #getEnvironmentInstance(name, type) {
         if (this.#envCache[name]) return this.#envCache[name];
-        if (!type || !this.rowboat) return null;
-        this.#envCache[name] = await this.rowboat.createEnvironment(type, name);
+        if (!type || !this.core) return null;
+        this.#envCache[name] = await this.core.createEnvironment(type, name);
         return this.#envCache[name];
     }
 
@@ -262,21 +262,21 @@ export default class EditConfig {
     //Write behavior parameters
 
 
-    async #getBehaviorInstance(name, type) {
+    async getBehaviorInstance(name, type) {
         if (this.#beCache[name]) return this.#beCache[name];
-        if (!type || !this.rowboat) return null;
-        this.#beCache[name] = await this.rowboat.createBehavior(type, name);
+        if (!type || !this.core) return null;
+        this.#beCache[name] = await this.core.createBehavior(type, name);
         return this.#beCache[name];
     }
 
     async #getBehaviorInstanceFromNode(nodeBe) {
         if (!nodeBe || !yaml.isNode(nodeBe)) return;
         if (yaml.isScalar(nodeBe)) {
-            return this.#getBehaviorInstance(nodeBe.value, nodeBe.value);
+            return this.getBehaviorInstance(nodeBe.value, nodeBe.value);
         } else if (!nodeBe.get(KEY_NAME)) {
-            return this.#getBehaviorInstance(nodeBe.get(KEY_TYPE), nodeBe.get(KEY_TYPE));
+            return this.getBehaviorInstance(nodeBe.get(KEY_TYPE), nodeBe.get(KEY_TYPE));
         } else {
-            return this.#getBehaviorInstance(nodeBe.get(KEY_NAME), nodeBe.get(KEY_TYPE));
+            return this.getBehaviorInstance(nodeBe.get(KEY_NAME), nodeBe.get(KEY_TYPE));
         }
     }
 
