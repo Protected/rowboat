@@ -124,19 +124,17 @@ export function registerDefaultFeatures() {
             let syntax = " ".repeat(HELP_FEATURE_INDENT) + PREFIX + options.name
                     + (options.args || []).map((arg, i) => i >= minArgs ? ` [${arg.toUpperCase()}]` : ` ${arg.toUpperCase()}`).join("");
 
-            let fldescwidth = descwidth;
             if (syntax.length + HELP_MIN_GAP > HELP_LEFT_COLUMN) {
-                syntax += " ".repeat(HELP_MIN_GAP);
-                fldescwidth = termwidth - syntax.length - HELP_MIN_GAP;
+                syntax += "\n" + " ".repeat(HELP_LEFT_COLUMN);
             } else {
                 syntax += " ".repeat(HELP_LEFT_COLUMN - syntax.length);
             }
 
             //Description
             let description = options.description + ".";
-            if (description.length > fldescwidth) {
-                syntax += description.substring(0, fldescwidth);
-                description = description.substring(fldescwidth);
+            if (description.length > descwidth) {
+                syntax += description.substring(0, descwidth);
+                description = description.substring(descwidth);
             } else {
                 syntax += description;
                 description = null;

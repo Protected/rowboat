@@ -26,6 +26,17 @@ function genericFeedback(result, label) {
     }
 }
 
+registerFeature("config", {
+    description: "Use a custom config filename",
+    args: ["filename"]
+}, ({filename}, context) => {
+    context.config.setConfigFile(filename);
+    if (!context.config.loadMasterConfig()) {
+        logger.error("Unable to load master config.");
+        process.exit(2);
+    }
+});
+
 // === lists ===
 
 registerGroup("lists", {

@@ -7,8 +7,9 @@ import logger from './Logger.js';
 import EditConfig from './EditConfig.js';
 
 const CONFIG_PATH = "config/";
-const CONFIG_FILE = "config.yaml";
 const PACKAGE_PATH = "package.json";
+
+var configFile = "config.yaml";
 
 //Master config. Auxiliary config files update this object too.
 var config = {};
@@ -31,10 +32,17 @@ const DEFAULT_CONFIG = {
 }
 
 
+export function setConfigFile(newConfigFile) {
+    if (newConfigFile) {
+        configFile = newConfigFile;
+    }
+}
+
+
 export function loadMasterConfig() {
 
     try {
-        fs.accessSync(CONFIG_PATH + CONFIG_FILE, fs.constants.F_OK);
+        fs.accessSync(CONFIG_PATH + configFile, fs.constants.F_OK);
     } catch (e) {
         if (!generateMasterConfig()) {
             return false;
@@ -42,14 +50,14 @@ export function loadMasterConfig() {
     }
 
     try {
-        fs.accessSync(CONFIG_PATH + CONFIG_FILE, fs.constants.R_OK);
+        fs.accessSync(CONFIG_PATH + configFile, fs.constants.R_OK);
     } catch (e) {
         logger.error("No permission to read master config.");
         return false;
     }
 
     try {
-        const file = fs.readFileSync(CONFIG_PATH + CONFIG_FILE, 'utf8');
+        const file = fs.readFileSync(CONFIG_PATH + configFile, 'utf8');
         config = yaml.parse(file);
     } catch (e) {
         logger.error("Failed to load master config. Error: " + e.message);
@@ -111,10 +119,10 @@ function loadEditConfig() {
     let config;
 
     try {
-        fs.accessSync(CONFIG_PATH + CONFIG_FILE, fs.constants.F_OK);
+        fs.accessSync(CONFIG_PATH + configFile, fs.constants.F_OK);
 
         try {
-            const data = fs.readFileSync(CONFIG_PATH + CONFIG_FILE, 'utf8');
+            const data = fs.readFileSync(CONFIG_PATH + configFile, 'utf8');
             config = new EditConfig(data);
         } catch (e) {
             logger.error("Failed to load master config. Error: " + e.message);
@@ -129,7 +137,7 @@ function loadEditConfig() {
 function saveEditConfig(config) {
 
     try  {
-        fs.writeFileSync(CONFIG_PATH + CONFIG_FILE, String(config));
+        fs.writeFileSync(CONFIG_PATH + configFile, String(config));
     } catch (e) {
         logger.warn("Failed to save master config. Error: " + e.message);
         return false;
@@ -150,7 +158,7 @@ export function saveMasterConfig() {
 
     try {
         let contents = yaml.stringify(config);
-        fs.writeFileSync(CONFIG_PATH + CONFIG_FILE, contents);
+        fs.writeFileSync(CONFIG_PATH + configFile, contents);
     } catch (e) {
         logger.warn("Failed to save master config. Error: " + e.message);
         return false;
@@ -227,7 +235,8 @@ export default new Proxy({
     loadEditConfig, saveEditConfig,
     loadMasterConfig, saveMasterConfig,
     getEnvironmentConfig, loadEnvironmentConfig, setEnvironmentDefaults,
-    getBehaviorConfig, getBehaviorCommonConfig, loadBehaviorConfig, setBehaviorDefaults
+    getBehaviorConfig, getBehaviorCommonConfig, loadBehaviorConfig, setBehaviorDefaults,
+    setConfigFile
 }, {
     get: (target, prop, receiver) => {
         if (!target[prop]) {
