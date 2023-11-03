@@ -206,7 +206,7 @@ export default class EditConfig {
         if (!env) return ConfigFail.TYPE_NOT_FOUND;
         let descriptor = env.params.find(param => param.n === key);
         if (!descriptor) return ConfigFail.PARAM_NOT_FOUND;
-        nodeEnv.set(key, value);
+        nodeEnv.set(key, this.document.createNode(value));
     }
 
     async addEnvironmentParameters(name, {required, missing}) {
@@ -296,7 +296,7 @@ export default class EditConfig {
             this.document.setIn([HEADER_BEHAVIORS, indexBe], nodeBe);
         }
 
-        nodeBe.set(key, value);
+        nodeBe.set(key, this.document.createNode(value));
     }
 
     async addBehaviorParameters(name, {required, missing}) {
