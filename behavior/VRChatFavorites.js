@@ -92,7 +92,7 @@ export default class VRChatFavorites extends Behavior {
         };
 
         let messageHandler = async (env, type, message, authorid, channelid, messageObject) => {
-            if (env.name != this.param("env") || type != "regular" || messageObject.webhookId) return;
+            if (type != "regular" || messageObject.webhookId) return;
 
             if (channelid == this.pinnedchan?.id) {
                 //Direct sharing to pinnedchan
