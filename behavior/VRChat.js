@@ -2264,7 +2264,7 @@ export default class VRChat extends Behavior {
         }
     }
 
-    async removeWorldMember(worldid, userid) {
+    removeWorldMember(worldid, userid) {
         if (!this._worlds[worldid]) return;
         if (this._worlds[worldid].members[userid]) {
             delete this._worlds[worldid].members[userid];

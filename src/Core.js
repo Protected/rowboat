@@ -16,9 +16,13 @@ export async function importUncached(modulepath) {
     const newFilepath = `${filepath.replace(new RegExp(`\\${ext}$`), "")}.${Date.now()}${ext}`;
     const fileurl = url.pathToFileURL(newFilepath);
     
-    const fileContent = await fs.promises.readFile(filepath, "utf8");
-    await fs.promises.writeFile(newFilepath, fileContent);
-
+    try {
+        const fileContent = await fs.promises.readFile(filepath, "utf8");
+        await fs.promises.writeFile(newFilepath, fileContent);
+    } catch (e) {
+        return;
+    }
+    
     try {
         const module = await import(fileurl);
         return module;
@@ -217,7 +221,7 @@ export default class Core {
 
     async createEnvironment(type, name, logerror) {
         let envtype = await importUncached(PATH_ENVIRONMENTS + ENVIRONMENT_PREFIX + type + ".js");
-        envtype = envtype.default;
+        envtype = envtype?.default;
         if (!envtype) {
             if (logerror) logger.error("Could not load the environment: " + name + " . Is the environment source in in the environment directory?");
             return null;
@@ -226,6 +230,11 @@ export default class Core {
     }
 
     async loadEnvironments() {
+
+        if (Object.keys(config?.environments || {}).length < 1) {
+            logger.warn("Environments provide connectivity. You should configure at least one Environment.");
+            return true;
+        }
 
         for (let name in config.environments) {
 
@@ -248,13 +257,18 @@ export default class Core {
                 sharedInstances[sharedModule] = this._shared[sharedName];
             }
             
-            if (!env.initialize({
-                config: config,
-                sharedInstances: sharedInstances,
-                pushShutdownHandler: this.pushShutdownHandler.bind(this),
-                pushCleanupHandler: this.pushCleanupHandler.bind(this)
-            })) {
-                logger.error("Could not initialize the environment: " + name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
+            try {
+                if (!env.initialize({
+                    config: config,
+                    sharedInstances: sharedInstances,
+                    pushShutdownHandler: this.pushShutdownHandler.bind(this),
+                    pushCleanupHandler: this.pushCleanupHandler.bind(this)
+                })) {
+                    logger.error("Could not initialize the environment: " + name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
+                    return false;
+                }
+            } catch (e) {
+                logger.error("Exception when initializing the environment: " + name + ". " + e);
                 return false;
             }
             
@@ -282,7 +296,7 @@ export default class Core {
 
     async createBehavior(type, name, logerror) {
         let betype = await importUncached(PATH_BEHAVIORS + type + ".js");
-        betype = betype.default;
+        betype = betype?.default;
         if (!betype) {
             if (logerror) logger.error("Could not load the behavior: " + name + " . Is the behavior source in the behavior directory?");
             return null;
@@ -291,6 +305,11 @@ export default class Core {
     }
 
     async loadBehaviors() {
+
+        if ((config?.behaviors?.length || 0) < 1) {
+            logger.warn("Behaviors provide functionality. You should configure at least one Behavior.");
+            return true;
+        }
 
         let uniqueBehaviors = {};
 
@@ -326,18 +345,23 @@ export default class Core {
                 core = this;
             }
 
-            if (!be.initialize({
-                config: config,
-                envExists: (name, type) => type ? this._environments[name]?.type === type : !!this._environments[name],
-                beExists: (name, type) => type ? this._behaviors[name]?.type === type : !!this._behaviors[name],
-                envProxy: this.createEnvironmentProxy(),
-                beProxy: this.createBehaviorProxy(),
-                pushShutdownHandler: this.pushShutdownHandler.bind(this),
-                pushCleanupHandler: this.pushCleanupHandler.bind(this),
-                rootpath: path.resolve(),
-                core: core
-            })) {
-                logger.error("Could not initialize the behavior: " + be.name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined and valid.");
+            try {
+                if (!be.initialize({
+                    config: config,
+                    envExists: (name, type) => type ? this._environments[name]?.type === type : !!this._environments[name],
+                    beExists: (name, type) => type ? this._behaviors[name]?.type === type : !!this._behaviors[name],
+                    envProxy: this.createEnvironmentProxy(),
+                    beProxy: this.createBehaviorProxy(),
+                    pushShutdownHandler: this.pushShutdownHandler.bind(this),
+                    pushCleanupHandler: this.pushCleanupHandler.bind(this),
+                    rootpath: path.resolve(),
+                    core: core
+                })) {
+                    logger.error("Could not initialize the behavior: " + be.name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined and valid.");
+                    return false;
+                }
+            } catch (e) {
+                logger.error("Exception when initializing the behavior: " + be.name + ". " + e);
                 return false;
             }
 
@@ -358,18 +382,26 @@ export default class Core {
         let promises = [];
         for (let name in this._environments) {
             logger.info("Requesting disconnection of environment " + name + " ...");
-            promises.push(this._environments[name].disconnect());
+            let prom = this._environments[name].disconnect();
+            prom.catch((e) => {
+                logger.error("Exception disconnecting from environment " + name + ": " + e);
+            });
+            promises.push(prom);
         }
-        return Promise.allSettled(promises);
+        return Promise.allSettled(promises).catch(() => {});
     }
 
     async runEnvironments() {
         let promises = [];
         for (let name in this._environments) {
             logger.info("Requesting connection of environment " + name + " ...");
-            promises.push(this._environments[name].connect());
+            let prom = this._environments[name].connect();
+            prom.catch((e) => {
+                logger.error("Exception connecting to environment " + name + ": " + e);
+            });
+            promises.push(prom);
         }
-        return Promise.all(promises);
+        return Promise.all(promises).catch(() => {});
     }
 
 }

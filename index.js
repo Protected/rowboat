@@ -27,43 +27,7 @@ import Core from './src/Core.js';
 
 const PIDFILE = "rowboat.pid";
 
-//Check pidfile
-
-if (fs.existsSync(PIDFILE)) {
-    console.log("Rowboat is already running.");
-    process.exit(1);
-}
-
-//Start up
-
-if (!config.loadMasterConfig()) {
-    logger.error("Unable to load master config.");
-    process.exit(2);
-}
-
-if (!config.dontCatchRejections) {
-
-    process.on('unhandledRejection', (reason, promise) => {
-        logger.warn('Unhandled Rejection at: ' + JSON.stringify(promise) + ' Reason: ' + JSON.stringify(reason));
-    });
-
-}
-
-let core = new Core();
-
-process.on("SIGINT", () => {
-    //Graceful shutdown
-    core.beginShutdown();
-});
-
-fs.writeFileSync(PIDFILE, String(process.pid), {mode: 0o644});
-
-process.on("exit", () => {
-    //Cleanup
-    core.performCleanup();
-    fs.unlinkSync(PIDFILE);
-    logger.info("Rowboat has ended gracefully.");
-});
+const core = new Core();
 
 registerCommandLineFeatures();
 
@@ -73,7 +37,22 @@ args.shift(); args.shift();
 (async function() {
     "use strict";
 
-    //Command line arguments
+    //Start up
+
+    if (!await config.loadMasterConfig(core)) {
+        logger.error("Unable to load master config.");
+        process.exit(2);
+    }
+
+    if (!config.dontCatchRejections) {
+
+        process.on('unhandledRejection', (reason, promise) => {
+            logger.warn('Unhandled Rejection at: ' + JSON.stringify(promise) + ' Reason: ' + JSON.stringify(reason));
+        });
+
+    }
+
+    //Parse command line arguments
 
     let stop = await parseAndExecuteArgs(args, {core, config, editConfig: null}, ({editConfig, stop}) => {
         if (editConfig) {
@@ -90,7 +69,40 @@ args.shift(); args.shift();
         process.exit(0);
     }
 
+    //Check pidfile
+
+    if (fs.existsSync(PIDFILE)) {
+        let isRunning = false;
+        let pid = null;
+        try {
+            pid = fs.readFileSync(PIDFILE);
+        } catch (e) {}
+        try {
+            isRunning = process.kill(pid, 0);
+        } catch (e) {
+            isRunning = e.code === 'EPERM';
+        }
+        if (isRunning) {
+            console.log("Rowboat is already running.");
+            process.exit(1);
+        }
+    }
+
+    //Shutdown and cleanup handlers
+
+    process.on("SIGINT", () => {
+        core.beginShutdown();
+    });
+    
+    process.on("exit", () => {
+        core.performCleanup();
+        fs.unlinkSync(PIDFILE);
+        logger.info("Rowboat has ended gracefully.");
+    });
+
     //Actual execution
+
+    fs.writeFileSync(PIDFILE, String(process.pid), {mode: 0o644});
     
     let fail = 0;
 
@@ -111,4 +123,5 @@ args.shift(); args.shift();
         await core.runEnvironments();
         logger.info("Rowboat " + config.version + " is now running.");
     }
+
 })();

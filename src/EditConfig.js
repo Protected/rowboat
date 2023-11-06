@@ -4,8 +4,8 @@ import yaml from 'yaml';
 
 const COMMENT_TOP = "This is the master configuration file. Declare here your environments (which connect to other systems) and behaviors (which provide functionality).";
 const COMMENT_PATHS = "Filesystem paths used by the core.";
-const COMMENT_ENVS = "Environment declaration mapping each instance name to a map of options. The options can be 'type' and parameters specific to that environment type. Multiple environments of the same type are permitted.";
-const COMMENT_BECOMMON = "Common options that will be replicated to every loaded behavior.";
+const COMMENT_ENVS = "Environment declaration mapping each instance name to a map of options. The options can be 'type' and parameters specific to that environment type.";
+const COMMENT_BECOMMON = "Common parameters that will be replicated to every loaded behavior.";
 const COMMENT_BES = "Behavior declaration consisting in a list of behaviors in load order. For each item provide a string (which will be used as the 'type') or a map containing 'type', optionally 'name', and parameters specific to that behavior type.";
 
 const HEADER_PATHS = "paths";

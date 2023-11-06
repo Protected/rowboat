@@ -36,7 +36,6 @@ export function registerFeature(name, options, callback) {
         logger.warn("Redefining command line feature '" + name + "'.");
     }
     features[name] = {...options, name, callback};
-    logger.info("Registered command line feature '" + name + "'.");
 }
 
 export async function parseAndExecuteArgs(args, context, cleanup) {

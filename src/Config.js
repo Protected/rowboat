@@ -14,23 +14,6 @@ var configFile = "config.yaml";
 //Master config. Auxiliary config files update this object too.
 var config = {};
 
-const DEFAULT_CONFIG = {
-    "paths": {
-        "logger": "[logs/]Y-MM[.log]",
-        "data": "data/"
-    },
-    "environments": {
-        "Discord": {
-            type: "Discord"
-        }
-    },
-    "behaviorCommon": {},
-    "behaviors": [
-        "Users",
-        "Commands"
-    ]
-}
-
 
 export function setConfigFile(newConfigFile) {
     if (newConfigFile) {
@@ -39,12 +22,12 @@ export function setConfigFile(newConfigFile) {
 }
 
 
-export function loadMasterConfig() {
+export async function loadMasterConfig(core) {
 
     try {
         fs.accessSync(CONFIG_PATH + configFile, fs.constants.F_OK);
     } catch (e) {
-        if (!generateMasterConfig()) {
+        if (!await generateMasterConfig(core)) {
             return false;
         }
     }
@@ -63,6 +46,8 @@ export function loadMasterConfig() {
         logger.error("Failed to load master config. Error: " + e.message);
         return false;
     }
+
+    if (!config) config = {};
     
     if (config.paths && config.paths.logger) {
         logger.setPathTemplate(config.paths.logger);
@@ -77,38 +62,32 @@ export function loadMasterConfig() {
         }
     }
 
-    if (Object.keys(config.environments).length < 1) {
-        logger.warn("Environments provide connectivity. Please configure at least one environment.");
-        return false;
-    }
-
-    for (let instanceName in config.environments) {
-        if (!config.environments[instanceName].type) {
-            logger.warn("No type provided for environment " + instanceName + " .");
-            return false;
+    if (typeof config.environments === "object") {
+        for (let instanceName in config.environments) {
+            if (!config.environments[instanceName].type) {
+                logger.warn("No type provided for environment " + instanceName + " .");
+                return false;
+            }
         }
     }
 
-    if ((config.behaviors?.length || 0) < 1) {
-        logger.warn("Behaviors provide functionality. Please configure at least one behavior.");
-        return false;
-    }
+    if (Array.isArray(config.behaviors)) {
+        for (let i = 0; i < config.behaviors.length; i++) {
+            let check = config.behaviors[i];
 
-    for (let i = 0; i < config.behaviors.length; i++) {
-        let check = config.behaviors[i];
+            if (typeof check !== "object") {
+                config.behaviors[i] = {name: check, type: check};
+                check = config.behaviors[i];
+            }
 
-        if (typeof check !== "object") {
-            config.behaviors[i] = {name: check, type: check};
-            check = config.behaviors[i];
-        }
+            if (!check.type) {
+                logger.warn("No type provided for behavior " + i + " " + (beConfig.name || "(Unknown)") + " .");
+                return false;
+            }
 
-        if (!check.type) {
-            logger.warn("No type provided for behavior " + i + " " + (beConfig.name || "(Unknown)") + " .");
-            return false;
-        }
-
-        if (!check.name) {
-            check.name = check.type;
+            if (!check.name) {
+                check.name = check.type;
+            }
         }
     }
     
@@ -146,25 +125,16 @@ function saveEditConfig(config) {
     return true;
 }
 
-function generateMasterConfig() {
+async function generateMasterConfig(core) {
     logger.info("Generating default config...");
-    config = DEFAULT_CONFIG;
-    return saveMasterConfig();
-}
-
-export function saveMasterConfig() {
-
-    logger.info("Saving master config...");
-
-    try {
-        let contents = yaml.stringify(config);
-        fs.writeFileSync(CONFIG_PATH + configFile, contents);
-    } catch (e) {
-        logger.warn("Failed to save master config. Error: " + e.message);
-        return false;
-    }
-
-    return true;
+    let editConfig = new EditConfig("");
+    editConfig.core = core;
+    editConfig.addEnvironment("MyDiscord", "Discord");
+    await editConfig.addEnvironmentParameters("MyDiscord", {required: true, missing: true});
+    editConfig.addBehavior("Users");
+    editConfig.addBehavior("Commands");
+    editConfig.setBehaviorCommonParameter("Discord", "MyDiscord");
+    return saveEditConfig(editConfig);
 }
 
 function loadAuxiliaryConfigFromFile(instanceName, suffix, target) {
@@ -233,7 +203,7 @@ export function setBehaviorDefaults(instanceName, defaults) {
 
 export default new Proxy({
     loadEditConfig, saveEditConfig,
-    loadMasterConfig, saveMasterConfig,
+    loadMasterConfig,
     getEnvironmentConfig, loadEnvironmentConfig, setEnvironmentDefaults,
     getBehaviorConfig, getBehaviorCommonConfig, loadBehaviorConfig, setBehaviorDefaults,
     setConfigFile

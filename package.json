@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "screen -mS rowboat node --trace-warnings --trace-uncaught index.js",
+    "start": "screen -dmS rowboat node --trace-warnings --trace-uncaught index.js",
     "stop": "kill -2 $(cat rowboat.pid)"
   },
   "repository": {

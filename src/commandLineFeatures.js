@@ -16,22 +16,26 @@ function editConfig(context) {
     return context.editConfig;
 }
 
-function genericFeedback(result, label) {
+function cap(str) {
+    return str[0].toUpperCase() + str.substring(1);
+}
+
+function genericFeedback(result, name, action, entity, obj) {
     if (result == ConfigFail.CONFIG_NOT_FOUND) {
-        console.log("These is no such " + label + ".");
+        console.log(`${cap(action)} ${cap(entity)} ${obj}: ${cap(entity)} ${name} not found.`);
     } else if (result == ConfigFail.TYPE_NOT_FOUND) {
-        console.log("The type of this " + label + " could not be loaded.");
+        console.log(`${cap(action)} ${cap(entity)} ${obj}: The type of ${name} could not be loaded.`);
     } else {
-        console.log("OK.");
+        console.log(`${cap(action)}ed ${cap(entity)} ${obj} for ${name}.`);
     }
 }
 
 registerFeature("config", {
     description: "Use a custom config filename",
     args: ["filename"]
-}, ({filename}, context) => {
+}, async ({filename}, context) => {
     context.config.setConfigFile(filename);
-    if (!context.config.loadMasterConfig()) {
+    if (!await context.config.loadMasterConfig(context.core)) {
         logger.error("Unable to load master config.");
         process.exit(2);
     }
@@ -52,7 +56,7 @@ registerFeature("environments", {
     context.stop = true;
     let allenvs = context.config.environments;
     if (!allenvs || !Object.keys(allenvs).length) {
-        console.log("No environments found.");
+        console.log("No Environments found.");
         return;
     }
     console.log("Environments ({NAME}):");
@@ -69,7 +73,7 @@ registerFeature("behaviors", {
     context.stop = true;
     let allbes = context.config.behaviors;
     if (!allbes || !Object.keys(allbes).length) {
-        console.log("No behaviors found.");
+        console.log("No Behaviors found.");
         return;
     }
 
@@ -216,14 +220,14 @@ registerFeature("addEnvironment", {
     description: "Add or replace an environment",
     args: ["name", "type"],
     minArgs: 1
-}, ({name, type}, context) => {
+}, async ({name, type}, context) => {
     if (!type) type = name;
     editConfig(context).addEnvironment(name, type);
-    let result = editConfig(context).addEnvironmentParameters(name, {required: true, missing: true});
+    let result = await editConfig(context).addEnvironmentParameters(name, {required: true, missing: true});
     if (result == ConfigFail.TYPE_NOT_FOUND) {
-        console.log("OK, but this type could not be found.");
+        console.log(`Add Environment ${name}: Added, but ${type} type not found.`);
     } else {
-        console.log("OK.");
+        console.log(`Added Environment ${name}.`);
     }
 });
 
@@ -232,14 +236,14 @@ registerFeature("addBehavior", {
     description: "Add or replace a behavior",
     args: ["name", "type"],
     minArgs: 1
-}, ({name, type}, context) => {
+}, async ({name, type}, context) => {
     if (!type) type = name;
     editConfig(context).addBehavior(name, type);
-    let result = editConfig(context).addBehaviorParameters(name, {required: true, missing: true});
+    let result = await editConfig(context).addBehaviorParameters(name, {required: true, missing: true});
     if (result == ConfigFail.TYPE_NOT_FOUND) {
-        console.log("OK, but this type could not be found.");
+        console.log(`Add Behavior ${name}: Added, but ${type} type not found.`);
     } else {
-        console.log("OK.");
+        console.log(`Added Behavior ${name}.`);
     }
 });
 
@@ -248,12 +252,17 @@ registerFeature("insertBehavior", {
     description: "Insert a behavior before the one with the given BEFORE name or at the top of the list",
     args: ["name", "type", "before"],
     minArgs: 1
-}, ({name, type, before}, context) => {
+}, async ({name, type, before}, context) => {
     if (!type) type = name;
     if (editConfig(context).insertBehaviorBefore(name, type, before)) {
-        console.log("OK.");
+        let result = await editConfig(context).addBehaviorParameters(name, {required: true, missing: true});
+        if (result == ConfigFail.TYPE_NOT_FOUND) {
+            console.log(`Insert Behavior ${name}: Inserted before ${before}, but ${type} type not found.`);
+        } else {
+            console.log(`Inserted Behavior ${name} before ${before}.`);
+        }
     } else {
-        console.log("There is no behavior with the given BEFORE name.");
+        console.log(`Can't insert a Behavior before ${before}: There's no Behavior with that name.`);
     }
 });
 
@@ -263,9 +272,9 @@ registerFeature("removeEnvironment", {
     args: ["name"]
 }, ({name}, context) => {
     if (editConfig(context).removeEnvironment(name)) {
-        console.log("OK.");
+        console.log(`Removed Environment ${name}.`);
     } else {
-        console.log("There is no such environment.");
+        console.log(`Remove Environment ${name}: Environment not found.`);
     }
 });
 
@@ -275,9 +284,9 @@ registerFeature("removeBehavior", {
     args: ["name"]
 }, ({name}, context) => {
     if (editConfig(context).removeBehavior(name)) {
-        console.log("OK.");
+        console.log(`Removed Behavior ${name}.`);
     } else {
-        console.log("There is no such behavior.");
+        console.log(`Remove Behavior ${name}: Behavior not found.`);
     }
 });
 
@@ -304,11 +313,11 @@ registerFeature("addEnvironmentParams", {
 }, async ({name, mode}, context) => {
     if (!mode) mode = "required";
     if (!paramsMode[mode]) {
-        console.log("MODE must be one of:", Object.keys(paramsMode).join(", "));
+        console.log("Add Environment parameters: MODE must be one of:", Object.keys(paramsMode).join(", "));
         return;
     }
     let result = await editConfig(context).addEnvironmentParameters(name, paramsMode[mode]);
-    genericFeedback(result, "environment");
+    genericFeedback(result, name, "add", "environment", "parameters");
 });
 
 registerFeature("addBehaviorParams", {
@@ -319,11 +328,11 @@ registerFeature("addBehaviorParams", {
 }, async ({name, mode}, context) => {
     if (!mode) mode = "required";
     if (!paramsMode[mode]) {
-        console.log("MODE must be one of:", Object.keys(paramsMode).join(", "));
+        console.log("Add Behavior parameters: MODE must be one of:", Object.keys(paramsMode).join(", "));
         return;
     }
     let result = await editConfig(context).addBehaviorParameters(name, paramsMode[mode]);
-    genericFeedback(result, "behavior");
+    genericFeedback(result, name, "add", "behavior", "parameters");
 });
 
 // === comments ===
@@ -348,12 +357,12 @@ registerFeature("addEnvironmentComments", {
 }, async ({name, mode, overwrite}, context) => {
     if (!mode) mode = "both";
     if (!commentsMode[mode]) {
-        console.log("MODE must be one of:", Object.keys(commentsMode).join(", "));
+        console.log("Add Environment comments: MODE must be one of:", Object.keys(commentsMode).join(", "));
         return;
     }
     let options = Object.assign({unset: overwrite != "overwrite"}, commentsMode[mode]);
     let result = await editConfig(context).addEnvironmentComments(name, options);
-    genericFeedback(result, "environment");
+    genericFeedback(result, name, "add", "environment", "comments");
 });
 
 registerFeature("addBehaviorComments", {
@@ -364,12 +373,12 @@ registerFeature("addBehaviorComments", {
 }, async ({name, mode, overwrite}, context) => {
     if (!mode) mode = "both";
     if (!commentsMode[mode]) {
-        console.log("MODE must be one of:", Object.keys(commentsMode).join(", "));
+        console.log("Add Behavior comments: MODE must be one of:", Object.keys(commentsMode).join(", "));
         return;
     }
     let options = Object.assign({unset: overwrite != "overwrite"}, commentsMode[mode]);
     let result = await editConfig(context).addBehaviorComments(name, options);
-    genericFeedback(result, "behavior");
+    genericFeedback(result, name, "add", "behavior", "comments");
 });
 
 registerFeature("removeEnvironmentComments", {
@@ -380,12 +389,12 @@ registerFeature("removeEnvironmentComments", {
 }, async ({name, mode, always}, context) => {
     if (!mode) mode = "both";
     if (!commentsMode[mode]) {
-        console.log("MODE must be one of:", Object.keys(commentsMode).join(", "));
+        console.log("Remove Environment comments: MODE must be one of:", Object.keys(commentsMode).join(", "));
         return;
     }
     let options = Object.assign({exact: always != "always"}, commentsMode[mode]);
     let result = await editConfig(context).removeEnvironmentComments(name, options);
-    genericFeedback(result, "environment");
+    genericFeedback(result, name, "remove", "environment", "comments");
 });
 
 registerFeature("removeBehaviorComments", {
@@ -396,12 +405,12 @@ registerFeature("removeBehaviorComments", {
 }, async ({name, mode, always}, context) => {
     if (!mode) mode = "both";
     if (!commentsMode[mode]) {
-        console.log("MODE must be one of:", Object.keys(commentsMode).join(", "));
+        console.log("Remove Behavior comments: MODE must be one of:", Object.keys(commentsMode).join(", "));
         return;
     }
     let options = Object.assign({exact: always != "always"}, commentsMode[mode]);
     let result = await editConfig(context).removeBehaviorComments(name, options);
-    genericFeedback(result, "behavior");
+    genericFeedback(result, name, "remove", "behavior", "comments");
 });
 
 

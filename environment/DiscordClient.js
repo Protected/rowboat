@@ -74,7 +74,7 @@ export default new class DiscordClient extends AsyncEventEmitter {
     }
     
     
-    prepareClient(envDiscord, token, sendDelay) {
+    async prepareClient(envDiscord, token, sendDelay) {
         this._sendDelay = sendDelay;
         
         this._environments[envDiscord.name] = envDiscord;
@@ -120,9 +120,10 @@ export default new class DiscordClient extends AsyncEventEmitter {
             }
         });
 
-        this._realClient.login(this._token);
+        return new Promise((resolve, reject) => {
+            this._realClient.login(this._token)
+                .catch(e => reject(e));
 
-        return new Promise((resolve) => {
             this._resolveOnLogin.push(resolve);
         });
     }
