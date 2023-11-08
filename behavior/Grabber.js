@@ -1254,7 +1254,9 @@ export default class Grabber extends Behavior {
         for (let i = 0; i < chapters.length - 1; i++) {
             chapters[i].end_time = chapters[i + 1].start_time;
         }
-        chapters[chapters.length - 1].end_time = parseInt(info.videoDetails?.lengthSeconds);
+        if (chapters.length) {
+            chapters[chapters.length - 1].end_time = parseInt(info.videoDetails?.lengthSeconds);
+        }
         return chapters;
     }
 

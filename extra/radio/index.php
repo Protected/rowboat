@@ -267,7 +267,7 @@ $(() => {
             },
             language: {
                 search: '',
-                info: 'Rajio Library - _TOTAL_ songs'
+                info: 'Radio Library - _TOTAL_ songs'
             },
             search: {
                 smart: false,

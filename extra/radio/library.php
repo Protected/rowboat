@@ -68,8 +68,8 @@ $filterfields = [
         return false;
     },
     "plays" => function($pattern, $item) use ($instancename) {
-        if (!isset($item["rajio." . $instancename . ".plays"])) return false;
-        return preg_match($pattern, $item["rajio." . $instancename . ".plays"]);
+        if (!isset($item["radio." . $instancename . ".plays"])) return false;
+        return preg_match($pattern, $item["radio." . $instancename . ".plays"]);
     },
     "novelty" => true
 ];
@@ -232,13 +232,13 @@ foreach ($list as $info) {
     $info["album"] = htmlspecialchars($info["album"] ?? "");
     
     $lastplayedmeta = str_pad(0, strlen(PHP_INT_MAX), "0", STR_PAD_LEFT);
-    if (isset($info["rajio." . $instancename . ".lastplayed"])) {
-        $lastplayedmeta = str_pad($info["rajio." . $instancename . ".lastplayed"], strlen(PHP_INT_MAX), "0", STR_PAD_LEFT);
+    if (isset($info["radio." . $instancename . ".lastplayed"])) {
+        $lastplayedmeta = str_pad($info["radio." . $instancename . ".lastplayed"], strlen(PHP_INT_MAX), "0", STR_PAD_LEFT);
     }
     
     $queuepos = null;
     $queueuser = null;
-    foreach ($stats["rajio." . $instancename . ".queue"] as $i => $queueitem) {
+    foreach ($stats["radio." . $instancename . ".queue"] as $i => $queueitem) {
         if ($queueitem["hash"] == $info["hash"]) {
             $queuepos = $i + 1;
             $queueuser = $queueitem["userid"];
@@ -261,17 +261,17 @@ foreach ($list as $info) {
         "length" => minutesAndSeconds($info["length"]),
         "sharedBy" => $info["sharedBy"][0],
         "allsharers" => $allsharers,
-        "plays" => $info["rajio." . $instancename . ".plays"] ?? 0,
+        "plays" => $info["radio." . $instancename . ".plays"] ?? 0,
         "paddedlastplayed" => $lastplayedmeta,
-        "lastplayed" => ago($info["rajio." . $instancename . ".lastplayed"] ?? 0),
+        "lastplayed" => ago($info["radio." . $instancename . ".lastplayed"] ?? 0),
         "kwlist" => $info["keywords"] ?? [],
         "kw" => count($info["keywords"] ?? []),
         "likes" => $likes,
         "likenum" => $likenum,
-        "priority" => number_format($stats["rajio." . $instancename . ".latestpriorities"][$info["hash"]] ?? 0, 1, ".", ""),
-        "prioritymeta" => $stats["rajio." . $instancename . ".latestpriorities"][$info["hash"]] ?? 0,
+        "priority" => number_format($stats["radio." . $instancename . ".latestpriorities"][$info["hash"]] ?? 0, 1, ".", ""),
+        "prioritymeta" => $stats["radio." . $instancename . ".latestpriorities"][$info["hash"]] ?? 0,
         "highlight" => isset($info["highlight"]),
-        "novelty" => in_array($info["hash"], $stats["rajio." . $instancename . ".latestnovelties"]),
+        "novelty" => in_array($info["hash"], $stats["radio." . $instancename . ".latestnovelties"]),
         "queuepos" => $queuepos,
         "queueuser" => $queueuser
     ];
@@ -310,7 +310,7 @@ $result["recordsFiltered"] = count($data);
 $result["totalLength"] = hoursMinutesAndSeconds($totlength);
 
 $result["userstats"] = $stats["users"];
-$result["playing"] = $stats["rajio." . $instancename . ".playing"];
+$result["playing"] = $stats["radio." . $instancename . ".playing"];
 
 if ($highlightonly) {
     $result["highlights"] = [
