@@ -2627,7 +2627,7 @@ export default class VRChat extends Behavior {
             emb = new EmbedBuilder();
         }
 
-        emb.setTitle(world.name);
+        emb.setTitle(world.name || "(unnamed)");
         emb.setThumbnail(world.imageUrl);
         emb.setColor(membercount ? this.param("coloronline") : this.param("coloroffline"));
         emb.setURL("https://vrchat.com/home/world/" + worldid);

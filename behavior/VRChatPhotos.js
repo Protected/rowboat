@@ -590,8 +590,10 @@ export default class VRChatPhotos extends Behavior {
                 }
             }
 
+            let originalContent = message.content;
+
             return message.delete()
-                .then(() => this.bakePicture(attachment.name || "photo.png", data, message.member, metadata))
+                .then(() => this.bakePicture(attachment.name || "photo.png", data, message.member, metadata, originalContent))
                 .then((message) => { this._index[message.id] = message; })
                 .catch((e) => {  });
         });
@@ -648,7 +650,7 @@ export default class VRChatPhotos extends Behavior {
     
     //Picture metadata
 
-    async bakePicture(name, data, member, metadata) {
+    async bakePicture(name, data, member, metadata, optionaltext) {
         if (!name || !data || !data.length || !member) return null;
 
         let sharedBy = await this.denv.idToDisplayName(member.id);
@@ -714,10 +716,14 @@ export default class VRChatPhotos extends Behavior {
         emb.setImage("attachment://" + encodeURI(name));
 
         try {
+            let msgoptions = {embeds: [emb], files: [{name: name, attachment: data}]};
+            if (optionaltext) {
+                msgoptions.content = optionaltext;
+            }
             if (this.param("usewebhook")) {
-                return this.denv.getWebhook(this.photochan, member).then((webhook) => webhook.send({embeds: [emb], files: [{name: name, attachment: data}]}));
+                return this.denv.getWebhook(this.photochan, member).then((webhook) => webhook.send(msgoptions));
             } else {
-                return this.denv.msg(this.photochan, {embeds: [emb], files: [{name: name, attachment: data}]});
+                return this.denv.msg(this.photochan, msgoptions);
             }
         } catch (e) {
             this.log("error", "Failed to bake picture " + url + ": " + JSON.stringify(e));
