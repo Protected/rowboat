@@ -816,6 +816,10 @@ export default class VRChatGroups extends Behavior {
             this._groups[vrcgroupid].members = [];
         }
         let members = await this.vrchat.vrcGroupMembers(vrcgroupid);
+        if (!members) {
+            this.log("warn", "Unable to retrieve list of members for " + vrcgroupid);
+            return;
+        }
         
         let memberUserIds = members.map(member => member.userId);
         let goneMembers = this._groups[vrcgroupid].members.filter(oldMember => !memberUserIds.includes(oldMember.userId));

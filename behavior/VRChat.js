@@ -934,7 +934,7 @@ export default class VRChat extends Behavior {
 
                 //Update stored avatar picture location
                 if (!person.stickypic) {
-                    this.updatePic(userid, this._friends[person.vrc].currentAvatarImageUrl);
+                    this.updatePic(userid, this._friends[person.vrc].profilePicOverride || this._friends[person.vrc].currentAvatarImageUrl);
                 }
 
                 //Synchronize nickname with vrchat username
