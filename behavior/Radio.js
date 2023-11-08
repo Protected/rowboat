@@ -1659,7 +1659,7 @@ export default class Radio extends Behavior {
             this._history = this._history.slice(0, this.param('historysize'));
         }
         
-        let plays = (this.grabber.getSongMeta(song.hash, this.metaprefix + ".plays") || 0) + 1;
+        let plays = (await this.grabber.getSongMeta(song.hash, this.metaprefix + ".plays") || 0) + 1;
         let now = moment().unix();
 
         await this.grabber.setSongMeta(song.hash, this.metaprefix + ".lastplayed", now);
