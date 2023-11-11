@@ -312,7 +312,7 @@ export default class Grabber extends Behavior {
             let info = this._index[this._sessionGrabs[-args.offset - 1][0]];
             if (info) {
 
-                let candeleteall = await this.be('Users').testPermissions(this.denv.name, userid, channelid, this.param('permissionsDeleteAll'));
+                let candeleteall = this.param('permissionsDeleteAll') === true || await this.be('Users').testPermissions(this.denv.name, userid, channelid, this.param('permissionsDeleteAll'));
                 let partial = false;
 
                 if (info.seen.length > 1) {
@@ -370,7 +370,7 @@ export default class Grabber extends Behavior {
                 return true;
             }
 
-            let candeleteall = await this.be('Users').testPermissions(this.denv.name, userid, channelid, this.param('permissionsDeleteAll'));
+            let candeleteall = this.param('permissionsDeleteAll') === true || await this.be('Users').testPermissions(this.denv.name, userid, channelid, this.param('permissionsDeleteAll'));
 
             if (!candeleteall) {
                 let info = this._index[hash];
@@ -1065,7 +1065,7 @@ export default class Grabber extends Behavior {
         let messageInfo = this.extractMessageInfo(fragment, {authorid: messageObj.author.id, chapters: chapters});
 
         if (messageInfo.replace) {
-            if (!await this.be('Users').testPermissions(this.denv.name, messageObj.author.id, messageObj.channel.id, this.param('permissionsReplace'))) {
+            if (!(this.param('permissionsReplace') === true || await this.be('Users').testPermissions(this.denv.name, messageObj.author.id, messageObj.channel.id, this.param('permissionsReplace')))) {
                 messageInfo.replace = false;
             }
         }
