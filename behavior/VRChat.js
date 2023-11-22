@@ -3413,7 +3413,10 @@ export default class VRChat extends Behavior {
                             if ([ws.OPEN, ws.CLOSING].includes(this._ws.readyState)) {
                                 this._ws.terminate();
                             }
-                            buildWebsocket();
+                            buildWebsocket()
+                                .catch((e) => {
+                                    this.log("warn", "Failed to reconnect to websocket:" + JSON.stringify(e) + " (will retry)"); 
+                                });
                         }, 10000);
 
                         clearInterval(this._wstimeout);
@@ -3461,6 +3464,8 @@ export default class VRChat extends Behavior {
         if (!e.statusCode) {
             if (e.error && e.error.code == "ENOTFOUND") {
                 this.log("warn", "DNS lookup failure: " + e.error.hostname);
+            } else if (e.error && e.error.code == "ETIMEDOUT") {
+                this.log("warn", "Timeout connecting to the VRChat API at " + path);
             } else {
                 //Unexpected error
                 this.log("error", JSON.stringify(e));
