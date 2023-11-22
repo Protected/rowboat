@@ -14,6 +14,7 @@ const ENDPOINT = "https://api.vrchat.cloud/api/1/";
 const WEBSOCKET = "wss://pipeline.vrchat.cloud/";
 const HTTP_USER_AGENT_TEMPLATE = "Rowboat/$version$ $contact$";
 const RATE_DELAY = 1000;
+const GATEWAY_ERRORS = [502, 504, 522];  //Not thrown
 
 const STATUS_ONLINE = ["active", "join me", "ask me"];
 const TRUST_PRECEDENCE = ["system_trust_veteran", "system_trust_trusted", "system_trust_known", "system_trust_basic"];
@@ -3466,10 +3467,9 @@ export default class VRChat extends Behavior {
                 throw e;
             }
         } else {
-            if (e.statusCode == 502 || e.statusCode == 504) {
+            if (GATEWAY_ERRORS.indexOf(e.statusCode) > -1) {
                 this.log("warn", "Oh no, gateway errors (" + e.statusCode + ")...");
-            }
-            if (e.statusCode != 401) {
+            } else if (e.statusCode != 401) {
                 this.log("warn", "API rejection at " + path + ": " + JSON.stringify(e));
                 throw e;
             }

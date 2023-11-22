@@ -976,6 +976,7 @@ export default class VRChatGroups extends Behavior {
 
     async updateGroupRoles(vrcgroupid) {
         let grouproles = await this.vrchat.vrcGroupRoles(vrcgroupid);
+        if (!grouproles) return;
         
         this._groups[vrcgroupid].roles = grouproles;
         this._groups.save();
