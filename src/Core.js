@@ -212,7 +212,8 @@ export default class Core {
     //Load and initialize configured environments
 
     async listEnvironmentTypes() {
-        let files = await fs.promises.readdir(PATH_ENVIRONMENTS);
+        let files = await fs.promises.readdir(PATH_ENVIRONMENTS, {withFileTypes: true});
+        files = files.filter(dirent => dirent.isFile()).map(dirent => dirent.name);
         return files.filter(file => file.startsWith(ENVIRONMENT_PREFIX)).map(file => {
             let match = file.match(new RegExp(ENVIRONMENT_PREFIX + "(.+)\\.js"));
             return match[1];
@@ -287,7 +288,8 @@ export default class Core {
     //Load and initialize configured behaviors
 
     async listBehaviorTypes() {
-        let files = await fs.promises.readdir(PATH_BEHAVIORS);
+        let files = await fs.promises.readdir(PATH_BEHAVIORS, {withFileTypes: true});
+        files = files.filter(dirent => dirent.isFile()).map(dirent => dirent.name);
         return files.map(file => {
             let match = file.match("(.+)\\.js");
             return match[1];

@@ -4,16 +4,17 @@ import { promisify } from 'util';
 import { Readable } from 'stream';
 import ytdl from 'ytdl-core';
 import FFmpeg from 'fluent-ffmpeg';
-import normalize from 'ffmpeg-normalize';
 import moment from 'moment';
 import random from 'meteor-random';
+
+import { analyzeVolume } from './Grabber/loudness.js';
 
 import Behavior from '../src/Behavior.js';
 
 const INDEXFILE = 'index.json';
 const STATSFILE = 'stats.json';
 
-const GET_FIELDS = ['name', 'author', 'album', 'track', 'length', 'source', 'sourceSpecificId', 'sourceLoudness', 'sharedBy', 'hash'];
+const GET_FIELDS = ['name', 'author', 'album', 'track', 'length', 'source', 'sourceSpecificId', 'loudness', 'sharedBy', 'hash'];
 const SET_FIELDS = ['name', 'author', 'album', 'track'];
 const NUMBER_FIELDS = ['track'];
 
@@ -48,9 +49,7 @@ export default class Grabber extends Behavior {
         {n: 'tagIgnore', d: "Tag message to be ignored (regex)"},
         {n: 'tagQuiet', d: "Tag message to be quietly processed (regex)"},
         {n: 'tagFeedback', d: "Tag message to be processed and provide feedback (regex)"},
-        {n: 'normalization', d: "Normalize downloaded files. One of: false, true/'ebuR128', 'rms'"},
-        {n: 'normalTarget', d: "Normalization target in LUFS or dB depending on the algorithm chosen above"},
-        {n: 'normalCustomTweak', d: "Allowable customization interval (added to target) for normalization"}
+        {n: 'loudCustomTweak', d: "Allowable customization interval for loudness"}
     ]; }
 
     get defaults() { return {
@@ -76,9 +75,7 @@ export default class Grabber extends Behavior {
         tagQuiet: '^\\$\\$',
         tagFeedback: '^!!',
         
-        normalization: 'rms',
-        normalTarget: -20,
-        normalCustomTweak: 4
+        loudCustomTweak: 4
     }; }
 
     get requiredEnvironments() { return {
@@ -289,6 +286,54 @@ export default class Grabber extends Behavior {
             
             return true;
         });
+
+
+        this.be('Commands').registerCommand(this, 'grab analyze', {
+            description: 'Analyze songs in the library and update the index.',
+            args: ['hashoroffset'],
+            minArgs: 0,
+            permissions: [permAdmin]
+        }, (env, type, userid, channelid, command, args, handle, ep) => {
+
+            if (args.hashoroffset) {
+
+                let hash = this.parseHashArg(args.hashoroffset);
+                if (hash === false) {
+                    ep.reply('Offset not found in recent history.');
+                    return true;
+                } else if (hash === true) {
+                    ep.reply('Reference matches more than one song; Please be more specific.');
+                    return true;
+                } else if (!hash) {
+                    ep.reply('Hash not found.');
+                    return true;
+                }
+
+                this.queueAnalyze(this._index[hash], {
+                    success: () => {
+                        ep.reply(hash + ": Successfully analyzed.");
+                    },
+                    error: (err) => ep.reply(hash + ": Failed to analyze song.")
+                });
+                return true;
+            }
+
+            ep.reply("Sit tight, this may take a long time...");
+
+            let i = 0;
+
+            for (let hash in this._index) {
+                this.queueAnalyze(this._index[hash], {
+                    success: () => {
+                        i += 1;
+                        if (!(i % 100)) ep.reply(i + " accepted so far.");
+                    },
+                    error: (err) => ep.reply(hash + ": Failed to analyze song.")
+                });
+            }
+
+            return true;
+        });
         
         
         this.be('Commands').registerCommand(this, 'grab undo', {
@@ -438,57 +483,6 @@ export default class Grabber extends Behavior {
                 ep.reply('[' + pos + '] ' + this._scanQueue[i][0]);
             }
             ep.reply("```");
-            
-            return true;
-        });
-        
-        
-        this.be('Commands').registerCommand(this, 'grab fixloudness', {
-            description: 'Adjust the loudness of a song to match the instance target.',
-            details: [
-                'This operation is lossy if the song is cached in a lossy format.'
-            ],
-            args: ['hashoroffset'],
-            minArgs: 0,
-            permissions: [permAdmin]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
-        
-            if (args.hashoroffset) {
-            
-                let hash = this.parseHashArg(args.hashoroffset);
-                if (hash === false) {
-                    ep.reply('Offset not found in recent history.');
-                    return true;
-                } else if (hash === true) {
-                    ep.reply('Reference matches more than one song; Please be more specific.');
-                    return true;
-                } else if (!hash) {
-                    ep.reply('Hash not found.');
-                    return true;
-                }
-            
-                this.queueFixLoudness(this._index[hash], {
-                    success: (newsong) => ep.reply("`#" + newsong.hash + "`: Loudness fixed from #" + hash + "."),
-                    error: (oldsong, err) => ep.reply("`#" + oldsong.hash + "`: Failed loudness fix: " + err)
-                });
-
-                ep.reply("Loudness fix requested.");
-                return true;
-            }
-        
-            ep.reply("Sit tight, this may take a long time...");
-        
-            let i = 0;
-        
-            for (let hash in this._index) {
-                this.queueFixLoudness(this._index[hash], {
-                    success: (newsong) => {
-                        i += 1;
-                        if (!(i % 100)) ep.reply(i + " fixed so far.");
-                    },
-                    error: (oldsong, err) => ep.reply(oldsong.hash + ": Failed loudness fix: " + err)
-                });
-            }
             
             return true;
         });
@@ -912,9 +906,6 @@ export default class Grabber extends Behavior {
             },
             errorEncoding: (messageObj, messageAuthor, reply) => {
                 if (reply) reply(messageAuthor + ", the song could not be obtained or converted.");
-            },
-            errorNormalizedCollision: (messageObj, messageAuthor, reply) => {
-                if (reply) reply(messageAuthor + ", the hash of the normalized version of the song collided with an existing hash.");
             }
         });
     }
@@ -1704,30 +1695,15 @@ export default class Grabber extends Behavior {
         entry.format = mp.info.format;
 
         let tweak = mp.info.tweak || 0;
-        tweak = Math.min(tweak, this.param("normalCustomTweak"));
-        tweak = Math.max(tweak, this.param("normalCustomTweak") * -1);
+        tweak = Math.min(tweak, this.param("loudCustomTweak"));
+        tweak = Math.max(tweak, this.param("loudCustomTweak") * -1);
         entry.tweak = tweak;
         
         await promisify(fs.rename)(temppath, realpath);
-        
-        //Normalize loudness. Returns a new index entry if successful.
-        let normalized;
-        if (this.param('normalization')) {
-            try {
-                normalized = await this.fixNormalization(entry);
-            } catch (e) {
-                this.log('  Normalized hash collision.');
-                if (callbacks.errorNormalizedCollision) callbacks.errorNormalizedCollision(messageObj, mp.authorName, mp.reply);
-                fs.unlink(realpath, (err) => {});
-                return;
-            }
-        } 
-        
-        if (normalized && normalized.hash != entry.hash) {
-            entry = normalized;
-            hash = entry.hash;
-        }
 
+        let { mean_volume } = await analyzeVolume(realpath);
+        entry.loudness = mean_volume;
+        
         //If this was a regrab, recover previous metadata, otherwise...
         if (!mp.regrab) {
             if (typeof info == "object") {
@@ -1958,63 +1934,6 @@ export default class Grabber extends Behavior {
         if (actualmin > Number.MAX_SAFE_INTEGER) actualmin = Number.MAX_SAFE_INTEGER;
         if (actualmax < actualmin) actualmax = actualmin;
         return [actualmin, actualmax];
-    }
-    
-    
-    async fixNormalization(song) {
-        
-        let oldpath = this.param('downloadPath') + '/' + song.hash + '.' + (song.format || 'mp3');
-        let temppath = this.param('downloadPath') + '/' + 'nor_' + (this._preparing++) + '.' + (song.format || this.param('defaultFormat'));
-
-        let mode = this.param('normalization');
-        if (!(['ebuR128', 'rms'].find(m => m == mode))) mode = 'ebuR128';
-        
-        let normalized = await normalize({
-            input: oldpath,
-            output: temppath,
-            loudness: {
-                normalization: mode,
-                target: {
-                    input_i: this.param('normalTarget') + song.tweak,
-                    input_tp: 0
-                }
-            }
-        });
-        
-        if (!normalized) {
-            return song;
-        }
-        
-        let newsong = Object.assign({}, song);
-        
-        newsong.normalized = {
-            method: mode,
-            from: normalized.info.measured,
-            to: normalized.info.loudness
-        };
-        
-        let data = await promisify(fs.readFile)(temppath);
-        if (!data) throw "Normalized file is empty.";
-            
-        let hash = crypto.createHash('md5').update(data).digest('hex');
-        let newpath = this.param('downloadPath') + '/' + hash + '.' + (newsong.format || this.param('defaultFormat'));
-
-        if (fs.existsSync(newpath)) {
-            promisify(fs.unlink)(temppath);
-            throw "Normalized hash already exists.";
-        }
-        
-        await promisify(fs.rename)(temppath, newpath);
-        this._usage += fs.statSync(newpath).size;
-        
-        this._usage -= fs.statSync(oldpath).size;
-        if (oldpath != newpath) {
-            await promisify(fs.unlink)(oldpath);
-        }
-            
-        newsong.hash = hash;
-        
-        return newsong;
     }
     
     
@@ -2261,26 +2180,6 @@ export default class Grabber extends Behavior {
         }.bind(this)]);
     }
     
-    queueFixLoudness(song, callbacks) {
-        this._scanQueue.push(["Fix loudness", function() {
-            this._downloads += 1;
-            this.log('Fixing loudness of ' + song.hash);
-            this.fixNormalization(song)
-                .then((newsong) => {
-                    this._downloads -= 1;
-                    if (song.hash == newsong.hash) return;
-                    if (this._index[song.hash]) delete this._index[song.hash];
-                    this._index[newsong.hash] = newsong;
-                    this._index.save();
-                    if (callbacks.success) callbacks.success(newsong);
-                })
-                .catch((err) => {
-                    this._downloads -= 1;
-                    if (callbacks.error) callbacks.error(song, err.error || err);
-                });
-        }.bind(this)]);
-    }
-    
     queueReformat(song, format, callbacks) {
         this._scanQueue.push(["Reformat", function() {
             this._downloads += 1;
@@ -2295,6 +2194,21 @@ export default class Grabber extends Behavior {
                 })
                 .catch((err) => {
                     this._downloads -= 1;
+                    if (callbacks.error) callbacks.error(song, err);
+                });
+        }.bind(this)]);
+    }
+
+    queueAnalyze(song, callbacks) {
+        this._scanQueue.push(["Analyze", function() {
+            this.log('Analyzing ' + song.hash);
+            analyzeVolume(this.songPathByHash(song.hash))
+                .then(({mean_volume}) => {
+                    this._index[song.hash].loudness = mean_volume;
+                    this._index.save();
+                    if (callbacks.success) callbacks.success(song, mean_volume);
+                })
+                .catch((err) => {
                     if (callbacks.error) callbacks.error(song, err);
                 });
         }.bind(this)]);

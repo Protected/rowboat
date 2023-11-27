@@ -70,9 +70,8 @@ export default class Radio extends Behavior {
         {n: 'autowithdraw', d: "How long in seconds before a user withdraws from the queue if they are online but not a listener"},
         {n: 'queuesize', d: "Maximum amount of songs in the request queue"},
         {n: 'historysize', d: "Maximum amount of recently played songs to remember"},
-        {n: 'referenceloudness', d: "Negative decibels; Play youtube songs with higher loudness at a lower volume to compensate (non-normalized entries only)"},
+        {n: 'referenceloudness', d: "Negative decibels; Play songs with higher loudness at a lower volume to compensate"},
         {n: 'volume', d: "Global volume multipler; Defaults to 1.0 and can be changed via command"},
-        {n: 'fec', d: "Forward error correction (true/false)"},
         
         {n: 'announcechannel', d: "ID of a Discord text channel to announce radio status information to"},
         {n: 'announcedelay', d: "Minimum seconds between song announces"},
@@ -123,7 +122,6 @@ export default class Radio extends Behavior {
         historysize: 20,
         referenceloudness: -20,
         volume: 1.0,
-        fec: false,
         
         announcechannel: null,
         announcedelay: 0,
@@ -1335,23 +1333,13 @@ export default class Radio extends Behavior {
         }
         
         let att = 1.0;
-        if (!song.normalized) {
-            let ref = this.param('referenceloudness');
-            if (!isNaN(ref) && ref < 0) {
-                if (song.sourceLoudness && song.sourceLoudness > ref) {  //Both negative numbers
-                    att = Math.pow(10, (ref - song.sourceLoudness) / 20);
-                }
+        let ref = this.param('referenceloudness');
+        if (!isNaN(ref) && ref < 0) {
+            if (song.loudness && song.loudness > ref) {  //Both negative numbers
+                att = Math.pow(10, (ref - song.loudness + song.tweak) / 20);
             }
         }
         let volume = this._volume * att;
-        
-        /*
-        let options = {
-            volume: (volume != 1 ? volume : false),
-            seek: seek || 0,
-            highWaterMark: 64,
-            fec: this.param('fec')
-        };*/
 
         let audioResource = createAudioResourceAndSeek(await this.grabber.songPathByHash(song.hash), {
             inlineVolume: volume != 1,
