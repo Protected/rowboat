@@ -541,7 +541,7 @@ export default class Radio extends Behavior {
                 return true;
             }
                         
-            this.dchan.members.get(userid).setDeaf(true);
+            this.dchan.members.get(userid).voice.setDeaf(true);
             
             return true;
         });
@@ -1615,7 +1615,7 @@ export default class Radio extends Behavior {
             let members = this.dchan.members;
             for (let userid in this._skipper) {
                 if (members.get(userid) && members.get(userid).voice.deaf) {
-                    members.get(userid).setDeaf(false);
+                    members.get(userid).voice.setDeaf(false);
                     delete this._skipper[userid];
                 }
             }
