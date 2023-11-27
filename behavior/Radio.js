@@ -4,7 +4,7 @@ import emoji from 'emoji-toolkit';
 import { ActivityType, ChannelType } from 'discord.js';
 import prism from 'prism-media';
 import { createAudioPlayer, AudioPlayerStatus, AudioResource,
-    getVoiceConnection, joinVoiceChannel, VoiceConnectionStatus } from '@discordjs/voice';
+    getVoiceConnection, joinVoiceChannel, VoiceConnectionStatus, entersState } from '@discordjs/voice';
 
 import Behavior from '../src/Behavior.js';
 
@@ -1248,8 +1248,18 @@ export default class Radio extends Behavior {
                 voiceConnection.subscribe(this._audioPlayer);
                 resolve(voiceConnection);
             });
-            voiceConnection.on(VoiceConnectionStatus.Disconnected, (oldState, newState) => {
-                reject(newState.reason || "Unknown reason.");
+            voiceConnection.on(VoiceConnectionStatus.Disconnected, async (oldState, newState) => {
+                try {
+                    await Promise.race([
+                        entersState(voiceConnection, VoiceConnectionStatus.Signalling, 5_000),
+                        entersState(voiceConnection, VoiceConnectionStatus.Connecting, 5_000),
+                    ]);
+                    // Seems to be reconnecting to a new channel - ignore disconnect
+                } catch (error) {
+                    // Seems to be a real disconnect which SHOULDN'T be recovered from
+                    voiceConnection.destroy();
+                    reject(newState.reason || "Unknown reason.");
+                }
             })
             voiceConnection.on("error", (error) => {
                 this.log("error", "Voice channel error: " + error);
