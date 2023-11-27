@@ -1346,7 +1346,7 @@ export default class Radio extends Behavior {
         let ref = this.param('referenceloudness');
         if (!isNaN(ref) && ref < 0) {
             if (song.loudness && song.loudness > ref) {  //Both negative numbers
-                att = Math.min(Math.pow(10, (ref - song.loudness + song.tweak) / 20), 1.0);
+                att = Math.min(Math.pow(10, (ref - song.loudness + (song.tweak || 0)) / 20), 1.0);
             }
         }
         let volume = this._volume * att;
