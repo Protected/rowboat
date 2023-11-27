@@ -7,8 +7,8 @@ export function analyzeVolume(audiofile) {
             if (error) {
                 reject(error);
             } else {
-                let mean_volume = result.match(/mean_volume: ([0-9.-]+) dB/)?.[1];
-                let max_volume = result.match(/max_volume: ([0-9.-]+) dB/)?.[1];
+                let mean_volume = parseFloat(result.match(/mean_volume: ([0-9.-]+) dB/)?.[1]);
+                let max_volume = parseFloat(result.match(/max_volume: ([0-9.-]+) dB/)?.[1]);
                 resolve({mean_volume, max_volume});
             }
         });

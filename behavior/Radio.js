@@ -188,7 +188,7 @@ export default class Radio extends Behavior {
                 : SONG_PRIORITY
         */
 
-        "pri.queue.chance": 0.9,
+        "pri.queue.chance": 1.0,
 
         /*
             If there are novelties (novelty is defined as: song shared less than pri.novelty.duration seconds ago and with less than pri.novelty.breaker plays)
