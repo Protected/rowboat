@@ -1733,10 +1733,10 @@ export default class Grabber extends Behavior {
             entry.sharedBy = [mp.author];
             if (mp.interval) entry.length = mp.interval[1] - mp.interval[0];
             entry.sourcePartial = mp.interval;
-            entry.name = entry.name ?? (mp.info.title || info.name);
-            entry.author = entry.author ?? (mp.info.artist || info.author || "");
-            entry.album = entry.album ?? (mp.info.album || info.album || "");
-            entry.track = entry.track ?? (mp.info.track || info.track || null);
+            entry.name = mp.info.title || (entry.name ?? info.name);
+            entry.author = mp.info.artist || (entry.author ?? (info.author || ""));
+            entry.album = mp.info.album || (entry.album ?? (info.album || ""));
+            entry.track = mp.info.track || (entry.track ?? (info.track || null));
             if (!entry.keywords) entry.keywords = [];
         }
 
