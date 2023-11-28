@@ -265,17 +265,28 @@ export default class SongRanking extends Behavior {
                 let extr = emoji.toShort(messageReaction.emoji.name).match(/\:([^:]+)\:/);
                 if (!extr) return;
                 emojiname = extr[1];
-                if (LIKEABILITY_REACTIONS[emojiname] === undefined) return;
+
+                let lik = LIKEABILITY_REACTIONS[emojiname];
+                if (lik === undefined) return;
+                if (lik === 0 && (!this.param('allowRemoval') || this.param('preventLastRemoval') && Object.keys(await this.getAllSongLikes(hash)).length == 1)) return;
 
                 if (messageReaction.message.author?.id == env.server.members.me.id) {
                     let hashes = await this.grabber.extractHashes(messageReaction.message.content);
                     for (let hash of hashes) {
-                        await this.setSongLikeability(hash, user.id, LIKEABILITY_REACTIONS[emojiname]);
+                        if (!lik) {
+                            await this.unsetSongLikeability(hash, userid);
+                        } else {
+                            await this.setSongLikeability(hash, user.id, lik);
+                        }
                     }
                 } else {
                     this.grabber.queueScanMessage(messageReaction.message, {
                         exists: (messageObj, messageAuthor, reply, hash) => {
-                            this.setSongLikeability(hash, user.id, LIKEABILITY_REACTIONS[emojiname]);
+                            if (!lik) {
+                                this.unsetSongLikeability(hash, userid);
+                            } else {
+                                this.setSongLikeability(hash, user.id, lik);
+                            }
                         }
                     }, true);
                 }
