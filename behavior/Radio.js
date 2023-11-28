@@ -1244,6 +1244,7 @@ export default class Radio extends Behavior {
                 selfMute: false,
                 selfDeaf: false
             });
+            let voiceConnectionDestroyed = false;
             voiceConnection.on(VoiceConnectionStatus.Ready, () => {
                 voiceConnection.subscribe(this._audioPlayer);
                 resolve(voiceConnection);
@@ -1257,7 +1258,13 @@ export default class Radio extends Behavior {
                     // Seems to be reconnecting to a new channel - ignore disconnect
                 } catch (error) {
                     // Seems to be a real disconnect which SHOULDN'T be recovered from
-                    voiceConnection.destroy();
+                    if (!voiceConnectionDestroyed) {
+                        try {
+                            voiceConnection.destroy();
+                        } finally {
+                            voiceConnectionDestroyed = true;
+                        }
+                    }
                     reject(newState.reason || "Unknown reason.");
                 }
             })
