@@ -473,16 +473,19 @@ export default class Grabber extends Behavior {
         
             if (!this._scanQueue.length) {
                 ep.reply('The queue is empty.');
-                return true;
+            } else {
+                ep.reply("```");
+                for (let i = 0; i < this._scanQueue.length; i++) {
+                    let width = String(this._scanQueue.length).length;
+                    let pos = ('0'.repeat(width) + String(i+1)).slice(-width);
+                    ep.reply('[' + pos + '] ' + this._scanQueue[i][0]);
+                }
+                ep.reply("```");
             }
 
-            ep.reply("```");
-            for (let i = 0; i < this._scanQueue.length; i++) {
-                let width = String(this._scanQueue.length).length;
-                let pos = ('0'.repeat(width) + String(i+1)).slice(-width);
-                ep.reply('[' + pos + '] ' + this._scanQueue[i][0]);
+            if (this._downloads) {
+                ep.reply(this._downloads + " ongoing download" + (this._downloads != 1 ? "s" : "") + ".");
             }
-            ep.reply("```");
             
             return true;
         });
@@ -1233,8 +1236,10 @@ export default class Grabber extends Behavior {
             return ytdl.getInfo(url)
                 .then((info) => {
                     this._cache[url].info = info;
-                    this._cache[url].ongoinginfo = false;
                     return info;
+                })
+                .finally(()=> {
+                    this._cache[url].ongoinginfo = false;
                 });
         }
     }
@@ -1272,8 +1277,12 @@ export default class Grabber extends Behavior {
             stream.on("data", (data) => {
                 this._cache[url].data.push(data);
             });
+
             stream.on("end", () => {
                 this._cache[url].data = Buffer.concat(this._cache[url].data);
+            });
+
+            stream.on("close", () => {
                 this._cache[url].ongoing = false;
             });
             return stream;
