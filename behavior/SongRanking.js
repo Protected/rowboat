@@ -275,7 +275,7 @@ export default class SongRanking extends Behavior {
                     for (let hash of hashes) {
                         if (!lik) {
                             if (!this.param('preventLastRemoval') || Object.keys(await this.getAllSongLikes(hash)).length > 1) {
-                                await this.unsetSongLikeability(hash, userid);
+                                await this.unsetSongLikeability(hash, user.id);
                             }
                         } else {
                             await this.setSongLikeability(hash, user.id, lik);
@@ -286,7 +286,7 @@ export default class SongRanking extends Behavior {
                         exists: async (messageObj, messageAuthor, reply, hash) => {
                             if (!lik) {
                                 if (!this.param('preventLastRemoval') || Object.keys(await this.getAllSongLikes(hash)).length > 1) {
-                                    this.unsetSongLikeability(hash, userid);
+                                    this.unsetSongLikeability(hash, user.id);
                                 }
                             } else {
                                 this.setSongLikeability(hash, user.id, lik);
