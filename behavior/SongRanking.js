@@ -268,22 +268,26 @@ export default class SongRanking extends Behavior {
 
                 let lik = LIKEABILITY_REACTIONS[emojiname];
                 if (lik === undefined) return;
-                if (lik === 0 && (!this.param('allowRemoval') || this.param('preventLastRemoval') && Object.keys(await this.getAllSongLikes(hash)).length == 1)) return;
+                if (lik === 0 && !this.param('allowRemoval')) return;
 
                 if (messageReaction.message.author?.id == env.server.members.me.id) {
                     let hashes = await this.grabber.extractHashes(messageReaction.message.content);
                     for (let hash of hashes) {
                         if (!lik) {
-                            await this.unsetSongLikeability(hash, userid);
+                            if (!this.param('preventLastRemoval') || Object.keys(await this.getAllSongLikes(hash)).length > 1) {
+                                await this.unsetSongLikeability(hash, userid);
+                            }
                         } else {
                             await this.setSongLikeability(hash, user.id, lik);
                         }
                     }
                 } else {
                     this.grabber.queueScanMessage(messageReaction.message, {
-                        exists: (messageObj, messageAuthor, reply, hash) => {
+                        exists: async (messageObj, messageAuthor, reply, hash) => {
                             if (!lik) {
-                                this.unsetSongLikeability(hash, userid);
+                                if (!this.param('preventLastRemoval') || Object.keys(await this.getAllSongLikes(hash)).length > 1) {
+                                    this.unsetSongLikeability(hash, userid);
+                                }
                             } else {
                                 this.setSongLikeability(hash, user.id, lik);
                             }
