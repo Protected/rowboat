@@ -1283,6 +1283,8 @@ export default class Grabber extends Behavior {
     async grabFromYoutube(mp, url, messageObj, callbacks, readOnly) {
         if (mp.info.noextract) return;
 
+        let downloading = false;
+
         //Obtain metadata from youtube
         this.youtubeInfo(url)
             .then((info) => {
@@ -1323,6 +1325,7 @@ export default class Grabber extends Behavior {
                 
                 this.log('Grabbing from youtube: ' + url);
                 this._downloads += 1;
+                downloading = true;
             
                 //Youtube -> FFmpeg -> Hard drive
                 
@@ -1375,6 +1378,7 @@ export default class Grabber extends Behavior {
             })
             .catch((err) => {
                 this.log('warn', err);
+                if (downloading) this._downloads -= 1;
             });
     }
         
