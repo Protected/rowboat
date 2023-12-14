@@ -69,7 +69,7 @@ export default class VRChatFavorites extends Behavior {
                 if (messageReaction.message.partial) await messageReaction.message.fetch();
 
                 if (messageReaction.emoji.name == this.param("deleteemoji")) {
-                    let owners = this.extractOwnersFromPin(messageReaction.message);
+                    let owners = await this.extractOwnersFromPin(messageReaction.message);
                     if (owners && owners.find(owner => owner == user.id)) {
                         messageReaction.message.delete();
                     } else {

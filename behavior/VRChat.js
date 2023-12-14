@@ -15,6 +15,7 @@ const WEBSOCKET = "wss://pipeline.vrchat.cloud/";
 const HTTP_USER_AGENT_TEMPLATE = "Rowboat/$version$ $contact$";
 const RATE_DELAY = 1000;
 const GATEWAY_ERRORS = [502, 504, 522];  //Not thrown
+const RECONNECT_DELAYS = [5, 20, 60, 120, 300];
 
 const STATUS_ONLINE = ["active", "join me", "ask me"];
 const TRUST_PRECEDENCE = ["system_trust_veteran", "system_trust_trusted", "system_trust_known", "system_trust_basic"];
@@ -206,6 +207,8 @@ export default class VRChat extends Behavior {
         this._ws = null;  //The websocket
         this._wstimeout = null;  //The websocket's ping timer
         this._wsping = 0;  //Pending pings
+        this._wsreconnect = 0;  //Amount of reconnect attempts
+        this._wsfail = true;  //Whether the websocket promise should reject if the connection fails
 
         this._lt_online = {prefix: "🟢 Online", msg: null, ts: null, stack: []};  //State of recent 'is online' announcements
         this._lt_offline = {prefix: "⚪ Offline", msg: null, ts: null, stack: []};  //State of recent 'is offline' announcements
@@ -794,6 +797,7 @@ export default class VRChat extends Behavior {
             .then(() => this.vrcInitialize())
             .then(() => this.refreshFriends(true))
             .then(() => this.emit("connect"))
+            .then(() => {  this._wsfail = false;  })  //From now on, websocket will attempt to reconnect if it fails
             .catch((e) => {
                 this.log("error", "Failed to initialize VRChat behavior. Error:" + JSON.stringify(e));
                 process.exit(11);
@@ -1089,11 +1093,15 @@ export default class VRChat extends Behavior {
             
                 let data = await this.vrcUser(vrchatuser);
                 if (!data) {
-                    let search = await this.vrcUserSearch(vrchatuser);
-                    if (search && search[0]) {
-                        if (search[0].displayName.toLocaleLowerCase() == vrchatuser.toLocaleLowerCase()) {
-                            data = search[0];
-                        } else {
+                    let search = await this.vrcUserSearch(vrchatuser, 20);
+                    if (search) {
+                        for (let check of search) {
+                            if (check.displayName.toLocaleLowerCase() == vrchatuser.toLocaleLowerCase()) {
+                                data = check;
+                                break;
+                            }
+                        }
+                        if (!data) {
                             ep.reply("There is no user with the ID or display name " + vrchatuser + ", but there is a user with the display name " + search[0].displayName + " whose ID is `" + search[0].id + "`. Is this you?");
                             return true;
                         }
@@ -3253,8 +3261,9 @@ export default class VRChat extends Behavior {
         return this.vrcget("auth/user").then(data => { if (data) this._me = data; });
     }
 
-    async vrcUserSearch(query) {
-        return this.vrcget("users/?n=1&search=" + encodeURIComponent(query));
+    async vrcUserSearch(query, n) {
+        if (!n) n = 1;
+        return this.vrcget("users/?n=" + n + "&search=" + encodeURIComponent(query));
     }
 
     async vrcUser(vrcuser) {
@@ -3365,41 +3374,48 @@ export default class VRChat extends Behavior {
     async vrcInitialize() {
         await this.vrcMe();  //Login
 
-        let buildWebsocket = () => {
-            //Initialize websocket
-            return new Promise((resolve, reject) => {
-                let ws = new WebSocket(WEBSOCKET + "?authToken=" + this._auth, {headers: {"User-Agent": this.httpUserAgent}, localAddress: this.param("localAddress")});
-                
-                let connectionError = (err) => reject(err);
+        let buildWebsocket = () => new Promise((resolve, reject) => {
 
-                ws.on('open', () => {
-                    this._ws = ws;
-                    this.log("Established connection to the websocket.");
-                    resolve();
-                    ws.removeListener('error', connectionError);
-                });
+            let ws = new WebSocket(WEBSOCKET + "?authToken=" + this._auth, {headers: {"User-Agent": this.httpUserAgent}, localAddress: this.param("localAddress")});
 
-                let resetPing = () => this._wsping = [0, moment().unix()];
+            let reconnectWebsocket = () => {
+                if (this._wstimeout) clearInterval(this._wstimeout);
 
-                ws.on('ping', (data) => { resetPing(); ws.pong(data); });
-                
-                ws.on('pong', (data) => { resetPing(); });
-
-                ws.on('error', connectionError);
-
-                ws.on('message', (data) => {
-                    resetPing();
-                    let message = JSON.parse(data);
-                    try {
-                        let content = JSON.parse(message.content);
-                        if (["friend-active", "friend-online", "friend-offline"].includes(message.type)) {
-                            this.emit("friendStateChange", Object.assign({state: message.type.split("-")[1], id: message.userId || content.user?.id}, content.user));
-                        }
-                        this.emit(message.type.split("-").map((elm, i) => i > 0 ? elm[0].toUpperCase() + elm.substring(1) : elm).join(""), content);
-                    } catch (e) {
-                        this.log("warn", "Could not parse websocket message " + message.type + ": " + message.content + " (" + JSON.stringify(e) + ")");
+                setTimeout(() => {
+                    if ([ws.OPEN, ws.CLOSING].includes(this._ws.readyState)) {
+                        this._ws.terminate();
                     }
-                });
+                    buildWebsocket();
+                }, 1000 * RECONNECT_DELAYS[Math.min(this._wsreconnect, RECONNECT_DELAYS.length - 1)]);
+
+                this._wsreconnect += 1;
+
+            }
+            
+            let connectionError = (err) => {
+                this.log("warn", "Websocket error (" + this._wsreconnect + "): " + JSON.stringify(e));
+                if (this._wsfail) {
+                    if (this._wstimeout) clearInterval(this._wstimeout);
+                    reject(err);
+                } else {
+                    reconnectWebsocket();
+                }
+            };
+
+            let resetPing = () => this._wsping = [0, moment().unix()];
+
+            ws.on('ping', (data) => { resetPing(); ws.pong(data); });
+            
+            ws.on('pong', (data) => { resetPing(); });
+
+            ws.on('error', connectionError);
+
+            ws.on('open', () => {
+                this._ws = ws;
+                this.log("Established connection to the websocket.");
+                this._wsreconnect = 0;
+                resolve();
+                //ws.removeListener('error', connectionError);
 
                 resetPing();
                 this._wstimeout = setInterval(() => {
@@ -3408,18 +3424,9 @@ export default class VRChat extends Behavior {
                         
                         this.log("warn", "Recreating websocket (ping timeout).")
                         this._ws.close();
+    
+                        reconnectWebsocket();
 
-                        setTimeout(() => {
-                            if ([ws.OPEN, ws.CLOSING].includes(this._ws.readyState)) {
-                                this._ws.terminate();
-                            }
-                            buildWebsocket()
-                                .catch((e) => {
-                                    this.log("warn", "Failed to reconnect to websocket:" + JSON.stringify(e) + " (will retry)"); 
-                                });
-                        }, 10000);
-
-                        clearInterval(this._wstimeout);
                     } else {
                         this._ws.ping(this._wsping[0]);
                         this._wsping[0] += 1;
@@ -3427,7 +3434,22 @@ export default class VRChat extends Behavior {
                 }, 30000);
 
             });
-        }
+
+            ws.on('message', (data) => {
+                resetPing();
+                let message = JSON.parse(data);
+                try {
+                    let content = JSON.parse(message.content);
+                    if (["friend-active", "friend-online", "friend-offline"].includes(message.type)) {
+                        this.emit("friendStateChange", Object.assign({state: message.type.split("-")[1], id: message.userId || content.user?.id}, content.user));
+                    }
+                    this.emit(message.type.split("-").map((elm, i) => i > 0 ? elm[0].toUpperCase() + elm.substring(1) : elm).join(""), content);
+                } catch (e) {
+                    this.log("warn", "Could not parse websocket message " + message.type + ": " + message.content + " (" + JSON.stringify(e) + ")");
+                }
+            });
+
+        });
 
         return buildWebsocket();
     }

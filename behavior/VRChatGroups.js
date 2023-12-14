@@ -67,6 +67,8 @@ export default class VRChatGroups extends Behavior {
             }, ...}*/
         this._groupChannels = null;
 
+        this._groupMemberMsgLocks = {};  //{GROUPID: {vrcuserid: true|false, ...}, ...}
+
         this._groupIndex = {};  //{CHANNELID: [...GROUPID...], ...}
         this._grouproleIndex = {};  //{ROLEID: [...GROUPID...], ...}
 
@@ -667,6 +669,7 @@ export default class VRChatGroups extends Behavior {
                 greet: null,
                 grouproles: [],
                 memberMsgs: {},
+                memberMsgLocks: {},
                 announcementMsgs: {}
             };
         }
@@ -782,6 +785,21 @@ export default class VRChatGroups extends Behavior {
         for (let assignment of channeldata.grouproles) {
             this.unindexRole(assignment.discordrole, vrcgroupid);
         }
+    }
+
+    setLockMemberMsg(vrcgroupid, vrcuserid, state) {
+        if (!this._groupMemberMsgLocks[vrcgroupid]) {
+            this._groupMemberMsgLocks[vrcgroupid] = {};
+        }
+        if (state && this._groupMemberMsgLocks[vrcgroupid][vrcuserid]) {
+            return false;
+        }
+        this._groupMemberMsgLocks[vrcgroupid][vrcuserid] = !!state;
+        return true;
+    }
+
+    isLockedMemberMsg(vrcgroupid, vrcuserid) {
+        return this._groupMemberMsgLocks[vrcgroupid]?.[vrcuserid];
     }
 
     setMemberMsg(vrcgroupid, vrcuserid, msgid) {
@@ -1102,6 +1120,7 @@ export default class VRChatGroups extends Behavior {
         if (!memberChannel) return;
         let group = this._groups[vrcgroupid];
         if (!group) return;
+        if (!this.isLockedMemberMsg(vrcgroupid, vrcuserid)) return;
 
         let member = group.members.find(check => check.userId == vrcuserid);
         if (!member) return;
@@ -1169,11 +1188,14 @@ export default class VRChatGroups extends Behavior {
             if (message) {
                 return await message.edit({embeds: [emb]});
             } else {
-                return await memberChannel.send({embeds: [emb]})
-                    .then(newmessage => {
-                        this.setMemberMsg(group.id, member.userId, newmessage.id);
-                        return newmessage;
-                    });
+                if (this.setLockMemberMsg(group.id, member.userId, true)) {  //Atomicity
+                    return await memberChannel.send({embeds: [emb]})
+                        .then(newmessage => {
+                            this.setMemberMsg(group.id, member.userId, newmessage.id);
+                            this.setLockMemberMsg(group.id, member.userId, false);
+                            return newmessage;
+                        });
+                }
             }
         } catch (e) {
             this.log("warn", "Failed to bake member " + vrcuserid + " for group " + group.id + ": " + JSON.stringify(e));
