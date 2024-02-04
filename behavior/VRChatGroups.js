@@ -1083,6 +1083,9 @@ export default class VRChatGroups extends Behavior {
                 return await announcementChannel.send({embeds: [emb]})
                     .then(newmessage => {
                         this.setAnnouncementMsg(group.id, announcement.id, newmessage.id);
+                        if (newmessage.crosspostable) {
+                            newmessage.crosspost();
+                        }
                         return newmessage;
                     });
             }
