@@ -493,23 +493,23 @@ export default class VRChat extends Behavior {
                                         instance = this.generateInstanceFor(person.vrc, "public", null, instances.map(ci => ci.split("~")[0]), region);
                                     }
                                     this.vrcInvite(person.vrc, worldid, instance)
-                                        .then(() => { buttonInteraction.editReply("Invite sent."); })
+                                        .then(() => buttonInteraction.editReply("Invite sent."))
                                         .catch(e => {
                                             this.log("error", "Failed to invite " + buttonInteraction.user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e));
-                                            buttonInteraction.deleteReply();
+                                            buttonInteraction.deleteReply().catch(() => {});
                                         });
                                 })
                                 .catch((e) => {
                                     this.log("warn", "Failed to invite " + buttonInteraction.user.id + " to " + worldid + " because the world couldn't be retrieved.");
-                                    buttonInteraction.deleteReply();
+                                    buttonInteraction.deleteReply().catch(() => {});
                                 });
                         } else {
                             let instance = this.generateInstanceFor(this._me.id, buttonInteraction.customId == "invitefriendsplus" ? "friends+" : "friends", undefined, undefined, region);
                             this.vrcInvite(person.vrc, worldid, instance)
-                                .then(() => { buttonInteraction.editReply("Invite sent."); })
+                                .then(() => buttonInteraction.editReply("Invite sent."))
                                 .catch(e => {
                                     this.log("error", "Failed to invite " + buttonInteraction.user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e));
-                                    buttonInteraction.deleteReply();
+                                    buttonInteraction.deleteReply().catch(() => {});
                                 });
                         }
 

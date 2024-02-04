@@ -34,7 +34,7 @@ export default class EnvDiscord extends Environment {
 
     //Replace with @decorators once they become available
     get synchronousMethods() { 
-        return super.synchronousMethods.concat(["extractRoleId", "extractChannelId", "extractRoleIdsFromCollection"]);
+        return super.synchronousMethods.concat(["extractRoleId", "extractChannelId", "extractRoleIdsFromCollection", "extractChannelIdsFromCollection"]);
     }
 
     constructor(name) {
@@ -517,6 +517,11 @@ export default class EnvDiscord extends Environment {
     extractRoleIdsFromCollection(roleids) {
         if (!roleids) return [];
         return roleids.map(roleid => this.extractRoleId(roleid)).filter(checkroleid => !!checkroleid);
+    }
+
+    extractChannelIdsFromCollection(channelids) {
+        if (!channelids) return [];
+        return channelids.map(channelid => this.extractChannelId(channelid)).filter(checkchannelid => !!checkchannelid);
     }
 
 

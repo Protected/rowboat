@@ -1280,9 +1280,10 @@ export default class Grabber extends Behavior {
 
             stream.on("end", () => {
                 this._cache[url].data = Buffer.concat(this._cache[url].data);
+                this._cache[url].ongoing = false;
             });
 
-            stream.on("close", () => {
+            stream.on("error", () => {
                 this._cache[url].ongoing = false;
             });
             return stream;

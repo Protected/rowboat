@@ -173,7 +173,7 @@ export default class DiscordTempVoice extends Behavior {
 
             let textchannel = await this.denv.server.channels.fetch(channelid);
 
-            if (this.ownerCheck() && !await this.be('Users').testPermissions(env.name, userid, channelid, this.ownershipPermissions(env, channelid, textchannel.parentId))) {
+            if (this.ownerCheck() && !await this.be('Users').testPermissions(env.name, userid, channelid, this.ownershipPermissions(channelid, textchannel.parentId))) {
                 ep.reply("You don't have permission to do that here.");
                 return true;
             }
@@ -198,7 +198,7 @@ export default class DiscordTempVoice extends Behavior {
 
             let textchannel = await this.denv.server.channels.fetch(channelid);
 
-            if (this.ownerCheck() && !await this.be('Users').testPermissions(env.name, userid, channelid, this.ownershipPermissions(env, channelid, textchannel.parentId))) {
+            if (this.ownerCheck() && !await this.be('Users').testPermissions(env.name, userid, channelid, this.ownershipPermissions(channelid, textchannel.parentId))) {
                 ep.reply("You don't have permission to do that here.");
                 return true;
             }
@@ -285,7 +285,7 @@ export default class DiscordTempVoice extends Behavior {
 
             let textchannel = await this.denv.server.channels.fetch(channelid);
 
-            if (this.ownerCheck() && !await this.be('Users').testPermissions(env.name, userid, channelid, this.ownershipPermissions(env, channelid, textchannel.parentId))) {
+            if (this.ownerCheck() && !await this.be('Users').testPermissions(env.name, userid, channelid, this.ownershipPermissions(channelid, textchannel.parentId))) {
                 ep.reply("You don't have permission to do that here.");
                 return true;
             }
@@ -368,9 +368,9 @@ export default class DiscordTempVoice extends Behavior {
         return this.param("permissions") !== true;
     }
 
-    ownershipPermissions(env, channelid, parentid) {
+    ownershipPermissions(channelid, parentid) {
         return this.param("permissions").map(template => template
-                    .replaceAll(/%env%/g, env.name)
+                    .replaceAll(/%env%/g, this.denv.name)
                     .replaceAll(/%channelid%/g, channelid)
                     .replaceAll(/%parentid%/g, parentid || "noparent"));
     }
