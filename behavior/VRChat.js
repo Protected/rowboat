@@ -652,7 +652,7 @@ export default class VRChat extends Behavior {
 
                 this.dqueue(function() {
                     this.emptyWorlds();
-                });
+                }.bind(this));
 
             }
 
