@@ -249,7 +249,6 @@ export default class VRChat extends Behavior {
         if (this._people === false) return false;
 
         this._worlds = this.loadData(this.name.toLowerCase() + ".worlds.json", {}, {quiet: true});
-        this.emptyWorlds();
 
         this._misc = this.loadData(this.name.toLowerCase() + ".misc.json", {
             pronounscolor: null,
@@ -649,6 +648,10 @@ export default class VRChat extends Behavior {
                             message.delete();
                         }.bind(this));
                     }
+                });
+
+                this.dqueue(function() {
+                    this.emptyWorlds();
                 });
 
             }
