@@ -233,6 +233,7 @@ export default class VRChat extends Behavior {
         this._mtimer = null;  //Mail timer - Checks for expired callbacks
 
         this._otpPromise = null;  //A promise that will resolve when the OTP is validated
+        this._addingWorldMember = {};  //Maintain consistency when adding and removing world members {userid: location}
     }
     
     
@@ -248,6 +249,7 @@ export default class VRChat extends Behavior {
         if (this._people === false) return false;
 
         this._worlds = this.loadData(this.name.toLowerCase() + ".worlds.json", {}, {quiet: true});
+        this.emptyWorlds();
 
         this._misc = this.loadData(this.name.toLowerCase() + ".misc.json", {
             pronounscolor: null,
@@ -2257,19 +2259,28 @@ export default class VRChat extends Behavior {
 
     async addWorldMember(worldid, location, userid) {
         try {
-            let world = await this.getWorld(worldid);
-            if (!world) throw {error: "Unable to retrieve world."};
-            world.members[userid] = true;
-            world.emptysince = null;
+            this._addingWorldMember[userid] = location;
 
-            let instance = this.instanceFromLocation(location), instanceid = this.instanceIdFromLocation(location);
-            if (!world.instances[instanceid]) {
-                world.instances[instanceid] = {msg: null, instance: instance, members: {}};
+            let world = await this.getWorld(worldid);
+            if (!world) {
+                if (this._addingWorldMember[userid]) { delete this._addingWorldMember[userid]; }
+                throw {error: "Unable to retrieve world."};
             }
-            world.instances[instanceid].members[userid] = true;
+            if (this._addingWorldMember[userid] === location) {  //Conclude only if there hasn't been another call to add/remove
+                world.members[userid] = true;
+                world.emptysince = null;
+
+                let instance = this.instanceFromLocation(location), instanceid = this.instanceIdFromLocation(location);
+                if (!world.instances[instanceid]) {
+                    world.instances[instanceid] = {msg: null, instance: instance, members: {}};
+                }
+                world.instances[instanceid].members[userid] = true;
+            }
 
         } catch (e) {
             this.log('warn', "Failed to add world member " + userid + " to " + worldid + ": " + JSON.stringify(e));
+        } finally {
+            if (this._addingWorldMember[userid]) { delete this._addingWorldMember[userid]; }
         }
     }
 
@@ -2289,6 +2300,7 @@ export default class VRChat extends Behavior {
                 }
             }
         }
+        if (this._addingWorldMember[userid]) { delete this._addingWorldMember[userid]; }
         if (!this.worldMemberCount(worldid)) {
             this._worlds[worldid].emptysince = moment().unix();
         }
