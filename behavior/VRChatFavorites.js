@@ -189,6 +189,10 @@ export default class VRChatFavorites extends Behavior {
             let pins = this._pins;
             while (!!(operationmatch = filterstring.match(OTHERS_OPERATION))) {
                 pins = await this.combinePins(pins, operationmatch[1]);
+                if (!pins) {
+                    ep.reply("No reference to a list named " + operationmatch[1] + ".");
+                    return true;
+                }
                 filterstring = operationmatch[2].trim();
             }
 
@@ -228,6 +232,10 @@ export default class VRChatFavorites extends Behavior {
             let pins = this._pins;
             while (!!(operationmatch = filterstring.match(OTHERS_OPERATION))) {
                 pins = await this.combinePins(pins, operationmatch[1]);
+                if (!pins) {
+                    ep.reply("No reference to a list named " + operationmatch[1] + ".");
+                    return true;
+                }
                 filterstring = operationmatch[2].trim();
             }
 
