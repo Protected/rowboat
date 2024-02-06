@@ -81,6 +81,8 @@ export default class VRChat extends Behavior {
         {n: "friendsplusemoji", d: "Emoji that represents a friends+ instance ['hidden']"},
         {n: "friendsemoji", d: "Emoji that represents a friends instance"},
         {n: "deleteemoji", d: "Emoji for deleting things"},
+        {n: "pcvremoji", d: "Emoji that represents PCVR compatibility"},
+        {n: "androidemoji", d: "Emoji that represents Android compatibility"},
 
         {n: "alertmin", d: "Minimum amount of online people to vrcalert at"},
         {n: "alertcooldown", d: "How long until a user can be alerted again (mins)"},
@@ -133,6 +135,8 @@ export default class VRChat extends Behavior {
         friendsplusemoji: "🥳",
         friendsemoji: "🧑‍🤝‍🧑",
         deleteemoji: "❌",
+        pcvremoji: "🖥️",
+        androidemoji: "📱",
 
         alertmin: 4,
         alertcooldown: 60,
@@ -2439,6 +2443,52 @@ export default class VRChat extends Behavior {
     }
 
 
+    worldPlatformsAsEmojiField(world) {
+        let unitypackages = world?.unityPackages;
+        if (!unitypackages) return "-"; 
+        let result = "";
+        if (unitypackages.find(pack => pack.platform == "standalonewindows")) {
+            result += (this.param("pcvremoji") || "(PC)");
+        }
+        if (unitypackages.find(pack => pack.platform == "android")) {
+            result += (this.param("androidemoji") || "(And)");
+        }
+        return result;
+    }
+
+    worldPlatformsAsList(world) {
+        let unitypackages = world?.unityPackages;
+        if (!unitypackages) return [];
+        let result = [];
+        if (unitypackages.find(pack => pack.platform == "standalonewindows")) {
+            result.push("pcvr");
+        }
+        if (unitypackages.find(pack => pack.platform == "android")) {
+            result.push("android");
+        }
+        return result;
+    }
+
+    testPlatformFromEmojiField(str, platform) {
+        if (!str) return false;
+        if (platform == "pcvr" && str.indexOf(this.param("pcvremoji") || "(PC)") > -1) return true;
+        if (platform == "android" && str.indexOf(this.param("androidemoji") || "(And)") > -1) return true;
+        return false;
+    }
+
+    testPlatformInWorld(world, platform) {
+        let unitypackages = world?.unityPackages;
+        if (!unitypackages) return false;
+        if (platform == "pcvr" && unitypackages.find(pack => pack.platform == "standalonewindows")) {
+            return true;
+        }
+        if (platform == "android" && unitypackages.find(pack => pack.platform == "android")) {
+            return true;
+        }
+        return false;
+    }
+
+
     //Status embeds
 
     async bakeStatus(userid, vrcdata, now) {
@@ -2651,7 +2701,10 @@ export default class VRChat extends Behavior {
             emb = new EmbedBuilder();
         }
 
-        emb.setTitle(world.name || "(unnamed)");
+        let title = world.name || "(unnamed)";
+        title += this.worldPlatformsAsEmojiField(world);
+        emb.setTitle(title);
+
         emb.setThumbnail(world.imageUrl);
         emb.setColor(membercount ? this.param("coloronline") : this.param("coloroffline"));
         emb.setURL("https://vrchat.com/home/world/" + worldid);
@@ -2934,6 +2987,13 @@ export default class VRChat extends Behavior {
                     tags = tagfield.value.split(",").map(tag => tag.trim());
                 }
 
+                let plats = [];
+                let platfield = this.embedFieldByName(emb, "Platforms");
+                if (platfield) {
+                    if (this.testPlatformFromEmojiField(platfield.value, "pcvr")) plats.push("pcvr");
+                    if (this.testPlatformFromEmojiField(platfield.value, "android")) plats.push("android");
+                }
+
                 //Logic for finding "best" author
                 let authorid = null;
                 let authorfield = this.embedFieldByName(emb, "Added by");
@@ -2966,6 +3026,7 @@ export default class VRChat extends Behavior {
                     image: emb.data.image,
                     description: emb.data.description,
                     tags: tags,
+                    platforms: plats,
                     sharedById: authorid,
                     sharedBy: authorname
                 };

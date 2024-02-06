@@ -1123,7 +1123,7 @@ export default class VRChatGroups extends Behavior {
         if (!memberChannel) return;
         let group = this._groups[vrcgroupid];
         if (!group) return;
-        if (!this.isLockedMemberMsg(vrcgroupid, vrcuserid)) return;
+        if (this.isLockedMemberMsg(vrcgroupid, vrcuserid)) return;
 
         let member = group.members.find(check => check.userId == vrcuserid);
         if (!member) return;

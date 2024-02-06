@@ -475,8 +475,9 @@ export default class EnvDiscord extends Environment {
     scanEveryMessage(channel, onMessage, onEnd) {
         if (!channel || !onMessage) return;
         let scanning = null;
+        let promise = null;
         let scanner = () => {
-            channel.messages.fetch({
+            promise = channel.messages.fetch({
                 limit: 100,
                 before: scanning
             }).then((messages) => {
@@ -484,13 +485,13 @@ export default class EnvDiscord extends Environment {
                 let messagesarr = [...messages.values()];
                 if (messagesarr.length < 100) endNow = true;
                 for (let message of messagesarr) {
-                    onMessage(message);
+                    promise = promise.then(() => onMessage(message));
                 }
                 if (!endNow) {
                     scanning = messagesarr[messagesarr.length - 1].id;
-                    setTimeout(scanner, 500);
+                    promise = promise.then(() => setTimeout(scanner, 500));
                 } else if (onEnd) {
-                    onEnd(channel);
+                    promise = promise.then(() => onEnd(channel));
                 }
             });
         };

@@ -3,6 +3,14 @@ import random from 'meteor-random';
 
 import Behavior from '../src/Behavior.js';
 
+const FILTER_TAGS = /^\[(.*)\]$/i;
+const FILTER_PLATFORMS = /^\<(.*)\>$/i;
+
+const OTHERS_OPERATION = /^\{([+&-][A-Za-z0-9_-]+)\}(.*)/;
+const OTHERS_UNION = '+';
+const OTHERS_INTERSECTION = '&';
+const OTHERS_SUBTRACTION = '-';
+
 export default class VRChatFavorites extends Behavior {
 
     get description() { return "Manages a channel for sharing static links to VRChat worlds"; }
@@ -11,13 +19,15 @@ export default class VRChatFavorites extends Behavior {
         {n: "pinnedchan", d: "ID of text channel for favorite worlds"},
         {n: "listname", d: "List name override (unique between this module and VRChatPhotos); defaults to instance name"},
         {n: "deleteemoji", d: "Emoji for deleting things"},
-        {n: "usewebhook", d: "Use a webhook to re-emit links"}
+        {n: "usewebhook", d: "Use a webhook to re-emit links"},
+        {n: "otherfavorites", d: "List of names of other instances of this Behavior that can be used in filter operations"}
     ]; }
 
     get defaults() { return {
         listname: null,
         deleteemoji: "❌",
-        usewebhook: true
+        usewebhook: true,
+        otherfavorites: []
     }; }
 
     get requiredEnvironments() { return {
@@ -49,6 +59,8 @@ export default class VRChatFavorites extends Behavior {
         
         this._listName = name;
 
+        this._others = {};  //Maps list names to other favorites instances
+
         this._pins = {};  //Map of favorited worlds (transient) {WORLDID: Message, ...}
     }
     
@@ -56,7 +68,20 @@ export default class VRChatFavorites extends Behavior {
     initialize(opt) {
         if (!super.initialize(opt)) return false;
 
+        let {beExists, beProxy} = opt;
+
         if (this.param("listname")) this._listName = this.param("listname");
+
+        //# Setup integration with other instances
+
+        for (let other of this.param("otherfavorites") || []) {
+            if (!beExists(other, this.constructor.name)) {
+                this.log("error", "Instance for filter operations not found or wrong type:", other);
+                return false;
+            }
+            let otherProxy = beProxy(other);
+            otherProxy.listName().then(otherListName => this._others[otherListName.toLowerCase()] = otherProxy);  //Will only resolve when initialized
+        }
 
         //# Register Discord callbacks
 
@@ -156,15 +181,23 @@ export default class VRChatFavorites extends Behavior {
             minArgs: 0
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let filter = undefined;
+            let filterstring = "", operationmatch;
             if (args.filter.length) {
-                let filterarg = args.filter.join(" ");
-                let checkonlytags = filterarg.match(/^\[(.*)\]$/);
-                if (checkonlytags) filterarg = checkonlytags[1];
-                filter = this.pinFilterFromString(filterarg, checkonlytags);
+                filterstring = args.filter.join(" ").trim();
             }
 
-            let message = await this.randomPin(filter);
+            let pins = this._pins;
+            while (!!(operationmatch = filterstring.match(OTHERS_OPERATION))) {
+                pins = await this.combinePins(pins, operationmatch[1]);
+                filterstring = operationmatch[2].trim();
+            }
+
+            let filter = undefined;
+            if (filterstring) {
+                filter = this.pinFilterFromString(filterstring);
+            }
+
+            let message = await this.randomPin(pins, filter);
             if (!message) {
                 ep.reply("There are no worlds in " + this._listName + (args.filter.length ? " matching your search" : "") + "!");
                 return true;
@@ -187,15 +220,23 @@ export default class VRChatFavorites extends Behavior {
             minArgs: 0
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let filter = undefined;
+            let filterstring = "", operationmatch;
             if (args.filter.length) {
-                let filterarg = args.filter.join(" ");
-                let checkonlytags = filterarg.match(/^\[(.*)\]$/);
-                if (checkonlytags) filterarg = checkonlytags[1];
-                filter = this.pinFilterFromString(filterarg, checkonlytags);
+                filterstring = args.filter.join(" ").trim();
             }
 
-            let count = await this.countPins(filter);
+            let pins = this._pins;
+            while (!!(operationmatch = filterstring.match(OTHERS_OPERATION))) {
+                pins = await this.combinePins(pins, operationmatch[1]);
+                filterstring = operationmatch[2].trim();
+            }
+
+            let filter = undefined;
+            if (filterstring) {
+                filter = this.pinFilterFromString(filterstring);
+            }
+
+            let count = await this.countPins(pins, filter);
             ep.reply(count);
 
             return true;
@@ -227,69 +268,127 @@ export default class VRChatFavorites extends Behavior {
         this.be('Commands').registerRootExtension(this, 'VRChat', 'vrcfix');
 
         this.be('Commands').registerCommand(this, 'vrcfix ' + this._listName + ' update', {
-            description: "Refresh all processed entries from " + this._listName + " (non-destructive).",
+            description: "Refresh all processed entries from " + this._listName + " (only destructive in webhook mode).",
             permissions: [permAdmin]
         }, (env, type, userid, channelid, command, args, handle, ep) => {
 
+            let updateQueue = [];
+            let promises = [];
+            let myid = this.denv.server.members.me.id;
+
             this.denv.scanEveryMessage(this.pinnedchan, async (message) => {
-                let worldid = await this.extractWorldFromMessage(message);
-                if (!worldid) return;
+                updateQueue.push(async () => {
+                    let data = await this.extractWorldFromMessage(message, true);
+                    if (!data) return;
 
-                let world = await this.getWorld(worldid);
-                if (!world) return;
+                    let worldid = data.worldid;
+                
+                    let world = await this.getWorld(worldid);
+                    if (!world) return;
 
-                let emb = null;
-                for (let checkembed of message.embeds) {
-                    if (checkembed.image) {
-                        emb = EmbedBuilder.from(checkembed);
-                        break;
+                    let emb = null;
+                    for (let checkembed of message.embeds) {
+                        if (checkembed.image) {
+                            emb = EmbedBuilder.from(checkembed);
+                            break;
+                        }
                     }
-                }
-                if (!emb) return;
+                    if (!emb) return;
 
-                let changed = false;
+                    let addedBy = this.embedFieldByName(emb, "Added by") || this.embedFieldByName(emb, "Pinned by") || this.embedFieldByName(emb, "Shared by");
 
-                //Fix basic
-                if (emb.data.title != world.name) {
-                    emb.setTitle(world.name);
-                    changed = true;
-                }
+                    let changed = false;
 
-                if (emb.data.image?.url != world.imageUrl) {
-                    emb.setImage(world.imageUrl);
-                    changed = true;
-                }
-
-
-                let body = [];
-                body.push(world.description);
-                body = body.join("\n\n");
-                if (emb.data.description != body) {
-                    emb.setDescription(body || null);
-                    changed = true;
-                }
-
-                //Fix tags
-                let tagsToDisplay = this.formatWorldTags(world.tags).join(", ");
-                if (tagsToDisplay) {
-                    let field = this.embedFieldByName(emb, "Tags");
-                    if (field && field.value != tagsToDisplay) {
-                        field.value = tagsToDisplay;
-                        changed = true;
-                    } else if (!field) {
-                        emb.addFields({name: "Tags", value: tagsToDisplay});
+                    //Fix basic
+                    if (emb.data.title != world.name) {
+                        emb.setTitle(world.name);
                         changed = true;
                     }
-                }
 
-                if (changed) {
-                    this.vrchat.dqueue(async function() {
-                        message.edit({embeds: [emb], components: [await this.vrchat.worldInviteButtons()]});
-                    }.bind(this));
-                }
+                    if (emb.data.image?.url != world.imageUrl) {
+                        emb.setImage(world.imageUrl);
+                        changed = true;
+                    }
+
+
+                    let body = [];
+                    body.push(world.description);
+                    body = body.join("\n\n");
+                    if (emb.data.description != body) {
+                        emb.setDescription(body || null);
+                        changed = true;
+                    }
+
+
+                    //Fix tags
+                    let tags = this.formatWorldTags(world.tags);
+                    tags = tags.length ? tags.join(", ") : "-";
+                    
+                    let willchange = true;
+                    if (!emb.data.fields[0]) emb.addFields({name: "Tags", value: tags, inline: true});
+                    else if (emb.data.fields[0].name != "Tags" || emb.data.fields[0].value != tags) emb.spliceFields(0, 1, {name: "Tags", value: tags, inline: true});
+                    else willchange = false;
+                    if (willchange) changed = true;
+
+                    //Fix platforms
+                    let platforms = await this.vrchat.worldPlatformsAsEmojiField(world);
+                    
+                    willchange = true;
+                    if (!emb.data.fields[1]) emb.addFields({name: "Platforms", value: platforms, inline: true});
+                    else if (emb.data.fields[1].name != "Platforms" || emb.data.fields[1].value != platforms) emb.spliceFields(1, 1, {name: "Platforms", value: platforms, inline: true});
+                    else willchange = false;
+                    if (willchange) changed = true;
+
+                    //Fix added by
+                    if (addedBy) {
+                        willchange = true;
+                        if (!emb.data.fields[2]) emb.addFields({name: "Added by", value: addedBy.value, inline: true});
+                        else if (emb.data.fields[2].name != "Added by" || emb.data.fields[2].value != addedBy.value) emb.spliceFields(2, 1, {name: "Added by", value: addedBy.value, inline: true});
+                        else willchange = false;
+                        if (willchange) changed = true;
+                    }
+
+                    if (changed) {
+                        this.vrchat.dqueue(async function() {
+                            if (message.author?.id == myid) {
+                                promises.push(message.edit({embeds: [emb], components: [await this.vrchat.worldInviteButtons()]}));
+                            } else {
+                                promises.push(this.potentialWorldPin(worldid, true, data.sharedById, true)
+                                    .then(async result => {
+                                        if (result) {
+                                            message.delete()
+                                        } else {
+                                            let worldname = await this.getCachedWorld(worldid)?.name || worldid;
+                                            this.announce("Failed to add the world " + worldname + " to " + this._listName + " - does it still exist?");
+                                        }
+                                    })
+                                );
+                            }
+                        }.bind(this));
+                    }
+                });
 
             }, async () => {
-                ep.reply("Done!");
+
+                let oneMoreUpdate = async () => {
+                    let update = updateQueue.pop();
+                    await update();
+                    if (updateQueue.length) {
+                        setTimeout(() => oneMoreUpdate(), 2000);  //Slow queue for the sake of the VRChat API.
+                    } else {
+                        ep.reply("Fetching and processing completed.");
+                        Promise.allSettled(promises).then(() => {
+                            ep.reply("Done updating " + promises.length + " message(s)!");
+                        });
+                    }
+                }
+                
+                if (updateQueue.length) {
+                    oneMoreUpdate();
+                } else {
+                    ep.reply("Found no applicable messages.");
+                }
+                
             });
 
             ep.reply("Wait...");
@@ -344,7 +443,7 @@ export default class VRChatFavorites extends Behavior {
                             .then(async result => {
                                 if (!result) {
                                     let worldname = await this.getCachedWorld(worldid)?.name || worldid;
-                                    this.announce("Failed to add the world " + worldname + " - does it still exist?");
+                                    this.announce("Failed to add the world " + worldname + " to " + this._listName + " - does it still exist?");
                                 } else {
                                     pinned += 1;
                                 }
@@ -393,6 +492,15 @@ export default class VRChatFavorites extends Behavior {
     // # Module code below this line #
     
 
+    listName() {
+        return this._listName;
+    }
+
+    pins() {
+        return this._pins;
+    }
+
+
     //VRChat module shortcuts (async)
     
     extractWorldFromMessage(message, verbose) {
@@ -414,7 +522,8 @@ export default class VRChatFavorites extends Behavior {
 
     //Pin favorites
 
-    async potentialWorldPin(message, byid, userid) {
+    async potentialWorldPin(message, byid, userid, replacing) {
+
         let worldid;
         if (byid) {
             worldid = message;
@@ -422,7 +531,7 @@ export default class VRChatFavorites extends Behavior {
             worldid = await this.extractWorldFromMessage(message);
         }
         if (!worldid) return false;
-        if (this._pins[worldid]) return false;
+        if (this._pins[worldid] && !replacing) return false;
 
         let sharedBy = await this.denv.idToDisplayName(userid);
 
@@ -443,10 +552,12 @@ export default class VRChatFavorites extends Behavior {
         emb.setURL("https://vrchat.com/home/world/" + worldid);
 
         emb.data.fields = [];
+        
         let tags = this.formatWorldTags(world.tags);
-        if (tags.length) {
-            emb.addFields({name: "Tags", value: tags.join(", "), inline: true});
-        }
+        emb.addFields({name: "Tags", value: tags.length ? tags.join(", ") : "-", inline: true});
+
+        let platforms = await this.vrchat.worldPlatformsAsEmojiField(world);
+        emb.addFields({name: "Platforms", value: platforms, inline: true});
 
         if (sharedBy) {
             let msgurl = await this.vrchat.getPersonMsgURL(userid);
@@ -514,31 +625,81 @@ export default class VRChatFavorites extends Behavior {
         return "https://discord.com/channels/" + this.denv.server.id + "/" + this.pinnedchan.id + "/" + msgid;
     }
 
-    async randomPin(makefilter) {
-        return this.randomEntry(this._pins, makefilter ? await (async () => makefilter(this._pins)) : undefined);
+    async randomPin(pins, makefilter) {
+        return this.randomEntry(pins, makefilter ? await makefilter(pins) : undefined);
     }
 
-    async countPins(makefilter) {
-        return this.countEntries(this._pins, makefilter ? await (async () => makefilter(this._pins)) : undefined);
+    async countPins(pins, makefilter) {
+        return this.countEntries(pins, makefilter ? await makefilter(pins) : undefined);
     }
 
-    pinFilterFromString(filterarg, checkonlytags) {
+    async combinePins(pins, commandstr) {
+        if (!pins || typeof(pins) != "object") return null;
+        let mode = null;
+        if (commandstr.substring(0, 1) == OTHERS_UNION) mode = 1;
+        if (commandstr.substring(0, 1) == OTHERS_INTERSECTION) mode = 2;
+        if (commandstr.substring(0, 1) == OTHERS_SUBTRACTION) mode = 3;
+        if (!mode) return null;
+        let listname = commandstr.substring(1).toLowerCase();
+        if (!this._others[listname]) return null;
+        let result = {};
+        let otherpins = await this._others[listname].pins();
+        if (mode == 1) {
+            result = Object.assign({}, pins);
+            for (let worldid in otherpins) {
+                if (!result[worldid]) {
+                    result[worldid] = otherpins[worldid];
+                }
+            }
+        }
+        if (mode == 2) {
+            for (let worldid in pins) {
+                if (otherpins[worldid]) {
+                    result[worldid] = pins[worldid];
+                }
+            }
+        }
+        if (mode == 3) {
+            for (let worldid in pins) {
+                if (!otherpins[worldid]) {
+                    result[worldid] = pins[worldid];
+                }
+            }
+        }
+        return result;
+    }
+
+    isFilterExpr(str, regexes) {
+        if (!Array.isArray(regexes)) regexes = [regexes];
+        return regexes.reduce((acc, regex) => acc || str.match(regex), false);
+    }
+
+    removeFilterExpr(str, regexes) {
+        if (!Array.isArray(regexes)) regexes = [regexes];
+        for (let regex of regexes) {
+            let check = str.match(regex);
+            if (check) return check[1];
+        }
+        return str;
+    }
+
+    pinFilterFromString(filterarg) {
         return pins => async worldid => {
             let data = await this.extractWorldFromMessage(pins[worldid], true);
-            let filters = [
-                (data, filter) => {
-                    if (data.tags) {
-                        for (let tag of data.tags) {
-                            if (tag == filter) return true;
-                        }
-                    }
-                }
-            ];
-            if (!checkonlytags) {
-                filters.push((data, filter) => data.title?.toLowerCase().indexOf(filter) > -1);
-                filters.push((data, filter) => data.description?.toLowerCase().indexOf(filter) > -1);
-                filters.push((data, filter) => data.sharedBy?.toLowerCase().indexOf(filter) > -1);
-            }
+            let filters = [];
+            filters.push((data, filter) => {
+                if (this.isFilterExpr(filter, FILTER_PLATFORMS)) return false;
+                filter = this.removeFilterExpr(filter, FILTER_TAGS);
+                if (data.tags) return !!data.tags.find(tag => tag == filter);
+            });
+            filters.push((data, filter) => {
+                if (this.isFilterExpr(filter, FILTER_TAGS)) return false;
+                filter = this.removeFilterExpr(filter, FILTER_PLATFORMS);
+                if (data.platforms) return !!data.platforms.find(plat => plat == filter);
+            });
+            filters.push((data, filter) => !this.isFilterExpr(filter, [FILTER_TAGS, FILTER_PLATFORMS]) && data.title?.toLowerCase().indexOf(filter) > -1);
+            filters.push((data, filter) => !this.isFilterExpr(filter, [FILTER_TAGS, FILTER_PLATFORMS]) && data.description?.toLowerCase().indexOf(filter) > -1);
+            filters.push((data, filter) => !this.isFilterExpr(filter, [FILTER_TAGS, FILTER_PLATFORMS]) && data.sharedBy?.toLowerCase().indexOf(filter) > -1);
             return this.matchAgainstFilters(data, filterarg, filters);
         }
     }
@@ -546,17 +707,32 @@ export default class VRChatFavorites extends Behavior {
 
     //Helpers
 
-    randomEntry(map, filter) {
+    async asyncFilter(list, filter) {
+        let tests = [], results = {};
+        for (let item of list) {
+            tests.push(filter(item).then(result => results[item] = result));
+        }
+        await Promise.all(tests);
+        let filtered = [];
+        for (let item of list) {
+            if (results[item]) {
+                filtered.push(item);
+            }
+        }
+        return filtered;
+    }
+
+    async randomEntry(map, filter) {
         let keys = Object.keys(map);
-        if (filter) keys = keys.filter(filter);
+        if (filter) keys = await this.asyncFilter(keys, filter);
         if (!keys.length) return null;
         let key = keys[Math.floor(random.fraction() * keys.length)];
         return Object.assign({key: key}, map[key]);
     }
 
-    countEntries(map, filter) {
+    async countEntries(map, filter) {
         let keys = Object.keys(map);
-        if (filter) keys = keys.filter(filter);
+        if (filter) keys = await this.asyncFilter(keys, filter);
         return keys.length;
     }
 
