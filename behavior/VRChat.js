@@ -2702,7 +2702,7 @@ export default class VRChat extends Behavior {
         }
 
         let title = world.name || "(unnamed)";
-        title += this.worldPlatformsAsEmojiField(world);
+        title += " " + this.worldPlatformsAsEmojiField(world);
         emb.setTitle(title);
 
         emb.setThumbnail(world.imageUrl);
