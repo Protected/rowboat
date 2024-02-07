@@ -284,7 +284,7 @@ export default class VRChatFavorites extends Behavior {
                 return true;
             }
 
-            let channel = this.denv.server.channels.cache.get(channelid);
+            let channel = this.pinnedchan;
 
             let filterstring = "", operationmatch, originalfilter;
             if (args.filter.length) {

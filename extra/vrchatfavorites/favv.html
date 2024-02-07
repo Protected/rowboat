@@ -486,9 +486,9 @@ function listDump(filter, sort) {
         
         //Description (process formatting)
         let desc = fav.de;
-        desc = desc.replace(/˸/g, ":").replace(/⁄/g, "/")
+        desc = desc ? desc.replace(/˸/g, ":").replace(/⁄/g, "/")
             .replace(/<?((https?|s?ftp)\:\/\/([^ >\n]+))>?/g, '<a target="_blank" href="$1">$1</a>')
-            ;
+            : "";
 
         let favdiv = document.createElement("div");
         favdiv.id = "fav_" + fav.wi;
@@ -510,31 +510,34 @@ function listDump(filter, sort) {
         namediv.className = "worldname";
         namediv.innerHTML = `<a href="${WORLD_URL}${fav.wi}" target="_blank">${fav.wn}</a>`;
 
-        let imgwrap, imageId = picToUUID(fav.im);
-        if (imagecache[imageId]) {
-            imgwrap = imagecache[imageId];
-        } else {
-            imgwrap = document.createElement("a");
-            imgwrap.className = "imgwrap";
-            let w = fav.iw;
-            let h = fav.ih;
-            if (w > 376) {
-                h = h * 376 / w;
-                w = 376;
-            }
-            if (h > 282) {
-                w = w * 282 / h;
-                h = 282;
-            }
-            imgwrap.target = "_blank";
-            let imgurl = picToThumbnail(fav.im);
-            if (imgurl) {
-                imgwrap.href = imgurl;
-            }
-            imgwrap.style.width = w + "px";
-            imgwrap.style.height = h + "px";
+        let imgwrap = "", imageId;
+        if (fav.im) {
+            imageId = picToUUID(fav.im);
+            if (imagecache[imageId]) {
+                imgwrap = imagecache[imageId];
+            } else {
+                imgwrap = document.createElement("a");
+                imgwrap.className = "imgwrap";
+                let w = fav.iw;
+                let h = fav.ih;
+                if (w > 376) {
+                    h = h * 376 / w;
+                    w = 376;
+                }
+                if (h > 282) {
+                    w = w * 282 / h;
+                    h = 282;
+                }
+                imgwrap.target = "_blank";
+                let imgurl = picToThumbnail(fav.im);
+                if (imgurl) {
+                    imgwrap.href = imgurl;
+                }
+                imgwrap.style.width = w + "px";
+                imgwrap.style.height = h + "px";
 
-            imagecache[imageId] = imgwrap;
+                imagecache[imageId] = imgwrap;
+            }
         }
 
         let txtdiv = document.createElement("div");
