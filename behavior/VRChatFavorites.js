@@ -1,7 +1,12 @@
 import { AttachmentBuilder, EmbedBuilder } from 'discord.js';
 import random from 'meteor-random';
+import fs from 'fs';
+import moment from 'moment';
+import jszip from 'jszip';
 
 import Behavior from '../src/Behavior.js';
+
+const FAVV_PATH = 'extra/vrchatfavorites/favv.html';
 
 const FILTER_TAGS = /^\[(.*)\]$/i;
 const FILTER_PLATFORMS = /^\<(.*)\>$/i;
@@ -254,7 +259,97 @@ export default class VRChatFavorites extends Behavior {
         this.be('Commands').registerRootExtension(this, 'VRChat', 'vrcsave');
 
         this.be('Commands').registerCommand(this, 'vrcsave ' + this._listName, {
-            description: "Back up the list of worlds from the " + this._listName + " channel.",
+            description: "Generate a list of worlds for download using the " + this._listName + " cache as a source.",
+            details: [
+                "The following modes are available:",
+                "  json - Send only the favorites list in a machine-readable (json) format.",
+                "  favv - Send only the latest version of Favorites Viewer (the filter will be ignored).",
+                "  zip - Send a zip archive containing the favorites list and the latest version of FavV.",
+                "  embedded (default) - Send a single HTML file with FavV and the favorites list embedded in it."
+            ],
+            args: ["mode", "filter", true],
+            minArgs: 0
+        },  async (env, type, userid, channelid, command, args, handle, ep) => {
+
+            let mode = args.mode || "embedded";
+            mode = mode.toLowerCase();
+            if (mode === "" || mode == "-" || mode == "html") mode = "embedded";
+            if (["embedded", "json", "favv", "zip"].indexOf(mode) < 0) {
+                ep.reply("Invalid mode. Please use: json, favv, zip or embedded");
+                return true;
+            }
+
+            if (mode == "favv") {
+                this.deliverFavv(ep);
+                return true;
+            }
+
+            let channel = this.denv.server.channels.cache.get(channelid);
+
+            let filterstring = "", operationmatch, originalfilter;
+            if (args.filter.length) {
+                originalfilter = filterstring = args.filter.join(" ").trim();
+            }
+
+            let result = {
+                name: this._listName,
+                filter: originalfilter,
+                requestStart: moment().unix(),
+                serverid: channel.guild.id,
+                channelid: channel.id,
+                channelname: channel.name,
+                favorites: []
+            }
+
+            let pins = this._pins, usedlists = [];
+            while (!!(operationmatch = filterstring.match(OTHERS_OPERATION))) {
+                pins = await this.combinePins(pins, operationmatch[1]);
+                if (!pins) {
+                    ep.reply("No reference to a list named " + operationmatch[1] + ".");
+                    return true;
+                }
+                filterstring = operationmatch[2].trim();
+            }
+
+            let filter = undefined;
+            if (filterstring) {
+                filter = this.pinFilterFromString(filterstring);
+            }
+
+            pins = await this.filterAllPins(pins, filter);
+            for (let pin of pins) {
+                let data = await this.extractWorldFromMessage(pin, true);
+                result.favorites.push({
+                    wi: data.worldid,
+                    wn: data.title,
+                    im: data.image?.url,
+                    iw: data.image?.width,
+                    ih: data.image?.height,
+                    de: data.description,
+                    tg: data.tags,
+                    pl: data.platforms,
+                    si: data.sharedById,
+                    sn: data.sharedBy
+                });
+            }
+
+            let fndt = moment.unix(result.requestStart).format("YYYYMMDD_HHmm");
+            if (mode == "embedded") {
+                this.deliverEmbed(ep, channel.name + "." + fndt + ".html", result);
+            } else if (mode == "zip") {
+                this.deliverZip(ep, channel.name + "." + fndt, result);
+            } else {
+                this.deliverDownload(ep, channel.name + "." + fndt + ".json", result);
+            }
+
+            return true;
+        });
+
+
+        this.be('Commands').registerRootExtension(this, 'VRChat', 'vrcfix');
+
+        this.be('Commands').registerCommand(this, 'vrcfix ' + this._listName + ' dump', {
+            description: "Retrieve the set of worlds from the " + this._listName + " channel and provide it as a JSON attachment.",
             permissions: [permAdmin],
             type: ["private"]
         },  (env, type, userid, channelid, command, args, handle, ep) => {
@@ -271,9 +366,6 @@ export default class VRChatFavorites extends Behavior {
 
             return true;
         });
-
-
-        this.be('Commands').registerRootExtension(this, 'VRChat', 'vrcfix');
 
         this.be('Commands').registerCommand(this, 'vrcfix ' + this._listName + ' update', {
             description: "Refresh all processed entries from " + this._listName + " (only destructive in webhook mode).",
@@ -641,6 +733,10 @@ export default class VRChatFavorites extends Behavior {
         return this.countEntries(pins, makefilter ? await makefilter(pins) : undefined);
     }
 
+    async filterAllPins(pins, makefilter) {
+        return this.filterEntries(pins, makefilter ? await makefilter(pins) : undefined);
+    }
+
     async combinePins(pins, commandstr) {
         if (!pins || typeof(pins) != "object") return null;
         let mode = null;
@@ -712,6 +808,53 @@ export default class VRChatFavorites extends Behavior {
         }
     }
 
+    //Save delivery
+
+    async getFavv() {
+        return new Promise((resolve, reject) => {
+            fs.readFile(FAVV_PATH, {encoding: 'utf-8'}, (err, data) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(data);
+                }
+            });
+        });
+    }
+
+    deliverDownload(ep, filename, json) {
+        ep.reply(new AttachmentBuilder(Buffer.from(JSON.stringify(json)), {name: filename}));
+    }
+
+    deliverFavv(ep) {
+        this.getFavv().then((contents) => ep.reply(new AttachmentBuilder(Buffer.from(contents), {name: "favv.html"})));
+    }
+
+    deliverEmbed(ep, filename, json) {
+        this.getFavv().then((favv) => ep.reply(
+            new AttachmentBuilder(Buffer.from(
+                favv.replace(/let predump = null; \/\*FAVORITES DUMP STRING\*\//, "let predump = decodeURIComponent('"
+                    + encodeURIComponent(JSON.stringify(json)).replace(/(')/g, "\\$1")
+                    + "'); /*FAVORITES DUMP STRING*/"
+                )
+            ), {name: filename})
+        ));
+    }
+
+    deliverZip(ep, filename, json) {
+        let zip = new jszip();
+        this.getFavv().then((favv) => {
+            zip.file("favv.html", favv);
+            zip.file(filename + ".json", JSON.stringify(json));
+            zip.generateAsync({
+                type:'nodebuffer',
+                compression: 'DEFLATE',
+            }).then((buffer) => {
+                ep.reply(new AttachmentBuilder(buffer, {name: filename + ".zip"}));
+            });
+        });
+    }
+
 
     //Helpers
 
@@ -742,6 +885,16 @@ export default class VRChatFavorites extends Behavior {
         let keys = Object.keys(map);
         if (filter) keys = await this.asyncFilter(keys, filter);
         return keys.length;
+    }
+
+    async filterEntries(map, filter) {
+        let keys = Object.keys(map);
+        if (filter) keys = await this.asyncFilter(keys, filter);
+        let result = [];
+        for (let key of keys) {
+            result.push(Object.assign({key: key}, map[key]));
+        }
+        return result;
     }
 
     formatWorldTags(tags) {

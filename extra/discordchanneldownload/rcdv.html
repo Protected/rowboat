@@ -760,7 +760,7 @@ function updateTheme(newdark) {
 function loadPix() {
     for (let msg of document.getElementById("contents").getElementsByClassName("msg")) {
         let txt = msg.getElementsByClassName("txt")[0];
-        txt.innerHTML = txt.innerHTML.replace(/&lt;(\:[A-Za-z0-9~_-]+\:)([0-9]+)&gt;/g, '<img aria-label="$1" src="https://cdn.discordapp.com/emojis/$2.png?v=1" alt=":dragohug:" draggable="false" class="emoji jumboable">');
+        txt.innerHTML = txt.innerHTML.replace(/&lt;(\:[A-Za-z0-9~_-]+\:)([0-9]+)&gt;/g, '<img aria-label="$1" src="https://cdn.discordapp.com/emojis/$2.png?v=1" draggable="false" class="emoji jumboable">');
         
         let imgwrap = msg.getElementsByClassName("imgwrap");
         if (imgwrap.length) {

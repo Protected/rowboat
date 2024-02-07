@@ -106,7 +106,7 @@ export default class Core {
 
     pushShutdownHandler(func) {
         if (typeof func != "function") return false;
-        this._cleanup.push(func);
+        this._shutdown.push(func);
         return true;        
     }
 
