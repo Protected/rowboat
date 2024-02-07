@@ -441,6 +441,12 @@ function loadDump(json) {
 
     let i = 0;
     for (let fav of dump.favorites) {
+        fav.wn = fav.wn || "(unnamed)";
+        fav.de = fav.de || "";
+        fav.tg = fav.tg || [];
+        fav.pl = fav.pl || [];
+        fav.si = fav.si || 0;
+        fav.sn = fav.sn || "";
         fav.defSort = i;
         i++;
     }
