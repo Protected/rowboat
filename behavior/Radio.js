@@ -1760,7 +1760,7 @@ export default class Radio extends Behavior {
             }
 
             if (comp.lte(0)) comp = comp.sub(0.5);
-            comp = pow(comp.mul(-1).mul(N(userhistory.length - i).mul(this.param('pri.listen.historysc'))), this.param('pri.listen.history'), DECIMALS);
+            comp = comp.mul(-1).mul(pow(N(userhistory.length - i).mul(this.param('pri.listen.historysc')), this.param('pri.listen.history'), DECIMALS));
             slide = slide.add(comp);
         }
         return slide;
