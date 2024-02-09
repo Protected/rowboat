@@ -1870,7 +1870,7 @@ export default class Radio extends Behavior {
         if (songrank) {
             //Global rank
             let calcrank = await songrank.computeSongRank(song.hash, null, true);
-            let crank = N(calcrank.rank || 0);
+            let crank = N(String(calcrank.rank) || 0);
             if (calcrank.users.length) crank = crank.div(calcrank.users.length);
             crank = crank.mul(this.param('pri.rank'));
             priority = priority.add(crank);
@@ -1890,7 +1890,7 @@ export default class Radio extends Behavior {
                     if (!Object.keys(curators).length) continue;
 
                     for (let curator in curators) {
-                        curated = curated.add(N(await songrank.computeSongRank(song.hash, [curator]) || 0).mul(curators[curator] ? 1 : -1));
+                        curated = curated.add(N(String(await songrank.computeSongRank(song.hash, [curator])) || 0).mul(curators[curator] ? 1 : -1));
                     }
                     curated = curated.div(Object.keys(curators).length);
                     curated = curated.mul(this.param('pri.listen'));
