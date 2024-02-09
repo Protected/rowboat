@@ -920,9 +920,13 @@ export default class VRChatFavorites extends Behavior {
             let ofresult = true;
             let andfilters = orfilter.split("&").map(filter => filter.trim());
             for (let andfilter of andfilters) {
-                let afresult = false;
+                let not = false, matchnot;
+                if (!!(matchnot = andfilter.match(/-(.*)/))) {
+                    not = true; andfilter = matchnot[1];
+                }
+                let afresult = not;
                 for (let test of tests) {
-                    if (test(thing, andfilter)) { afresult = true; break; }  //one valid test validates filter
+                    if (test(thing, andfilter)) { afresult = !not; break; }  //one valid test validates filter
                 }
                 if (!afresult) { ofresult = false; break; }  //one failed filter invalidates and section
             }
