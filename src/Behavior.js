@@ -260,7 +260,9 @@ export default class Behavior extends AsyncEventEmitter {
             this.log("Saving datafile: " + datafilepath);
         }
 
-        jsonfile.writeFileSync(datafilepath, data, (options && options.pretty ? {spaces: 4} : {}));
+        let replacer = (key, value) => typeof value === 'bigint' ? value.toString() : value;
+
+        jsonfile.writeFileSync(datafilepath, data, (options && options.pretty ? {spaces: 4, replacer} : {replacer}));
     }
     
     

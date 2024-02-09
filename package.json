@@ -27,6 +27,7 @@
     "discord.js": "^14.14.1",
     "duck-duck-scrape": "^2.2.4",
     "emoji-toolkit": "^8.0.0",
+    "exactnumber": "^1.0.1",
     "express": "^4.17.1",
     "feedparser": "^2.2.10",
     "ffmpeg-static": "^5.2.0",

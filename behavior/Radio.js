@@ -1,5 +1,7 @@
 import moment from 'moment';
+import { ExactNumber as N, log, log10, pow as exactPow } from 'exactnumber';
 import random from 'meteor-random';
+import { randomInt } from 'crypto';
 import emoji from 'emoji-toolkit';
 import { ActivityType, ChannelType } from 'discord.js';
 import prism from 'prism-media';
@@ -8,7 +10,16 @@ import { createAudioPlayer, AudioPlayerStatus, AudioResource,
 
 import Behavior from '../src/Behavior.js';
 
+const PRIORITY_MAX_PRECISION_DECIMALS = 10000;
+const DECIMALS = log10(PRIORITY_MAX_PRECISION_DECIMALS, 0).toNumber();
 const FFMPEG_PCM_ARGUMENTS = ['-analyzeduration', '0', '-loglevel', '0', '-f', 's16le', '-ar', '48000', '-ac', '2'];
+
+
+function pow(base, exp, dec) {
+    if (N(base).eq(0)) return N(0);
+    return exactPow(base, exp, dec);
+}
+
 
 function createAudioResourceAndSeek(input, options) {
 
@@ -159,27 +170,27 @@ export default class Radio extends Behavior {
                 * (unanimous_hate ? pri.unanimous.hate : (unanimous_dislike ? pri.unanimous.meh : 1))
         */
 
-        "pri.base": 10.0,
-        "pri.rank": 10.0,
-        "pri.listen": 50.0,
-        "pri.listen.nopos": 0.75,
-        "pri.listen.yesneg": 0.10,
-        "pri.listen.skiprange": 259200,
-        "pri.listen.skipbias": 2,
-        "pri.listen.skipfact": 0.1,
-        "pri.listen.slide": 0.5,
-        "pri.listen.history": 0.3,
-        "pri.listen.historysc": 3,
-        "pri.length": 10.0,
-        "pri.length.minlen": 180,
-        "pri.length.maxlen": 600,
-        "pri.length.maxexcs": 900,
-        "pri.lowplays": 30.0,
-        "pri.lowplays.max": 3,
-        "pri.mitigatedslice": 0.1,
-        "pri.recent": 86400,
-        "pri.unanimous.meh": 0.65,
-        "pri.unanimous.hate": 0.05,
+        "pri.base": "10.0",
+        "pri.rank": "10.0",
+        "pri.listen": "50.0",
+        "pri.listen.nopos": "0.75",
+        "pri.listen.yesneg": "0.10",
+        "pri.listen.skiprange": "259200",
+        "pri.listen.skipbias": "2",
+        "pri.listen.skipfact": "0.1",
+        "pri.listen.slide": "0.5",
+        "pri.listen.history": "0.3",
+        "pri.listen.historysc": "3",
+        "pri.length": "10.0",
+        "pri.length.minlen": "180",
+        "pri.length.maxlen": "600",
+        "pri.length.maxexcs": "900",
+        "pri.lowplays": "30.0",
+        "pri.lowplays.max": "3",
+        "pri.mitigatedslice": "0.1",
+        "pri.recent": "86400",
+        "pri.unanimous.meh": "0.65",
+        "pri.unanimous.hate": "0.05",
 
         /*
             If there are queued songs:
@@ -188,7 +199,7 @@ export default class Radio extends Behavior {
                 : SONG_PRIORITY
         */
 
-        "pri.queue.chance": 1.0,
+        "pri.queue.chance": "1.0",
 
         /*
             If there are novelties (novelty is defined as: song shared less than pri.novelty.duration seconds ago and with less than pri.novelty.breaker plays)
@@ -197,9 +208,9 @@ export default class Radio extends Behavior {
                 : SONG_PRIORITY
         */
 
-        "pri.novelty.chance": 0.05,
-        "pri.novelty.duration": 691200, //8 days
-        "pri.novelty.breaker": 8,
+        "pri.novelty.chance": "0.05",
+        "pri.novelty.duration": "691200", //8 days
+        "pri.novelty.breaker": "8",
 
         "pref.maxcurators": 3,
         "pref.maxkeywords": 8
@@ -844,7 +855,7 @@ export default class Radio extends Behavior {
             let prioritycomponents = await this.songPriority(await this.grabber.hashSong(hash), this.listeners.map(listener => listener.id), false, false, true);
             
             for (let cname in prioritycomponents) {
-                ep.reply('`' + cname + ' = ' + prioritycomponents[cname] + '`');
+                ep.reply('`' + cname + ' = ' + prioritycomponents[cname].toString() + '`');
             }
 
             let queuepos = this._queue.findIndex(item => item.song.hash == hash);
@@ -1533,30 +1544,31 @@ export default class Radio extends Behavior {
         let novelties = await this.isThereANovelty(listeners);
         let usenovelty = (novelties ? random.fraction() < this.param('pri.novelty.chance') : false);
 
-        let priorities = {};
+        let priorities = {}, tostats = {};
         for (let hash of await this.grabber.everySong()) {
             let priority = await this.songPriority(await this.grabber.hashSong(hash), listeners, usequeue, usenovelty);
             priorities[hash] = priority;
+            tostats[hash] = priority.toNumber();
         }
 
-        await this.grabber.setAdditionalStats(this.metaprefix + '.latestpriorities', priorities);
+        await this.grabber.setAdditionalStats(this.metaprefix + '.latestpriorities', tostats);
         await this.grabber.setAdditionalStats(this.metaprefix + '.latestnovelties', novelties || []);
         
-        let sum = 0;
+        let sum = N(0);
         let candidates = [];
         for (let hash in priorities) {
             if (!priorities[hash]) continue;
-            sum += priorities[hash];
+            sum = sum.add(priorities[hash]);
             candidates.push([hash, sum]);
         }
         
         if (!candidates.length) return null;
         
-        let pick = random.fraction() * sum;
+        let pick = N(randomInt(sum.mul(PRIORITY_MAX_PRECISION_DECIMALS).floor().toNumber())).div(PRIORITY_MAX_PRECISION_DECIMALS);
         let selection = null;
         for (let item of candidates) {
             selection = item;
-            if (pick < item[1]) break;
+            if (pick.lt(item[1])) break;
         }
         if (!selection) selection = candidates[candidates.length - 1];
         
@@ -1727,29 +1739,29 @@ export default class Radio extends Behavior {
         return true;
     }
 
-    async calculateListenerSlide(listener) {
-        if (!this.songrank) return 0;
+    async calculateListenerSlide(listener) {  //:N
+        if (!this.songrank) return N(0);
         let userhistory = this._history.slice(0, this._userlistened[listener] || 0);
 
         let curators = {};
         if (!this._userdata[listener] || !this._userdata[listener].curators) curators[listener] = true;
         else curators = this._userdata[listener].curators;
 
-        let slide = 0;
+        let slide = N(0);
         for (let i = 0; i < userhistory.length; i++) {
             let song = userhistory[i];
 
-            let comp = 0;
+            let comp = N(0);
             if (Object.keys(curators).length) {
                 for (let curator in curators) {
-                    comp += (await this.songrank.computeSongRank(song.hash, [curator]) || 0) * (curators[curator] ? 1 : -1);
+                    comp = comp.add(N(await this.songrank.computeSongRank(song.hash, [curator]) || 0).mul(curators[curator] ? 1 : -1));
                 }
-                comp /= Object.keys(curators).length;
+                comp = comp.div(Object.keys(curators).length);
             }
 
-            if (comp <= 0) comp -= 0.5;
-            comp *= -1 * Math.pow((userhistory.length - i) * this.param('pri.listen.historysc'), this.param('pri.listen.history'));
-            slide += comp;
+            if (comp.lte(0)) comp = comp.sub(0.5);
+            comp = pow(comp.mul(-1).mul(N(userhistory.length - i).mul(this.param('pri.listen.historysc'))), this.param('pri.listen.history'), DECIMALS);
+            slide = slide.add(comp);
         }
         return slide;
     }
@@ -1773,7 +1785,7 @@ export default class Radio extends Behavior {
         return rank;
     }
 
-    async calculateSkipMitigation(hash, listener, skipdata, now) {
+    async calculateSkipMitigation(hash, listener, skipdata, now) {  //:N
         if (!skipdata) skipdata = await this.grabber.getSongMeta(hash, this.metaprefix + ".skipped") || {};
         if (!now) now = moment().unix();
         
@@ -1784,9 +1796,9 @@ export default class Radio extends Behavior {
             }
         }
 
-        if (!mostrecent) return 1;
+        if (!mostrecent) return N(1);
 
-        return Math.pow((now - mostrecent) / this.param('pri.listen.skiprange'), this.param('pri.listen.skipbias')) * (1 - this.param('pri.listen.skipfact')) + this.param('pri.listen.skipfact');
+        return pow(N(now - mostrecent).div(this.param('pri.listen.skiprange')), this.param('pri.listen.skipbias'), DECIMALS).mul(1 - this.param('pri.listen.skipfact')).add(this.param('pri.listen.skipfact'));
     }
 
     async isNovelty(hash, songcount) {
@@ -1835,8 +1847,8 @@ export default class Radio extends Behavior {
     }
 
     
-    async songPriority(song, listeners, usequeue, usenovelty, trace) {
-        let priority = this.param('pri.base');
+    async songPriority(song, listeners, usequeue, usenovelty, trace) {  //:N
+        let priority = N(this.param('pri.base'));
         let components = {base: priority};
         let songcount = (await this.grabber.everySong()).length;
         let now = moment().unix();
@@ -1858,18 +1870,18 @@ export default class Radio extends Behavior {
         if (songrank) {
             //Global rank
             let calcrank = await songrank.computeSongRank(song.hash, null, true);
-            let crank = (calcrank.rank || 0);
-            if (calcrank.users.length) crank /= calcrank.users.length;
-            crank *= this.param('pri.rank');
-            priority += crank;
+            let crank = N(calcrank.rank || 0);
+            if (calcrank.users.length) crank = crank.div(calcrank.users.length);
+            crank = crank.mul(this.param('pri.rank'));
+            priority = priority.add(crank);
             if (trace) components.rank = crank;
             
             //Listener components
             if (listeners.length) {
-                let clisten = 0;
+                let clisten = N(0);
 
                 for (let listener of listeners) {
-                    let curated = 0;
+                    let curated = N(0);
 
                     //Base rank for each listener (from curators)
                     let curators = {};
@@ -1878,11 +1890,11 @@ export default class Radio extends Behavior {
                     if (!Object.keys(curators).length) continue;
 
                     for (let curator in curators) {
-                        curated += (await songrank.computeSongRank(song.hash, [curator]) || 0) * (curators[curator] ? 1 : -1);
+                        curated = curated.add(N(await songrank.computeSongRank(song.hash, [curator]) || 0).mul(curators[curator] ? 1 : -1));
                     }
-                    curated /= Object.keys(curators).length;
-                    curated *= this.param('pri.listen');
-                    curated /= listeners.length;
+                    curated = curated.div(Object.keys(curators).length);
+                    curated = curated.mul(this.param('pri.listen'));
+                    curated = curated.div(listeners.length);
 
                     if (trace) components["listener." + listener] = curated;
 
@@ -1900,33 +1912,33 @@ export default class Radio extends Behavior {
                     let posfound = this.findKeywordsInSong(song, keywordspos);
                     let negfound = this.findKeywordsInSong(song, keywordsneg);
 
-                    if (curated > 0 && keywordspos.length && !posfound || curated < 0 && posfound) {
-                        curated *= this.param('pri.listen.nopos');
+                    if (curated.gt(0) && keywordspos.length && !posfound || curated.lt(0) && posfound) {
+                        curated = curated.mul(this.param('pri.listen.nopos'));
                     }
-                    if (curated > 0 && negfound || curated < 0 && keywordsneg.length && !negfound) {
-                        curated *= this.param('pri.listen.yesneg');
+                    if (curated.gt(0) && negfound || curated.lt(0) && keywordsneg.length && !negfound) {
+                        curated = curated.mul(this.param('pri.listen.yesneg'));
                     }
 
                     if (trace) components["withkeywords." + listener] = curated;
 
                     //Skip attenuation
-                    if (curated > 0) {
+                    if (curated.gt(0)) {
                         let skipfactor = await this.calculateSkipMitigation(song.hash, listener, skipdata, now);
-                        curated *= skipfactor;
-                        if (trace && skipfactor < 1) components["withskips." + listener] = curated;
+                        curated = curated.mul(skipfactor);
+                        if (trace && skipfactor.lt(1)) components["withskips." + listener] = curated;
                     }
 
-                    clisten += curated;
+                    clisten = clisten.add(curated);
                 }
 
                 //Slide
                 for (let listener of listeners) {
                     let slide = await this.calculateListenerSlide(listener);
                     if (trace) components["slide." + listener] = slide;
-                    clisten *= (slide > 1 ? Math.pow(slide, this.param('pri.listen.slide')) : 1);
+                    clisten = clisten.mul(slide.gt(1) ? slide.pow(this.param('pri.listen.slide')) : 1);
                 }
 
-                priority += clisten;
+                priority = priority.add(clisten);
                 if (trace) components.listen = clisten;
             }
         }
@@ -1934,41 +1946,41 @@ export default class Radio extends Behavior {
         
         //Proximity to optimal length
         
-        let clength = 0;
+        let clength = N(0);
         if (song.length >= this.param('pri.length.minlen') && song.length <= this.param('pri.length.maxlen')) {
-            clength = this.param('pri.length');
+            clength = N(this.param('pri.length'));
         } else if (song.length > this.param('pri.length.maxlen') && song.length < this.param('pri.length.maxexcs')) {
-            clength = this.param('pri.length') * ((this.param('pri.length.maxexcs') - song.length) / (this.param('pri.length.maxexcs') - this.param('pri.length.maxlen')));
+            clength = N(this.param('pri.length')).mul(N(this.param('pri.length.maxexcs') - song.length).div(this.param('pri.length.maxexcs') - this.param('pri.length.maxlen')));
         } else if (song.length < this.param('pri.length.minlen')) {
-            clength = this.param('pri.length') * (song.length / this.param('pri.length.minlen'));
+            clength = N(this.param('pri.length')).mul(N(song.length).div(this.param('pri.length.minlen')));
         }
-        priority += clength;
+        priority = priority.add(clength);
         if (trace) components.length = clength;
 
 
         //Low plays
         
         let plays = song[this.metaprefix + ".plays"] || 0;
-        let clowplays = (1 - Math.min(this.param('pri.lowplays.max'), plays) / this.param('pri.lowplays.max')) * this.param('pri.lowplays');
-        priority += clowplays;
+        let clowplays = N(N(1).sub(N(Math.min(this.param('pri.lowplays.max'), plays)).div(this.param('pri.lowplays.max')))).mul(this.param('pri.lowplays'));
+        priority = priority.add(clowplays);
         if (trace) components.lowplays = clowplays;
 
 
         //Comparative plays
 
-        if (priority < 0) priority = 0;
+        if (priority.lt(0)) priority = N(0);
         if (trace) components.baseabsolute = priority;
         let playsrank = await this.playsRank(song.hash);
-        let playsfactor = Math.log(playsrank + 1) / Math.log(1 + songcount * this.param('pri.mitigatedslice'));
+        let playsfactor = log(playsrank + 1, DECIMALS).div(log(N(1).add(N(songcount).mul(this.param('pri.mitigatedslice'))), DECIMALS));
         if (trace) components.playsfactor = playsfactor;
-        priority = Math.pow(priority, playsfactor);
+        priority = pow(priority, playsfactor, DECIMALS);
         if (trace) components.withplays = priority;
 
 
         //Recently played song mitigation
         
-        let recentgradient = Math.min(now - (song[this.metaprefix + ".lastplayed"] || 0), this.param('pri.recent')) / this.param('pri.recent');
-        priority *= recentgradient;
+        let recentgradient = N(Math.min(now - (song[this.metaprefix + ".lastplayed"] || 0), this.param('pri.recent'))).div(this.param('pri.recent'));
+        priority = priority.mul(recentgradient);
         if (trace) components.withrecent = priority;
 
 
@@ -1977,12 +1989,12 @@ export default class Radio extends Behavior {
         if (listeners.length) {
             let upenalty = null;
             if (await this.unanimousOpinion(song.hash, listeners, -2)) {
-                upenalty = priority * (1 - this.param('pri.unanimous.hate'));
-                priority -= upenalty;
+                upenalty = priority.mul(N(1).sub(this.param('pri.unanimous.hate')));
+                priority = priority.sub(upenalty);
                 if (trace) components.unanimoushate = upenalty;
             } else if (await this.unanimousOpinion(song.hash, listeners, -1)) {
-                upenalty = priority * (1 - this.param('pri.unanimous.meh'));
-                priority -= upenalty;
+                upenalty = priority.mul(N(1).sub(this.param('pri.unanimous.meh')));
+                priority = priority.sub(upenalty);
                 if (trace) components.unanimousdislike = upenalty;
             }
         }
@@ -1993,10 +2005,10 @@ export default class Radio extends Behavior {
         if (usequeue && this._queue.length) {
             let queuepos = this._queue.findIndex(item => item.song.hash == song.hash);
             if (queuepos > -1) {
-                priority = (this.param('queuesize') - queuepos) / this.param('queuesize');
+                priority = N(this.param('queuesize') - queuepos).div(this.param('queuesize'));
                 if (trace) components.queuereset = priority;
             } else {
-                priority = 0;
+                priority = N(0);
                 if (trace) components.queuereset = priority;
             }
 
@@ -2006,7 +2018,7 @@ export default class Radio extends Behavior {
         //Novelty
 
         if (usenovelty && !await this.isNovelty(song.hash, songcount)) {
-            priority = 0;
+            priority = N(0);
             if (trace) components.noveltyreset = priority;
         }
 
