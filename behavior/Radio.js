@@ -1759,7 +1759,7 @@ export default class Radio extends Behavior {
                 comp = comp.div(Object.keys(curators).length);
             }
 
-            if (comp.lte(0)) comp = comp.sub(0.5);
+            if (comp.lte(0)) comp = comp.sub("0.5");
             comp = comp.mul(-1).mul(pow(N(userhistory.length - i).mul(this.param('pri.listen.historysc')), this.param('pri.listen.history'), DECIMALS));
             slide = slide.add(comp);
         }

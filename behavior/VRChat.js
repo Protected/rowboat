@@ -2520,7 +2520,7 @@ export default class VRChat extends Behavior {
         let pronouns = await this.userEmbedPronouns(userid);
         if (pronouns) title += " " + pronouns;
 
-        emb.setTitle(title || "?");
+        emb.setTitle((title || "?").substring(0, 254));
         emb.setThumbnail(person.latestpic || null);
         emb.setColor(!person.invisible && STATUS_ONLINE.includes(vrcdata.status) ? this.param("coloronline") : this.param("coloroffline"));
         emb.setURL("https://vrchat.com/home/user/" + vrcdata.id);
@@ -2703,7 +2703,7 @@ export default class VRChat extends Behavior {
 
         let title = world.name || "(unnamed)";
         title += " " + this.worldPlatformsAsEmojiField(world);
-        emb.setTitle(title);
+        emb.setTitle(title.substring(0, 254));
 
         emb.setThumbnail(world.imageUrl);
         emb.setColor(membercount ? this.param("coloronline") : this.param("coloroffline"));
@@ -2820,7 +2820,7 @@ export default class VRChat extends Behavior {
             emb = new EmbedBuilder();
         }
 
-        emb.setTitle(world.name + "  (" + instanceid + ")");
+        emb.setTitle(world.name.substring(0, 240) + "  (" + instanceid + ")");
         emb.setThumbnail(world.imageUrl);
         if (world.msg) {
             emb.setDescription("[Go to world](https://discord.com/channels/" + this.denv.server.id + "/" + this.worldchan.id + "/" + world.msg + ")");

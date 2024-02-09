@@ -401,7 +401,7 @@ export default class VRChatFavorites extends Behavior {
 
                     //Fix basic
                     if (emb.data.title != world.name) {
-                        emb.setTitle(world.name);
+                        emb.setTitle(world.name.substring(0, 254));
                         changed = true;
                     }
 
@@ -647,7 +647,7 @@ export default class VRChatFavorites extends Behavior {
 
         let emb = new EmbedBuilder();
 
-        emb.setTitle(world.name);
+        emb.setTitle(world.name.substring(0, 254));
         emb.setImage(world.imageUrl);
         emb.setURL("https://vrchat.com/home/world/" + worldid);
 
