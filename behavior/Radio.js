@@ -1935,7 +1935,7 @@ export default class Radio extends Behavior {
                 for (let listener of listeners) {
                     let slide = await this.calculateListenerSlide(listener);
                     if (trace) components["slide." + listener] = slide;
-                    clisten = clisten.mul(slide.gt(1) ? slide.pow(this.param('pri.listen.slide')) : 1);
+                    clisten = clisten.mul(slide.gt(1) ? pow(slide, this.param('pri.listen.slide'), DECIMALS) : 1);
                 }
 
                 priority = priority.add(clisten);
