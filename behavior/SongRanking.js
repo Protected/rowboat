@@ -1,5 +1,5 @@
 import emoji from 'emoji-toolkit';
-import random from 'meteor-random';
+import { randomInt } from 'crypto';
 
 import Behavior from '../src/Behavior.js';
 
@@ -305,7 +305,7 @@ export default class SongRanking extends Behavior {
             if (!userid) return null;
             let likeability = (match[1] || 0);
             if (!this._index[userid] || !this._index[userid][likeability] || !this._index[userid][likeability].length) return null;
-            return this._index[userid][likeability][Math.floor(random.fraction() * this._index[userid][likeability].length)];
+            return this._index[userid][likeability][randomInt(this._index[userid][likeability].length)];
         }, "Selects a random song with the given likeability (-2, -1, 1 or 2).");
         
         

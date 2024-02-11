@@ -5,7 +5,6 @@ import { Readable } from 'stream';
 import ytdl from 'ytdl-core';
 import FFmpeg from 'fluent-ffmpeg';
 import moment from 'moment';
-import random from 'meteor-random';
 
 import { analyzeVolume } from './Grabber/loudness.js';
 
@@ -1925,7 +1924,7 @@ export default class Grabber extends Behavior {
         let songs = this.filterSongsBySearchString(extract[2]);
         if (songs.length > 1) {
             if (extract[1]) {
-                return songs[Math.floor(random.fraction() * songs.length)];
+                return songs[crypto.randomInt(songs.length)];
             } else {
                 return true;
             }
@@ -2012,7 +2011,7 @@ export default class Grabber extends Behavior {
     randomSong() {
         let allhashes = Object.keys(this._index);
         if (!allhashes.length) return null;
-        let hash = allhashes[Math.floor(random.fraction() * allhashes.length)];
+        let hash = allhashes[crypto.randomInt(allhashes.length)];
         return this._index[hash];
     }
     

@@ -1,4 +1,4 @@
-import random from 'meteor-random';
+import { randomInt } from 'crypto';
 
 import Behavior from '../src/Behavior.js';
 
@@ -56,7 +56,7 @@ export default class DiscordReactionCounter extends Behavior {
                 let reaction = message.reactions.cache.find(reaction => reaction.emoji.name == args.emoji);
                 counts.push({msg: message.id, count: reaction ? reaction.count : 0});
             }, () => {
-                counts.sort((a, b) => a.count != b.count ? b.count - a.count : random.fraction() - 0.5);
+                counts.sort((a, b) => a.count != b.count ? b.count - a.count : randomInt(2) - 0.5);
                 counts = counts.slice(0, amount);
                 ep.reply("**__Top " + amount + ":__**");
                 let i = 1;

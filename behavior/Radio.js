@@ -1,6 +1,5 @@
 import moment from 'moment';
 import { ExactNumber as N, log, log10, pow as exactPow } from 'exactnumber';
-import random from 'meteor-random';
 import { randomInt } from 'crypto';
 import emoji from 'emoji-toolkit';
 import { ActivityType, ChannelType } from 'discord.js';
@@ -10,8 +9,8 @@ import { createAudioPlayer, AudioPlayerStatus, AudioResource,
 
 import Behavior from '../src/Behavior.js';
 
-const PRIORITY_MAX_PRECISION_DECIMALS = 10000;
-const DECIMALS = log10(PRIORITY_MAX_PRECISION_DECIMALS, 0).toNumber();
+const MAX_PRECISION_DECIMALS = 10000;
+const DECIMALS = log10(MAX_PRECISION_DECIMALS, 0).toNumber();
 const FFMPEG_PCM_ARGUMENTS = ['-analyzeduration', '0', '-loglevel', '0', '-f', 's16le', '-ar', '48000', '-ac', '2'];
 
 
@@ -1540,9 +1539,9 @@ export default class Radio extends Behavior {
     async dequeue(getrequester) {
         let listeners = this.listeners.map((listener) => listener.id);
     
-        let usequeue = (this._queue.length ? random.fraction() < this.param('pri.queue.chance') : false);
+        let usequeue = (this._queue.length ? randomInt(MAX_PRECISION_DECIMALS) / MAX_PRECISION_DECIMALS < this.param('pri.queue.chance') : false);
         let novelties = await this.isThereANovelty(listeners);
-        let usenovelty = (novelties ? random.fraction() < this.param('pri.novelty.chance') : false);
+        let usenovelty = (novelties ? randomInt(MAX_PRECISION_DECIMALS) / MAX_PRECISION_DECIMALS < this.param('pri.novelty.chance') : false);
 
         let priorities = {}, tostats = {};
         for (let hash of await this.grabber.everySong()) {
@@ -1564,7 +1563,7 @@ export default class Radio extends Behavior {
         
         if (!candidates.length) return null;
         
-        let pick = N(randomInt(sum.mul(PRIORITY_MAX_PRECISION_DECIMALS).floor().toNumber())).div(PRIORITY_MAX_PRECISION_DECIMALS);
+        let pick = N(randomInt(sum.mul(MAX_PRECISION_DECIMALS).floor().toNumber())).div(MAX_PRECISION_DECIMALS);
         let selection = null;
         for (let item of candidates) {
             selection = item;

@@ -3,7 +3,7 @@
 //Note: By default, the moderator permission is enough for manipulating dictionaries owned by other users.
 
 import sqlite3 from 'sqlite3';
-import random from 'meteor-random';
+import { randomInt } from 'crypto';
 import moment from 'moment';
 import diff from 'diff';
 
@@ -917,13 +917,13 @@ export default class DictionaryGame extends Behavior {
         this._previous = this._current;
         if (this._words.length > 1) {
             while (this._previous == this._current) {
-                this._current = this._words[Math.floor(random.fraction() * this._words.length)];
+                this._current = this._words[randomInt(this._words.length)];
             }
         } else {
             this._current = this._words[0];
         }
         if (this._mode == MODE_BOTH) {
-            this._current.mode = random.fraction() * 2 < 1 ? MODE_NORMAL : MODE_INVERTED;
+            this._current.mode = randomInt(2) < 1 ? MODE_NORMAL : MODE_INVERTED;
         } else {
             this._current.mode = this._mode;
         }
@@ -935,7 +935,7 @@ export default class DictionaryGame extends Behavior {
         let query = (this._current.mode == MODE_INVERTED ? this._current.right : this._current.left);
         if (typeof query != "string") {
             //It's an array of alternatives; pick one
-            query = query[Math.floor(random.fraction() * query.length)];
+            query = query[randomInt(query.length)];
         }
 
         if (gd && this.genv.type == "Discord" && EmbedBuilder && query.length <= 20 && !this._forcePlaintext) {

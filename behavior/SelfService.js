@@ -1,4 +1,4 @@
-import random from 'meteor-random';
+import { randomInt } from 'crypto';
 import moment from 'moment';
 import md5 from 'js-md5';
 
@@ -211,7 +211,7 @@ export default class SelfService extends Behavior {
         while (!token || this._tokens[token]) {
             token = '';
             for (let i = 0; i < this.param('tokenLength'); i++) {
-                token += tokenChars[Math.floor(random.fraction() * tokenChars.length)];
+                token += tokenChars[randomInt(tokenChars.length)];
             }
         }
         

@@ -1,6 +1,6 @@
 //WARNING: This behavior stores environment names. Renaming an environment with dynamic commands will break the stored commands.
 
-import random from 'meteor-random';
+import { randomInt } from 'crypto';
 
 import Behavior from '../src/Behavior.js';
 
@@ -603,7 +603,7 @@ export default class DynamicCommands extends Behavior {
 
             desc.calls.push({envname: env.name, userid: userid, channelid: channelid, args: Object.assign({}, args)});
 
-            let reply = desc.reply[Math.floor(random.fraction() * desc.reply.length)];
+            let reply = desc.reply[randomInt(desc.reply.length)];
 
             reply = reply.replace(/\{envname\}/g, env.name)
                         .replace(/\{userid\}/g, userid)

@@ -1,4 +1,6 @@
-import random from 'meteor-random';
+import { randomInt } from 'crypto';
+
+const FRACTION_PRECISION = 10000000000;
 
 import Behavior from '../src/Behavior.js';
 
@@ -36,13 +38,13 @@ export default class Random extends Behavior {
         
             if (args.max) {
                 if (args.max.match(/^[0-9]+$/)) {
-                    val = Math.floor(random.fraction() * args.max);
+                    val = randomInt(parseInt(args.max));
                 } else {
                     ep.reply("Invalid argument.");
                     return false;
                 }
             } else {
-                val = random.fraction();
+                val = randomInt(FRACTION_PRECISION) / FRACTION_PRECISION;
             }
             
             if (args.pub) {
@@ -86,7 +88,7 @@ export default class Random extends Behavior {
         }, (env, type, userid, channelid, command, args, handle, ep) => {
             
             let items = this.cleanupItems(args.items);
-            let pick = items[Math.floor(random.fraction() * items.length)];
+            let pick = items[randomInt(items.length)];
             ep.reply(env.idToDisplayName(userid) + ": " + pick);
             
             return true;
@@ -129,7 +131,7 @@ export default class Random extends Behavior {
                     //Dice
                     let dice = [];
                     for (let j = 0; j < (facets[2] || 1); j++) {
-                        let die = Math.floor(random.fraction() * facets[3]) + 1;
+                        let die = randomInt(parseInt(facets[3])) + 1;
                         dice.push(die);
                     }
                     let val;
@@ -214,7 +216,7 @@ export default class Random extends Behavior {
     
     shuffle(list) {
         for (let i = list.length; i; i--) {
-            let j = Math.floor(random.fraction() * i);
+            let j = randomInt(i);
             [list[i - 1], list[j]] = [list[j], list[i - 1]];
         }
         return list;

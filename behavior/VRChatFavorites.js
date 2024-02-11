@@ -1,5 +1,5 @@
 import { AttachmentBuilder, EmbedBuilder } from 'discord.js';
-import random from 'meteor-random';
+import { randomInt } from 'crypto';
 import fs from 'fs';
 import moment from 'moment';
 import jszip from 'jszip';
@@ -877,7 +877,7 @@ export default class VRChatFavorites extends Behavior {
         let keys = Object.keys(map);
         if (filter) keys = await this.asyncFilter(keys, filter);
         if (!keys.length) return null;
-        let key = keys[Math.floor(random.fraction() * keys.length)];
+        let key = keys[randomInt(keys.length)];
         return Object.assign({key: key}, map[key]);
     }
 

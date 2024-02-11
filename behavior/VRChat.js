@@ -1,5 +1,5 @@
 import moment from 'moment';
-import random from 'meteor-random';
+import crypto from 'crypto';
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField } from 'discord.js';
 import WebSocket from 'ws';
 import Imap from 'imap';
@@ -16,6 +16,7 @@ const HTTP_USER_AGENT_TEMPLATE = "Rowboat/$version$ $contact$";
 const RATE_DELAY = 1000;
 const GATEWAY_ERRORS = [502, 504, 522];  //Not thrown
 const RECONNECT_DELAYS = [5, 20, 60, 120, 300];
+const NONCE_LENGTH = 64;
 
 const STATUS_ONLINE = ["active", "join me", "ask me"];
 const TRUST_PRECEDENCE = ["system_trust_veteran", "system_trust_trusted", "system_trust_known", "system_trust_basic"];
@@ -3951,7 +3952,7 @@ export default class VRChat extends Behavior {
     }
 
     generateNonce() {
-        return random.hexString(64).toUpperCase();
+        return crypto.randomBytes(Math.ceil(NONCE_LENGTH/2)).toString("hex").substring(0, NONCE_LENGTH).toUpperCase();
     }
 
     generateInstanceId(include, exclude) {
@@ -3960,11 +3961,11 @@ export default class VRChat extends Behavior {
         if (!exclude) exclude = [];
         do {
             if (include && include.length) {
-                let i = Math.floor(random.fraction() * include.length);
+                let i = crypto.randomInt(include.length);
                 result = include[i];
                 include.splice(i, 1); //Prevent infinite loop
             } else {
-                result = Math.floor(random.fraction() * 99998) + 1;
+                result = crypto.randomInt(1, 99999);
             }
         } while (exclude.find(id => result.split("~")[0] == id));
         return result;
@@ -3997,7 +3998,7 @@ export default class VRChat extends Behavior {
         let keys = Object.keys(map);
         if (filter) keys = keys.filter(filter);
         if (!keys.length) return null;
-        let key = keys[Math.floor(random.fraction() * keys.length)];
+        let key = keys[crypto.randomInt(keys.length)];
         return Object.assign({key: key}, map[key]);
     }
 

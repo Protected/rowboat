@@ -1,5 +1,4 @@
 import moment from 'moment';
-import random from 'meteor-random';
 import { EmbedBuilder } from 'discord.js';
 import pngextract from 'png-chunks-extract';
 import fs from 'fs';
@@ -941,7 +940,7 @@ export default class VRChatPhotos extends Behavior {
         let keys = Object.keys(map);
         if (filter) keys = keys.filter(filter);
         if (!keys.length) return null;
-        let key = keys[Math.floor(random.fraction() * keys.length)];
+        let key = keys[randomInt(keys.length)];
         return Object.assign({key: key}, map[key]);
     }
 
