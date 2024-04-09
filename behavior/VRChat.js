@@ -3435,10 +3435,10 @@ export default class VRChat extends Behavior {
         return this.vrcget("groups/" + vrcgroupid + "/roles");
     }
 
-    async vrcGroupPosts(vrcgroupid, n, offset, public) {
+    async vrcGroupPosts(vrcgroupid, n, offset, publiconly) {
         if (!n) n = 5;
         if (!offset) offset = 0;
-        return this.vrcget("groups/" + vrcgroupid + "/posts?n=" + n + "&offset=" + offset + (public ? "&publicOnly=true" : ""));
+        return this.vrcget("groups/" + vrcgroupid + "/posts?n=" + n + "&offset=" + offset + (publiconly ? "&publicOnly=true" : ""));
     }
 
     async vrcIsUserGroupMember(vrcgroupid, vrcuserid) {
