@@ -3,6 +3,8 @@ import { EmbedBuilder } from 'discord.js';
 
 import Behavior from '../src/Behavior.js';
 
+const HEXCOLOR = /^#[a-z0-9]{6}$/i;
+
 export default class VRChatGroups extends Behavior {
 
     get description() { return "Manages VRChat group membership and provides group-related features"; }
@@ -12,9 +14,10 @@ export default class VRChatGroups extends Behavior {
         {n: "announcefreq", d: "How often to check group announcements (s)"},
         {n: "rolefreq", d: "How often to check group roles (s)"},
         {n: "ddelay", d: "Delay between actions in the delayed action queue (ms) [used to prevent rate limiting]"},
+        {n: "memberwindow", d: "Amount of members to check post initialization"},
+        {n: "announcewindow", d: "Amount of most recent group posts to check"},
 
-        {n: "colannounceactive", d: "Color for active announcements"},
-        {n: "colannounceold", d: "Color for old announcements"},
+        {n: "colannounceactive", d: "Default color for announcements"},
         {n: "colrepresenting", d: "Color for members who are online and representing"},
 
         {n: "inemoji", d: "Emoji for new members"},
@@ -26,8 +29,9 @@ export default class VRChatGroups extends Behavior {
         announcefreq: 160,
         rolefreq: 1805,
         ddelay: 500,
+        memberwindow: 20,
+        announcewindow: 10,
         colannounceactive: [255, 40, 30],
-        colannounceold: [200, 200, 200],
         colrepresenting: [255, 120, 244],
         inemoji: "📥",
         outemoji: "📤"
@@ -63,7 +67,8 @@ export default class VRChatGroups extends Behavior {
 
         /*{GROUPID: {
                 group: GROUPID, announcements: CHANNELID, members: CHANNELID, greet: CHANNELID, grouproles: [{grouprole, discordrole}, ...]
-                announcementMsgs: {announcementid: msgid, ...}, memberMsgs: {vrcuserid: msgid, ...}
+                announcementMsgs: {announcementid: msgid, ...}, memberMsgs: {vrcuserid: msgid, ...},
+                announcementColor: HEXCOLOR
             }, ...}*/
         this._groupChannels = null;
 
@@ -112,8 +117,8 @@ export default class VRChatGroups extends Behavior {
                         this._nameIndex[group.name.toLowerCase()] = group.id;
 
                         this.dqueue(async function() {
-                            await this.updateGroupMembers(group.id);
-                            await this.updateGroupAnnouncement(group.id);
+                            await this.updateGroupMembers(group.id, true);
+                            await this.updateGroupAnnouncements(group.id);
                         }.bind(this));
                     }
                     this._active = true;
@@ -309,7 +314,7 @@ export default class VRChatGroups extends Behavior {
                 this._atimer = setInterval(function () {
                     for (let vrcgroupid in this._groups) {
                         this.dqueue(function() {
-                            this.updateGroupAnnouncement(vrcgroupid);
+                            this.updateGroupAnnouncements(vrcgroupid);
                         }.bind(this));
                     }
                 }.bind(this), this.param("announcefreq") * 1000);
@@ -479,6 +484,40 @@ export default class VRChatGroups extends Behavior {
 
             return true;
         });
+
+        this.be('Commands').registerCommand(this, 'vrcgroup announcecolor', {
+            description: "Set/unset the discord accent color group announcements.",
+            details: [
+                "Please provide the color as a hexadecimal #RRGGBB string.",
+                "Use '-' instead of a color to unset the color."
+            ],
+            args: ["color", "group", true],
+            permissions: [permAdmin]
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
+            ep.ok();
+
+            let group = args.group.join(" ");
+            if (!this._groups[group] && this._nameIndex[group.toLowerCase()]) {
+                group = this._nameIndex[group.toLowerCase()];
+            }
+            if (!this._groups[group]) {
+                ep.reply("I'm not in this group!");
+                return true;
+            }
+
+            if (args.color == "-" || args.color == "no" || args.color == "off") {
+                this.unsetGroupAnnouncementColor(group);
+                ep.ok();
+            } else if (args.color.match(HEXCOLOR)) {
+                this.setGroupAnnouncementColor(group, args.color);
+                ep.ok();
+            } else {
+                ep.reply("Invalid color. Please provide a hexadecimal #RRGGBB string.");
+            }
+
+            return true;
+        });
+
 
         this.be('Commands').registerCommand(this, 'vrcgroup members', {
             description: "Set/unset a discord channel for displaying group members.",
@@ -692,6 +731,18 @@ export default class VRChatGroups extends Behavior {
         this.unindexChannelsCheck(old, this._groupChannels[vrcgroupid]);
     }
 
+    setGroupAnnouncementColor(vrcgroupid, color) {
+        this.initializeGroupChannels(vrcgroupid);
+        this._groupChannels[vrcgroupid].announcementColor = color;
+        this._groupChannels.save();
+    }
+
+    unsetGroupAnnouncementColor(vrcgroupid) {
+        if (!this._groupChannels[vrcgroupid]) return;
+        this._groupChannels[vrcgroupid].announcementColor = null;
+        this._groupChannels.save();
+    }
+
     setGroupMembers(vrcgroupid, channelid) {
         this.initializeGroupChannels(vrcgroupid);
         let old = this._groupChannels[vrcgroupid].members;
@@ -829,18 +880,34 @@ export default class VRChatGroups extends Behavior {
 
     //Update functions
 
-    async updateGroupMembers(vrcgroupid) {
+    async updateGroupMembers(vrcgroupid, full) {
         if (!this._groups[vrcgroupid].members) {
             this._groups[vrcgroupid].members = [];
         }
-        let members = await this.vrchat.vrcGroupMembers(vrcgroupid);
-        if (!members) {
-            this.log("warn", "Unable to retrieve list of members for " + vrcgroupid);
-            return;
+
+        let members = [];
+        if (full) {
+            let offset = 0;
+            do {
+                let moremembers = await this.vrchat.vrcGroupMembers(vrcgroupid, 100, 100 * offset);
+                if (!moremembers) {
+                    this.log("warn", "Unable to retrieve full list of members for " + vrcgroupid);
+                    return;
+                }
+                members = members.concat(moremembers);
+                offset += 1;
+            } while (moremembers && moremembers.length >= 100);
+        } else {
+            let somemembers = await this.vrchat.vrcGroupMembers(vrcgroupid, this.param("memberwindow"), 0, true);
+            if (!somemembers) {
+                this.log("warn", "Unable to retrieve list of recent members for " + vrcgroupid);
+                return;
+            }
+            members = somemembers;
         }
         
         let memberUserIds = members.map(member => member.userId);
-        let goneMembers = this._groups[vrcgroupid].members.filter(oldMember => !memberUserIds.includes(oldMember.userId));
+        let goneMembers = (full ? this._groups[vrcgroupid].members.filter(oldMember => !memberUserIds.includes(oldMember.userId)) : []);
 
         let oldMembers = this._groups[vrcgroupid].members;
         let oldMemberUserIds = oldMembers.map(oldMember => oldMember.userId);
@@ -1010,20 +1077,19 @@ export default class VRChatGroups extends Behavior {
 
     }
 
-    async updateGroupAnnouncement(vrcgroupid) {
-        let old = this._groups[vrcgroupid].announcement;
+    async updateGroupAnnouncements(vrcgroupid) {
+        let groupannouncements = await this.vrchat.vrcGroupPosts(vrcgroupid, this.param("announcewindow"));
+        groupannouncements = groupannouncements.posts;
         
-        let groupannouncement = await this.vrchat.vrcGroupAnnouncement(vrcgroupid);
-        if (!groupannouncement?.title) groupannouncement = null;
-        this._groups[vrcgroupid].announcement = groupannouncement;
+        this._groups[vrcgroupid].announcement = (groupannouncements[0]?.title ? groupannouncements[0] : null);
         this._groups.save();
 
-        if (old?.id != groupannouncement?.id) {
-            this.toggleAnnouncementsOff(vrcgroupid, groupannouncement?.id ? [groupannouncement.id] : undefined);
+        groupannouncements.reverse();
+        for (let announcement of groupannouncements) {
+            let msgid = this._groupChannels[vrcgroupid]?.announcementMsgs?.[announcement.id];
+            if (msgid) continue;
+            this.bakeAnnouncement(vrcgroupid, announcement);
         }
-
-        this.bakeAnnouncement(vrcgroupid);
-        
     }
 
 
@@ -1049,14 +1115,11 @@ export default class VRChatGroups extends Behavior {
         return message;
     }
 
-    async bakeAnnouncement(vrcgroupid, now) {
+    async bakeAnnouncement(vrcgroupid, announcement, now) {
         let announcementChannel = this.groupAnnouncementsChan(vrcgroupid);
         if (!announcementChannel) return;
         let group = this._groups[vrcgroupid];
         if (!group) return;
-
-        let announcement = group.announcement;
-        if (!announcement) return;
 
         if (now) now = moment.unix(now);
         else now = moment();
@@ -1072,7 +1135,7 @@ export default class VRChatGroups extends Behavior {
         emb.setTitle(announcement.title);
         emb.setDescription(announcement.text || null);
         emb.setThumbnail(announcement.imageUrl);
-        emb.setColor(this.param("colannounceactive"));
+        emb.setColor(group.announcementColor || this.param("colannounceactive"));
         emb.setAuthor({name: group.name, url: "https://vrchat.com/home/group/" + group.id, iconURL: group.iconURL || undefined});
         emb.setFooter({text: "Posted " + moment(announcement.createdAt).from(now)});
 
@@ -1094,29 +1157,6 @@ export default class VRChatGroups extends Behavior {
         };
     }
 
-    async toggleAnnouncementsOff(vrcgroupid, except) {
-        let announcementChannel = this.groupAnnouncementsChan(vrcgroupid);
-        if (!announcementChannel) return;
-        let group = this._groups[vrcgroupid];
-        if (!group) return;
-        
-        for (let vrcpostid in this._groupChannels[vrcgroupid].announcementMsgs) {
-            if (except && except.includes(vrcpostid)) continue;
-            let message = await this.getAnnouncementMessage(group.id, vrcpostid);
-            if (!message || !message.embeds[0]) continue;
-            let emb = EmbedBuilder.from(message.embeds[0]);
-            if (this.makeHexColor(emb.data.color) != this.makeHexColor(this.param("colannounceold"))) {
-                emb.setColor(this.param("colannounceold"));
-                emb.setFooter({text: "Removed " + moment().format("Y-MM-DD HH:mm")});
-                this.dqueue(function() {
-                    message.edit({embeds: [emb]})
-                        .catch((e) => { 
-                            this.log("warn", "Failed to toggle announcement for group " + vrcgroupid + ": " + JSON.stringify(e));
-                        });
-                }.bind(this));
-            }
-        }
-    }
 
     async bakeMember(vrcgroupid, vrcuserid, now) {
         let memberChannel = this.groupMembersChan(vrcgroupid);
