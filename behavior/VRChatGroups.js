@@ -887,9 +887,9 @@ export default class VRChatGroups extends Behavior {
 
         let members = [];
         if (full) {
-            let offset = 0;
+            let offset = 0, moremembers;
             do {
-                let moremembers = await this.vrchat.vrcGroupMembers(vrcgroupid, 100, 100 * offset);
+                moremembers = await this.vrchat.vrcGroupMembers(vrcgroupid, 100, 100 * offset);
                 if (!moremembers) {
                     this.log("warn", "Unable to retrieve full list of members for " + vrcgroupid);
                     return;
@@ -914,7 +914,16 @@ export default class VRChatGroups extends Behavior {
         let newMembers = members.filter(member => !oldMemberUserIds.includes(member.userId));
         let stayingMembers = members.filter(member => oldMemberUserIds.includes(member.userId));
 
-        this._groups[vrcgroupid].members = members;
+        if (full) {
+            this._groups[vrcgroupid].members = members;
+        } else {
+            if (!this._groups[vrcgroupid].members) {
+                this._groups[vrcgroupid].members = [];
+            }
+            for (let member of newMembers) {
+                this._groups[vrcgroupid].members.push(member);
+            }
+        }
         this._groups.save();
 
         let groupname = this._groups[vrcgroupid].name;
@@ -1135,7 +1144,7 @@ export default class VRChatGroups extends Behavior {
         emb.setTitle(announcement.title);
         emb.setDescription(announcement.text || null);
         emb.setThumbnail(announcement.imageUrl);
-        emb.setColor(group.announcementColor || this.param("colannounceactive"));
+        emb.setColor(this.groupAnnouncementsColor(group.id));
         emb.setAuthor({name: group.name, url: "https://vrchat.com/home/group/" + group.id, iconURL: group.iconURL || undefined});
         emb.setFooter({text: "Posted " + moment(announcement.createdAt).from(now)});
 
@@ -1286,6 +1295,11 @@ export default class VRChatGroups extends Behavior {
     groupAnnouncementsChan(vrcgroupid) {
         if (!this._groupChannels[vrcgroupid]?.announcements) return null;
         return this.denv.server.channels.cache.get(this._groupChannels[vrcgroupid].announcements);
+    }
+
+    groupAnnouncementsColor(vrcgroupid) {
+        if (!this._groupChannels[vrcgroupid]?.announcementColor) return this.param("colannounceactive");
+        return this._groupChannels[vrcgroupid].announcementColor;
     }
 
     groupMembersChan(vrcgroupid) {
