@@ -288,7 +288,9 @@ export default class EnvDiscord extends Environment {
     async displayNameToId(displayname) {
         let refuser = null;
 
-        refuser = await this._server.members.fetch(displayname);  //By ID
+        try {
+            refuser = await this._server.members.fetch(displayname);  //By ID
+        } catch (e) {}
         if (!refuser) {
             let queryuser = await this._server.members.fetch({query: displayname, limit: 1});
             if (queryuser) refuser = queryuser[0];
