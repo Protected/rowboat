@@ -293,7 +293,7 @@ export default class EnvDiscord extends Environment {
         } catch (e) {}
         if (!refuser) {
             let queryuser = await this._server.members.fetch({query: displayname, limit: 1});
-            if (queryuser) refuser = queryuser[0];
+            if (queryuser) refuser = queryuser.first();
         }
 
         if (refuser) {
