@@ -918,7 +918,7 @@ export default class Radio extends Behavior {
             details: [
                 "Specify the display name or ID of yourself or another user."
             ]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             if (this._userdata[userid] && this._userdata[userid].curators && Object.keys(this._userdata[userid].curators).length >= this.param('pref.maxcurators')) {
                 ep.reply("You can't have more than " + this.param('pref.maxcurators') + " user" + (this.param('pref.maxcurators') > 1 ? "s" : "") + " in your curator list.");
@@ -926,7 +926,7 @@ export default class Radio extends Behavior {
             }
 
             let targetuser = args.targetuser.join(" ");
-            let targetid = env.displayNameToId(targetuser);
+            let targetid = await env.displayNameToId(targetuser);
             if (!targetid) {
                 if (env.idToDisplayName(targetuser) != targetuser) {
                     targetid = targetuser;
@@ -949,7 +949,7 @@ export default class Radio extends Behavior {
             details: [
                 "Specify the display name or ID of yourself or another user."
             ]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             if (this._userdata[userid] && this._userdata[userid].curators && Object.keys(this._userdata[userid].curators).length >= this.param('pref.maxcurators')) {
                 ep.reply("You can't have more than " + this.param('pref.maxcurators') + " user" + (this.param('pref.maxcurators') > 1 ? "s" : "") + " in your curator list.");
@@ -957,7 +957,7 @@ export default class Radio extends Behavior {
             }
 
             let targetuser = args.targetuser.join(" ");
-            let targetid = env.displayNameToId(targetuser);
+            let targetid = await env.displayNameToId(targetuser);
             if (!targetid) {
                 if (env.idToDisplayName(targetuser) != targetuser) {
                     targetid = targetuser;
@@ -981,10 +981,10 @@ export default class Radio extends Behavior {
             details: [
                 "Specify the display name or ID of yourself or another user."
             ]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let targetuser = args.targetuser.join(" ");
-            let targetid = env.displayNameToId(targetuser);
+            let targetid = await env.displayNameToId(targetuser);
             if (!targetid) {
                 targetid = targetuser;
             }
@@ -1008,7 +1008,7 @@ export default class Radio extends Behavior {
                 "If you don't specify a list, it will be reset to default (you will be your own sole, positive curator).",
                 "To clear the list entirely (your presence as a listener will have no effect on song selection) use `radio pref curator set -` or remove yourself using radio pref curator remove."
             ]
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             let curatorlist = args.newlist.join(" ").split(/;|\n/);
 
@@ -1030,7 +1030,7 @@ export default class Radio extends Behavior {
                     curcandidate = curcandidate.substr(1);
                 }
 
-                let targetid = env.displayNameToId(curcandidate);
+                let targetid = await env.displayNameToId(curcandidate);
                 if (!targetid) {
                     if (env.idToDisplayName(curcandidate) != curcandidate) {
                         targetid = curcandidate;

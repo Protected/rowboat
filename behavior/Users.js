@@ -103,7 +103,7 @@ export default class Users extends Behavior {
                 permissions: [this.defaultPermAdmin]
             }, async (env, type, userid, channelid, command, args, handle, ep) => {
             
-                let targetid = env.displayNameToId(args.user);
+                let targetid = await env.displayNameToId(args.user);
                 if (!targetid) {
                     ep.reply("There is no such user.");
                     return true;

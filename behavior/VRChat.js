@@ -1087,7 +1087,7 @@ export default class VRChat extends Behavior {
             let targetid = userid;
 
             if (discorduser) {
-                targetid = env.displayNameToId(discorduser);
+                targetid = await env.displayNameToId(discorduser);
                 if (!targetid) {
                     ep.reply("There is no such Discord user.");
                     return true;
@@ -1170,14 +1170,14 @@ export default class VRChat extends Behavior {
         },  (env, type, userid, channelid, command, args, handle, ep) => asscall(env, userid, args.discorduser.join(" "), args.vrchatuser, ep));
 
 
-        let unasscall = (env, userid, discorduser, ep, unfriend) => {
+        let unasscall = async (env, userid, discorduser, ep, unfriend) => {
 
             if (!this.testEnv(env)) return true;
 
             let targetid = userid;
         
             if (discorduser) {
-                targetid = env.displayNameToId(discorduser);
+                targetid = await env.displayNameToId(discorduser);
                 if (!targetid) {
                     ep.reply("There is no such Discord user.");
                     return true;

@@ -290,7 +290,7 @@ export default class DiscordTempVoice extends Behavior {
                 return true;
             }
 
-            let newmoduserid = env.displayNameToId(newmodname);
+            let newmoduserid = await env.displayNameToId(newmodname);
             if (!newmoduserid) {
                 ep.reply("There is no such user.");
                 return true;

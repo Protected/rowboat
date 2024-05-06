@@ -336,7 +336,7 @@ export default class Time extends Behavior {
                     timezone = await this.be("Users").getMeta(checkhandle[1], "timezone");
                     owner = checkhandle[1];
                 } else {
-                    let handles = await this.be("Users").getHandlesById(env.name, env.displayNameToId(reqzone) || reqzone);
+                    let handles = await this.be("Users").getHandlesById(env.name, await env.displayNameToId(reqzone) || reqzone);
                     if (handles.length) {
                         timezone = await this.be("Users").getMeta(handles[0], "timezone");
                         owner = reqzone;

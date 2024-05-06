@@ -248,7 +248,7 @@ export default class EnvIRC extends Environment {
     }
 
 
-    displayNameToId(displayname) {
+    async displayNameToId(displayname) {
         if (this._people[displayname]) {
             return this._people[displayname].id;
         }

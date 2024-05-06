@@ -285,18 +285,13 @@ export default class EnvDiscord extends Environment {
     }
     
     
-    displayNameToId(displayname) {
+    async displayNameToId(displayname) {
         let refuser = null;
 
-        refuser = this._server.members.cache.get(displayname);  //By ID
+        refuser = await this._server.members.fetch(displayname);  //By ID
         if (!refuser) {
-            let cache = this._server.members.cache.filter(member => member.user?.username === displayname);  //By exact username
-            if (cache.size == 1) {
-                refuser = cache[0];
-            } else {
-                displayname = displayname.toLowerCase();
-                refuser = this._server.members.cache.find(member => member.displayName?.toLowerCase() === displayname); //By display name
-            }
+            let queryuser = await this._server.members.fetch({query: displayname, limit: 1});
+            if (queryuser) refuser = queryuser[0];
         }
 
         if (refuser) {

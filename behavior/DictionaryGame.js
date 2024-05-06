@@ -177,7 +177,7 @@ export default class DictionaryGame extends Behavior {
             minArgs: 2
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let dictmap = this.dictionaryNameToMap(args.dictionary, env);
+            let dictmap = await this.dictionaryNameToMap(args.dictionary, env);
 
             if (!dictmap || !dictmap.language) {
                 ep.reply('Your dictionary reference must contain a language.');
@@ -229,7 +229,7 @@ export default class DictionaryGame extends Behavior {
             minArgs: 2
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let dictmap = this.dictionaryNameToMap(args.dictionary, env);
+            let dictmap = await this.dictionaryNameToMap(args.dictionary, env);
 
             if (!dictmap || !dictmap.language) {
                 ep.reply('Your dictionary reference must contain a language.');
@@ -275,7 +275,7 @@ export default class DictionaryGame extends Behavior {
             args: ["dictionary"]
         }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let dictmap = this.dictionaryNameToMap(args.dictionary, env);
+            let dictmap = await this.dictionaryNameToMap(args.dictionary, env);
 
             if (!dictmap || !dictmap.language) {
                 ep.reply('Your dictionary reference must contain a language.');
@@ -320,9 +320,9 @@ export default class DictionaryGame extends Behavior {
             ],
             args: ["dictionary", "page"],
             minArgs: 0
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
-            let dictmap = this.dictionaryNameToMap(args.dictionary, env);
+            let dictmap = await this.dictionaryNameToMap(args.dictionary, env);
             if (!dictmap) dictmap = {userid: undefined, language: null, category: null};
             if (dictmap.userid === undefined) {
                 dictmap.userid = userid;
@@ -356,14 +356,14 @@ export default class DictionaryGame extends Behavior {
             description: "Shows all translations in a given dictionary.",
             args: ["dictionary", "page"],
             minArgs: 1
-        }, (env, type, userid, channelid, command, args, handle, ep) => {
+        }, async (env, type, userid, channelid, command, args, handle, ep) => {
 
             if (this._playing) {
                 ep.reply("This command can't be used during a game.");
                 return true;
             }
 
-            let dictmap = this.dictionaryNameToMap(args.dictionary, env);
+            let dictmap = await this.dictionaryNameToMap(args.dictionary, env);
             if (!dictmap || !dictmap.language) {
                 ep.reply('Your dictionary reference must contain a language.');
                 return true;
@@ -685,7 +685,7 @@ export default class DictionaryGame extends Behavior {
     }
 
 
-    dictionaryNameToMap(name, env) {
+    async dictionaryNameToMap(name, env) {
         //Optionally pass an environment to resolve the userid immediately
         if (!name) return null;
 
@@ -694,7 +694,7 @@ export default class DictionaryGame extends Behavior {
         let unmatches = /^(([^|]+)\|)?(.*)$/.exec(name);
         if (unmatches[2]) {
             if (unmatches[2] == "*") map.userid = null;
-            else map.userid = (env ? env.displayNameToId(unmatches[2]) || unmatches[2] : unmatches[2]);
+            else map.userid = (env ? await env.displayNameToId(unmatches[2]) || unmatches[2] : unmatches[2]);
         } else {
             map.userid = undefined;
         }
@@ -800,7 +800,7 @@ export default class DictionaryGame extends Behavior {
                     matches = regex.exec(dictname);
                     if (matches) { corrections = matches[1]; continue; }
 
-                    let dict = this.dictionaryNameToMap(dictname, env);
+                    let dict = await this.dictionaryNameToMap(dictname, env);
                     if (!dict) {
                         ep.reply("Invalid dictionary: " + dictname);
                         continue;

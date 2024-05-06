@@ -116,7 +116,7 @@ export default class Environment extends AsyncEventEmitter {
     
     
     idToDisplayName(id) { return null; }
-    displayNameToId(displayName) { return null; }
+    async displayNameToId(displayName) { return null; }
     
     idToMention(id) { return null; }                                    //Convert a user ID into a format most likely to trigger an alert
     
