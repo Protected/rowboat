@@ -889,7 +889,9 @@ export default class VRChatGroups extends Behavior {
         if (full) {
             let offset = 0, moremembers;
             do {
-                moremembers = await this.vrchat.vrcGroupMembers(vrcgroupid, 100, 100 * offset);
+                try {
+                    moremembers = await this.vrchat.vrcGroupMembers(vrcgroupid, 100, 100 * offset);
+                } catch (e) {}
                 if (!moremembers) {
                     this.log("warn", "Unable to retrieve full list of members for " + vrcgroupid);
                     return;
@@ -898,7 +900,10 @@ export default class VRChatGroups extends Behavior {
                 offset += 1;
             } while (moremembers && moremembers.length >= 100);
         } else {
-            let somemembers = await this.vrchat.vrcGroupMembers(vrcgroupid, this.param("memberwindow"), 0, true);
+            let somemembers;
+            try {
+                somemembers = await this.vrchat.vrcGroupMembers(vrcgroupid, this.param("memberwindow"), 0, true);
+            } catch (e) {}
             if (!somemembers) {
                 this.log("warn", "Unable to retrieve list of recent members for " + vrcgroupid);
                 return;
@@ -1069,7 +1074,10 @@ export default class VRChatGroups extends Behavior {
     }
 
     async updateGroupRoles(vrcgroupid) {
-        let grouproles = await this.vrchat.vrcGroupRoles(vrcgroupid);
+        let grouproles;
+        try {
+            grouproles = await this.vrchat.vrcGroupRoles(vrcgroupid);
+        } catch (e) {}
         if (!grouproles) return;
         
         this._groups[vrcgroupid].roles = grouproles;
@@ -1087,7 +1095,11 @@ export default class VRChatGroups extends Behavior {
     }
 
     async updateGroupAnnouncements(vrcgroupid) {
-        let groupannouncements = await this.vrchat.vrcGroupPosts(vrcgroupid, this.param("announcewindow"));
+        let groupannouncements;
+        try {
+            groupannouncements = await this.vrchat.vrcGroupPosts(vrcgroupid, this.param("announcewindow"));
+        } catch (e) {}
+        if (!groupannouncements) return;
         groupannouncements = groupannouncements.posts;
         
         this._groups[vrcgroupid].announcement = (groupannouncements[0]?.title ? groupannouncements[0] : null);

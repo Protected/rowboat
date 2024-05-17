@@ -3579,7 +3579,7 @@ export default class VRChat extends Behavior {
             if (GATEWAY_ERRORS.indexOf(e.statusCode) > -1) {
                 this.log("warn", "Oh no, gateway errors (" + e.statusCode + ")...");
             } else if (e.statusCode != 401) {
-                this.log("warn", "API rejection at " + path + ": " + JSON.stringify(e));
+                this.log("error", "API rejection at " + path + ": " + JSON.stringify(e));
                 throw e;
             }
         }
