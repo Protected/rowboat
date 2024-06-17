@@ -517,6 +517,9 @@ export default class VRChat extends Behavior {
                                     this.log("error", "Failed to invite " + buttonInteraction.user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e));
                                     buttonInteraction.deleteReply().catch(() => {});
                                 });
+                        } else {
+                            this.log("error", "Failed to invite " + buttonInteraction.user.id + " to " + worldid + ": Could not generate instance.");
+                            buttonInteraction.deleteReply().catch(() => {});
                         }
 
                     }
@@ -3374,7 +3377,7 @@ export default class VRChat extends Behavior {
         options.type = type;
 
         if (type != "public") {
-            options.ownerId == vrcownerid;
+            options.ownerId = vrcownerid;
         }
 
         return this.vrcpost("instances", options);
