@@ -51,11 +51,10 @@ export default class VRChat extends Behavior {
         {n: "knownrole", d: "ID of a role that will be automatically assigned to known people and unassigned from unknown people"},
         {n: "offlinetolerance", d: "How long to delay offline announcements to improve odds they're real and not slow world loading (s)"},
 
-        {n: "worldfreq", d: "How often to run the world update function (s) [Note: Worlds can be updated outside this function.]"},
+        {n: "worldfreq", d: "How often to run the world cache cleanup function (s)"},
         {n: "worldchan", d: "ID of text channel for worlds (warning: all contents will be deleted)"},
         {n: "worldstale", d: "How long after retrieval until an entry in the world cache goes stale (s)"},
         {n: "worldexpiration", d: "How long after emptying until an entry in the world cache is removed (h)"},
-        {n: "staleupdatesperitr", d: "How many stale worlds are updated per every time the update function runs"},
         {n: "instancechan", d: "ID of text channel for baked instance members embeds"},
 
         {n: "coloroffline", d: "Color for offline/unused embed accents"},
@@ -105,11 +104,10 @@ export default class VRChat extends Behavior {
         knownrole: null,
         offlinetolerance: 119,
 
-        worldfreq: 300,
+        worldfreq: 900,
         worldchan: null,
         worldstale: 3600,
         worldexpiration: 25,
-        staleupdatesperitr: 10,
         instancechan: null,
         
         coloroffline: [200, 200, 200],
@@ -479,38 +477,40 @@ export default class VRChat extends Behavior {
                         buttonInteraction.deferReply({ephemeral: true});
                         
                         let region = await this.idealServerRegion(buttonInteraction.user.id);
+                        let instance;
 
-                        if (buttonInteraction.customId == "invitepublic" || buttonInteraction.customId == "inviteany") {
-                            this.getWorld(worldid, true)
-                                .then((world) => {
-                                    if (!world) throw {};
-                                    let instances = Object.values(world.instances)
-                                        .filter(ci => {
-                                            if (ci.members && Object.keys(ci.members).length >= world.capacity) return false;
-                                            let friends = ci.instance.split("~").find(element => element.match(/^friends\(/));
-                                            if (friends) return friends === "friends(" + this._me.id + ")";  //Can only invite to bot-owned friends instances
-                                            return true;
-                                        })
-                                        .map(ci => ci.instance);
-                                    let instance;
-                                    if (buttonInteraction.customId == "inviteany") {
-                                        instance = this.generateInstanceFor(person.vrc, "public", instances);
-                                    } else {
-                                        instance = this.generateInstanceFor(person.vrc, "public", null, instances.map(ci => ci.split("~")[0]), region);
-                                    }
-                                    this.vrcInvite(person.vrc, worldid, instance)
-                                        .then(() => buttonInteraction.editReply("Invite sent."))
-                                        .catch(e => {
-                                            this.log("error", "Failed to invite " + buttonInteraction.user.id + " to " + worldid + " instance " + instance + ": " + JSON.stringify(e));
-                                            buttonInteraction.deleteReply().catch(() => {});
-                                        });
-                                })
-                                .catch((e) => {
-                                    this.log("warn", "Failed to invite " + buttonInteraction.user.id + " to " + worldid + " because the world couldn't be retrieved.");
-                                    buttonInteraction.deleteReply().catch(() => {});
-                                });
+                        if (buttonInteraction.customId == "inviteany") {
+                            try {
+                                let world = await this.getWorld(worldid, true);
+                                if (!world) throw {};
+                                let instances = Object.values(world.instances)
+                                    .filter(ci => {
+                                        if (ci.members && Object.keys(ci.members).length >= world.capacity) return false;
+                                        let friends = ci.instance.split("~").find(element => element.match(/^friends\(/));
+                                        if (friends) return friends === "friends(" + this._me.id + ")";  //Can only invite to bot-owned friends instances
+                                        return true;
+                                    })
+                                    .map(ci => ci.instance);
+                                instance = instances[crypto.randomInt(instances.length)];
+                            } catch (e) {
+                                this.log("warn", "Failed to invite " + buttonInteraction.user.id + " to " + worldid + " because the world couldn't be retrieved.");
+                                buttonInteraction.deleteReply().catch(() => {});
+                            }
                         } else {
-                            let instance = this.generateInstanceFor(this._me.id, buttonInteraction.customId == "invitefriendsplus" ? "friends+" : "friends", undefined, undefined, region);
+                            let instancedata;
+                            if (buttonInteraction.customId == "invitepublic") {
+                                instancedata = await this.vrcCreateInstance(worldid, "public", region);
+                            }
+                            if (buttonInteraction.customId == "invitefriendsplus") {
+                                instancedata = await this.vrcCreateInstance(worldid, "hidden", region, this._me.id);
+                            }
+                            if (buttonInteraction.customId == "invitefriends") {
+                                instancedata = await this.vrcCreateInstance(worldid, "friends", region, this._me.id);
+                            }
+                            instance = instancedata?.id;
+                        }
+
+                        if (instance) {
                             this.vrcInvite(person.vrc, worldid, instance)
                                 .then(() => buttonInteraction.editReply("Invite sent."))
                                 .catch(e => {
@@ -1030,46 +1030,6 @@ export default class VRChat extends Behavior {
 
             await Promise.all(worldclears);  //Some clears are queued and only resolve later
             this._worlds.save();
-
-            //Update cached worlds
-
-            let hasWorldchan = !!this.worldchan;
-            let worldidsbyretrieval = Object.keys(this._worlds).sort((a, b) => this.getCachedWorld(a).retrieved < this.getCachedWorld(b).retrieved ? -1 : 1);
-            let refreshed = 0;
-
-            for (let worldid of worldidsbyretrieval) {
-                let world = this.getCachedWorld(worldid);
-                
-                let retrieved = world?.retrieved;
-                world = await this.getWorld(worldid);
-
-                if (!world || this._worldsinprogress[worldid]) continue;
-                if (world.retrieved != retrieved) refreshed += 1;
-
-                if (hasWorldchan) {
-                    this.dqueue(function() {
-                        if (this._worldsinprogress[worldid]) return;
-                        let oldmsgid = world.msg;
-                        this._worldsinprogress[worldid] = this.bakeWorld(worldid, now)
-                            .then(worldmsg => {
-                                //Update user links only if world message was reemitted
-                                if (worldmsg && worldmsg.id != oldmsgid && !this.instancechan) {
-                                    for (let userid in world.members) {
-                                        this.dqueue(function() {
-                                            this.setWorldLink(userid, world.name, worldmsg);
-                                        }.bind(this));
-                                    }
-                                }
-                            })
-                            .finally(() => {
-                                delete this._worldsinprogress[worldid];
-                            })
-                    }.bind(this));
-                }
-
-                if (refreshed >= this.param("staleupdatesperitr")) break;
-            }
-            
 
         }.bind(this), this.param("worldfreq") * 1000);
 
@@ -3390,7 +3350,7 @@ export default class VRChat extends Behavior {
         return this.vrcget("avatars/" + avatarid);
     }
 
-    async vrcInvite(vrcuserid, worldid, instanceid, message) {
+    async vrcInvite(vrcuserid, worldid, instanceid) {
         if (!this.isValidUser(vrcuserid)) throw {error: "Invalid user ID."};
         if (!this.isValidWorld(worldid)) throw {error: "Invalid world ID."};
         let location = worldid + (instanceid ? ":" + instanceid : "");
@@ -3399,6 +3359,25 @@ export default class VRChat extends Behavior {
             instanceId: location,
             messageSlot: 0
         });
+    }
+
+    async vrcCreateInstance(worldid, type, region, vrcownerid, options) {
+        options = options || {};
+        
+        options.worldId = worldid;
+        options.region = region;
+
+        if (type == "private+") {
+            type = "private";
+            options.canRequestInvite = true;
+        }
+        options.type = type;
+
+        if (type != "public") {
+            options.ownerId == vrcownerid;
+        }
+
+        return this.vrcpost("instances", options);
     }
 
 
@@ -3954,49 +3933,6 @@ export default class VRChat extends Behavior {
         if (sneak) return "Being sneaky";
         if (location == "private") return "In private world";
         return defaultcontents || "Processing...";
-    }
-
-    generateNonce() {
-        return crypto.randomBytes(Math.ceil(NONCE_LENGTH/2)).toString("hex").substring(0, NONCE_LENGTH).toUpperCase();
-    }
-
-    generateInstanceId(include, exclude) {
-        //The include list can contain type/nonce, but the exclude list shouldn't
-        let result;
-        if (!exclude) exclude = [];
-        do {
-            if (include && include.length) {
-                let i = crypto.randomInt(include.length);
-                result = include[i];
-                include.splice(i, 1); //Prevent infinite loop
-            } else {
-                result = crypto.randomInt(1, 99999);
-            }
-        } while (exclude.find(id => result.split("~")[0] == id));
-        return result;
-    }
-
-    generateInstanceFor(vrcuserid, type, include, exclude, region) {
-        let regionpart = "";
-        if (region) {
-            regionpart = "~region(" + region + ")";
-        }
-        let instanceid = this.generateInstanceId(include, exclude);
-        if (vrcuserid) {
-            if (type == "private" || type == "invite") {
-                return instanceid + "~private(" + vrcuserid + ")" + regionpart + "~nonce(" + this.generateNonce() + ")";
-            }
-            if (type == "invite+") {
-                return instanceid + "~private(" + vrcuserid + ")~canRequestInvite" + regionpart + "~nonce(" + this.generateNonce() + ")";
-            }
-            if (type == "friends") {
-                return instanceid + "~friends(" + vrcuserid + ")" + regionpart + "~nonce(" + this.generateNonce() + ")";
-            }
-            if (type == "hidden" || type == "friends+") {
-                instanceid + "~hidden(" + vrcuserid + ")" + regionpart + "~nonce(" + this.generateNonce() + ")";
-            }
-        }
-        return instanceid + regionpart;
     }
 
     randomEntry(map, filter) {
