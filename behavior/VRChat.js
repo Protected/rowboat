@@ -507,7 +507,7 @@ export default class VRChat extends Behavior {
                             if (buttonInteraction.customId == "invitefriends") {
                                 instancedata = await this.vrcCreateInstance(worldid, "friends", region, this._me.id);
                             }
-                            instance = instancedata?.id;
+                            instance = instancedata?.instanceId;
                         }
 
                         if (instance) {
