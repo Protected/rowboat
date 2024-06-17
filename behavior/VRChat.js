@@ -2731,7 +2731,7 @@ export default class VRChat extends Behavior {
             if (val) emb.addFields({name: fieldcount ? "\u200b" : "In-world", value: val});
         }
 
-        emb.setFooter({text: "Retrieved " + moment.unix(world.retrieved).from(now)});
+        emb.setTimestamp(moment.unix(world.retrieved).toDate());
 
         try {
             let pinnedmode = null, pinfavorites = this.be("PinFavorites");

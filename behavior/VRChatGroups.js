@@ -1158,7 +1158,7 @@ export default class VRChatGroups extends Behavior {
         emb.setThumbnail(announcement.imageUrl);
         emb.setColor(this.groupAnnouncementsColor(group.id));
         emb.setAuthor({name: group.name, url: "https://vrchat.com/home/group/" + group.id, iconURL: group.iconURL || undefined});
-        emb.setTimestamp(announcement.createdAt);
+        emb.setTimestamp(moment(announcement.createdAt).toDate());
 
         if (announcement.visibility == "public") {
             emb.setFooter({text: "Public"});
