@@ -117,7 +117,7 @@ export default class Users extends Behavior {
                 }
                 
                 let wanthandle = args.handle;
-                if (!wanthandle) wanthandle = this.handleSuggestion(env.name, targetid);
+                if (!wanthandle) wanthandle = await this.handleSuggestion(env.name, targetid);
                 
                 if (!wanthandle || !wanthandle.match(/^[0-9a-zA-Z]+$/)) {
                     ep.reply("The handle '" + wanthandle + "' is invalid. Please provide a handle with only alphanumeric characters in it.");
@@ -411,10 +411,10 @@ export default class Users extends Behavior {
 
     //User account manipulation (new accounts only have a handle)
 
-    handleSuggestion(env, userid) {
+    async handleSuggestion(env, userid) {
         let getenv = this._envProxy(env);
         if (!getenv) return null;
-        let wanthandle = getenv.idToDisplayName(userid);
+        let wanthandle = await getenv.idToDisplayName(userid);
         if (wanthandle) {
             wanthandle = wanthandle
                 .replace(/\[[^\]]*\]/g, "")
@@ -430,7 +430,7 @@ export default class Users extends Behavior {
         let handles = await this.getHandlesById(env, userid, true);
         if (handles.length) return this.getUser(handles[0]);
 
-        let handle = this.handleSuggestion(env, userid);
+        let handle = await this.handleSuggestion(env, userid);
         if (!handle) return null;
 
         let user = this.getUser(handle);
