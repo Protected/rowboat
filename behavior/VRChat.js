@@ -3457,7 +3457,7 @@ export default class VRChat extends Behavior {
             }
             
             let connectionError = (err) => {
-                this.log("warn", "Websocket error (" + this._wsreconnect + "): " + JSON.stringify(e));
+                this.log("warn", "Websocket error (" + this._wsreconnect + "): " + JSON.stringify(err));
                 if (this._wsfail) {
                     if (this._wstimeout) clearInterval(this._wstimeout);
                     reject(err);
