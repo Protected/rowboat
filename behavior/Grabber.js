@@ -2,7 +2,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { promisify } from 'util';
 import { Readable } from 'stream';
-import ytdl from 'ytdl-core';
+import ytdl from '@distube/ytdl-core';
 import FFmpeg from 'fluent-ffmpeg';
 import moment from 'moment';
 
