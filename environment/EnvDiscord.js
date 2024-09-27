@@ -559,11 +559,22 @@ export default class EnvDiscord extends Environment {
     async getWebhook(channel, member) {
         if (!member) throw {error: "Member must be provided."};
         if (!channel) throw {error: "Channel must be provided."};
-        if (!this._webhooks[channel.id]?.[member.id]) return this.prepareWebhook(channel, member);
+        if (!this._webhooks[channel.id]?.[member.id]) return this.prepareWebhook(channel, member.id, member.displayName, member.user.displayAvatarURL());
         this._webhooks[channel.id][member.id].ts = moment().unix();
         clearTimeout(this._webhooks[channel.id][member.id].cleartimer);
         this.setWebhookCleanupTimer(channel.id, member.id);
         return this._webhooks[channel.id][member.id].webhook;
+    }
+
+    async getCustomWebhook(channel, id, displayname, avatar) {
+        if (!channel) throw {error: "Channel must be provided."};
+        if (!id) throw {error: "ID for reference must be provided."};
+        if (!displayname) throw {error: "Username for display must be provided."};
+        if (!this._webhooks[channel.id]?.[id]) return this.prepareWebhook(channel, id, displayname, avatar);
+        this._webhooks[channel.id][id].ts = moment().unix();
+        clearTimeout(this._webhooks[channel.id][id].cleartimer);
+        this.setWebhookCleanupTimer(channel.id, id);
+        return this._webhooks[channel.id][id].webhook;
     }
 
     countWebhooks() {
@@ -578,19 +589,20 @@ export default class EnvDiscord extends Environment {
         });
     }
 
-    async prepareWebhook(channel, member) {
-        if (!member) throw {error: "Member must be provided."};
+    async prepareWebhook(channel, id, displayname, avatar) {
         if (!channel) throw {error: "Channel must be provided."};
+        if (!id) throw {error: "ID for reference must be provided."};
+        if (!displayname) throw {error: "Username for display must be provided."};
         
         if (this.countWebhooks() >= this.param("maxwebhooks")) {
             let oldest = this.oldestWebhook();
             await this.removeWebhook(oldest.channelid, oldest.userid);
         }
 
-        let webhook = await channel.createWebhook({name: member.displayName, avatar: member.user.displayAvatarURL(), reason: "User simulation."});
+        let webhook = await channel.createWebhook({name: displayname, avatar: avatar, reason: "User simulation."});
         if (!this._webhooks[channel.id]) this._webhooks[channel.id] = {};
-        this._webhooks[channel.id][member.id] = {channelid: channel.id, userid: member.id, webhook: webhook, ts: moment().unix(), cleartimer: null};
-        this.setWebhookCleanupTimer(channel.id, member.id);
+        this._webhooks[channel.id][id] = {channelid: channel.id, userid: id, webhook: webhook, ts: moment().unix(), cleartimer: null};
+        this.setWebhookCleanupTimer(channel.id, id);
         return webhook;
     }
 

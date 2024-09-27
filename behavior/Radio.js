@@ -1797,7 +1797,7 @@ export default class Radio extends Behavior {
 
         if (!mostrecent) return N(1);
 
-        return pow(N(now - mostrecent).div(this.param('pri.listen.skiprange')), this.param('pri.listen.skipbias'), DECIMALS).mul(1 - this.param('pri.listen.skipfact')).add(this.param('pri.listen.skipfact'));
+        return pow(N(now - mostrecent).div(this.param('pri.listen.skiprange')), this.param('pri.listen.skipbias'), DECIMALS).mul(N(1).sub(this.param('pri.listen.skipfact'))).add(this.param('pri.listen.skipfact'));
     }
 
     async isNovelty(hash, songcount) {

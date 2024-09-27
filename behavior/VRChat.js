@@ -591,7 +591,7 @@ export default class VRChat extends Behavior {
 
 
         let messageHandler = (env, type, message, authorid, channelid, messageObject) => {
-            if (env.name != this.param("env") || type != "regular" || messageObject.webhookId) return;
+            if (type != "regular" || messageObject.webhookId) return;
 
             this.setLatestDiscord(authorid);
 
@@ -3164,7 +3164,7 @@ export default class VRChat extends Behavior {
         }
         if (!state.msg && stack.length) {
             let message;
-            if (prevmessage) {
+            if (prevmessage && prevmessage.edit) {
                 message = prevmessage;
                 message.edit(prefix + txt);
             } else {
