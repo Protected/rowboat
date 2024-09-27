@@ -173,7 +173,11 @@ export default class EmbyPartyBridge extends Behavior {
         });
 
 
-        this.initializeWebSocket();
+        this.initializeWebSocket()
+            .then(() => {  this._wsfail = false;  })
+            .catch((e) => {
+                this.log("error", "Failed to connect to Emby server. Is the server down or unreachable?");
+            });
         
 
         return true;
