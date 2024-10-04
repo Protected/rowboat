@@ -37,6 +37,8 @@ export default class EmbyPartyBridge extends Behavior {
         this._ws = null;
         this._wsreconnect = 0;  //Amount of reconnect attempts
         this._wsfail = true;  //Whether the websocket promise should reject if the connection fails
+        this._wsping = null;
+        this._wstimeout = null;
 
         this._linkedparties = {};  //{PARTYNAME: {channels: [...], awaiting: [...]}, ...}
     }
@@ -100,7 +102,7 @@ export default class EmbyPartyBridge extends Behavior {
             let payload = {
                 Name: messageObject.member.displayName,
                 AvatarUrl: messageObject.member.displayAvatarURL({extension: "png", size: 64}),
-                Message: message
+                Message: messageObject.cleanContent
             };
 
             for (let party of parties) {
@@ -115,6 +117,15 @@ export default class EmbyPartyBridge extends Behavior {
 
         this.denv.on("connected", async () => {
             this.denv.on("message", messageHandler);
+        });
+
+
+        this.on("WebsocketConnect", () => {
+            for (let party in this._linkedparties) {
+                this.broadcastToChannels(this._linkedparties[party].channels, `Lost connection to **${party}**.`);
+            }
+
+            this._linkedparties = {};
         });
 
 
@@ -192,10 +203,13 @@ export default class EmbyPartyBridge extends Behavior {
             let ws = new WebSocket(this.param("endpoint"));
 
             let reconnectWebsocket = () => {
+                if (this._wstimeout) clearInterval(this._wstimeout);
+
                 setTimeout(() => {
                     if ([ws.OPEN, ws.CLOSING].includes(this._ws.readyState)) {
                         this._ws.terminate();
                     }
+                    this.log("warn", "Attempting to reconnect to Emby server.");
                     buildWebsocket();
                 }, 1000 * RECONNECT_DELAYS[Math.min(this._wsreconnect, RECONNECT_DELAYS.length - 1)]);
 
@@ -206,11 +220,18 @@ export default class EmbyPartyBridge extends Behavior {
             let connectionError = (err) => {
                 this.log("warn", "Websocket error (" + this._wsreconnect + "): " + JSON.stringify(err));
                 if (this._wsfail) {
+                    if (this._wstimeout) clearInterval(this._wstimeout);
                     reject(err);
                 } else {
                     reconnectWebsocket();
                 }
             };
+
+            let resetPing = () => this._wsping = [0, Math.floor(Date.now() / 1000)];
+
+            ws.on('ping', (data) => { resetPing(); ws.pong(data); });
+
+            ws.on('pong', (data) => { resetPing(); });
 
             ws.on('error', connectionError);
 
@@ -218,11 +239,28 @@ export default class EmbyPartyBridge extends Behavior {
                 this._ws = ws;
                 this.log("Established connection to the websocket.");
                 this._wsreconnect = 0;
+                this.emit("WebsocketConnect");
                 resolve();
                 
+                resetPing();
+                this._wstimeout = setInterval(() => {
+                    if (Math.floor(Date.now() / 1000) - this._wsping[1] < 30) return;
+                    if (this._wsping[0] > 2) {
+                        
+                        this.log("warn", "Recreating websocket (ping timeout).")
+                        this._ws.close();
+    
+                        reconnectWebsocket();
+
+                    } else {
+                        this._ws.ping(this._wsping[0]);
+                        this._wsping[0] += 1;
+                    }
+                }, 30000);
             });
 
             ws.on('message', (data) => {
+                resetPing();
                 let message = JSON.parse(data);
                 try {
                     let content = message.Data, party = message.Party;
