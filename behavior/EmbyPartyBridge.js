@@ -134,18 +134,13 @@ export default class EmbyPartyBridge extends Behavior {
 
             if (content.Name == "PartyLogMessage") {
             
-                this.broadcastToChannels(this._linkedparties[party].channels, `**[${content.Arguments.Type}]** ${content.Arguments.Subject || ""}`)
+                this.broadcastToChannels(this._linkedparties[party].channels, `**[${content.Arguments.Type}]** ${content.Arguments.Subject ? `\`${content.Arguments.Subject}\`` : ""}`);
 
             }
 
             if (content.Name == "ChatBroadcast") {
 
-                this.broadcastToChannelsWithHook(
-                    content.Arguments.Name,
-                    this.param('embyurl') + AVATAR_URL_TEMPLATE.replace(/\$userid\$/, content.Arguments.UserId),
-                    this._linkedparties[party].channels,
-                    content.Arguments.Message
-                );
+                this.broadcastToChannels(this._linkedparties[party].channels, `**<${content.Arguments.Name}>** ${content.Arguments.Message}`);
 
             }
 
@@ -284,17 +279,6 @@ export default class EmbyPartyBridge extends Behavior {
     broadcastToChannels(channels, message) {
         for (let channelid of channels) {
             this.denv.msg(channelid, message);
-        }
-    }
-
-
-    async broadcastToChannelsWithHook(displayname, avatar, channels, message) {
-        for (let channelid of channels) {
-            try {
-                let channel = this.denv.server.channels.cache.get(channelid);
-                let webhook = await this.denv.getCustomWebhook(channel, displayname, displayname, avatar);
-                webhook.send(message);
-            } catch (e) {}
         }
     }
 
