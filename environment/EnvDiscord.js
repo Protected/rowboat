@@ -5,6 +5,13 @@ import Environment from '../src/Environment.js';
 
 const MAXIMUM_MSG_LENGTH = 2000;
 
+const BASE_CHANNEL_OPERATIONS = [
+    ChannelType.GuildText,
+    ChannelType.GuildAnnouncement,
+    ChannelType.PublicThread,
+    ChannelType.PrivateThread
+];
+
 export default class EnvDiscord extends Environment {
 
     get description() { return "Connects to a Discord server/guild"; }
@@ -414,17 +421,17 @@ export default class EnvDiscord extends Environment {
     async getActualChanFromTarget(targetid) {
         let targetchan = null;
 
-        await this._server.channels.fetchActiveThreads();
+        await this._server.channels.fetchActiveThreads(true);
 
         if (typeof targetid == "string") {
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == ChannelType.GuildText).get(targetid);
+                this._channels[targetid] = this._server.channels.cache.filter(channel => BASE_CHANNEL_OPERATIONS.includes(channel.type)).get(targetid);
             }
             if (!this._channels[targetid]) {
                 this._channels[targetid] = this._server.members.cache.get(targetid);
             }
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == ChannelType.GuildText).find(channel => channel.name == targetid);
+                this._channels[targetid] = this._server.channels.cache.filter(channel => BASE_CHANNEL_OPERATIONS.includes(channel.type)).find(channel => channel.name == targetid);
             }
             if (!this._channels[targetid]) {
                 this._channels[targetid] = this._server.members.cache.find(member => member.user?.name == targetid);
