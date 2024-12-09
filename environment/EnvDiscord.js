@@ -421,7 +421,7 @@ export default class EnvDiscord extends Environment {
                 this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == ChannelType.GuildText).get(targetid);
             }
             if (!this._channels[targetid]) {
-                this._channels[targetid] = await this._server.members.fetch(targetid);
+                this._channels[targetid] = this._server.members.cache.get(targetid);
             }
             if (!this._channels[targetid]) {
                 this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == ChannelType.GuildText).find(channel => channel.name == targetid);
