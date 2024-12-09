@@ -117,7 +117,7 @@ export default class EmbyPartyBridge extends Behavior {
 
         let channelDeleteHandler = (channel) => {
             let channelid = channel.id;
-            for (let party of this._linkedparties) {
+            for (let party in this._linkedparties) {
                 this._linkedparties[party].awaiting = this._linkedparties[party].channels.filter(targetid => targetid != channelid);
                 this._linkedparties[party].channels = this._linkedparties[party].channels.filter(targetid => targetid != channelid);
 
