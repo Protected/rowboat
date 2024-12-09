@@ -228,8 +228,8 @@ export default class EnvDiscord extends Environment {
     }
     
     
-    msg(targetid, msg, options) {
-        let targetchan = this.getActualChanFromTarget(targetid);
+    async msg(targetid, msg, options) {
+        let targetchan = await this.getActualChanFromTarget(targetid);
         if (!targetchan || !options && !msg) return false;
         if (!options) options = {};
         else options = {...options};
@@ -318,8 +318,8 @@ export default class EnvDiscord extends Environment {
     }
     
     
-    listUserIds(channel) {
-        let targetchan = this.getActualChanFromTarget(channel);
+    async listUserIds(channel) {
+        let targetchan = await this.getActualChanFromTarget(channel);
         if (!targetchan) return [];
         
         if (targetchan.type == ChannelType.DM) return [targetchan.recipient?.id];
@@ -353,8 +353,8 @@ export default class EnvDiscord extends Environment {
         return channelid;
     }
     
-    channelIdToType(channelid) {
-        let chan = this.getActualChanFromTarget(channelid);
+    async channelIdToType(channelid) {
+        let chan = await this.getActualChanFromTarget(channelid);
         if (!chan) return "unknown";
         if (chan.type === undefined || chan.type == ChannelType.DM) return "private";
         return "regular";
@@ -411,21 +411,23 @@ export default class EnvDiscord extends Environment {
     get server() { return this._server; }
     
     
-    getActualChanFromTarget(targetid) {
+    async getActualChanFromTarget(targetid) {
         let targetchan = null;
+
+        await this._server.channels.fetchActiveThreads();
 
         if (typeof targetid == "string") {
             if (!this._channels[targetid]) {
                 this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == ChannelType.GuildText).get(targetid);
             }
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.members.cache.get(targetid);
+                this._channels[targetid] = await this._server.members.fetch(targetid);
             }
             if (!this._channels[targetid]) {
                 this._channels[targetid] = this._server.channels.cache.filter(channel => channel.type == ChannelType.GuildText).find(channel => channel.name == targetid);
             }
             if (!this._channels[targetid]) {
-                this._channels[targetid] = this._server.members.cache.find(channel => channel.name == targetid);
+                this._channels[targetid] = this._server.members.cache.find(member => member.user?.name == targetid);
             }
             if (this._channels[targetid]) {
                 targetchan = this._channels[targetid];
