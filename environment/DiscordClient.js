@@ -8,6 +8,7 @@ const Events = discord.Events;
 const Intents = discord.IntentsBitField.Flags;
 
 const BRIDGE_EVENTS = [
+    Events.GuildAuditLogEntryCreate,
     Events.MessageCreate,
     Events.MessageUpdate,
     Events.MessageDelete,
@@ -21,10 +22,18 @@ const BRIDGE_EVENTS = [
     Events.VoiceStateUpdate,
     Events.MessageReactionAdd,
     Events.MessageReactionRemove,
+    Events.MessagePollVoteAdd,
+    Events.MessagePollVoteRemove,
     Events.ChannelCreate,
     Events.ChannelDelete,
     Events.ChannelUpdate,
     Events.ChannelPinsUpdate,
+    Events.ThreadCreate,
+    Events.ThreadDelete,
+    Events.ThreadUpdate,
+    Events.ThreadMemberUpdate,
+    Events.ThreadMembersUpdate,
+    Events.ThreadListSync,
     Events.WebhooksUpdate,
     Events.InteractionCreate
 ];

@@ -84,7 +84,7 @@ export default class EmbyPartyBridge extends Behavior {
                 this._linkedparties[party].awaiting = this._linkedparties[party].channels.filter(targetid => targetid != channelid);
                 this._linkedparties[party].channels = this._linkedparties[party].channels.filter(targetid => targetid != channelid);
 
-                if (this._linkedparties[party].awaiting.length && this._linkedparties[party].channels.length == 0) {
+                if (this._linkedparties[party].awaiting.length == 0 && this._linkedparties[party].channels.length == 0) {
                     delete this._linkedparties[party];
                 }
             }
@@ -121,7 +121,7 @@ export default class EmbyPartyBridge extends Behavior {
                 this._linkedparties[party].awaiting = this._linkedparties[party].channels.filter(targetid => targetid != channelid);
                 this._linkedparties[party].channels = this._linkedparties[party].channels.filter(targetid => targetid != channelid);
 
-                if (this._linkedparties[party].awaiting.length && this._linkedparties[party].channels.length == 0) {
+                if (this._linkedparties[party].awaiting.length == 0 && this._linkedparties[party].channels.length == 0) {
                     delete this._linkedparties[party];
                 }
             }
