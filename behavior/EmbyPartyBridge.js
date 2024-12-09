@@ -115,7 +115,21 @@ export default class EmbyPartyBridge extends Behavior {
             
         };
 
+        let channelDeleteHandler = (channel) => {
+            let channelid = channel.id;
+            for (let party of this._linkedparties) {
+                this._linkedparties[party].awaiting = this._linkedparties[party].channels.filter(targetid => targetid != channelid);
+                this._linkedparties[party].channels = this._linkedparties[party].channels.filter(targetid => targetid != channelid);
+
+                if (this._linkedparties[party].awaiting.length && this._linkedparties[party].channels.length == 0) {
+                    delete this._linkedparties[party];
+                }
+            }
+        }
+
         this.denv.on("connected", async () => {
+            this.denv.client.on("channelDelete", channelDeleteHandler);
+            this.denv.client.on("threadDelete", channelDeleteHandler);
             this.denv.on("message", messageHandler);
         });
 
