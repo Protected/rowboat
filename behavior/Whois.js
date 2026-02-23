@@ -1,4 +1,4 @@
-import whois from 'whois';
+import { lookup } from 'whois';
 import moment from 'moment';
 
 import Behavior from '../src/Behavior.js';
@@ -113,7 +113,7 @@ export default class Whois extends Behavior {
 
         return new Promise((resolve, reject) => {
 
-            whois.lookup(query, {
+            lookup(query, {
                 server: this.param('server'),
                 follow: this.param('follow'),
                 timeout: this.param('timeout'),

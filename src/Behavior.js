@@ -223,7 +223,7 @@ export default class Behavior extends AsyncEventEmitter {
         //Create or load file from the filesystem
 
         try {
-            fs.accessSync(datafilepath, fs.F_OK);
+            fs.accessSync(datafilepath, fs.constants.F_OK);
         } catch (e) {
             jsonfile.writeFileSync(datafilepath, (def !== undefined ? def : {}));
             this.log('warn', "Error accessing data file.");
