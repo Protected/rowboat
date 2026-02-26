@@ -54,7 +54,10 @@ const MAXIMUM_EMBEDS = 10;
 const MAXIMUM_LENGTH = 1900;
 const MAXIMUM_ATTACH = 8388608;
 const MAXIMUM_COMPROWS = 5;
+
 const EXPIRE_QUEUED_MESSAGE = 60; //seconds
+const DELAY_RECENCY = 1000;
+const DELAY_MAXQUEUE = 10;
 
 export default new class DiscordClient extends AsyncEventEmitter {
 
@@ -73,7 +76,7 @@ export default new class DiscordClient extends AsyncEventEmitter {
         this._reactioncarrier = null;
         this._reactioncap = 30;
         
-        this._sendDelay = 500;
+        this._sendDelay = 1000;
         this._token = null;
     }
     
@@ -144,10 +147,17 @@ export default new class DiscordClient extends AsyncEventEmitter {
         if (Object.keys(this._environments).length) return Promise.resolve();
         return this._realClient.destroy()
             .then(() => {
+                
                 if (this._carrier) {
                     clearInterval(this._carrier);
                     this._carrier = null;
                 }
+
+                if (this._reactioncarrier) {
+                    clearInterval(this._reactioncarrier);
+                    this._reactioncarrier = null;
+                }
+
                 this._realClient = null;
             });
     }
@@ -157,9 +167,16 @@ export default new class DiscordClient extends AsyncEventEmitter {
         if (!this._outbox?.length) return;
 
         let now = Date.now();
+        if (this._outbox?.length < DELAY_MAXQUEUE && now - this._outbox.at(-1).ts < DELAY_RECENCY) return;
 
         //Helper function adds an outboxed message to a package
         let outboxToPackage = (pack, entry, position, item) => {
+            
+            if (!entry.content?.length && !entry.attachments?.length && !entry.embeds?.length && !entry.components?.length) {
+                this._outbox.splice(position, 1);
+                return position - 1;
+            }
+
             pack.messages.push(entry);
             pack.length += (entry.content?.length || 0);
             for (let attachment of entry.attachments || []) {
@@ -167,8 +184,10 @@ export default new class DiscordClient extends AsyncEventEmitter {
             }
             pack.embed += (entry.embeds?.length || 0);
             pack.comprows += (entry.components?.length || 0);
+            pack.populated = true;
             pack.resolves.push(item.resolve);
-            pack.rejects.push(item.reject)
+            pack.rejects.push(item.reject);
+
             this._outbox.splice(position, 1);
             return position - 1;
         }
@@ -188,6 +207,7 @@ export default new class DiscordClient extends AsyncEventEmitter {
                     attach: 0,
                     embed: 0,
                     comprows: 0,
+                    populated: false,
                     resolves: [],
                     rejects: []
                 };
@@ -244,6 +264,8 @@ export default new class DiscordClient extends AsyncEventEmitter {
         //Deliver packages
         for (let rawchannelid in packages) {
             let pack = packages[rawchannelid];
+
+            if (!pack.populated) continue;
             
             let realmessage = pack.messages.shift();
             realmessage.tts = false;

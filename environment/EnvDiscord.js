@@ -79,7 +79,7 @@ export default class EnvDiscord extends Environment {
 
         this.log(`Connecting to ${this.param('server')}`);
 
-        return this._localClient.prepareClient(this, this.param('token'), this.param('sendDelay'))
+        return this._localClient.prepareClient(this, this.param('token'), this.param('senddelay'))
             .then(async (client) => {
                 this._client = client;
                 this._server = await client.guilds.fetch(this.param('server'));

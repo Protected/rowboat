@@ -102,7 +102,7 @@ export default class Commands extends Behavior {
                         let rootdetails = this._rootDetails[parts[1]];
                         if (rootdetails.description) ep.reply('    ' + rootdetails.description);
                         if (rootdetails.details && rootdetails.details.length) {
-                            ep.reply('');
+                            ep.reply('  ');
                             for (let line of rootdetails.details) {
                                 ep.reply('    ' + line);
                             }
@@ -114,14 +114,14 @@ export default class Commands extends Behavior {
                     ep.reply('    ' + descriptor.description);
                     
                     if (descriptor.details && descriptor.details.length) {
-                        ep.reply('');
+                        ep.reply('  ');
                         for (let line of descriptor.details) {
                             ep.reply('    ' + line);
                         }
                     }
                     
                     if (descriptor.environments || descriptor.types || descriptor.permissions) {
-                        ep.reply('');  //Blank line
+                        ep.reply('  ');  //Blank line
                     }
                     
                     if (descriptor.environments) {
@@ -149,7 +149,7 @@ export default class Commands extends Behavior {
                 }
                 
                 if (subcommands.length) {
-                    ep.reply('');  //Blank line
+                    ep.reply('  ');  //Blank line
                     ep.reply('    __Subcommands:__');
                     for (let subcommand of subcommands) {
                         

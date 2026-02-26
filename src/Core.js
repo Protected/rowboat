@@ -118,8 +118,11 @@ export default class Core {
 
     nextShutdown() {
         let oneshutdown = this._shuttingDown.shift();
-        if (oneshutdown) oneshutdown(this.nextShutdown.bind(this));
-        else process.exit();
+        if (oneshutdown) {
+            oneshutdown(this.nextShutdown.bind(this));
+        } else {
+            this.stopEnvironments().finally(() => process.exit());
+        };
     }
 
     nextCleanup() {
