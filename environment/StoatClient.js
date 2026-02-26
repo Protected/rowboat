@@ -265,7 +265,7 @@ export default new class StoatClient extends AsyncEventEmitter {
             let notifyEnvironments = [];
             for (let name in this._environments) {
                 let env = this._environments[name];
-                if (env.param('server') == pack.targetchan.server.id) {
+                if (env.param('server') == pack.targetchan.server?.id) {
                     notifyEnvironments.push(env);
                 }
             }

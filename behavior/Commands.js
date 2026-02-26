@@ -1,6 +1,8 @@
 import Behavior from '../src/Behavior.js';
 
-const DISCORD_ENVIRONMENT = "Discord";  //Type match for specific behavior
+const DISCORD_ENVIRONMENT = "Discord";
+const STOAT_ENVIRONMENT = "Stoat";
+const REACT_ENVIRONMENT = ["Discord", "Stoat"];  //Type match for specific behavior
 const OK_EMOJI = '✅';
 
 export default class Commands extends Behavior {
@@ -687,6 +689,12 @@ export default class Commands extends Behavior {
                                 failIfNotExists: false
                             }
                         }
+                        if (env.type == STOAT_ENVIRONMENT) {
+                            options.replies = [{
+                                id: rawobject.id,
+                                fail_if_not_exists: false
+                            }]
+                        }
                         env.msg(channelid, (typeof msg == "object" ? msg : env.applyFormatting(msg)), options);
                     },
                     pub: function(msg) {
@@ -700,15 +708,15 @@ export default class Commands extends Behavior {
                         }
                     },
                     react: function(emoji) {
-                        if (env.type == DISCORD_ENVIRONMENT) {
+                        if (REACT_ENVIRONMENT.find(type => type === env.type)) {
                             env.react(rawobject, emoji);
                         }
                     },
                     ok: function() {
-                        if (env.type == DISCORD_ENVIRONMENT) {
+                        if (REACT_ENVIRONMENT.find(type => type === env.type)) {
                             env.react(rawobject, OK_EMOJI);
                         } else {
-                            ep.reply("Ok.");
+                            env.msg(channelid, "Ok.");
                         }
                     },
                     rawobject: rawobject
