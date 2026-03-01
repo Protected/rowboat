@@ -687,13 +687,14 @@ export default class Commands extends Behavior {
                             options.reply = {
                                 messageReference: rawobject.id,
                                 failIfNotExists: false
-                            }
+                            };
                         }
                         if (env.type == STOAT_ENVIRONMENT) {
                             options.replies = [{
                                 id: rawobject.id,
-                                fail_if_not_exists: false
-                            }]
+                                fail_if_not_exists: false,
+                                mention: false
+                            }];
                         }
                         env.msg(channelid, (typeof msg == "object" ? msg : env.applyFormatting(msg)), options);
                     },

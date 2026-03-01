@@ -394,7 +394,7 @@ export default class EnvStoat extends Environment {
                 this._channels[targetid] = this._server.channels.find(channel => BASE_CHANNEL_OPERATIONS.includes(channel.type) && channel.name.toLowerCase() == targetid.toLowerCase());
             }
             if (!this._channels[targetid] && this._server.queryMembersExperimental) {
-                const query = await this._server.queryMemberExperimental(targetid);
+                const query = await this._server.queryMembersExperimental(targetid);
                 if (query.users.length) {
                     this._channels[targetid] = await query.users[0].openDM();
                 }
