@@ -55,5 +55,10 @@
     "ws": "^7.5.10",
     "yaml": "^2.8.2",
     "zxcvbn": "^4.4.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.2",
+    "globals": "^17.4.0"
   }
 }

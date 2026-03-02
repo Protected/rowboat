@@ -31,7 +31,7 @@ const core = new Core();
 
 registerCommandLineFeatures();
 
-let args = process.argv;
+const args = process.argv;
 args.shift(); args.shift();
 
 (async function() {
@@ -54,7 +54,7 @@ args.shift(); args.shift();
 
     //Parse command line arguments
 
-    let stop = await parseAndExecuteArgs(args, {core, config, editConfig: null}, ({editConfig, stop}) => {
+    const stop = await parseAndExecuteArgs(args, {core, config, editConfig: null}, ({editConfig, stop}) => {
         if (editConfig) {
             config.saveEditConfig(editConfig);
             logger.info("Saved configuration file.");
@@ -76,7 +76,7 @@ args.shift(); args.shift();
         let pid = null;
         try {
             pid = fs.readFileSync(PIDFILE);
-        } catch (e) {}
+        } catch (e) { /*do nothing*/ }
         try {
             isRunning = process.kill(pid, 0);
         } catch (e) {

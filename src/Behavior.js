@@ -77,14 +77,14 @@ export default class Behavior extends AsyncEventEmitter {
         this._trueParams = this.params;
         this._trueDefaults = this.defaults;
 
-        for (let param in this.requiredBehaviors) {
+        for (const param in this.requiredBehaviors) {
             if (!this.params.find(entry => entry.n === param)) {
                 this._trueParams.push({n: param, d: "Instance name of a " + this.requiredBehaviors[param] + " behavior"});
                 this._trueDefaults[param] = param;
             }
         }
 
-        for (let param in this.optionalBehaviors) {
+        for (const param in this.optionalBehaviors) {
             if (!this.params.find(entry => entry.n === param)) {
                 this._trueParams.push({n: param, d: "Instance name of a " + this.optionalBehaviors[param] + " behavior (optional)"});
                 this._trueDefaults[param] = null;
@@ -118,24 +118,24 @@ export default class Behavior extends AsyncEventEmitter {
         this.config.setBehaviorDefaults(this._name, this._trueDefaults);
         
         let fail = false;
-        for (let param of this.params) {
+        for (const param of this.params) {
             if (this.param(param.n) === undefined) {
                 this.log('error', `Parameter not found: ${param.n}`);
                 fail = true;
             }
         }
-        if (fail) return false;
+        if (fail) { return false; }
               
         //Check reference to environments/behaviors
 
-        for (let param in this.requiredEnvironments) {
+        for (const param in this.requiredEnvironments) {
             if (!opt.envExists(this.param(param), this.requiredEnvironments[param])) {
                 this.log('error', "Could not initialize the behavior: " + this._name + " because the parameter " + param + " does not reference an instance of an environment with the type " + this.requiredEnvironments[param] + " .");
                 return false;
             }
         }
 
-        for (let param in this.requiredBehaviors) {
+        for (const param in this.requiredBehaviors) {
             if (!opt.beExists(this.param(param), this.requiredBehaviors[param])) {
                 this.log('error', "Could not initialize the behavior: " + this._name + " because the parameter " + param + " does not reference an instance of a behavior with the type " + this.requiredBehaviors[param] + " .");
                 return false;
@@ -212,9 +212,9 @@ export default class Behavior extends AsyncEventEmitter {
     //Load data from a datafile, if it exists, and return a datastore
 
     loadData(datafile, def, options) {
-        if (!datafile) datafile = this.param('datafile');
-        if (!datafile) datafile = this.name.toLowerCase() + ".data.json";
-        let datafilepath = (options && options.abspath ? datafile : this.dataPath() + datafile);
+        if (!datafile) { datafile = this.param('datafile'); }
+        if (!datafile) { datafile = this.name.toLowerCase() + ".data.json"; }
+        const datafilepath = (options && options.abspath ? datafile : this.dataPath() + datafile);
 
         if (!options || !options.quiet) {
             this.log("Loading datafile: " + datafilepath);
@@ -236,7 +236,7 @@ export default class Behavior extends AsyncEventEmitter {
             this.log('error', `Error reading datafile: ${e}`);
             return false;
         }
-        if (!jsondata) jsondata = (def !== undefined ? def : {});
+        if (!jsondata) { jsondata = (def !== undefined ? def : {}); }
 
         //Save method that persists the datastore when called.
 
@@ -252,15 +252,15 @@ export default class Behavior extends AsyncEventEmitter {
     //Save any data into a datafile.
 
     saveData(datafile, data, options) {
-        if (!datafile) datafile = this.param('datafile');
-        if (!datafile) datafile = this.name.toLowerCase() + ".data.json";
-        let datafilepath = (options && options.abspath ? datafile : this.dataPath() + datafile);
+        if (!datafile) { datafile = this.param('datafile'); }
+        if (!datafile) { datafile = this.name.toLowerCase() + ".data.json"; }
+        const datafilepath = (options && options.abspath ? datafile : this.dataPath() + datafile);
 
         if (!options || !options.quiet) {
             this.log("Saving datafile: " + datafilepath);
         }
 
-        let replacer = (key, value) => typeof value === 'bigint' ? value.toString() : value;
+        const replacer = (key, value) => typeof value === 'bigint' ? value.toString() : value;
 
         jsonfile.writeFileSync(datafilepath, data, (options && options.pretty ? {spaces: 4, replacer} : {replacer}));
     }
@@ -270,14 +270,14 @@ export default class Behavior extends AsyncEventEmitter {
     
     //Returns Promise of URL contents
     async urlget(url, options, encoding) {
-        if (!encoding && typeof options == "string") {
+        if (!encoding && typeof options === "string") {
             encoding = options;
             options = undefined;
         }
         return new Promise((resolve, reject) => {
             let req;
             
-            let callback = (res) => {
+            const callback = (res) => {
                 if (encoding) {
                     res.setEncoding(encoding);
                 }
@@ -285,7 +285,7 @@ export default class Behavior extends AsyncEventEmitter {
                     reject({error: "Request failed: " + res.statusCode, statusCode: res.statusCode});
                 } else {
                     let body = '';
-                    if (options?.buffer) body = Buffer.from(body);
+                    if (options?.buffer) { body = Buffer.from(body); }
                     res.on('data', (chunk) => options?.buffer ? body = Buffer.concat([body, chunk]) : body += chunk);
                     res.on('end', () => {
                         if (options?.returnFull) {
@@ -307,17 +307,17 @@ export default class Behavior extends AsyncEventEmitter {
     }
 
     async urlpost(url, content, options, encoding) {
-        if (!encoding && typeof options == "string") {
+        if (!encoding && typeof options === "string") {
             encoding = options;
             options = undefined;
         }
-        if (!options) options = {};
+        if (!options) { options = {}; }
 
         let headers = {};
         if (!content) {
             content = "";
         } else {
-            if (typeof content == "object") {
+            if (typeof content === "object") {
                 content = querystring.stringify(content);
                 headers["Content-Type"] = "application/x-www-form-urlencoded";
             }
@@ -331,7 +331,7 @@ export default class Behavior extends AsyncEventEmitter {
         return new Promise((resolve, reject) => {
             let req;
 
-            let callback = (res) => {
+            const callback = (res) => {
                 if (encoding) {
                     res.setEncoding(encoding);
                 }
@@ -339,7 +339,7 @@ export default class Behavior extends AsyncEventEmitter {
                     reject({error: "Request failed: " + res.statusCode, statusCode: res.statusCode, content: content, headers: headers});
                 } else {
                     let body = '';
-                    if (options?.buffer) body = Buffer.from(body);
+                    if (options?.buffer) { body = Buffer.from(body); }
                     res.on('data', (chunk) => options?.buffer ? body = Buffer.concat([body, Buffer.from(chunk)]) : body += chunk);
                     res.on('end', () => {
                         if (options?.returnFull) {
@@ -365,8 +365,11 @@ export default class Behavior extends AsyncEventEmitter {
     //Returns Promise of object from JSON pointed at by URL
     async jsonget(url, options) {
         let body = await this.urlget(url, options, 'utf8');
-        if (typeof body == "object") body.body = JSON.parse(body.body);
-        else body = JSON.parse(body);
+        if (typeof body === "object") {
+            body.body = JSON.parse(body.body);
+        } else {
+            body = JSON.parse(body);
+        }
         return body;
     }
 
@@ -375,23 +378,29 @@ export default class Behavior extends AsyncEventEmitter {
         headers = Object.assign(headers, options.headers);
         options.headers = headers;
         let body = await this.urlpost(url, content ? JSON.stringify(content) : null, options, 'utf8');
-        if (typeof body == "object") body.body = JSON.parse(body.body);
-        else body = JSON.parse(body);
+        if (typeof body === "object") {
+            body.body = JSON.parse(body.body);
+        } else {
+            body = JSON.parse(body);
+        }
         return body;
     }
     
     //Returns stream of URL contents
     streamget(url, options, extcallback) {
-        let pt = new stream.PassThrough();
+        const pt = new stream.PassThrough();
         let req;
         
-        let callback = (res) => {
+        const callback = (res) => {
             res.on('error', (e) => {
                 pt.emit('error', e);
             });
             res.pipe(pt);
-            if (extcallback) extcallback(res);
-            else pt.emit('response', res);
+            if (extcallback) {
+                extcallback(res);
+            } else {
+                pt.emit('response', res);
+            }
         };
         
         if (url.match(/^https/i)) {
@@ -410,8 +419,8 @@ export default class Behavior extends AsyncEventEmitter {
     //Downloads URL into a local file
     async downloadget(url, localpath) {
         return new Promise((resolve, reject) => {
-            let stream = fs.createWriteStream(localpath);
-            let download = this.streamget(url);
+            const stream = fs.createWriteStream(localpath);
+            const download = this.streamget(url);
             download.pipe(stream);
             download.on('error', (e) => reject(e));
             stream.on('error', (e) => reject(e));

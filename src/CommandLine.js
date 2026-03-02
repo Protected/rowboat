@@ -19,8 +19,8 @@ const SEPARATOR = "--";
 
 const FEATURE_REGEX = new RegExp("^" + PREFIX + "([^ ]+)");
 
-var groups = {};
-var features = {};
+const groups = {};
+const features = {};
 
 export function registerGroup(name, options) {
     options = options || {};
@@ -39,30 +39,30 @@ export function registerFeature(name, options, callback) {
 }
 
 export async function parseAndExecuteArgs(args, context, cleanup) {
-    if (!Array.isArray(args)) return false;
+    if (!Array.isArray(args)) { return false; }
 
     let end = false;
 
     while (args.length) {
-        let item = args.shift();
-        if (item === SEPARATOR) return !end;
+        const item = args.shift();
+        if (item === SEPARATOR) { return !end; }
 
-        let featurematch = item.match(FEATURE_REGEX);
-        let name = featurematch ? featurematch[1] : null;
+        const featurematch = item.match(FEATURE_REGEX);
+        const name = featurematch ? featurematch[1] : null;
 
         if (!featurematch || !features[name]) {
             console.log("Unexpected argument:", item);
             return true;
         }
 
-        let argnames = features[name].args || [];
-        let minArgs = features[name].minArgs ?? argnames.length;
-        let tocallback = {};
+        const argnames = features[name].args || [];
+        const minArgs = features[name].minArgs ?? argnames.length;
+        const tocallback = {};
 
-        for (let arg of argnames) {
-            let nextdatum = args[0];
+        for (const arg of argnames) {
+            const nextdatum = args[0];
             if (nextdatum === undefined || nextdatum.match(FEATURE_REGEX)) {
-                if (Object.keys(tocallback).length >= minArgs) break;
+                if (Object.keys(tocallback).length >= minArgs) { break; }
                 console.log("Missing argument:", arg);
                 return true;
             }
@@ -73,7 +73,9 @@ export async function parseAndExecuteArgs(args, context, cleanup) {
         end = end || await (async () => features[name].callback(tocallback, context))();
     }
 
-    if (cleanup) end = end || cleanup(context);
+    if (cleanup) {
+        end = end || cleanup(context);
+    }
 
     return end;
 }
@@ -95,10 +97,17 @@ export function registerDefaultFeatures() {
         description: "List all command line features"
     }, () => {
 
-        let featurelist = Object.values(features);
+        const featurelist = Object.values(features);
         featurelist.sort((a, b) => {
-            if (groups[a.group]?.priority != groups[b.group]?.priority) return groups[a.group]?.priority - groups[b.group]?.priority;
-            if (a.group != b.group) return (a.group || "").localeCompare(b.group || "");
+            
+            if (groups[a.group]?.priority !== groups[b.group]?.priority) {
+                return groups[a.group]?.priority - groups[b.group]?.priority;
+            }
+            
+            if (a.group !== b.group) {
+                return (a.group || "").localeCompare(b.group || "");
+            }
+            
             return a.name.localeCompare(b.name);
         });
 
@@ -107,10 +116,10 @@ export function registerDefaultFeatures() {
         }
 
         let currentgroup = {name: ""};
-        for (let options of featurelist) {
+        for (const options of featurelist) {
             
             //Group header
-            if (options.group && options.group != currentgroup.name) {
+            if (options.group && options.group !== currentgroup.name) {
                 currentgroup = groups[options.group];
                 console.log(`\n${" ".repeat(HELP_GROUP_INDENT)}${currentgroup.label}`);
                 if (currentgroup.description) {
@@ -119,7 +128,7 @@ export function registerDefaultFeatures() {
             }
 
             //Syntax
-            let minArgs = options.minArgs ?? (options.args || []).length;
+            const minArgs = options.minArgs ?? (options.args || []).length;
             let syntax = " ".repeat(HELP_FEATURE_INDENT) + PREFIX + options.name
                     + (options.args || []).map((arg, i) => i >= minArgs ? ` [${arg.toUpperCase()}]` : ` ${arg.toUpperCase()}`).join("");
 
@@ -142,7 +151,7 @@ export function registerDefaultFeatures() {
             console.log(syntax);
 
             while (description) {
-                let next = description.substring(0, descwidth);
+                const next = description.substring(0, descwidth);
                 description = description.substring(descwidth);
                 console.log(`${" ".repeat(HELP_LEFT_COLUMN)}${next}`);
             }

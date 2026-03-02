@@ -45,7 +45,7 @@ export default class Environment extends AsyncEventEmitter {
         this.config.loadEnvironmentConfig(this._name);
         this.config.setEnvironmentDefaults(this._name, this.defaults);
         
-        for (let param of this.params) {
+        for (const param of this.params) {
             if (this.param(param.n) === undefined) {
                 this.log('error', `Parameter not found: ${param.n}`);
                 return false;
@@ -87,7 +87,7 @@ export default class Environment extends AsyncEventEmitter {
         if (this._hasConnected) {
             return Promise.resolve(this);
         } else {
-            return new Promise((resolve, reject) => {
+            return new Promise((resolve) => {
                 this.on('connected', (env) => {
                     resolve(env);
                 });
@@ -144,7 +144,7 @@ export default class Environment extends AsyncEventEmitter {
 
 
     genericErrorHandler(err) {
-        if (!err) return;
+        if (!err) { return; }
         this.emit('error', err);
     }
 

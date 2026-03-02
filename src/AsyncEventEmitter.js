@@ -24,15 +24,15 @@ export default class AsyncEventEmitter {
             this.emit('newListener', type, listener);
         }
         
-        let existing = this._events[type];
+        const existing = this._events[type];
 
         if (!existing) {
             this._events[type] = listener;
         } else if (typeof existing === 'function') {
-            if (existing === listener) return;
+            if (existing === listener) { return; }
             this._events[type] = prepend ? [listener, existing] : [existing, listener];
         } else {
-            if (existing.indexOf(listener) > -1) return;
+            if (existing.indexOf(listener) > -1) { return; }
             if (prepend) {
                 existing.unshift(listener);
             } else {
@@ -43,12 +43,12 @@ export default class AsyncEventEmitter {
 
 
     addListener(type, listener, self) {
-        if (typeof listener == "function" && self) listener.ctx = self;
+        if (typeof listener === "function" && self) { listener.ctx = self; }
         this._addListener(type, listener, false);
     };
     
     prependListener(type, listener, self) {
-        if (typeof listener == "function" && self) listener.ctx = self;
+        if (typeof listener === "function" && self) { listener.ctx = self; }
         this._addListener(type, listener, true);
     };
     
@@ -61,24 +61,24 @@ export default class AsyncEventEmitter {
         //Run the asynchronous listeners in asynchronous context so we can chain them
         //True means the event was fully processed; false means it was interrupted
 
-        if (!this._events) return true;
+        if (!this._events) { return true; }
 
-        let handler = this._events[type];
-        if (!handler) return true;
+        const handler = this._events[type];
+        if (!handler) { return true; }
 
         let self = this;
         
         try {
             if (typeof handler === 'function') {
-                if (handler.ctx) self = handler.ctx;
+                if (handler.ctx) { self = handler.ctx; }
                 //Forcefully promisify listener and execute it
                 await (async () => handler.apply(self, args))();
             } else {
-                for (let listener of handler.slice()) {
-                    if (listener.ctx) self = listener.ctx;
+                for (const listener of handler.slice()) {
+                    if (listener.ctx) { self = listener.ctx; }
                     //Forcefully promisify every listener and execute it
-                    let result = await (async () => listener.apply(self, args))();
-                    if (result === true) return false;
+                    const result = await (async () => listener.apply(self, args))();
+                    if (result === true) { return false; }
                 }
             }
         } catch (e) {

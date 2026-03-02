@@ -27,14 +27,14 @@ function log(method, subject) {
 function isModule(mod) {
     let proto = mod.prototype;
     while (proto !== Object.prototype) {
-        if (proto.constructor.name == "Module") return true;
+        if (proto.constructor.name === "Module") { return true; }
         proto = Object.getPrototypeOf(proto);
     }
     return false;
 }
 
 
-exports.start = function(rblogger, rbport) {
+export function start(rblogger, rbport) {
     logger = rblogger;
     router.listen(rbport, "127.0.0.1", () => {
         log("Listening on port: " + rbport);
@@ -42,14 +42,14 @@ exports.start = function(rblogger, rbport) {
 }
 
 //Expose the getters (GET), setters (PUT) and methods (POST) of a module on /name/propname
-exports.expose = function(mod) {
-    if (!mod.expose || !mod || !isModule(mod)) return false;
+export function expose(mod) {
+    if (!mod.expose || !mod || !isModule(mod)) { return false; }
     
-    let proto = Object.getPrototypeOf(mod);
-    for (let prop of Object.getOwnPropertyNames(proto)) {
-        if (prop == "constructor" || prop == "initialize") continue;
+    const proto = Object.getPrototypeOf(mod);
+    for (const prop of Object.getOwnPropertyNames(proto)) {
+        if (prop === "constructor" || prop === "initialize") { continue; }
     
-        let desc = Object.getOwnPropertyDescriptor(proto, prop);
+        const desc = Object.getOwnPropertyDescriptor(proto, prop);
         
         if (desc.get) {
             router.get('/' + mod.name + '/' + prop, (req, res) => {
@@ -64,12 +64,12 @@ exports.expose = function(mod) {
             });
         }
         
-        if (typeof desc.value == "function") {
+        if (typeof desc.value === "function") {
             router.post('/' + mod.name + '/' + prop, (req, res) => {
                 if (!Array.isArray(req.body)) {
                     res.sendStatus(400);
                 }
-                let ret = mod[prop].apply(mod, req.body);
+                const ret = mod[prop].apply(mod, req.body);
                 res.status(200);
                 res.send(ret);
             });
@@ -81,16 +81,16 @@ exports.expose = function(mod) {
 }
 
 //Returns a direct module accessor
-exports.localModule = function(mod) {
-    if (!mod || !isModule(mod)) return null;
+export function localModule(mod) {
+    if (!mod || !isModule(mod)) { return null; }
 
-    let promiseproxy = {};
+    const promiseproxy = {};
 
-    let proto = Object.getPrototypeOf(mod);
-    for (let prop of Object.getOwnPropertyNames(proto)) {
-        if (prop == "constructor" || prop == "initialize") continue;
+    const proto = Object.getPrototypeOf(mod);
+    for (const prop of Object.getOwnPropertyNames(proto)) {
+        if (prop === "constructor" || prop === "initialize") { continue; }
         
-        let desc = Object.getOwnPropertyDescriptor(proto, prop);
+        const desc = Object.getOwnPropertyDescriptor(proto, prop);
         
         if (desc.get) {
             Object.defineProperty(promiseproxy, prop, {
@@ -111,11 +111,11 @@ exports.localModule = function(mod) {
             });
         }
         
-        if (typeof desc.value == "function") {
+        if (typeof desc.value === "function") {
             Object.defineProperty(promiseproxy, prop, {
                 writable: false,
                 value: function() {
-                    let ret = mod[prop].apply(mod, ...arguments);
+                    const ret = mod[prop].apply(mod, ...arguments);
                     return Promise.resolve(ret);
                 }
             });
@@ -126,17 +126,54 @@ exports.localModule = function(mod) {
     return promiseproxy;
 }
 
-//Returns a remote module accessor
-exports.remoteModule = function(mod, baseurl) {
-    if (!mod || !isModule(mod)) return null;
 
-    let promiseproxy = {};
-
-    let proto = Object.getPrototypeOf(mod);
-    for (let prop of Object.getOwnPropertyNames(proto)) {
-        if (prop == "constructor" || prop == "initialize") continue;
+function jsonrequest(url, method, reqbody) {
+    return new Promise((resolve, reject) => {
+        let req;
         
-        let desc = Object.getOwnPropertyDescriptor(proto, prop);
+        const callback = (res) => {
+            res.setEncoding('utf8');
+            if (res.statusCode !== 200) {
+                reject("Request failed: " + res.statusCode);
+            } else {
+                let body = '';
+                res.on('data', (chunk) => body += chunk);
+                res.on('end', () => resolve(JSON.parse(body)));
+            }
+        };
+        
+        const opts = {
+            method: method,
+            headers: {
+                "Content-type": "application/json"
+            }
+        };
+        
+        if (url.match(/^https/i)) {
+            req = https.request(url, opts, callback);
+        } else {
+            req = http.request(url, opts, callback);
+        }
+        
+        req.on('error', reject);
+        
+        if (reqbody) {
+            req.write(JSON.stringify(reqbody));
+        }
+    });
+}
+
+//Returns a remote module accessor
+export function remoteModule(mod, baseurl) {
+    if (!mod || !isModule(mod)) { return null; }
+
+    const promiseproxy = {};
+
+    const proto = Object.getPrototypeOf(mod);
+    for (const prop of Object.getOwnPropertyNames(proto)) {
+        if (prop === "constructor" || prop === "initialize") { continue; }
+        
+        const desc = Object.getOwnPropertyDescriptor(proto, prop);
         
         if (desc.get) {
             Object.defineProperty(promiseproxy, prop, {
@@ -156,7 +193,7 @@ exports.remoteModule = function(mod, baseurl) {
             });
         }
         
-        if (typeof desc.value == "function") {
+        if (typeof desc.value === "function") {
             Object.defineProperty(promiseproxy, prop, {
                 writable: false,
                 value: function() {
@@ -168,41 +205,4 @@ exports.remoteModule = function(mod, baseurl) {
     }
     
     return promiseproxy;    
-}
-
-
-function jsonrequest(url, method, reqbody) {
-    return new Promise((resolve, reject) => {
-        let req;
-        
-        let callback = (res) => {
-            res.setEncoding('utf8');
-            if (res.statusCode !== 200) {
-                reject("Request failed: " + res.statusCode);
-            } else {
-                let body = '';
-                res.on('data', (chunk) => body += chunk);
-                res.on('end', () => resolve(JSON.parse(body)));
-            }
-        };
-        
-        let opts = {
-            method: method,
-            headers: {
-                "Content-type": "application/json"
-            }
-        };
-        
-        if (url.match(/^https/i)) {
-            req = https.request(url, opts, callback);
-        } else {
-            req = http.request(url, opts, callback);
-        }
-        
-        req.on('error', reject);
-        
-        if (reqbody) {
-            req.write(JSON.stringify(reqbody));
-        }
-    });
 }

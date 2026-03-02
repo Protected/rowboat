@@ -91,7 +91,7 @@ export default class EditConfig {
 
 
     #getEnvironment(name) {
-        let nodeEnvs = this.document.get(HEADER_ENVIRONMENTS, true);
+        const nodeEnvs = this.document.get(HEADER_ENVIRONMENTS, true);
         return nodeEnvs?.get(name, true);
     }
 
@@ -115,34 +115,34 @@ export default class EditConfig {
 
 
     #getBehavior(name, returnIndex) {
-        let nodeBes = this.document.get(HEADER_BEHAVIORS, true);
+        const nodeBes = this.document.get(HEADER_BEHAVIORS, true);
         return nodeBes?.items[returnIndex ? "findIndex" : "find"](behavior => {
             //Plain string
-            if (yaml.isScalar(behavior) && behavior.value === name) return true;
-            if (!yaml.isMap(behavior)) return false;
+            if (yaml.isScalar(behavior) && behavior.value === name) { return true; }
+            if (!yaml.isMap(behavior)) { return false; }
             //Map with explicit name
-            let bename = behavior.items.find(param => yaml.isPair(param) && param.key.value == KEY_NAME);
-            if (bename && bename.value.value === name) return true;
+            const bename = behavior.items.find(param => yaml.isPair(param) && param.key.value === KEY_NAME);
+            if (bename && bename.value.value === name) { return true; }
             if (!bename) {
                 //Map with type
-                let betype = behavior.items.find(param => yaml.isPair(param) && param.key.value == KEY_TYPE);
-                if (betype && betype.value.value === name) return true;
+                const betype = behavior.items.find(param => yaml.isPair(param) && param.key.value === KEY_TYPE);
+                if (betype && betype.value.value === name) { return true; }
             }
             return false;
         });
     }
 
     addBehavior(name, type, pos) {
-        if (!name) return;
+        if (!name) { return; }
         let nodeBe = this.#getBehavior(name);
         if (nodeBe) {
             if (pos !== undefined) {
                 this.#insertBehavior(nodeBe, pos, this.#getBehavior(name, true));
             }
             if (yaml.isScalar(nodeBe)) {
-                if (!type || name === type) return nodeBe;
+                if (!type || name === type) { return nodeBe; }
                 //Upgrade scalar to map
-                let indexBe = this.#getBehavior(name, true);
+                const indexBe = this.#getBehavior(name, true);
                 nodeBe = this.document.createNode({name, type});
                 this.document.setIn([HEADER_BEHAVIORS, indexBe], nodeBe);
             } else if (type) {
@@ -167,7 +167,7 @@ export default class EditConfig {
     }
 
     #insertBehavior(nodeBe, pos, removeOld) {
-        let nodeBes = this.document.get(HEADER_BEHAVIORS, true);
+        const nodeBes = this.document.get(HEADER_BEHAVIORS, true);
         if (removeOld) {
             nodeBes.items.splice(removeOld, 1);
         }
@@ -175,13 +175,13 @@ export default class EditConfig {
     }
 
     insertBehaviorBefore(name, type, before) {
-        let indexBefore = before ? this.#getBehavior(before, true) : 0;
-        if (indexBefore < 0) return null;
+        const indexBefore = before ? this.#getBehavior(before, true) : 0;
+        if (indexBefore < 0) { return null; }
         return this.addBehavior(name, type, indexBefore);
     }
 
     removeBehavior(name) {
-        let indexBe = this.#getBehavior(name, true);
+        const indexBe = this.#getBehavior(name, true);
         if (indexBe > -1) {
             return this.document.deleteIn([HEADER_BEHAVIORS, indexBe]);
         }
@@ -193,31 +193,31 @@ export default class EditConfig {
 
 
     async #getEnvironmentInstance(name, type) {
-        if (this.#envCache[name]) return this.#envCache[name];
-        if (!type || !this.core) return null;
+        if (this.#envCache[name]) { return this.#envCache[name]; }
+        if (!type || !this.core) { return null; }
         this.#envCache[name] = await this.core.createEnvironment(type, name);
         return this.#envCache[name];
     }
 
     async setEnvironmentParameter(name, key, value) {
-        let nodeEnv = this.#getEnvironment(name);
-        if (!nodeEnv) return ConfigFail.CONFIG_NOT_FOUND;
-        let env = await this.#getEnvironmentInstance(name, nodeEnv.get(KEY_TYPE));
-        if (!env) return ConfigFail.TYPE_NOT_FOUND;
-        let descriptor = env.params.find(param => param.n === key);
-        if (!descriptor) return ConfigFail.PARAM_NOT_FOUND;
+        const nodeEnv = this.#getEnvironment(name);
+        if (!nodeEnv) { return ConfigFail.CONFIG_NOT_FOUND; }
+        const env = await this.#getEnvironmentInstance(name, nodeEnv.get(KEY_TYPE));
+        if (!env) { return ConfigFail.TYPE_NOT_FOUND; }
+        const descriptor = env.params.find(param => param.n === key);
+        if (!descriptor) { return ConfigFail.PARAM_NOT_FOUND; }
         nodeEnv.set(key, this.document.createNode(value));
     }
 
     async addEnvironmentParameters(name, {required, missing}) {
-        let nodeEnv = this.#getEnvironment(name);
-        if (!nodeEnv) return ConfigFail.CONFIG_NOT_FOUND;
-        let env = await this.#getEnvironmentInstance(name, nodeEnv.get(KEY_TYPE));
-        if (!env) return ConfigFail.TYPE_NOT_FOUND;
+        const nodeEnv = this.#getEnvironment(name);
+        if (!nodeEnv) { return ConfigFail.CONFIG_NOT_FOUND; }
+        const env = await this.#getEnvironmentInstance(name, nodeEnv.get(KEY_TYPE));
+        if (!env) { return ConfigFail.TYPE_NOT_FOUND; }
         
-        for (let {n} of env.params) {
-            if (required && env.defaults[n] !== undefined) continue;
-            if (missing && nodeEnv.get(n) !== undefined) continue;
+        for (const {n} of env.params) {
+            if (required && env.defaults[n] !== undefined) { continue; }
+            if (missing && nodeEnv.get(n) !== undefined) { continue; }
             await this.setEnvironmentParameter(name, n, env.defaults[n] || null);
         }
     }
@@ -227,17 +227,19 @@ export default class EditConfig {
 
 
     removeEnvironmentParameter(name, key) {
-        let nodeEnv = this.#getEnvironment(name);
-        if (!nodeEnv) return ConfigFail.CONFIG_NOT_FOUND;
+        const nodeEnv = this.#getEnvironment(name);
+        if (!nodeEnv) { return ConfigFail.CONFIG_NOT_FOUND; }
         return nodeEnv.delete(key);
     }
 
     clearEnvironmentParameters(name) {
-        let nodeEnv = this.#getEnvironment(name);
-        if (!nodeEnv) return ConfigFail.CONFIG_NOT_FOUND;
-        let type = nodeEnv.get(KEY_TYPE);
+        const nodeEnv = this.#getEnvironment(name);
+        if (!nodeEnv) { return ConfigFail.CONFIG_NOT_FOUND; }
+        const type = nodeEnv.get(KEY_TYPE);
         nodeEnv.items = [];
-        if (type) nodeEnv.set(KEY_TYPE, type);
+        if (type) {
+            nodeEnv.set(KEY_TYPE, type);
+        }
     }
 
 
@@ -253,8 +255,8 @@ export default class EditConfig {
     }
 
     clearBehaviorCommonParameters() {
-        let nodeBeCommons = this.document.get(HEADER_BECOMMON, true);
-        if (!nodeBeCommons) return;
+        const nodeBeCommons = this.document.get(HEADER_BECOMMON, true);
+        if (!nodeBeCommons) { return; }
         nodeBeCommons.items = [];
     }
 
@@ -263,14 +265,14 @@ export default class EditConfig {
 
 
     async getBehaviorInstance(name, type) {
-        if (this.#beCache[name]) return this.#beCache[name];
-        if (!type || !this.core) return null;
+        if (this.#beCache[name]) { return this.#beCache[name]; }
+        if (!type || !this.core) { return null; }
         this.#beCache[name] = await this.core.createBehavior(type, name);
         return this.#beCache[name];
     }
 
     async #getBehaviorInstanceFromNode(nodeBe) {
-        if (!nodeBe || !yaml.isNode(nodeBe)) return;
+        if (!nodeBe || !yaml.isNode(nodeBe)) { return; }
         if (yaml.isScalar(nodeBe)) {
             return this.getBehaviorInstance(nodeBe.value, nodeBe.value);
         } else if (!nodeBe.get(KEY_NAME)) {
@@ -282,15 +284,15 @@ export default class EditConfig {
 
     async setBehaviorParameter(name, key, value) {
         let nodeBe = this.#getBehavior(name);
-        if (!nodeBe) return ConfigFail.CONFIG_NOT_FOUND;
-        let be = await this.#getBehaviorInstanceFromNode(nodeBe);
-        if (!be) return ConfigFail.TYPE_NOT_FOUND;
-        let descriptor = be.params.find(param => param.n === key);
-        if (!descriptor) return ConfigFail.PARAM_NOT_FOUND;
+        if (!nodeBe) { return ConfigFail.CONFIG_NOT_FOUND; }
+        const be = await this.#getBehaviorInstanceFromNode(nodeBe);
+        if (!be) { return ConfigFail.TYPE_NOT_FOUND; }
+        const descriptor = be.params.find(param => param.n === key);
+        if (!descriptor) { return ConfigFail.PARAM_NOT_FOUND; }
 
         if (yaml.isScalar(nodeBe)) {
             //Upgrade scalar to map
-            let indexBe = this.#getBehavior(name, true);
+            const indexBe = this.#getBehavior(name, true);
             nodeBe = this.document.createNode({type: name});
             nodeBe.spaceBefore = true;
             this.document.setIn([HEADER_BEHAVIORS, indexBe], nodeBe);
@@ -300,14 +302,14 @@ export default class EditConfig {
     }
 
     async addBehaviorParameters(name, {required, missing}) {
-        let nodeBe = this.#getBehavior(name);
-        if (!nodeBe) return ConfigFail.CONFIG_NOT_FOUND;
-        let be = await this.#getBehaviorInstanceFromNode(nodeBe);
-        if (!be) return ConfigFail.TYPE_NOT_FOUND;
+        const nodeBe = this.#getBehavior(name);
+        if (!nodeBe) { return ConfigFail.CONFIG_NOT_FOUND; }
+        const be = await this.#getBehaviorInstanceFromNode(nodeBe);
+        if (!be) { return ConfigFail.TYPE_NOT_FOUND; }
         
-        for (let {n} of be.params) {
-            if (required && be.defaults[n] !== undefined) continue;
-            if (missing && yaml.isCollection(nodeBe) && nodeBe.get(n) !== undefined) continue;
+        for (const {n} of be.params) {
+            if (required && be.defaults[n] !== undefined) { continue; }
+            if (missing && yaml.isCollection(nodeBe) && nodeBe.get(n) !== undefined) { continue; }
             await this.setBehaviorParameter(name, n, be.defaults[n] || null);
         }
     }
@@ -317,20 +319,24 @@ export default class EditConfig {
 
 
     removeBehaviorParameter(name, key) {
-        let nodeBe = this.#getBehavior(name);
-        if (!nodeBe) return ConfigFail.CONFIG_NOT_FOUND;
+        const nodeBe = this.#getBehavior(name);
+        if (!nodeBe) { return ConfigFail.CONFIG_NOT_FOUND; }
         return nodeBe.delete(key);
     }
 
     clearBehaviorParameters(name) {
-        let nodeBe = this.#getBehavior(name);
-        if (!nodeBe) return ConfigFail.CONFIG_NOT_FOUND;
+        const nodeBe = this.#getBehavior(name);
+        if (!nodeBe) { return ConfigFail.CONFIG_NOT_FOUND; }
         if (yaml.isScalar(nodeBe)) return;
-        let betype = nodeBe.get(KEY_TYPE);
-        let bename = nodeBe.get(KEY_NAME);
+        const betype = nodeBe.get(KEY_TYPE);
+        const bename = nodeBe.get(KEY_NAME);
         nodeBe.items = [];
-        if (betype) nodeBe.set(KEY_TYPE, betype);
-        if (bename) nodeBe.set(KEY_NAME, bename);
+        if (betype) {
+            nodeBe.set(KEY_TYPE, betype);
+        }
+        if (bename) {
+            nodeBe.set(KEY_NAME, bename);
+        }
     }
 
 
@@ -338,24 +344,24 @@ export default class EditConfig {
 
 
     async addEnvironmentComments(name, {header, params, unset}) {
-        let nodeEnv = this.#getEnvironment(name);
-        if (!nodeEnv) return ConfigFail.CONFIG_NOT_FOUND;
-        let env = await this.#getEnvironmentInstance(name, nodeEnv.get(KEY_TYPE));
-        if (!env) return ConfigFail.TYPE_NOT_FOUND;
+        const nodeEnv = this.#getEnvironment(name);
+        if (!nodeEnv) { return ConfigFail.CONFIG_NOT_FOUND; }
+        const env = await this.#getEnvironmentInstance(name, nodeEnv.get(KEY_TYPE));
+        if (!env) { return ConfigFail.TYPE_NOT_FOUND; }
 
         if (header) {
-            let currentComment = (nodeEnv.commentBefore || "").trim();
+            const currentComment = (nodeEnv.commentBefore || "").trim();
             if (!unset && currentComment !== env.description || unset && !currentComment) {
                 nodeEnv.commentBefore = env.description;
             }
         }
 
         if (params) {
-            for (let {n, d} of env.params) {
-                if (Array.isArray(params) && !params.includes(n)) continue;
-                let nodeParam = nodeEnv.get(n, true);
-                if (!nodeParam) continue;
-                let currentComment = (nodeParam.commentBefore || "").trim();
+            for (const {n, d} of env.params) {
+                if (Array.isArray(params) && !params.includes(n)) { continue; }
+                const nodeParam = nodeEnv.get(n, true);
+                if (!nodeParam) { continue; }
+                const currentComment = (nodeParam.commentBefore || "").trim();
                 if (!unset && currentComment !== d || unset && !currentComment) {
                     nodeParam.comment = d;
                 }
@@ -365,23 +371,23 @@ export default class EditConfig {
     }
 
     async removeEnvironmentComments(name, {header, params, exact}) {
-        let nodeEnv = this.#getEnvironment(name);
-        if (!nodeEnv) return ConfigFail.CONFIG_NOT_FOUND;
-        let env = await this.#getEnvironmentInstance(name, nodeEnv.get(KEY_TYPE));
-        if (!env) return ConfigFail.TYPE_NOT_FOUND;
+        const nodeEnv = this.#getEnvironment(name);
+        if (!nodeEnv) { return ConfigFail.CONFIG_NOT_FOUND; }
+        const env = await this.#getEnvironmentInstance(name, nodeEnv.get(KEY_TYPE));
+        if (!env) { return ConfigFail.TYPE_NOT_FOUND; }
 
         if (header) {
-            let currentComment = (nodeEnv.commentBefore || "").trim();
+            const currentComment = (nodeEnv.commentBefore || "").trim();
             if (!exact && currentComment || exact && currentComment !== env.description) {
                 nodeEnv.commentBefore = undefined;
             }
         }
         
         if (params) {
-            for (let {n, d} of env.params) {
-                if (Array.isArray(params) && !params.includes(n)) continue;
-                let nodeParam = nodeEnv.get(n, true);
-                let currentComment = (nodeParam.commentBefore || "").trim();
+            for (const {n, d} of env.params) {
+                if (Array.isArray(params) && !params.includes(n)) { continue; }
+                const nodeParam = nodeEnv.get(n, true);
+                const currentComment = (nodeParam.commentBefore || "").trim();
                 if (!exact && currentComment|| exact && currentComment !== d) {
                     nodeParam.comment = undefined;
                 }
@@ -392,24 +398,24 @@ export default class EditConfig {
 
 
     async addBehaviorComments(name, {header, params, unset}) {
-        let nodeBe = this.#getBehavior(name);
-        if (!nodeBe) return ConfigFail.CONFIG_NOT_FOUND;
-        let be = await this.#getBehaviorInstanceFromNode(nodeBe);
-        if (!be) return ConfigFail.TYPE_NOT_FOUND;
+        const nodeBe = this.#getBehavior(name);
+        if (!nodeBe) { return ConfigFail.CONFIG_NOT_FOUND; }
+        const be = await this.#getBehaviorInstanceFromNode(nodeBe);
+        if (!be) { return ConfigFail.TYPE_NOT_FOUND; }
 
         if (header) {
-            let currentComment = (nodeBe.commentBefore || "").trim();
+            const currentComment = (nodeBe.commentBefore || "").trim();
             if (!unset && currentComment !== be.description || unset && !currentComment) {
                 nodeBe.commentBefore = be.description;
             }
         }
 
         if (params && yaml.isCollection(nodeBe)) {
-            for (let {n, d} of be.params) {
-                if (Array.isArray(params) && !params.includes(n)) continue;
-                let nodeParam = nodeBe.get(n, true);
-                if (!nodeParam) continue;
-                let currentComment = (nodeParam.commentBefore || "").trim();
+            for (const {n, d} of be.params) {
+                if (Array.isArray(params) && !params.includes(n)) { continue; }
+                const nodeParam = nodeBe.get(n, true);
+                if (!nodeParam) { continue; }
+                const currentComment = (nodeParam.commentBefore || "").trim();
                 if (!unset && currentComment !== d || unset && !currentComment) {
                     nodeParam.comment = d;
                 }
@@ -419,23 +425,23 @@ export default class EditConfig {
     }
 
     async removeBehaviorComments(name, {header, params, exact}) {
-        let nodeBe = this.#getBehavior(name);
-        if (!nodeBe) return ConfigFail.CONFIG_NOT_FOUND;
-        let be = await this.#getBehaviorInstanceFromNode(nodeBe);
-        if (!be) return ConfigFail.TYPE_NOT_FOUND;
+        const nodeBe = this.#getBehavior(name);
+        if (!nodeBe) { return ConfigFail.CONFIG_NOT_FOUND; }
+        const be = await this.#getBehaviorInstanceFromNode(nodeBe);
+        if (!be) { return ConfigFail.TYPE_NOT_FOUND; }
 
         if (header) {
-            let currentComment = (nodeBe.commentBefore || "").trim();
+            const currentComment = (nodeBe.commentBefore || "").trim();
             if (!exact && currentComment || exact && currentComment !== be.description) {
                 nodeBe.commentBefore = undefined;
             }
         }
 
         if (params) {
-            for (let {n, d} of be.params) {
-                if (Array.isArray(params) && !params.includes(n)) continue;
-                let nodeParam = nodeBe.get(n, true);
-                let currentComment = (nodeParam.commentBefore || "").trim();
+            for (const {n, d} of be.params) {
+                if (Array.isArray(params) && !params.includes(n)) { continue; }
+                const nodeParam = nodeBe.get(n, true);
+                const currentComment = (nodeParam.commentBefore || "").trim();
                 if (!exact && currentComment|| exact && currentComment !== d) {
                     nodeParam.comment = undefined;
                 }

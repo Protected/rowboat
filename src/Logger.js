@@ -10,10 +10,10 @@ let pathTemplate = null;
 let path = null;
 let logger = null;
 let useConsole = false;
-let _tail = [];
+const _tail = [];
 
 export function setPathTemplate(newPathTemplate) {
-    if (pathTemplate == newPathTemplate) return;
+    if (pathTemplate === newPathTemplate) { return; }
     pathTemplate = newPathTemplate;
     path = null;
     logger = null;
@@ -24,9 +24,9 @@ export function enableConsole() {
 }
 
 
-export const logFormat = winston.format((info, opts) => {
+export const logFormat = winston.format((info) => {
     let result = moment().format('YYYY-MM-DD HH:mm:ss') + ' [' + info.level.toUpperCase() + '] ';
-    if (typeof info.message == "object") {
+    if (typeof info.message === "object") {
         result += "<<<\n" + JSON.stringify(info.message) + "\n>>>";
     } else {
         result += info.message;
@@ -37,10 +37,10 @@ export const logFormat = winston.format((info, opts) => {
 
 
 function ready() {
-    if (!pathTemplate) return false;
+    if (!pathTemplate) { return false; }
     
-    let desiredPath = moment().format(pathTemplate);
-    if (!logger || path != desiredPath) {
+    const desiredPath = moment().format(pathTemplate);
+    if (!logger || path !== desiredPath) {
         path = desiredPath;
         //console.log('Log open: ' + path);
 
@@ -67,7 +67,7 @@ function ready() {
 export function log(method, subject) {
     
     if (!ready()) {
-        if (typeof subject != "object") {
+        if (typeof subject !== "object") {
             console.log('[' + method.toUpperCase() + '] ' + subject);
         } else {
             console.log('[' + method.toUpperCase() + '] <<<');
@@ -77,7 +77,7 @@ export function log(method, subject) {
         return null;
     }
     
-    var actualMethod;
+    let actualMethod;
     switch (method) {
         case 'debug': actualMethod = logger.debug; break;
         case 'warn': actualMethod = logger.warn; break;
@@ -86,7 +86,9 @@ export function log(method, subject) {
     }
     
     _tail.push({level: method, message: subject});
-    if (_tail.length > TAIL_SIZE) _tail.shift();
+    if (_tail.length > TAIL_SIZE) {
+        _tail.shift();
+    }
 
     return actualMethod.apply(null, [subject]);
 }
@@ -105,8 +107,8 @@ export function error(subject) {
 }
 
 export function tail(count) {
-    if (!count || count < 1) count = 1;
-    if (count > TAIL_SIZE) count = TAIL_SIZE;
+    if (!count || count < 1) { count = 1; }
+    if (count > TAIL_SIZE) { count = TAIL_SIZE; }
     return _tail.slice(0, count);
 }
 

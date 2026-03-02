@@ -83,7 +83,7 @@ export default class Core {
     //Store and execute delayed cross-behavior requests
 
     behaviorDelay(behavior, callback) {
-        if (!behavior?.name || typeof callback !== "function") return false;
+        if (!behavior?.name || typeof callback !== "function") { return false; }
         if (!this._behaviordelayed[behavior.name]) {
             this._behaviordelayed[behavior.name] = [];
         }
@@ -92,8 +92,8 @@ export default class Core {
     }
     
     behaviorExecuteDelayed(name) {
-        if (!this._behaviordelayed[name]) return;
-        for (let callback of this._behaviordelayed[name]) {
+        if (!this._behaviordelayed[name]) { return; }
+        for (const callback of this._behaviordelayed[name]) {
             callback();
         }
         delete this._behaviordelayed[name];
@@ -105,19 +105,19 @@ export default class Core {
     //Cleanup handlers run synchronously while the process exits and cannot abort
 
     pushShutdownHandler(func) {
-        if (typeof func != "function") return false;
+        if (typeof func !== "function") { return false; }
         this._shutdown.push(func);
         return true;        
     }
 
     pushCleanupHandler(func) {
-        if (typeof func != "function") return false;
+        if (typeof func !== "function") { return false; }
         this._cleanup.push(func);
         return true;
     }
 
     nextShutdown() {
-        let oneshutdown = this._shuttingDown.shift();
+        const oneshutdown = this._shuttingDown.shift();
         if (oneshutdown) {
             oneshutdown(this.nextShutdown.bind(this));
         } else {
@@ -126,9 +126,12 @@ export default class Core {
     }
 
     nextCleanup() {
-        let onecleanup = this._cleaningUp.shift();
-        if (onecleanup) this._exitCode = onecleanup(this.nextCleanup.bind(this)) || 0;
-        else process.exit(this._exitCode);
+        const onecleanup = this._cleaningUp.shift();
+        if (onecleanup) {
+            this._exitCode = onecleanup(this.nextCleanup.bind(this)) || 0;
+        } else {
+            process.exit(this._exitCode);
+        }
     }
 
     beginShutdown() {
@@ -137,15 +140,15 @@ export default class Core {
     }
 
     performCleanup() {
-        let cleaningUp = this._cleanup;
-        if ((process.exitCode || 0) != 0) {
+        const cleaningUp = this._cleanup;
+        if ((process.exitCode || 0) !== 0) {
             cleaningUp.push(() => {
-                for (let item of logger.tail(5)) {
+                for (const item of logger.tail(5)) {
                     console.log(`[${item.level.toUpperCase()}] ${item.message}`);
                 }
             });
         }
-        for (let func of cleaningUp) {
+        for (const func of cleaningUp) {
             func();
         }
     }
@@ -160,13 +163,17 @@ export default class Core {
                 logger.error("Requested proxy for unknown " + label + " instance: " + name);
                 return;
             }
+            
             if (!proxyMap[name]) {
                 proxyMap[name] = new Proxy(name ? targetMap[name] : {}, {
                     get: (target, prop) => {
-                        if (prop[0] === "_") return undefined;
+                        if (prop[0] === "_") {
+                            //Don't bridge pseudoprivate properties
+                            return undefined;
+                        }
                         if (name) {
                             //Specific target
-                            let member = Reflect.get(target, prop);
+                            const member = Reflect.get(target, prop);
                             if (typeof member !== "function" || target.synchronousMethods?.find(s => s === prop)) {
                                 return member;
                             }
@@ -174,11 +181,11 @@ export default class Core {
                         } else {
                             //Every target - can only be used for methods
                             return (...methodArgs) => {
-                                let promises = [];
-                                for (let targetName in targetMap) {
-                                    let target = targetMap[targetName];
-                                    let member = Reflect.get(target, prop);
-                                    if (target.synchronousMethods?.find(s => s === prop)) continue;
+                                const promises = [];
+                                for (const targetName in targetMap) {
+                                    const target = targetMap[targetName];
+                                    const member = Reflect.get(target, prop);
+                                    if (target.synchronousMethods?.find(s => s === prop)) { continue; }
                                     promises.push((async () => trap(target, member, methodArgs))());
                                 }
                                 return Promise.allSettled(promises);
@@ -187,24 +194,25 @@ export default class Core {
                     }
                 });
             }
+
             return proxyMap[name];
         }
     }
     
     createEnvironmentProxy() {
-        var proxiedEnvironments = {};
+        const proxiedEnvironments = {};
         return this.createLocalProxyForModule("environment", this._environments, proxiedEnvironments, (target, method, args) => {
             return method.apply(target, args);
         });
     }
     
     createBehaviorProxy() {
-        var proxiedBehaviors = {};
+        const proxiedBehaviors = {};
         return this.createLocalProxyForModule("behavior", this._behaviors, proxiedBehaviors, (target, method, args) => {
             if (target.hasInitialized) {
                 return method.apply(target, args);
             } else {
-                return new Promise((resolve, reject) => {
+                return new Promise((resolve) => {
                     this.behaviorDelay(target, () => resolve(method.apply(target, args)));
                 });
             }
@@ -218,7 +226,7 @@ export default class Core {
         let files = await fs.promises.readdir(PATH_ENVIRONMENTS, {withFileTypes: true});
         files = files.filter(dirent => dirent.isFile()).map(dirent => dirent.name);
         return files.filter(file => file.startsWith(ENVIRONMENT_PREFIX)).map(file => {
-            let match = file.match(new RegExp(ENVIRONMENT_PREFIX + "(.+)\\.js"));
+            const match = file.match(new RegExp(ENVIRONMENT_PREFIX + "(.+)\\.js"));
             return match[1];
         });
     }
@@ -227,7 +235,9 @@ export default class Core {
         let envtype = await importUncached(PATH_ENVIRONMENTS + ENVIRONMENT_PREFIX + type + ".js");
         envtype = envtype?.default;
         if (!envtype) {
-            if (logerror) logger.error("Could not load the environment: " + name + " . Is the environment source in in the environment directory?");
+            if (logerror) {
+                logger.error("Could not load the environment: " + name + " . Is the environment source in in the environment directory?");
+            }
             return null;
         }
         return new envtype(name);
@@ -240,14 +250,14 @@ export default class Core {
             return true;
         }
 
-        for (let name in config.environments) {
+        for (const name in config.environments) {
 
-            let env = await this.createEnvironment(config.environments[name].type, name, true);
-            if (!env) return false;
+            const env = await this.createEnvironment(config.environments[name].type, name, true);
+            if (!env) { return false; }
             
-            let sharedInstances = {};
-            for (let sharedModule of env.sharedModules) {
-                let sharedName = env.type + '_' + sharedModule;
+            const sharedInstances = {};
+            for (const sharedModule of env.sharedModules) {
+                const sharedName = env.type + '_' + sharedModule;
                 
                 if (!this._shared[sharedName]) {
                     this._shared[sharedName] = await importUncached(PATH_ENVIRONMENTS + sharedModule + ".js");
@@ -294,7 +304,7 @@ export default class Core {
         let files = await fs.promises.readdir(PATH_BEHAVIORS, {withFileTypes: true});
         files = files.filter(dirent => dirent.isFile()).map(dirent => dirent.name);
         return files.map(file => {
-            let match = file.match("(.+)\\.js");
+            const match = file.match("(.+)\\.js");
             return match[1];
         });
     }
@@ -303,7 +313,9 @@ export default class Core {
         let betype = await importUncached(PATH_BEHAVIORS + type + ".js");
         betype = betype?.default;
         if (!betype) {
-            if (logerror) logger.error("Could not load the behavior: " + name + " . Is the behavior source in the behavior directory?");
+            if (logerror) {
+                logger.error("Could not load the behavior: " + name + " . Is the behavior source in the behavior directory?");
+            }
             return null;
         }
         return new betype(name);
@@ -316,14 +328,14 @@ export default class Core {
             return true;
         }
 
-        let uniqueBehaviors = {};
+        const uniqueBehaviors = {};
 
         //First pass: Instantiate and store all behaviors
 
-        for (let beConfig of config.behaviors) {
+        for (const beConfig of config.behaviors) {
             
-            let be = await this.createBehavior(beConfig.type, beConfig.name);
-            if (!be) return false;
+            const be = await this.createBehavior(beConfig.type, beConfig.name);
+            if (!be) { return false; }
 
             if (!be.isMultiInstanceable) {
                 if (uniqueBehaviors[be.type]) {
@@ -335,14 +347,14 @@ export default class Core {
 
             this._behaviors[be.name] = be;
 
-            logger.info("Successfully instantiated behavior: " + be.name + (be.name != be.type ? " (" + be.type + ")" : ""));
+            logger.info("Successfully instantiated behavior: " + be.name + (be.name !== be.type ? " (" + be.type + ")" : ""));
         }
 
         //Second pass: Initialize all behaviors
 
-        for (let beConfig of config.behaviors) {
+        for (const beConfig of config.behaviors) {
             
-            let be = this._behaviors[beConfig.name];
+            const be = this._behaviors[beConfig.name];
 
             let core;
             if (be.isCoreAccess) {
@@ -371,7 +383,7 @@ export default class Core {
             }
 
             be.setHasInitialized();
-            logger.info("Successfully initialized behavior: " + be.name + (be.name != be.type ? " (" + be.type + ")" : ""));
+            logger.info("Successfully initialized behavior: " + be.name + (be.name !== be.type ? " (" + be.type + ")" : ""));
 
             this.behaviorExecuteDelayed(be.name);
             
@@ -384,10 +396,10 @@ export default class Core {
     //Run and stop environments
 
     async stopEnvironments() {
-        let promises = [];
-        for (let name in this._environments) {
+        const promises = [];
+        for (const name in this._environments) {
             logger.info("Requesting disconnection of environment " + name + " ...");
-            let prom = this._environments[name].disconnect();
+            const prom = this._environments[name].disconnect();
             prom.catch((e) => {
                 logger.error("Exception disconnecting from environment " + name + ": " + e);
             });
@@ -397,10 +409,10 @@ export default class Core {
     }
 
     async runEnvironments() {
-        let promises = [];
-        for (let name in this._environments) {
+        const promises = [];
+        for (const name in this._environments) {
             logger.info("Requesting connection of environment " + name + " ...");
-            let prom = this._environments[name].connect();
+            const prom = this._environments[name].connect();
             prom.catch((e) => {
                 logger.error("Exception connecting to environment " + name + ": " + e);
             });
