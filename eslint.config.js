@@ -11,9 +11,10 @@ export default defineConfig([
         rules: {
             "curly": ["warn"],
             "default-case-last": ["warn"],
-            "eqeqeq": ["warn"],
+            "eqeqeq": ["error"],
             "no-await-in-loop": ["warn"],
             "no-constant-condition": ["error"],
+            "no-control-regex": ["off"],
             "no-duplicate-imports": ["error"],
             "no-empty": ["warn"],
             "no-self-compare": ["error"],

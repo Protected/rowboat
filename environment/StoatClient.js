@@ -73,12 +73,12 @@ export default new class StoatClient extends AsyncEventEmitter {
         this._realClient = new Client();
         
         this._realClient.on('error', (error) => {
-            for (let name in this._environments) {
+            for (const name in this._environments) {
                 this._environments[name].emit('error', 'Serious connection error: ' + error.error);
             }
         });
         
-        for (let event of BRIDGE_EVENTS) {
+        for (const event of BRIDGE_EVENTS) {
             this._realClient.on(event, (...args) => {
                 args.unshift(event);
                 console.log("Event:", event, args);
@@ -86,7 +86,7 @@ export default new class StoatClient extends AsyncEventEmitter {
             });
         }
 
-        let self = this;
+        const self = this;
         this._realClient.once('ready', () => {
             this._carrier = setInterval(() => {
                 self.deliverMsgs.apply(self, null);
@@ -96,7 +96,7 @@ export default new class StoatClient extends AsyncEventEmitter {
                 self.deliverReactions.apply(self, null);
             }, this._sendDelay);
             
-            for (let resolve of this._resolveOnLogin) {
+            for (const resolve of this._resolveOnLogin) {
                 resolve(this._realClient);
             }
         });
@@ -111,9 +111,9 @@ export default new class StoatClient extends AsyncEventEmitter {
     
     
     detachFromClient(envStoat) {
-        if (!this._environments[envStoat.name]) return Promise.resolve();
+        if (!this._environments[envStoat.name]) { return Promise.resolve(); }
         delete this._environments[envStoat.name];
-        if (Object.keys(this._environments).length) return Promise.resolve();
+        if (Object.keys(this._environments).length) { return Promise.resolve(); }
         return this._realClient.destroy()
             .then(() => {
 
@@ -133,13 +133,13 @@ export default new class StoatClient extends AsyncEventEmitter {
 
 
     deliverMsgs() {
-        if (!this._outbox?.length) return;
+        if (!this._outbox?.length) { return; }
 
-        let now = Date.now();
-        if (this._outbox?.length < DELAY_MAXQUEUE && now - this._outbox.at(-1).ts < DELAY_RECENCY) return;
+        const now = Date.now();
+        if (this._outbox?.length < DELAY_MAXQUEUE && now - this._outbox.at(-1).ts < DELAY_RECENCY) { return; }
 
         //Helper function adds an outboxed message to a package
-        let outboxToPackage = (pack, entry, position, item) => {
+        const outboxToPackage = (pack, entry, position, item) => {
             
             if (!entry.content?.length && !entry.attachments?.length && !entry.embeds?.length) {
                 this._outbox.splice(position, 1);
@@ -148,7 +148,7 @@ export default new class StoatClient extends AsyncEventEmitter {
 
             pack.messages.push(entry);
             pack.length += (entry.content?.length || 0);
-            for (let attachment of entry.attachments || []) {
+            for (const attachment of entry.attachments || []) {
                 pack.attach += attachment.size;
             }
             pack.embed += (entry.embeds?.length || 0);
@@ -161,10 +161,10 @@ export default new class StoatClient extends AsyncEventEmitter {
         }
 
         //Create one package per channel, containing as many messages as possible (without exceeding limits)
-        let packages = {};
+        const packages = {};
         for (let i = 0; this._outbox && i < this._outbox.length; i++) {
-            let entry = this._outbox[i].message;
-            let rawchannelid = this._outbox[i].channel.id;
+            const entry = this._outbox[i].message;
+            const rawchannelid = this._outbox[i].channel.id;
 
             let pack = packages[rawchannelid];
             if (!pack) {
@@ -194,7 +194,7 @@ export default new class StoatClient extends AsyncEventEmitter {
             }
 
             let size = 0;
-            for (let attachment of entry.attachments || []) {
+            for (const attachment of entry.attachments || []) {
                 size += attachment.size;
             }
             if (pack.attach + size > MAXIMUM_ATTACH) {
@@ -224,21 +224,21 @@ export default new class StoatClient extends AsyncEventEmitter {
         }
         
         //Deliver packages
-        for (let rawchannelid in packages) {
-            let pack = packages[rawchannelid];
+        for (const rawchannelid in packages) {
+            const pack = packages[rawchannelid];
             
-            if (!pack.populated) continue;
+            if (!pack.populated) { continue; }
 
-            let realmessage = pack.messages.shift();
+            const realmessage = pack.messages.shift();
 
-            for (let message of pack.messages) {
+            for (const message of pack.messages) {
                 if (!realmessage.content) {
                     realmessage.content = message.content;
                 } else if (message.content) {
                     realmessage.content = realmessage.content + "\n" + message.content;
                 }
                   
-                for (let lst of ["embeds", "attachments"]) {
+                for (const lst of ["embeds", "attachments"]) {
                     if (!realmessage[lst]?.length) {
                         realmessage[lst] = message[lst];
                     } else if (message[lst]?.length) {
@@ -251,28 +251,28 @@ export default new class StoatClient extends AsyncEventEmitter {
             pack.targetchan.sendMessage(realmessage)
                 .then((msg) => {
                     //Resolve promises
-                    for (let resolve of pack.resolves) {
+                    for (const resolve of pack.resolves) {
                         resolve(msg);
                     }
                 })
                 .catch((e) => {
-                    for (let reject of pack.rejects) {
+                    for (const reject of pack.rejects) {
                         reject(e);
                     }
                 });
             
             //List environments that target the server the package was delivered to
-            let notifyEnvironments = [];
-            for (let name in this._environments) {
-                let env = this._environments[name];
-                if (env.param('server') == pack.targetchan.server?.id) {
+            const notifyEnvironments = [];
+            for (const name in this._environments) {
+                const env = this._environments[name];
+                if (env.param('server') === pack.targetchan.server?.id) {
                     notifyEnvironments.push(env);
                 }
             }
             
             //Trigger messageSent event on listed environments
             setTimeout(() => {
-                for (let env of notifyEnvironments) {
+                for (const env of notifyEnvironments) {
                     env.emit('messageSent', env, env.channelIdToType(pack.targetchan), rawchannelid, realmessage.content);
                 }
             }, 1);
@@ -282,9 +282,9 @@ export default new class StoatClient extends AsyncEventEmitter {
 
 
     deliverReactions() {
-        if (!this._reactionbox.length) return;
-        let next = this._reactionbox.shift();
-        if (!next || next.length != 2) return;
+        if (!this._reactionbox.length) { return; }
+        const next = this._reactionbox.shift();
+        if (!next || next.length !== 2) { return; }
         next[0].react(next[1]);
     }
     
@@ -305,7 +305,7 @@ export default new class StoatClient extends AsyncEventEmitter {
 
     //Outbox a reaction
     reactionbox(stoatmsg, emoji) {
-        if (this._reactionbox.length >= this._reactioncap) return false;
+        if (this._reactionbox.length >= this._reactioncap) { return false; }
         this._reactionbox.push([stoatmsg, emoji]);
         return true;
     }

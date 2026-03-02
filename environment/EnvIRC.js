@@ -49,9 +49,9 @@ export default class EnvIRC extends Environment {
 
 
     connect() {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
         
-            var self = this;
+            const self = this;
 
             this._client = new irc.Client(this.param('serverhost'), this.param('nickname'), {
                 port: this.param('port'),
@@ -75,7 +75,7 @@ export default class EnvIRC extends Environment {
             this._client.addListener('registered', (messageObj) => {
                 this.emit('connected', this);
                 this._hasConnected = true;
-                if (this._client.nick != this.param('nickname')) {
+                if (this._client.nick !== this.param('nickname')) {
                     this.log('warning', "I am " + this._client.nick + " but should be " + this.param('nickname') + "; Will try to retake.");
                     this._retake = setInterval(() => {
                         self.retakeNickname.apply(self, null);
@@ -86,10 +86,10 @@ export default class EnvIRC extends Environment {
             
         
             this._client.addListener('message', (from, to, message, messageObj) => {
+                const authorid = from + '!' + messageObj.user + '@' + messageObj.host;
                 let type = "regular";
-                let authorid = from + '!' + messageObj.user + '@' + messageObj.host;
                 let channelid = to;
-                if (to[0] != "#") {
+                if (to[0] !== "#") {
                     type = "private";
                     channelid = authorid;
                 }
@@ -97,10 +97,10 @@ export default class EnvIRC extends Environment {
             });
         
             this._client.addListener('action', (from, to, message, messageObj) => {
+                const authorid = from + '!' + messageObj.user + '@' + messageObj.host;
                 let type = "action";
-                let authorid = from + '!' + messageObj.user + '@' + messageObj.host;
                 let channelid = to;
-                if (to[0] != "#") {
+                if (to[0] !== "#") {
                     type = "privateaction";
                     channelid = authorid;
                 }
@@ -108,7 +108,7 @@ export default class EnvIRC extends Environment {
             });
             
             this._client.addListener('notice', (from, to, message, messageObj) => {
-                if (this.param('nickpass') && from && this.param('nickservnick') && from.toLowerCase() == this.param('nickservnick').toLowerCase()) {
+                if (this.param('nickpass') && from && this.param('nickservnick') && from.toLowerCase() === this.param('nickservnick').toLowerCase()) {
                     if (/This.*nickname.*registered/i.exec(message)) {
                         this._client.say(this.param('nickservnick'), "IDENTIFY " + this.param('nickpass'));
                     }
@@ -118,7 +118,7 @@ export default class EnvIRC extends Environment {
             
             this._client.addListener('join', (channel, nick, messageObj) => {
                 this.addPeople(nick, [channel], messageObj);
-                if (nick.toLowerCase() == this.param('nickname').toLowerCase()) {
+                if (nick.toLowerCase() === this.param('nickname').toLowerCase()) {
                     this._client.send('WHO', channel);
                 } 
                 this.triggerJoin(nick, [channel], messageObj);
@@ -140,7 +140,7 @@ export default class EnvIRC extends Environment {
             });
             
             this._client.addListener('nick', (oldnick, newnick, channels, messageObj) => {
-                let modes = this._people[oldnick].modes;
+                const modes = this._people[oldnick].modes;
                 this.remPeople(oldnick, channels);
                 this.triggerPart(oldnick, ['nick', 'Nickname change', newnick], channels, messageObj);
                 this.addPeople(newnick, channels, messageObj, modes);
@@ -149,39 +149,39 @@ export default class EnvIRC extends Environment {
             
             
             this._client.addListener('+mode', (channel, by, mode, arg, messageObj) => {
-                if (!channel || !arg || !this._people[arg]) return;
-                if (!this._people[arg].modes[channel]) this._people[arg].modes[channel] = [];
+                if (!channel || !arg || !this._people[arg]) { return; }
+                if (!this._people[arg].modes[channel]) { this._people[arg].modes[channel] = []; }
                 this._people[arg].modes[channel].push(mode);
                 this.emit('gotRole', this, this._people[arg].id, mode, channel);
             });
             
             this._client.addListener('-mode', (channel, by, mode, arg, messageObj) => {
-                if (!channel || !arg || !this._people[arg]) return;
+                if (!channel || !arg || !this._people[arg]) { return; }
                 if (this._people[arg].modes[channel]) {
-                    this._people[arg].modes[channel] = this._people[arg].modes[channel].filter((eachmode) => eachmode != mode);
+                    this._people[arg].modes[channel] = this._people[arg].modes[channel].filter((eachmode) => eachmode !== mode);
                 }
                 this.emit('lostRole', this, this._people[arg].id, mode, channel);
             });
             
             
             this._client.addListener('raw', (messageObj) => {
-                if (messageObj.rawCommand == '005') { //VERSION reply
-                    for (let arg of messageObj.args) {
-                        let getprefs;
-                        if (getprefs = arg.match(/PREFIX=\([^\)]+\)(.+)/)) {
+                if (messageObj.rawCommand === '005') { //VERSION reply
+                    for (const arg of messageObj.args) {
+                        const getprefs = arg.match(/PREFIX=\([^\)]+\)(.+)/);
+                        if (getprefs) {
                             this._prefixes = getprefs[1].split('');
                         }
                     }
                 }
-                if (messageObj.rawCommand == '352') { //WHO reply
+                if (messageObj.rawCommand === '352') { //WHO reply
                     this.addPeople(messageObj.args[5], [messageObj.args[1]], {user: messageObj.args[2], host: messageObj.args[3]});
                 }
-                if (messageObj.rawCommand == '307') { //WHOIS reply - identified
+                if (messageObj.rawCommand === '307') { //WHOIS reply - identified
                     if (this._people[messageObj.args[1]]) {
                         this._people[messageObj.args[1]].identified = true;
                     }
                 }
-                if (messageObj.rawCommand == '671') { //WHOIS reply - secured
+                if (messageObj.rawCommand === '671') { //WHOIS reply - secured
                     if (this._people[messageObj.args[1]]) {
                         this._people[messageObj.args[1]].secured = true;
                     }
@@ -193,29 +193,35 @@ export default class EnvIRC extends Environment {
 
 
     async disconnect() {
-        if (this._client) this._client.disconnect();
+        if (this._client) {
+            this._client.disconnect();
+        }
         this._client = null;
         await this.emit('disconnected', this);
     }
 
 
     msg(targetid, msg, options) {
-        if (!targetid) targetid = this.param('channels')[0];
+        if (!targetid) {
+            targetid = this.param('channels')[0];
+        }
         
         let parts;
         
         try {
             let sent = false;
-            if (parts = targetid.match(/^([^!]+)![^@]+@.+$/)) {
+            parts = targetid.match(/^([^!]+)![^@]+@.+$/);
+            if (parts) {
                 this._client.say(parts[1], msg);
                 sent = true;
             }
-            if (parts = targetid.match(/^#.+$/)) {
+            parts = targetid.match(/^#.+$/);
+            if (parts) {
                 this._client.say(targetid, msg);
                 sent = true;
             }
             if (sent) {
-                let self = this;
+                const self = this;
                 setTimeout(() => { self.emit('messageSent', self, self.channelIdToType(targetid), targetid, msg); }, 1);
             }
         } catch (e) {
@@ -225,15 +231,19 @@ export default class EnvIRC extends Environment {
     
     
     notice(targetid, msg, options) {
-        if (!targetid) targetid = channels[0];
+        if (!targetid) {
+            targetid = this.param('channels')[0];
+        }
         
         let parts;
         
         try {
-            if (parts = targetid.match(/^([^!]+)![^@]+@.+$/)) {
+            parts = targetid.match(/^([^!]+)![^@]+@.+$/);
+            if (parts) {
                 this._client.notice(parts[1], msg);
             }
-            if (parts = targetid.match(/^#.+$/)) {
+            parts = targetid.match(/^#.+$/);
+            if (parts) {
                 this._client.notice(targetid, msg);
             }
         } catch (e) {
@@ -243,8 +253,8 @@ export default class EnvIRC extends Environment {
 
 
     idToDisplayName(id) {
-        let parts = id.split("!");
-        return parts[0];
+        const parts = id.split("!");
+        return parts?.[0];
     }
 
 
@@ -262,26 +272,26 @@ export default class EnvIRC extends Environment {
 
 
     idIsSecured(id) {
-        let parts = id.split("!");
-        let person = this._people[parts[0]];
+        const parts = id.split("!");
+        const person = this._people[parts?.[0]];
         return (person && person.secured);
     }
 
 
     idIsAuthenticated(id) {
-        let parts = id.split("!");
-        let person = this._people[parts[0]];
-        if (!person) return false;
-        if (person.identified) return true;
+        const parts = id.split("!");
+        const person = this._people[parts?.[0]];
+        if (!person) { return false; }
+        if (person.identified) { return true; }
         this._client.send('WHOIS ', parts[0]);
         return false;
     }
     
     
     listUserIds(channel) {
-        if (!channel) return [];
+        if (!channel) { return []; }
         
-        if (channel[0] != "#") {
+        if (channel[0] !== "#") {
             //PM
             if (this._people[channel]) {
                 return [this._people[channel].id];
@@ -290,9 +300,9 @@ export default class EnvIRC extends Environment {
         }
         
         //#channel
-        let ids = [];
-        for (let nick in this._people) {
-            let desc = this._people[nick];
+        const ids = [];
+        for (const nick in this._people) {
+            const desc = this._people[nick];
             if (desc.channels.indexOf(channel) > -1) {
                 ids.push(desc.id);
             }
@@ -302,10 +312,10 @@ export default class EnvIRC extends Environment {
     
     
     listUserRoles(id, channel) {
-        if (!channel) return [];
-        let parts = id.split("!");
-        let person = this._people[parts[0]];
-        if (!person) return false;
+        if (!channel) { return []; }
+        const parts = id.split("!");
+        const person = this._people[parts?.[0]];
+        if (!person) { return false; }
         let result = [];
         if (person.modes[channel]) {
             result = person.modes[channel].slice();
@@ -319,25 +329,27 @@ export default class EnvIRC extends Environment {
     }
     
     channelIdToType(channelid) {
-        if (channelid.match(/^([^!]+)![^@]+@.+$/)) return "private";
-        if (channelid.match(/^#.+$/)) return "regular";
+        if (channelid.match(/^([^!]+)![^@]+@.+$/)) { return "private"; }
+        if (channelid.match(/^#.+$/)) { return "regular"; }
         return "unknown";
     }
     
     
     roleIdToDisplayName(roleid) {
-        if (DISPLAY_MODES[roleid]) return DISPLAY_MODES[roleid];
+        if (DISPLAY_MODES[roleid]) { return DISPLAY_MODES[roleid]; }
         return "mode_" + roleid;
     }
     
     
     displayNameToRoleId(displayName) {
-        if (!displayName) return null;
-        for (let mode of DISPLAY_MODES) {
-            if (DISPLAY_MODES[mode] == displayName) return mode;
+        if (!displayName) { return null; }
+        for (const mode of DISPLAY_MODES) {
+            if (DISPLAY_MODES[mode] === displayName) {
+                return mode;
+            }
         }
-        let parts = displayName.split("_");
-        if (parts.length != 2 || parts[0] != "mode_" || parts[1].length != 1) return null;
+        const parts = displayName.split("_");
+        if (parts.length !== 2 || parts[0] !== "mode_" || parts[1].length !== 1) { return null; }
         return parts[1];
     }
     
@@ -346,10 +358,10 @@ export default class EnvIRC extends Environment {
         let bold = null;
         let und = null;
         let ita = null;
-        let order = [];
+        const order = [];
         text = String(text).replace(/([0-9]{1,2}(,[0-9]{1,2})?)?/g, "").replace(//g, "") + "";
         for (let i = 0; i < text.length; i++) {
-            if (text[i] == "") {
+            if (text[i] === "") {
                 if (und === null) {
                     und = i;
                     order.push('und');
@@ -359,7 +371,7 @@ export default class EnvIRC extends Environment {
                     i += 2;
                     order.splice(order.indexOf('und'), 1);
                 }
-            } else if (text[i] == "") {
+            } else if (text[i] === "") {
                 if (bold === null) {
                     bold = i;
                     order.push('bold');
@@ -369,7 +381,7 @@ export default class EnvIRC extends Environment {
                     i += 2;
                     order.splice(order.indexOf('bold'), 1);
                 }
-            } else if (text[i] == "") {
+            } else if (text[i] === "") {
                 if (ita === null) {
                     ita = i;
                     order.push('ita');
@@ -378,21 +390,21 @@ export default class EnvIRC extends Environment {
                     ita = null;
                     order.splice(order.indexOf('ita'), 1);
                 }
-            } else if (text[i] == "") {
+            } else if (text[i] === "") {
                 let insert = '';
                 let offset = 0;
                 let next = null;
-                while (next = order.pop()) {
-                    if (next == 'ita' && ita !== null) {
+                while ((next = order.pop())) {
+                    if (next === 'ita' && ita !== null) {
                         text = text.slice(0, ita) + "*" + text.slice(ita + 1);
                         insert += '*';
                     }
-                    if (next == 'bold' && bold !== null) {
+                    if (next === 'bold' && bold !== null) {
                         text = text.slice(0, bold) + "**" + text.slice(bold + 1);
                         insert += '**';
                         offset += 1;
                     }
-                    if (next == 'und' && und !== null) {
+                    if (next === 'und' && und !== null) {
                         text = text.slice(0, und) + "__" + text.slice(und + 1);
                         insert += '__';
                         offset += 1;
@@ -419,7 +431,7 @@ export default class EnvIRC extends Environment {
     
     retakeNickname() {
         this._client.send('NICK ', this.param('nickname'));
-        if (this._client.nick == this.param('nickname')) {
+        if (this._client.nick === this.param('nickname')) {
             clearInterval(this._retake);
             this._retake = null;
             return;
@@ -431,7 +443,7 @@ export default class EnvIRC extends Environment {
     
 
     addPeople(nick, channels, messageObj, carryModes) {
-        if (!messageObj) return false;
+        if (!messageObj) { return false; }
         if (!this._people[nick]) {
             this._people[nick] = {
                 id: null,
@@ -443,7 +455,7 @@ export default class EnvIRC extends Environment {
             this._client.send('WHOIS ', nick);
         }
         this._people[nick].id = nick + '!' + messageObj.user + '@' + messageObj.host;
-        for (let channel of channels) {
+        for (const channel of channels) {
             this._people[nick].channels.push(channel);
             if (carryModes && carryModes[channel]) {
                 this._people[nick].modes[channel] = carryModes[channel];
@@ -455,8 +467,8 @@ export default class EnvIRC extends Environment {
     }
 
     remPeople(nick, channels) {
-        if (!this._people[nick]) return false;
-        let newchans = this._people[nick].channels.filter(chan => !channels.find(remchan => remchan == chan));
+        if (!this._people[nick]) { return false; }
+        const newchans = this._people[nick].channels.filter(chan => !channels.find(remchan => remchan === chan));
         if (newchans.length) {
             this._people[nick].channels = newchans;
         } else {
@@ -467,18 +479,18 @@ export default class EnvIRC extends Environment {
     
     
     triggerJoin(nick, channels, messageObj) {
-        let authorid = nick + '!' + messageObj.user + '@' + messageObj.host;
+        const authorid = nick + '!' + messageObj.user + '@' + messageObj.host;
         
-        for (let channelid of channels) {
+        for (const channelid of channels) {
             this.emit('join', this, authorid, channelid, messageObj);
         }
     }
     
     triggerPart(nick, reason, channels, messageObj) {
-        let authorid = nick + '!' + messageObj.user + '@' + messageObj.host;
+        const authorid = nick + '!' + messageObj.user + '@' + messageObj.host;
         messageObj.reason = reason;
         
-        for (let channelid of channels) {
+        for (const channelid of channels) {
             this.emit('part', this, authorid, channelid, messageObj);
         }
     }
