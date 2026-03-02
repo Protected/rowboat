@@ -213,7 +213,7 @@ export default new Proxy({
     getBehaviorConfig, getBehaviorCommonConfig, loadBehaviorConfig, setBehaviorDefaults,
     setConfigFile
 }, {
-    get: (target, prop, receiver) => {
+    get: (target, prop) => {
         if (!target[prop]) {
             return config[prop];
         }

@@ -215,11 +215,14 @@ export default class EditConfig {
         const env = await this.#getEnvironmentInstance(name, nodeEnv.get(KEY_TYPE));
         if (!env) { return ConfigFail.TYPE_NOT_FOUND; }
         
+        const promises = [];
         for (const {n} of env.params) {
             if (required && env.defaults[n] !== undefined) { continue; }
             if (missing && nodeEnv.get(n) !== undefined) { continue; }
-            await this.setEnvironmentParameter(name, n, env.defaults[n] || null);
+            promises.push(this.setEnvironmentParameter(name, n, env.defaults[n] || null));
         }
+
+        await Promise.all(promises);
     }
 
 
@@ -307,11 +310,14 @@ export default class EditConfig {
         const be = await this.#getBehaviorInstanceFromNode(nodeBe);
         if (!be) { return ConfigFail.TYPE_NOT_FOUND; }
         
+        const promises = [];
         for (const {n} of be.params) {
             if (required && be.defaults[n] !== undefined) { continue; }
             if (missing && yaml.isCollection(nodeBe) && nodeBe.get(n) !== undefined) { continue; }
-            await this.setBehaviorParameter(name, n, be.defaults[n] || null);
+            promises.push(this.setBehaviorParameter(name, n, be.defaults[n] || null));
         }
+
+        await Promise.all(promises);
     }
 
 
@@ -327,7 +333,7 @@ export default class EditConfig {
     clearBehaviorParameters(name) {
         const nodeBe = this.#getBehavior(name);
         if (!nodeBe) { return ConfigFail.CONFIG_NOT_FOUND; }
-        if (yaml.isScalar(nodeBe)) return;
+        if (yaml.isScalar(nodeBe)) { return; }
         const betype = nodeBe.get(KEY_TYPE);
         const bename = nodeBe.get(KEY_NAME);
         nodeBe.items = [];

@@ -243,6 +243,21 @@ export default class Core {
         return new envtype(name);
     }
 
+    async loadEnvironmentSharedModule(type, sharedModuleName) {
+        const sharedName = type + '_' + sharedModuleName;
+
+        if (!this._shared[sharedName]) {
+            const sharedModule = await importUncached(PATH_ENVIRONMENTS + sharedModuleName + ".js");
+            this._shared[sharedName] = sharedModule?.default || undefined;
+        }
+
+        return this._shared[sharedName];
+    }
+
+    getCachedEnvironmentSharedModule(type, sharedModuleName) {
+        return this._shared[type + '_' + sharedModuleName];
+    }
+
     async loadEnvironments() {
 
         if (Object.keys(config?.environments || {}).length < 1) {
@@ -250,25 +265,38 @@ export default class Core {
             return true;
         }
 
-        for (const name in config.environments) {
+        const envs = await Promise.all(Object.keys(config.environments).map(name => this.createEnvironment(config.environments[name].type, name, true)));
 
-            const env = await this.createEnvironment(config.environments[name].type, name, true);
+        //Validate environments and pre-load shared modules
+
+        const loadSharedModules = [];
+
+        for (const env of envs) {
+
             if (!env) { return false; }
-            
+
+            for (const sharedModuleName of env.sharedModules) {
+                loadSharedModules.push(this.loadEnvironmentSharedModule(env.type, sharedModuleName));
+            }
+        }
+
+        await Promise.all(loadSharedModules);
+
+        //Initialize enviornments
+
+        for (const env of envs) {
+
             const sharedInstances = {};
-            for (const sharedModule of env.sharedModules) {
-                const sharedName = env.type + '_' + sharedModule;
+
+            for (const sharedModuleName of env.sharedModules) {
                 
-                if (!this._shared[sharedName]) {
-                    this._shared[sharedName] = await importUncached(PATH_ENVIRONMENTS + sharedModule + ".js");
-                    this._shared[sharedName] = this._shared[sharedName]?.default;
-                    if (!this._shared[sharedName]) {
-                        logger.error("Could not initialize the environment: " + name + " . The shared module " + sharedModule + " could not be found.");
-                        return false;
-                    }
+                const sharedModule = this.getCachedEnvironmentSharedModule(env.type, sharedModuleName);
+                if (!sharedModule) {
+                    logger.error("Could not initialize the environment: " + env.name + " . The shared module " + sharedModuleName + " could not be found.");
+                    return false;
                 }
                 
-                sharedInstances[sharedModule] = this._shared[sharedName];
+                sharedInstances[sharedModuleName] = sharedModule;
             }
             
             try {
@@ -278,11 +306,11 @@ export default class Core {
                     pushShutdownHandler: this.pushShutdownHandler.bind(this),
                     pushCleanupHandler: this.pushCleanupHandler.bind(this)
                 })) {
-                    logger.error("Could not initialize the environment: " + name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
+                    logger.error("Could not initialize the environment: " + env.name + " . Usually this means one or more required parameters are missing. Please make sure all the required parameters are defined.");
                     return false;
                 }
             } catch (e) {
-                logger.error("Exception when initializing the environment: " + name + ". " + e);
+                logger.error("Exception when initializing the environment: " + env.name + ". " + e);
                 return false;
             }
             
@@ -332,14 +360,15 @@ export default class Core {
 
         //First pass: Instantiate and store all behaviors
 
-        for (const beConfig of config.behaviors) {
+        const bes = await Promise.all(config.behaviors.map(beConfig => this.createBehavior(beConfig.type, beConfig.name)));
+
+        for (const be of bes) {
             
-            const be = await this.createBehavior(beConfig.type, beConfig.name);
             if (!be) { return false; }
 
             if (!be.isMultiInstanceable) {
                 if (uniqueBehaviors[be.type]) {
-                    logger.error("Could not load the behavior: " + beConfig.name + " . This behavior is not multi-instanceable and there already exists an instance named " + uniqueBehaviors[be.type].name);
+                    logger.error("Could not load the behavior: " + be.name + " . This behavior is not multi-instanceable and there already exists an instance named " + uniqueBehaviors[be.type].name);
                     return false;
                 }
                 uniqueBehaviors[be.type] = be;
@@ -350,7 +379,7 @@ export default class Core {
             logger.info("Successfully instantiated behavior: " + be.name + (be.name !== be.type ? " (" + be.type + ")" : ""));
         }
 
-        //Second pass: Initialize all behaviors
+        //Second pass: Initialize all behaviors in config order
 
         for (const beConfig of config.behaviors) {
             
